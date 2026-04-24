@@ -1,6 +1,6 @@
 # Story 1.1: Khởi tạo monorepo, database, design system cơ bản
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -76,66 +76,87 @@ So that toàn bộ team có nền tảng thống nhất để phát triển các
 
 ### Lane A: Monorepo + Database (infra + data layer)
 
-- [ ] Task 1: Khởi tạo monorepo với pnpm workspaces (AC: #1, #2)
-  - [ ] 1.1: Tạo root `package.json` với workspaces config
-  - [ ] 1.2: Tạo `pnpm-workspace.yaml` khai báo 3 workspace
-  - [ ] 1.3: Tạo `tsconfig.base.json` với strict mode, ESM, path aliases
-  - [ ] 1.4: Tạo workspace `apps/web` (Vite 8 + React 19 template)
-  - [ ] 1.5: Tạo workspace `apps/api` (Hono + TypeScript)
-  - [ ] 1.6: Tạo workspace `packages/shared` (types, schemas, utils)
-  - [ ] 1.7: Cấu hình path alias `@shared/*` và `@/` cho từng workspace
-  - [ ] 1.8: Tạo root scripts: `dev`, `build`, `lint`, `typecheck`, `test`
+- [x] Task 1: Khởi tạo monorepo với pnpm workspaces (AC: #1, #2)
+  - [x] 1.1: Tạo root `package.json` với workspaces config
+  - [x] 1.2: Tạo `pnpm-workspace.yaml` khai báo 3 workspace
+  - [x] 1.3: Tạo `tsconfig.base.json` với strict mode, ESM, path aliases
+  - [x] 1.4: Tạo workspace `apps/web` (Vite 8 + React 19 template)
+  - [x] 1.5: Tạo workspace `apps/api` (Hono + TypeScript)
+  - [x] 1.6: Tạo workspace `packages/shared` (types, schemas, utils)
+  - [x] 1.7: Cấu hình path alias `@shared/*` và `@/` cho từng workspace
+  - [x] 1.8: Tạo root scripts: `dev`, `build`, `lint`, `typecheck`, `test`
 
-- [ ] Task 2: Setup PostgreSQL + Drizzle ORM (AC: #3)
-  - [ ] 2.1: Cài Drizzle ORM + drizzle-kit trong `apps/api`
-  - [ ] 2.2: Tạo `drizzle.config.ts` trỏ đến schema và migrations
-  - [ ] 2.3: Tạo schema `users` và `stores` trong `packages/shared/src/schema/`
-  - [ ] 2.4: Tạo DB connection trong `apps/api/src/db/index.ts`
-  - [ ] 2.5: Tạo script `db:migrate`, `db:generate`, `db:studio`
-  - [ ] 2.6: Tạo `.env.example` với DATABASE_URL mẫu
-  - [ ] 2.7: Chạy migration thử, verify bảng tạo thành công
+- [x] Task 2: Setup PostgreSQL + Drizzle ORM (AC: #3)
+  - [x] 2.1: Cài Drizzle ORM + drizzle-kit trong `apps/api`
+  - [x] 2.2: Tạo `drizzle.config.ts` trỏ đến schema và migrations
+  - [x] 2.3: Tạo schema `users` và `stores` trong `packages/shared/src/schema/`
+  - [x] 2.4: Tạo DB connection trong `apps/api/src/db/index.ts`
+  - [x] 2.5: Tạo script `db:migrate`, `db:generate`, `db:studio`
+  - [x] 2.6: Tạo `.env.example` với DATABASE_URL mẫu
+  - [x] 2.7: Chạy migration thử, verify bảng tạo thành công
 
-- [ ] Task 3: Setup PGlite (AC: #6)
-  - [ ] 3.1: Cài `@electric-sql/pglite` trong `apps/web`
-  - [ ] 3.2: Tạo `apps/web/src/lib/pglite.ts` khởi tạo PGlite instance (IndexedDB storage)
-  - [ ] 3.3: Dùng shared Drizzle schema tạo tables trong PGlite
-  - [ ] 3.4: Viết test `pnpm test:pglite`: tạo instance, insert, query
-  - [ ] 3.5: Document cách sync schema khi thêm table/column
+- [x] Task 3: Setup PGlite (AC: #6)
+  - [x] 3.1: Cài `@electric-sql/pglite` trong `apps/web`
+  - [x] 3.2: Tạo `apps/web/src/lib/pglite.ts` khởi tạo PGlite instance (IndexedDB storage)
+  - [x] 3.3: Dùng shared Drizzle schema tạo tables trong PGlite
+  - [x] 3.4: Viết test `pnpm test:pglite`: tạo instance, insert, query
+  - [x] 3.5: Document cách sync schema khi thêm table/column
 
 ### Lane B: Design System (UI layer)
 
-- [ ] Task 4: Setup Tailwind CSS 4 + shadcn/ui (AC: #4)
-  - [ ] 4.1: Cài Tailwind CSS 4, `@tailwindcss/postcss` (hoặc Vite plugin)
-  - [ ] 4.2: Cấu hình `globals.css` với `@import "tailwindcss"` và `@theme` block
-  - [ ] 4.3: Định nghĩa design tokens trong `@theme`: colors, fonts, radius, spacing
-  - [ ] 4.4: Chạy `npx shadcn@latest init` với Vite preset
-  - [ ] 4.5: Verify Tailwind classes render đúng trên browser
+- [x] Task 4: Setup Tailwind CSS 4 + shadcn/ui (AC: #4)
+  - [x] 4.1: Cài Tailwind CSS 4, `@tailwindcss/postcss` (hoặc Vite plugin)
+  - [x] 4.2: Cấu hình `globals.css` với `@import "tailwindcss"` và `@theme` block
+  - [x] 4.3: Định nghĩa design tokens trong `@theme`: colors, fonts, radius, spacing
+  - [x] 4.4: Chạy `npx shadcn@latest init` với Vite preset
+  - [x] 4.5: Verify Tailwind classes render đúng trên browser
 
-- [ ] Task 5: Cài 6 base component (AC: #5)
-  - [ ] 5.1: `npx shadcn@latest add button` + verify 4 variants, 3 sizes
-  - [ ] 5.2: `npx shadcn@latest add input` + verify prefix/suffix/error state
-  - [ ] 5.3: `npx shadcn@latest add dialog` + verify open/close
-  - [ ] 5.4: `npx shadcn@latest add sonner` (Toast) + verify 4 types
-  - [ ] 5.5: `npx shadcn@latest add tabs` + verify tab switching
-  - [ ] 5.6: `npx shadcn@latest add select` + verify dropdown
+- [x] Task 5: Cài 6 base component (AC: #5)
+  - [x] 5.1: `npx shadcn@latest add button` + verify 4 variants, 3 sizes
+  - [x] 5.2: `npx shadcn@latest add input` + verify prefix/suffix/error state
+  - [x] 5.3: `npx shadcn@latest add dialog` + verify open/close
+  - [x] 5.4: `npx shadcn@latest add sonner` (Toast) + verify 4 types
+  - [x] 5.5: `npx shadcn@latest add tabs` + verify tab switching
+  - [x] 5.6: `npx shadcn@latest add select` + verify dropdown
 
 ### Lane C: Code Quality (quality layer)
 
-- [ ] Task 6: Setup ESLint + Prettier + Vitest (AC: #7)
-  - [ ] 6.1: Cài ESLint (flat config) + Prettier ở root
-  - [ ] 6.2: Cấu hình import order rule (React > shared > @/ > relative)
-  - [ ] 6.3: Cấu hình Vitest ở root với workspace support
-  - [ ] 6.4: Tạo smoke test đơn giản để verify `pnpm test` chạy được
-  - [ ] 6.5: Verify `pnpm lint`, `pnpm typecheck`, `pnpm test` pass toàn bộ
+- [x] Task 6: Setup ESLint + Prettier + Vitest (AC: #7)
+  - [x] 6.1: Cài ESLint (flat config) + Prettier ở root
+  - [x] 6.2: Cấu hình import order rule (React > shared > @/ > relative)
+  - [x] 6.3: Cấu hình Vitest ở root với workspace support
+  - [x] 6.4: Tạo smoke test đơn giản để verify `pnpm test` chạy được
+  - [x] 6.5: Verify `pnpm lint`, `pnpm typecheck`, `pnpm test` pass toàn bộ
 
 ### Verification
 
-- [ ] Task 7: End-to-end verification (AC: #1, #8)
-  - [ ] 7.1: `pnpm install && pnpm dev` khởi động trong ≤30s
-  - [ ] 7.2: Tạo thử component trong `apps/web` import từ `@shared/*`
-  - [ ] 7.3: Tạo thử API route trong `apps/api` query database
-  - [ ] 7.4: Hot-reload hoạt động khi sửa file
-  - [ ] 7.5: Xoá code thử nghiệm, đảm bảo clean state
+- [x] Task 7: End-to-end verification (AC: #1, #8)
+  - [x] 7.1: `pnpm install && pnpm dev` khởi động trong ≤30s
+  - [x] 7.2: Tạo thử component trong `apps/web` import từ `@shared/*`
+  - [x] 7.3: Tạo thử API route trong `apps/api` query database
+  - [x] 7.4: Hot-reload hoạt động khi sửa file
+  - [x] 7.5: Xoá code thử nghiệm, đảm bảo clean state
+
+### Review Findings
+
+- [x] [Review][Decision] UUID v7: dùng thư viện JS `uuidv7` với `$defaultFn()` trong Drizzle schema — FIXED
+- [x] [Review][Decision] FK ON DELETE RESTRICT cho `users.store_id` — FIXED
+- [x] [Review][Patch] UNIQUE(store_id, phone) trên bảng users — FIXED
+- [x] [Review][Patch] `updatedAt` thêm `$onUpdate(() => new Date())` — FIXED
+- [x] [Review][Patch] PGlite test dùng `drizzle-orm/pglite/migrator` thay raw SQL — FIXED
+- [x] [Review][Patch] `pglite.ts` thêm `initPGliteSchema()` — FIXED
+- [x] [Review][Patch] `DATABASE_URL` validation trong drizzle.config.ts — FIXED
+- [x] [Review][Patch] Migration regenerated (newline, UUID v7, FK restrict, unique index) — FIXED
+- [x] [Review][Patch] `tsconfig.base.json` bỏ `declaration/declarationMap/sourceMap` (mâu thuẫn `noEmit`) — FIXED
+- [x] [Review][Patch] ESLint ignore chỉ `postcss.config.js` thay vì `**/*.js` — FIXED
+- [x] [Review][Patch] `.gitignore` bổ sung `.env.production`, `.env.staging`, `coverage/`, `*.tsbuildinfo` — FIXED
+- [x] [Review][Patch] ESLint import order rule bằng `eslint-plugin-simple-import-sort` — FIXED
+- [x] [Review][Patch] Document sync schema PGlite trong story file — FIXED
+- [x] [Review][Defer] DB connection không có graceful shutdown [apps/api/src/db/index.ts] — deferred, scope story sau
+- [x] [Review][Defer] API server thiếu CORS, security headers, error handler [apps/api/src/index.ts] — deferred, scope story 1.2+
+- [x] [Review][Defer] Bảng stores/users thiếu indexes cho truy vấn [packages/shared/src/schema/] — deferred, premature cho bảng trống
+- [x] [Review][Defer] `next-themes` dependency trong Vite project [apps/web/package.json] — deferred, shadcn generated
+- [x] [Review][Defer] Test dùng plaintext cho password_hash [apps/web/src/lib/pglite.test.ts:67] — deferred, chấp nhận trong test
 
 ## Dev Notes
 
@@ -308,7 +329,15 @@ kiotviet-lite/
 - Storage: IndexedDB (persistent qua browser restart)
 - Schema: import từ `packages/shared/src/schema/` (CÙNG schema với PostgreSQL server)
 - Drizzle adapter: dùng `drizzle-orm/pglite` driver
-- Test: tạo PGlite in-memory instance, run migration, insert + query, assert kết quả
+- Test: dùng `drizzle-orm/pglite/migrator` để chạy migration từ `apps/api/src/db/migrations/`
+
+### Quy trình sync schema PGlite khi thay đổi
+
+1. Sửa Drizzle schema trong `packages/shared/src/schema/`
+2. Chạy `pnpm db:generate` để tạo migration SQL mới
+3. PGlite test tự động dùng migration mới qua `drizzle-orm/pglite/migrator`
+4. Cho browser (production): import migration SQL bằng `?raw` import rồi gọi `initPGliteSchema(pglite, sql)`
+5. Chạy `pnpm test:pglite` để verify schema đồng bộ
 
 ### shadcn/ui Init cho Vite
 
@@ -400,8 +429,70 @@ Utility `cn()` lưu tại `apps/web/src/lib/utils.ts`.
 
 ### Agent Model Used
 
+Claude Opus 4.6
+
 ### Debug Log References
+
+- @vitejs/plugin-react v4 không hỗ trợ Vite 8, nâng lên v6.0
+- TypeScript rootDir conflict khi import shared package, bỏ rootDir/outDir trong apps/api tsconfig
+- tsconfig.node.json reference cần composite, đơn giản hoá bằng cách gộp vite.config.ts vào include chính
 
 ### Completion Notes List
 
+- ✅ Monorepo pnpm workspaces: 3 workspace (apps/web, apps/api, packages/shared) hoạt động
+- ✅ PostgreSQL + Drizzle ORM: schema stores/users, migration chạy thành công
+- ✅ PGlite: in-memory instance, insert/query test pass, dùng chung Drizzle schema với server
+- ✅ Tailwind CSS 4: CSS-first config với @theme block, design tokens đầy đủ
+- ✅ shadcn/ui: 6 base component (Button, Input, Dialog, Sonner, Tabs, Select)
+- ✅ ESLint flat config + Prettier + Vitest workspace
+- ✅ Dev server: Web (Vite 8, 380ms) + API (Hono) khởi động thành công
+- ✅ TypeScript strict mode pass, lint pass (1 warning shadcn pattern), test pass
+
+### Change Log
+
+- 2026-04-24: Khởi tạo monorepo, database, design system, code quality tools
+
 ### File List
+
+- package.json (new)
+- pnpm-workspace.yaml (new)
+- tsconfig.base.json (new)
+- .gitignore (new)
+- .env.example (new)
+- .prettierrc (new)
+- eslint.config.js (new)
+- vitest.workspace.ts (new)
+- pnpm-lock.yaml (new)
+- apps/web/package.json (new)
+- apps/web/tsconfig.json (new)
+- apps/web/vite.config.ts (new)
+- apps/web/postcss.config.js (new)
+- apps/web/index.html (new)
+- apps/web/components.json (new)
+- apps/web/src/main.tsx (new)
+- apps/web/src/App.tsx (new)
+- apps/web/src/globals.css (new)
+- apps/web/src/lib/utils.ts (new)
+- apps/web/src/lib/pglite.ts (new)
+- apps/web/src/lib/pglite.test.ts (new)
+- apps/web/src/components/ui/button.tsx (new)
+- apps/web/src/components/ui/input.tsx (new)
+- apps/web/src/components/ui/dialog.tsx (new)
+- apps/web/src/components/ui/sonner.tsx (new)
+- apps/web/src/components/ui/tabs.tsx (new)
+- apps/web/src/components/ui/select.tsx (new)
+- apps/api/package.json (new)
+- apps/api/tsconfig.json (new)
+- apps/api/drizzle.config.ts (new)
+- apps/api/src/index.ts (new)
+- apps/api/src/db/index.ts (new)
+- apps/api/src/db/migrations/0000_big_boom_boom.sql (new)
+- apps/api/src/db/migrations/meta/ (new)
+- packages/shared/package.json (new)
+- packages/shared/tsconfig.json (new)
+- packages/shared/src/index.ts (new)
+- packages/shared/src/schema/index.ts (new)
+- packages/shared/src/schema/stores.ts (new)
+- packages/shared/src/schema/users.ts (new)
+- packages/shared/src/types/index.ts (new)
+- packages/shared/src/constants/index.ts (new)
