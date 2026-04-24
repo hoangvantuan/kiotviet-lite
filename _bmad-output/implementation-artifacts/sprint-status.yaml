@@ -1,5 +1,5 @@
 # generated: 2026-04-24
-# last_updated: 2026-04-24
+# last_updated: 2026-04-25
 # project: kiotviet-lite
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-24
-last_updated: 2026-04-24
+last_updated: 2026-04-25
 project: kiotviet-lite
 project_key: NOKEY
 tracking_system: file-system
@@ -45,7 +45,7 @@ development_status:
   # Epic 1: Khởi tạo dự án & Quản trị cửa hàng
   epic-1: in-progress
   1-1-khoi-tao-monorepo-database-design-system-co-ban: done
-  1-2-dang-ky-cua-hang-dang-nhap: backlog
+  1-2-dang-ky-cua-hang-dang-nhap: in-progress
   1-3-layout-ung-dung-navigation: backlog
   1-4-quan-ly-nhan-vien-phan-quyen: backlog
   epic-1-retrospective: optional
