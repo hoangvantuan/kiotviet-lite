@@ -169,6 +169,19 @@
 - AR28: Currency lưu integer (VNĐ, không thập phân), tính toán integer arithmetic, format `Intl.NumberFormat('vi-VN')`
 - AR29: Date: `timestamptz` (UTC) trong DB, ISO 8601 API, `date-fns` cho UI format locale vi-VN
 
+**Từ ADR Observability & Notifications:**
+
+- AR30: Pino 9.x structured logging JSON output, redact fields nhạy cảm, requestId (UUID v7) correlation qua Hono middleware
+- AR31: File rotation (pino-roll) theo ngày, giữ 30 ngày, max 100MB/file, ship sang Cloudflare R2 hàng ngày
+- AR32: `packages/notifications/` với Transport interface, 4 transports: console, file, webhook (undici), telegram (grammy)
+- AR33: DB tables: `notification_channels` (per-store config), `notification_rules` (event → channel mapping), `notification_deliveries` (delivery log)
+- AR34: Event routing: router query rule theo store_id + event type + severity, fan-out tới channels match, throttle chống spam
+- AR35: 7 event catalog MVP: `auth.login.suspicious`, `auth.pin.locked`, `order.high_value`, `stock.negative`, `sync.failed_repeatedly`, `audit.price_override`, `system.error.unhandled`
+- AR36: Retry 3 lần exponential backoff (1s, 4s, 16s) per transport, dead-letter queue (`status='dead'`), cron quét daily
+- AR37: Frontend outbox pattern: `outbox_events` (PGlite) → sync worker → `POST /api/notifications/emit` → backend validate + enqueue
+- AR38: Mã hoá channel config AES-256-GCM, key từ env `NOTIFICATION_CONFIG_KEY` (32 byte), rotation 6 tháng, decrypt chỉ runtime
+- AR39: Webhook outbound ký HMAC-SHA256 header `X-KVL-Signature`, rate-limit `/api/notifications/emit` 60 req/phút/user, client chỉ emit whitelist event type
+
 ## UX Design Requirements
 
 - UX-DR1: Triển khai hệ thống design tokens qua `tailwind.config.js` — colors (primary #2563EB, success #16A34A, warning #F59E0B, error #DC2626, neutral scale), spacing (base 4px: 4/8/12/16/20/24/32/40), breakpoints (375/768/1024/1280px)
@@ -262,3 +275,17 @@
 - FR65: Epic 1 — 3 vai trò (Owner/Manager/Staff)
 - FR66: Epic 1 — Quản lý nhân viên + cài đặt cửa hàng
 - FR67: Epic 1 — Xác thực PIN cho thao tác nhạy cảm
+
+**Architecture Requirements (Observability & Notifications):**
+
+- AR30: Epic 10 (Story 10.1) — Pino structured logging backend
+- AR31: Epic 10 (Story 10.1) — File rotation + ship R2
+- AR32: Epic 10 (Story 10.2, 10.3) — Notification Service package + 4 transports
+- AR33: Epic 10 (Story 10.2) — DB migration notification tables
+- AR34: Epic 10 (Story 10.2) — Event routing + throttle
+- AR35: Epic 10 (Story 10.4) — 7 event catalog MVP
+- AR36: Epic 10 (Story 10.2) — Retry + dead-letter
+- AR37: Epic 10 (Story 10.5) — Frontend outbox notifications
+- AR38: Epic 10 (Story 10.3) — Encryption channel config (AES-256-GCM)
+- AR39: Epic 10 (Story 10.3) — Webhook HMAC + rate-limit
+- NF13: Epic 10 (Story 10.1) — DB backup tự động hàng ngày

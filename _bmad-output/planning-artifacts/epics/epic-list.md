@@ -54,4 +54,11 @@ Toàn bộ POS hoạt động offline với PGlite. Service Worker cache app she
 **UX-DRs:** UX-DR9
 **Stories:** 9.1 (App offline đầy đủ), 9.2 (Đơn hàng offline tự đồng bộ)
 
+## Epic 10: Cảnh báo & Giám sát cửa hàng
+Chủ cửa hàng nhận cảnh báo tức thì qua Telegram/webhook khi có sự kiện nghiệp vụ quan trọng. Dev có structured log JSON để debug và giám sát hệ thống. Notification Service route event tới transport theo rule, hỗ trợ throttle, retry, dead-letter.
+**FRs:** (không có FR trực tiếp, requirements từ ADR observability-and-notifications.md)
+**NFRs:** NF13
+**ARs:** AR30-AR39
+**Stories:** 10.1 (Structured Logging Backend), 10.2 (Notification Service Core), 10.3 (Webhook & Telegram + Bảo mật), 10.4 (7 Event nghiệp vụ MVP), 10.5 (Frontend Outbox Notification)
+
 ---

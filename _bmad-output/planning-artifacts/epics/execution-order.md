@@ -13,3 +13,4 @@
 | 7 | Epic 7: Hóa đơn & In ấn | Cần orders từ Epic 3 |
 | 8 | Epic 8: Báo cáo | Cần data từ tất cả modules trước |
 | 9 | Epic 9: Offline & PWA | Wrap toàn bộ hệ thống với PGlite + sync |
+| 10 | Epic 10: Cảnh báo & Giám sát | Cần business events từ Epic 1-9 + PGlite outbox từ Epic 9 |
