@@ -3,9 +3,9 @@ project_name: 'kiotviet-lite'
 user_name: 'shun'
 date: '2026-04-24'
 sections_completed:
-  ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns']
+  ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns', 'logging_rules', 'notification_rules']
 status: 'complete'
-rule_count: 52
+rule_count: 62
 optimized_for_llm: true
 ---
 
@@ -37,6 +37,9 @@ _File này chứa các quy tắc và pattern quan trọng mà AI agent PHẢI tu
 | Backend  | Drizzle ORM         | 0.45.x      | Type-safe ORM                   |
 | Backend  | PostgreSQL          | ≥ 16        | Database server                 |
 | Backend  | Better Auth         | 1.6.x       | Authentication                  |
+| Backend  | Pino                | 9.x         | Structured logging (JSON)       |
+| Backend  | pino-roll           | 3.x         | Log file rotation               |
+| Backend  | grammy              | 1.x         | Telegram bot (notification)     |
 | Shared   | Zod                 | 3.x         | Validation schemas              |
 | Shared   | TypeScript          | strict mode | Ngôn ngữ                        |
 
@@ -53,9 +56,10 @@ _File này chứa các quy tắc và pattern quan trọng mà AI agent PHẢI tu
 
 ```
 kiotviet-lite/
-├── apps/web/          → Frontend SPA/PWA (Vite + React)
-├── apps/api/          → Backend REST API (Hono)
-└── packages/shared/   → Zod schemas, types, utils, constants dùng chung
+├── apps/web/              → Frontend SPA/PWA (Vite + React)
+├── apps/api/              → Backend REST API (Hono)
+├── packages/shared/       → Zod schemas, types, utils, constants dùng chung
+└── packages/notifications/ → Notification Service (transports, router, formatters)
 ```
 
 - `packages/shared` là nguồn duy nhất cho Zod schemas, types, và business logic thuần (pricing engine, debt allocator)
@@ -110,6 +114,8 @@ Ba tầng tách biệt trong `apps/api/src/`:
 - Soft delete cho business entities (orders, customers, products). KHÔNG hard delete
 - Tiền VND lưu integer (không thập phân). Tính toán dùng integer arithmetic, KHÔNG floating point
 - Date/Time: `timestamptz` (UTC) trong DB, ISO 8601 trong API, format `vi-VN` trong UI
+- Notification tables (server): `notification_channels` (config mã hoá per-store), `notification_rules` (routing event → channel), `notification_deliveries` (log gửi + dead-letter)
+- Outbox table (PGlite client): `outbox_events` (queue notification offline, sync worker đẩy khi online, xoá sau khi server ack, archive sau 7 ngày)
 
 ### Frontend (React)
 
@@ -158,6 +164,69 @@ Ba tầng tách biệt trong `apps/api/src/`:
 - Ghi log khi: sửa giá, điều chỉnh nợ, override hạn mức, xóa dữ liệu, đăng nhập
 - Fields: `action`, `entity_type`, `entity_id`, `old_value`, `new_value`, `user_id`, `created_at`
 - Mọi thay đổi giá/nợ/tồn kho PHẢI tạo audit log entry
+
+### Logging (Pino)
+
+Tách hoàn toàn với Notification Service. Vai trò: ghi structured log cho ops/debug.
+
+**Backend (Hono):**
+- Output: JSON stdout (production), pino-pretty (dev)
+- Level: `trace | debug | info | warn | error | fatal`. Default `info`, override qua env `LOG_LEVEL`
+- Redact tự động: `req.headers.authorization`, `*.password`, `*.pin`, `*.botToken`, `*.secret`. Thêm field nhạy cảm mới → CẬP NHẬT redact config
+- Correlation: middleware inject `requestId` (uuid v7) vào mọi log line + response header. Dùng để trace request xuyên suốt
+- File rotation: pino-roll, rotate theo ngày, giữ 30 ngày, max 100MB/file. Production ship sang Cloudflare R2 hàng ngày (cron)
+
+**Frontend:**
+- Dev: `console.*` bình thường
+- Production: giữ `console.error` + `console.warn`, loại bỏ `console.log/debug` (Vite build plugin)
+- Error thực sự vẫn đi Sentry như cũ
+
+### Notification Service
+
+Hai lớp độc lập: Logger nền (Pino, cho dev/ops) và Notification Service (cho alert nghiệp vụ tới user/admin).
+
+**Kiến trúc:**
+- Module nằm ở `packages/notifications/`, gọi từ service layer qua `notify(event)`
+- 4 transport: console, file, webhook (undici native), Telegram (grammy)
+- Thêm transport mới (Slack, Zalo, email): implement interface `Transport`, không động router
+- Rule routing lưu DB (`notification_rules`), không hard-code. Router query rule theo `store_id + type + severity` → fan-out
+
+**Event schema (Zod):**
+- Mọi event có: `id` (uuid v7), `storeId`, `type` (enum), `severity` (`info|warn|error|critical`), `title`, `body`, `occurredAt`, `correlationId` (optional, link với request log)
+- Event type theo namespace: `<domain>.<action>[.<qualifier>]`. Ví dụ: `stock.negative`, `auth.pin.locked`, `order.high_value`
+- Thêm event mới: bổ sung enum + Zod schema + Event Catalog
+
+**7 event MVP khởi tạo:**
+
+| Type | Severity | Trigger |
+| --- | --- | --- |
+| `auth.login.suspicious` | warn | Login từ IP/UA bất thường |
+| `auth.pin.locked` | warn | PIN sai 5 lần |
+| `order.high_value` | info | Đơn vượt ngưỡng cấu hình |
+| `stock.negative` | error | Tồn kho âm sau giao dịch |
+| `sync.failed_repeatedly` | error | Sync fail 3 lần liên tiếp |
+| `audit.price_override` | warn | Sửa giá dưới vốn |
+| `system.error.unhandled` | critical | Exception không bắt |
+
+**Frontend notification:**
+- Frontend KHÔNG gọi transport trực tiếp (Telegram, webhook). Lý do: offline fail, lộ token, thiếu audit
+- Outbox pattern: action → lưu `outbox_events` (PGlite) → toast ngay → khi online sync worker đẩy qua `POST /api/notifications/emit` → backend validate + route
+- 3 loại thông báo client: Toast (react-hot-toast, chỉ user hiện tại), In-app inbox (query API), External push (outbox → backend → transport)
+
+**Multi-tenant config:**
+- Mỗi store cấu hình kênh riêng qua bảng `notification_channels`
+- Config (token, URL, secret) lưu mã hoá AES-256-GCM. Key: env var `NOTIFICATION_CONFIG_KEY` (32 byte). Rotation 6 tháng
+- Decrypt chỉ trong Notification Service runtime, KHÔNG trả về client, KHÔNG log
+
+**Retry, throttle, dead-letter:**
+- Retry: webhook/Telegram 3 lần, exponential backoff (1s, 4s, 16s)
+- Throttle: theo rule (`throttle_seconds`). Ví dụ `order.high_value` throttle 300s = max 1 notification/5 phút cùng type cùng store
+- Dead-letter: fail sau retry → `notification_deliveries` với `status='dead'`. Cron hàng ngày quét dead-letter, gửi summary cho admin
+
+**Security:**
+- Webhook outbound ký HMAC-SHA256 header `X-KVL-Signature` bằng secret per-channel
+- Rate-limit endpoint `/api/notifications/emit`: 60 req/phút per JWT user
+- Client KHÔNG được chỉ định transport hoặc override rule. Client chỉ emit event type đã whitelist
 
 ### In ấn
 
@@ -220,6 +289,10 @@ Ba tầng tách biệt trong `apps/api/src/`:
 7. UUID v7 cho primary key mới
 8. Tailwind + shadcn/ui. Không CSS custom
 9. Thay đổi giá/nợ/tồn kho → audit log entry
+10. Mọi notification qua `notify(event)` của `packages/notifications`. Cấm gọi trực tiếp HTTP/Telegram từ service khác
+11. Frontend cấm gọi transport trực tiếp. Luôn đi qua outbox + backend API
+12. Config channel (token, URL, secret) bắt buộc lưu mã hoá AES-256-GCM. Không plaintext trong DB hoặc log
+13. Pino redact phải phủ mọi field nhạy cảm. Thêm field mới → cập nhật redact config ngay
 
 ## Anti-patterns: KHÔNG được làm
 
@@ -235,6 +308,10 @@ Ba tầng tách biệt trong `apps/api/src/`:
 - KHÔNG dùng `any` hoặc `@ts-ignore`
 - KHÔNG dùng CommonJS (`require`, `module.exports`)
 - KHÔNG assume online. POS flow PHẢI hoạt động offline
+- KHÔNG gọi Telegram/webhook trực tiếp từ frontend. Luôn đi qua outbox + backend (security + offline + audit)
+- KHÔNG lưu token/secret notification channel dạng plaintext trong DB hoặc log
+- KHÔNG gửi notification bỏ qua `packages/notifications`. Cấm gọi transport từ service nghiệp vụ
+- KHÔNG thêm event type mà không bổ sung enum + Zod schema
 
 ## Hướng dẫn sử dụng
 
@@ -249,4 +326,4 @@ Ba tầng tách biệt trong `apps/api/src/`:
 - Cập nhật khi technology stack thay đổi
 - Review định kỳ để loại bỏ quy tắc lỗi thời
 
-Cập nhật lần cuối: 2026-04-24
+Cập nhật lần cuối: 2026-04-24 (bổ sung Logging + Notification Service)
