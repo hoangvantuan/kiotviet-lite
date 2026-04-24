@@ -1,0 +1,108 @@
+# generated: 2026-04-24
+# last_updated: 2026-04-24
+# project: kiotviet-lite
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-04-24
+last_updated: 2026-04-24
+project: kiotviet-lite
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+development_status:
+  # Epic 1: Khởi tạo dự án & Quản trị cửa hàng
+  epic-1: backlog
+  1-1-khoi-tao-monorepo-database-design-system-co-ban: backlog
+  1-2-dang-ky-cua-hang-dang-nhap: backlog
+  1-3-layout-ung-dung-navigation: backlog
+  1-4-quan-ly-nhan-vien-phan-quyen: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: Quản lý Hàng hóa
+  epic-2: backlog
+  2-1-quan-ly-danh-muc-san-pham: backlog
+  2-2-crud-san-pham-co-ban: backlog
+  2-3-bien-the-san-pham: backlog
+  2-4-don-vi-quy-doi-ton-kho: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Bán hàng (POS)
+  epic-3: backlog
+  3-1-giao-dien-pos-tim-kiem-san-pham: backlog
+  3-2-gio-hang-quan-ly-don-hang: backlog
+  3-3-thanh-toan-hoan-thanh-don-hang: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Khách hàng & Hệ thống Đơn giá
+  epic-4: backlog
+  4-1-quan-ly-khach-hang-nhom-khach-hang: backlog
+  4-2-trang-chi-tiet-khach-hang: backlog
+  4-3-bang-gia-chain-formula: backlog
+  4-4-gia-rieng-khach-hang-gia-theo-so-luong-chiet-khau-danh-muc: backlog
+  4-5-tich-hop-6-tang-gia-vao-pos: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Quản lý Công nợ
+  epic-5: backlog
+  5-1-ghi-no-trong-pos-kiem-tra-han-muc: backlog
+  5-2-phieu-thu-phan-bo-fifo: backlog
+  5-3-phieu-chi-tra-no-ncc: backlog
+  5-4-dieu-chinh-no-thu-cong: backlog
+  5-5-canh-bao-no-bao-cao-cong-no: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Nhập hàng & Nhà cung cấp
+  epic-6: backlog
+  6-1-quan-ly-ncc-phieu-nhap-kho: backlog
+  6-2-kiem-kho-lich-su-nhap-hang: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: Hóa đơn & In ấn
+  epic-7: backlog
+  7-1-danh-sach-chi-tiet-hoa-don: backlog
+  7-2-tra-hang-in-an: backlog
+  epic-7-retrospective: optional
+
+  # Epic 8: Báo cáo & Dashboard
+  epic-8: backlog
+  8-1-dashboard-tong-quan: backlog
+  8-2-bao-cao-chi-tiet-export: backlog
+  epic-8-retrospective: optional
+
+  # Epic 9: Offline & PWA
+  epic-9: backlog
+  9-1-pglite-offline-database-service-worker: backlog
+  9-2-sync-engine-conflict-resolution: backlog
+  epic-9-retrospective: optional
