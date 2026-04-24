@@ -48,4 +48,44 @@ Những thao tác phải hoàn toàn tự nhiên, không cần training:
 4. **Progressive disclosure** — nhân viên thấy POS đơn giản, chủ cửa hàng unlock thêm cấu hình/báo cáo
 5. **Offline là bình thường** — offline không phải trạng thái lỗi, mà là trạng thái vận hành bình thường
 
----
+## Mô hình tư duy người dùng
+
+**Nhân viên bán hàng (Lan):**
+
+- Mental model: "Sổ tay bán hàng trên điện thoại" — tìm SP, ghi giá, tính tiền
+- Kỳ vọng: đơn giản như dùng máy tính tiền, nhưng thông minh hơn (tự nhớ giá)
+- Điểm gây confused: khi nào cần chọn KH trước (bán buôn) vs. bỏ qua (bán lẻ)
+
+**Chủ cửa hàng (chị Hoa):**
+
+- Mental model: "Excel thông minh" — bảng giá, tồn kho, công nợ nhưng tự tính
+- Kỳ vọng: biết tình hình cửa hàng trong 30 giây từ dashboard
+- Điểm gây confused: cascade giá (chain formula), conflict resolution khi sync
+
+## Tiêu chí thành công
+
+| Tiêu chí          | Metric                      | Target                 |
+| ----------------- | --------------------------- | ---------------------- |
+| Đơn hàng nhanh    | Thời gian 1 đơn (3-5 SP)    | ≤ 30 giây              |
+| Không cần hỏi giá | Số lần NV hỏi chủ về giá    | 0 lần/ngày             |
+| Tổng quan nhanh   | Thời gian nắm tình hình     | ≤ 30 giây từ dashboard |
+| Training ngắn     | Thời gian NV mới thành thạo | ≤ 30 phút              |
+| Setup nhanh       | Đăng ký → bán hàng đầu tiên | ≤ 5 phút               |
+| Offline seamless  | Đơn mất khi offline         | 0 đơn                  |
+
+## Novel UX Patterns
+
+**Kết hợp quen + mới:**
+
+- **Quen**: Grid sản phẩm (Shopee/Square), bottom tab bar (mọi app VN), pull-to-refresh
+- **Mới**: Hiển thị nguồn giá real-time cạnh mỗi dòng SP trên POS ("Giá ĐL C1", "Giá riêng KH")
+- **Mới**: Công nợ tích hợp trong luồng thanh toán (không phải module riêng)
+- **Mới**: Offline indicator nhẹ nhàng (chỉ icon nhỏ, không popup warning)
+
+**Cách "dạy" pattern mới:**
+
+- Nguồn giá: tooltip "?" giải thích lần đầu, sau đó user tự hiểu
+- Công nợ tích hợp: nút "Ghi nợ" hiện ngay cạnh "Thanh toán" khi có KH buôn
+- Offline: onboarding slide ngắn "KiotViet Lite hoạt động cả khi mất mạng"
+
+

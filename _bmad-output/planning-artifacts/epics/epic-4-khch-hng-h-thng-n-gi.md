@@ -92,11 +92,11 @@ So that đánh giá khách hàng và ra quyết định chính sách phù hợp.
 
 ---
 
-## Story 4.3: Bảng giá & Chain Formula
+## Story 4.3: Bảng giá Direct & Formula
 
 As a chủ cửa hàng,
-I want tạo nhiều bảng giá bằng nhiều phương pháp khác nhau, có ngày hiệu lực và quy tắc làm tròn,
-So that linh hoạt thiết lập giá bán cho từng nhóm khách hàng theo chiến lược kinh doanh.
+I want tạo bảng giá bằng phương pháp nhập trực tiếp hoặc công thức, có ngày hiệu lực và quy tắc làm tròn,
+So that thiết lập giá bán cho từng nhóm khách hàng theo chiến lược kinh doanh.
 
 **Acceptance Criteria:**
 
@@ -116,17 +116,30 @@ So that linh hoạt thiết lập giá bán cho từng nhóm khách hàng theo c
 **And** áp dụng rounding_rule đã chọn (ví dụ: ceil_thousand → 45.200 → 46.000)
 **And** cho phép override giá từng sản phẩm riêng lẻ sau khi tính
 
-**Given** đang tạo bảng giá với method = "chain"
-**When** chọn base_price_list_id tạo thành vòng lặp (A → B → C → A)
-**Then** hệ thống phát hiện cycle
-**And** hiển thị lỗi "Phát hiện vòng lặp tham chiếu: A → B → C → A. Vui lòng chọn bảng giá gốc khác"
-**And** không cho phép lưu
-
 **Given** bảng giá có effective_from và effective_to
 **When** ngày hiện tại nằm ngoài khoảng này
 **Then** bảng giá tồn tại nhưng is_active hiệu lực = false, không áp dụng vào tính giá trên POS
 **When** ngày hiện tại nằm trong khoảng
 **Then** bảng giá is_active hiệu lực = true và tham gia vào hệ thống giá
+
+**Given** đang ở trang Quản lý bảng giá
+**When** xem danh sách bảng giá
+**Then** hiển thị: tên, method, bảng giá gốc (nếu formula/chain), ngày hiệu lực, trạng thái active
+**And** có filter theo method và trạng thái
+
+## Story 4.3b: Chain Formula, Clone & Import bảng giá
+
+As a chủ cửa hàng,
+I want tạo bảng giá nối chuỗi từ bảng giá khác, sao chép hoặc import từ CSV,
+So that tiết kiệm thời gian thiết lập nhiều bảng giá phức tạp.
+
+**Acceptance Criteria:**
+
+**Given** đang tạo bảng giá với method = "chain"
+**When** chọn base_price_list_id tạo thành vòng lặp (A → B → C → A)
+**Then** hệ thống phát hiện cycle
+**And** hiển thị lỗi "Phát hiện vòng lặp tham chiếu: A → B → C → A. Vui lòng chọn bảng giá gốc khác"
+**And** không cho phép lưu
 
 **Given** đang tạo bảng giá với method = "clone"
 **When** chọn bảng giá nguồn
@@ -138,26 +151,42 @@ So that linh hoạt thiết lập giá bán cho từng nhóm khách hàng theo c
 **Then** hệ thống map product_code → product_id, tạo price_list_items tương ứng
 **And** nếu product_code không tồn tại → ghi vào danh sách lỗi, bỏ qua dòng đó, tiếp tục import
 
+## Story 4.3c: So sánh bảng giá
+
+As a chủ cửa hàng,
+I want so sánh 2 bảng giá cạnh nhau để thấy chênh lệch và margin,
+So that ra quyết định điều chỉnh giá hợp lý dựa trên dữ liệu cụ thể.
+
+**Acceptance Criteria:**
+
 **Given** đang ở trang Quản lý bảng giá, có ≥2 bảng giá
 **When** chọn chức năng "So sánh bảng giá" và chọn 2 bảng giá
 **Then** hiển thị bảng so sánh: tên SP, giá bảng A, giá bảng B, chênh lệch (số tiền và %), margin (nếu có giá vốn)
 **And** highlight dòng có chênh lệch > 10%
 
+**Given** đang xem bảng so sánh
+**When** sản phẩm có giá bảng B thấp hơn giá vốn WAC
+**Then** hiển thị cảnh báo đỏ "Dưới vốn" tại dòng đó
+**And** có thể filter chỉ hiện "SP dưới vốn"
+
+**Given** đang xem bảng so sánh
+**When** muốn export kết quả
+**Then** nút "Xuất CSV" download file so sánh với đầy đủ cột
+
 ---
 
-## Story 4.4: Giá riêng khách hàng, Giá theo số lượng & Chiết khấu danh mục
+## Story 4.4: Giá riêng khách hàng & Giá theo số lượng
 
 As a chủ cửa hàng,
-I want thiết lập giá riêng cho khách hàng VIP, giá theo số lượng mua và chiết khấu theo danh mục sản phẩm,
+I want thiết lập giá riêng cho khách hàng VIP và giá theo số lượng mua,
 So that có chính sách giá linh hoạt phù hợp từng đối tượng và khuyến khích mua số lượng lớn.
 
 **Acceptance Criteria:**
 
-**Given** database chưa có bảng customer_prices, volume_prices, category_discounts
+**Given** database chưa có bảng customer_prices, volume_prices
 **When** chạy migration
 **Then** tạo bảng customer_prices (id, customer_id FK, product_id FK, price, created_at, updated_at, UNIQUE(customer_id, product_id))
-**And** tạo bảng volume_prices (id, product_id FK, min_qty, price, UNIQUE(product_id, min_qty)) — tối đa 5 tiers per product
-**And** tạo bảng category_discounts (id, category_id FK, customer_id FK nullable, customer_group_id FK nullable, discount_type ENUM, discount_value, min_qty, effective_from DATE, effective_to DATE, created_at, updated_at)
+**And** tạo bảng volume_prices (id, product_id FK, min_qty, price, UNIQUE(product_id, min_qty))
 
 **Given** đang ở trang chi tiết khách hàng hoặc trang quản lý giá riêng
 **When** thêm giá riêng cho khách hàng X, sản phẩm Y với giá Z
@@ -169,6 +198,18 @@ So that có chính sách giá linh hoạt phù hợp từng đối tượng và 
 **Then** lưu tối đa 5 tiers vào volume_prices
 **And** khi thêm tier thứ 6 → hiển thị lỗi "Tối đa 5 mức giá theo số lượng cho mỗi sản phẩm"
 **And** min_qty phải tăng dần, giá phải giảm dần → validate khi lưu
+
+## Story 4.4b: Chiết khấu danh mục & Kiểm soát sửa giá
+
+As a chủ cửa hàng,
+I want thiết lập chiết khấu theo danh mục và kiểm soát quyền sửa giá của nhân viên,
+So that giá luôn đúng chính sách và không bị sửa trái phép.
+
+**Acceptance Criteria:**
+
+**Given** database chưa có bảng category_discounts
+**When** chạy migration
+**Then** tạo bảng category_discounts (id, category_id FK, customer_id FK nullable, customer_group_id FK nullable, discount_type ENUM, discount_value, min_qty, effective_from DATE, effective_to DATE, created_at, updated_at)
 
 **Given** đang ở trang chiết khấu danh mục
 **When** tạo chiết khấu cho category, áp dụng cho nhóm KH, loại %, giá trị, min_qty, ngày hiệu lực

@@ -42,11 +42,11 @@ So that có thể tra cứu nhanh thông tin đơn hàng, lịch sử thanh toá
 
 ---
 
-## Story 7.2: Trả hàng & In ấn
+## Story 7.2: Trả hàng
 
 As a manager/owner,
-I want xử lý trả hàng từ hóa đơn gốc và in hóa đơn bằng nhiều định dạng,
-So that hoàn trả chính xác cho khách và cung cấp hóa đơn chuyên nghiệp.
+I want xử lý trả hàng từ hóa đơn gốc với hoàn tiền hoặc giảm nợ tương ứng,
+So that hoàn trả chính xác cho khách và tồn kho luôn đúng.
 
 **Acceptance Criteria:**
 
@@ -63,30 +63,65 @@ So that hoàn trả chính xác cho khách và cung cấp hóa đơn chuyên ngh
 **And** nếu KH đã trả tiền → tạo bút toán hoàn tiền (refund)
 **And** nếu KH còn nợ → giảm nợ KH tương ứng
 
-**Given** máy tính kết nối thermal printer qua Web Serial API hoặc WebUSB
+**Given** hóa đơn đã trả hàng 1 phần trước đó
+**When** bấm "Trả hàng" lần nữa
+**Then** SL trả tối đa = SL đã mua - SL đã trả trước đó
+**And** hiển thị rõ "Đã trả: X" bên cạnh mỗi dòng SP
+
+**Given** trả hàng thành công
+**When** xem lại chi tiết hóa đơn
+**Then** hiển thị section "Lịch sử trả hàng": ngày trả, SP trả, SL, lý do, người xử lý
+**And** trạng thái hóa đơn đổi thành "Đã trả 1 phần" hoặc "Đã trả toàn bộ"
+
+## Story 7.3: In hóa đơn Thermal & A4
+
+As a nhân viên bán hàng,
+I want in hóa đơn bằng máy in nhiệt hoặc giấy A4/A5,
+So that cung cấp hóa đơn chuyên nghiệp cho khách hàng.
+
+**Acceptance Criteria:**
+
+**Given** máy tính kết nối thermal printer qua Web Serial API
 **When** nhân viên in hóa đơn
 **Then** gửi lệnh ESC/POS binary: init → logo → tên cửa hàng + slogan → mã HĐ + ngày → danh sách SP → tổng cộng → thanh toán → nợ cũ/mới (nếu bật) → ghi chú → cut paper
 **And** thermal 80mm: bố cục rộng hơn, thêm cột CK
 
-**Given** thermal printer không kết nối được
+**Given** thermal printer không kết nối được (chưa pair hoặc lỗi)
 **When** nhân viên in hóa đơn
-**Then** fallback: render thành ảnh → mở hộp thoại in trình duyệt
-**And** toast cảnh báo "Đang dùng chế độ in ảnh"
+**Then** fallback: CSS @media print + window.print()
+**And** toast cảnh báo "Máy in nhiệt không kết nối, đang in qua trình duyệt"
 
 **Given** khách buôn cần hóa đơn A4
 **When** nhân viên chọn "In A4/A5"
 **Then** render HTML với CSS @media print: header, thông tin KH, bảng SP đầy đủ, tổng bằng số + bằng chữ, khu vực ký tên
 **And** gọi window.print()
 
-**Given** chủ cửa hàng mở Cài đặt mẫu in
-**When** tùy chỉnh template
-**Then** có thể: upload logo, nhập slogan, bật/tắt: nợ cũ, nợ mới, giá vốn, CK, ghi chú cuối
-**And** preview realtime
-**And** cài đặt lưu theo store_id
-
 **Given** hệ thống đang offline
 **When** nhân viên in hóa đơn
 **Then** in thermal và A4/A5 vẫn hoạt động vì render phía client
 **And** logo đã cache trong Service Worker
+
+## Story 7.4: Cài đặt mẫu in
+
+As a chủ cửa hàng,
+I want tùy chỉnh mẫu in hóa đơn với logo, slogan và các trường hiển thị,
+So that hóa đơn phản ánh thương hiệu cửa hàng.
+
+**Acceptance Criteria:**
+
+**Given** chủ cửa hàng mở Cài đặt > Mẫu in
+**When** tùy chỉnh template
+**Then** có thể: upload logo (≤2MB, jpg/png), nhập slogan, bật/tắt: nợ cũ, nợ mới, giá vốn, CK, ghi chú cuối, tên KH, SĐT KH, SKU
+**And** chọn khổ giấy mặc định: 58mm, 80mm, A4, A5
+**And** cài đặt lưu vào bảng print_settings theo store_id
+
+**Given** đang ở trang Cài đặt mẫu in
+**When** thay đổi bất kỳ trường nào
+**Then** preview realtime bên phải hiển thị mẫu in đã cập nhật
+**And** preview hiển thị dữ liệu mẫu (đơn hàng giả) để dễ hình dung
+
+**Given** cửa hàng chưa có cài đặt mẫu in
+**When** mở trang Cài đặt > Mẫu in lần đầu
+**Then** tạo bản ghi print_settings với giá trị mặc định: thermal 58mm, không logo, footer "Cảm ơn quý khách!"
 
 ---

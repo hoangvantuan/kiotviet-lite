@@ -1,10 +1,11 @@
 # Epic List
 
 ## Epic 1: Khởi tạo dự án & Quản trị cửa hàng
-Owner đăng ký cửa hàng, đăng nhập, quản lý nhân viên, phân quyền 3 vai trò. Nền tảng monorepo, design tokens, base components, auth system.
+Owner đăng ký cửa hàng, đăng nhập, quản lý nhân viên, phân quyền 3 vai trò. Nền tảng monorepo, design tokens, base components, auth system. CI/CD pipeline.
 **FRs:** FR65, FR66, FR67
 **ARs:** AR1-AR14, AR20-AR22, AR24, AR27-AR29
 **UX-DRs:** UX-DR1-5, UX-DR14-17, UX-DR20
+**Stories:** 1.1 (Monorepo+DB+DS), 1.2 (Đăng ký+Đăng nhập), 1.3 (Layout+Nav), 1.4 (NV+Phân quyền), 1.5 (CI/CD)
 
 ## Epic 2: Quản lý Hàng hóa
 Owner tạo/sửa/xoá sản phẩm, biến thể (2 thuộc tính), danh mục 2 cấp, đơn vị quy đổi, theo dõi tồn kho, cảnh báo hết hàng, giá vốn BQ gia quyền.
@@ -13,6 +14,7 @@ Owner tạo/sửa/xoá sản phẩm, biến thể (2 thuộc tính), danh mục 
 
 ## Epic 3: Bán hàng (POS) — Luồng bán lẻ
 Nhân viên bán hàng cho khách vãng lai: tìm SP autocomplete, quét barcode camera, grid sản phẩm, giỏ hàng, chiết khấu, thanh toán tiền mặt/CK/QR, đa tab (5), phím tắt, auto mở đơn mới.
+> Phụ thuộc Epic 4 (chọn KH + giá 6 tầng) và Epic 5 (ghi nợ F4).
 **FRs:** FR26, FR27, FR29, FR30 (trừ ghi nợ), FR32, FR33, FR34, FR35
 **UX-DRs:** UX-DR6, UX-DR7, UX-DR13, UX-DR19
 
@@ -20,6 +22,7 @@ Nhân viên bán hàng cho khách vãng lai: tìm SP autocomplete, quét barcode
 Owner quản lý KH + nhóm KH, tạo bảng giá chain formula, 6 tầng ưu tiên, cascade, so sánh giá. POS tự áp giá đúng khi chọn KH, hiển thị nguồn giá. Tạo KH nhanh từ POS.
 **FRs:** FR13-FR25, FR28, FR40-FR45
 **UX-DRs:** UX-DR8, UX-DR10
+**Stories:** 4.1 (KH+Nhóm KH), 4.2 (Chi tiết KH), 4.3 (Bảng giá Direct & Formula), 4.3b (Chain+Clone+Import), 4.3c (So sánh bảng giá), 4.4 (Giá riêng KH + Giá SL), 4.4b (CK danh mục + Kiểm soát sửa giá), 4.5 (6 tầng giá POS)
 
 ## Epic 5: Quản lý Công nợ
 Nhân viên ghi nợ toàn bộ/1 phần khi bán hàng, hệ thống kiểm tra hạn mức + PIN override. Phiếu thu FIFO, phiếu chi NCC, điều chỉnh nợ, cảnh báo nợ quá hạn.
@@ -36,17 +39,19 @@ Nhân viên xem/lọc/in lại hóa đơn. Owner xử lý trả hàng. In therma
 **FRs:** FR46, FR47, FR48, FR49, FR50, FR51
 **ARs:** AR23
 **UX-DRs:** UX-DR11
+**Stories:** 7.1 (Danh sách+Chi tiết HĐ), 7.2 (Trả hàng), 7.3 (In Thermal & A4), 7.4 (Cài đặt mẫu in)
 
 ## Epic 8: Báo cáo & Dashboard
 Chủ cửa hàng nắm tình hình kinh doanh trong 30 giây: dashboard tổng quan, báo cáo doanh thu/lợi nhuận/tồn kho/công nợ/giá, export CSV/Excel.
 **FRs:** FR59, FR60, FR61, FR62, FR63, FR64
 **UX-DRs:** UX-DR12
 
-## Epic 9: Offline & PWA
-Toàn bộ POS hoạt động offline với PGlite. Service Worker cache app shell. Background Sync đồng bộ đơn hàng. Conflict resolution server/client wins. PWA installable.
+## Epic 9: Bán hàng không gián đoạn, Offline & PWA
+Toàn bộ POS hoạt động offline với PGlite. Service Worker cache app shell. Background Sync đồng bộ đơn hàng. Conflict resolution server/client wins. PGlite schema migration. PWA installable.
 **FRs:** FR36, FR37, FR38, FR39
 **NFRs:** NF14, NF15, NF16
 **ARs:** AR15-AR18
 **UX-DRs:** UX-DR9
+**Stories:** 9.1 (App offline đầy đủ), 9.2 (Đơn hàng offline tự đồng bộ)
 
 ---

@@ -243,3 +243,40 @@ So that mỗi người chỉ truy cập đúng chức năng được phép và t
 **And** audit_logs là append-only, không cho phép sửa/xoá (DB constraint)
 
 ---
+
+## Story 1.5: CI/CD & Development Pipeline
+
+As a developer,
+I want CI/CD pipeline tự động kiểm tra code quality và deploy,
+So that team phát triển nhanh, an toàn, phát hiện lỗi sớm trước khi merge.
+
+**Acceptance Criteria:**
+
+**Given** developer push code lên GitHub
+**When** tạo Pull Request
+**Then** GitHub Actions tự động chạy pipeline: install → typecheck → lint → test → build
+**And** pipeline fail → block merge, hiển thị chi tiết lỗi
+**And** pipeline pass → cho phép merge
+
+**Given** monorepo có 3 workspace
+**When** chỉ thay đổi file trong `apps/web`
+**Then** CI chỉ chạy typecheck, lint, test cho `apps/web` và `packages/shared` (affected only)
+**And** giảm thời gian CI cho các PR nhỏ
+
+**Given** developer commit code
+**When** pre-commit hook chạy
+**Then** Husky + lint-staged: format (Prettier) + lint (ESLint) cho staged files
+**And** commit bị block nếu lint fail
+
+**Given** project cần env variables
+**When** developer clone repo lần đầu
+**Then** file `.env.example` tồn tại với tất cả env keys cần thiết (không có giá trị thật)
+**And** document rõ cách copy `.env.example` → `.env.local` và điền giá trị
+
+**Given** code được merge vào main
+**When** pipeline deploy chạy
+**Then** tự động deploy `apps/web` lên hosting (Vercel/CF Pages)
+**And** tự động deploy `apps/api` lên hosting (Railway/Fly.io)
+**And** chạy Drizzle migration tự động trên staging/production DB
+
+---
