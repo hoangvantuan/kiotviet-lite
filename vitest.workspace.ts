@@ -25,4 +25,12 @@ export default defineWorkspace([
       include: ['src/**/*.test.ts'],
     },
   },
+  {
+    test: {
+      name: 'notifications',
+      root: './packages/notifications',
+      environment: 'node',
+      include: ['src/**/*.test.ts'],
+    },
+  },
 ])

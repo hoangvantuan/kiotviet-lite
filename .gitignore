@@ -5,7 +5,9 @@ dist
 .env.production
 .env.staging
 *.log
+logs/
 .DS_Store
 .vite
 coverage
 *.tsbuildinfo
+.gitnexus

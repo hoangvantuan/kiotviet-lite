@@ -3,9 +3,19 @@ project_name: 'kiotviet-lite'
 user_name: 'shun'
 date: '2026-04-24'
 sections_completed:
-  ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns', 'logging_rules', 'notification_rules']
+  [
+    'technology_stack',
+    'language_rules',
+    'framework_rules',
+    'testing_rules',
+    'quality_rules',
+    'workflow_rules',
+    'anti_patterns',
+    'logging_rules',
+    'notification_rules',
+  ]
 status: 'complete'
-rule_count: 62
+rule_count: 68
 optimized_for_llm: true
 ---
 
@@ -18,30 +28,30 @@ _File này chứa các quy tắc và pattern quan trọng mà AI agent PHẢI tu
 **Monorepo:** pnpm workspaces (3 packages)
 **Runtime:** Node.js ≥ 22 LTS | Package manager: pnpm ≥ 9.x
 
-| Layer    | Package             | Phiên bản   | Vai trò                          |
-| -------- | ------------------- | ----------- | -------------------------------- |
-| Frontend | React               | 19.2.x      | UI framework                    |
-| Frontend | Vite                | 8.0.x       | Build tool (Rolldown bundler)   |
-| Frontend | TanStack Router     | 1.168.x     | File-based routing              |
-| Frontend | TanStack Query      | 5.99.x      | Server state, cache             |
-| Frontend | Zustand             | 5.0.x       | Client/UI state                 |
-| Frontend | Tailwind CSS        | 4.2.x       | Styling                         |
-| Frontend | shadcn/ui           | latest 2026 | Component library               |
-| Frontend | React Hook Form     | current     | Form handling                   |
-| Frontend | PGlite              | 0.4.x       | Browser PostgreSQL (offline DB) |
-| Frontend | html5-qrcode        | current     | Barcode scanner                 |
-| Frontend | @tanstack/react-virtual | current | Virtual scrolling               |
-| Frontend | Lucide React        | current     | Icon library                    |
-| Frontend | date-fns            | current     | Date utilities                  |
-| Backend  | Hono                | 4.12.x      | HTTP framework                  |
-| Backend  | Drizzle ORM         | 0.45.x      | Type-safe ORM                   |
-| Backend  | PostgreSQL          | ≥ 16        | Database server                 |
-| Backend  | Better Auth         | 1.6.x       | Authentication                  |
-| Backend  | Pino                | 9.x         | Structured logging (JSON)       |
-| Backend  | pino-roll           | 3.x         | Log file rotation               |
-| Backend  | grammy              | 1.x         | Telegram bot (notification)     |
-| Shared   | Zod                 | 3.x         | Validation schemas              |
-| Shared   | TypeScript          | strict mode | Ngôn ngữ                        |
+| Layer    | Package                 | Phiên bản   | Vai trò                         |
+| -------- | ----------------------- | ----------- | ------------------------------- |
+| Frontend | React                   | 19.2.x      | UI framework                    |
+| Frontend | Vite                    | 8.0.x       | Build tool (Rolldown bundler)   |
+| Frontend | TanStack Router         | 1.168.x     | File-based routing              |
+| Frontend | TanStack Query          | 5.99.x      | Server state, cache             |
+| Frontend | Zustand                 | 5.0.x       | Client/UI state                 |
+| Frontend | Tailwind CSS            | 4.2.x       | Styling                         |
+| Frontend | shadcn/ui               | latest 2026 | Component library               |
+| Frontend | React Hook Form         | current     | Form handling                   |
+| Frontend | PGlite                  | 0.4.x       | Browser PostgreSQL (offline DB) |
+| Frontend | html5-qrcode            | current     | Barcode scanner                 |
+| Frontend | @tanstack/react-virtual | current     | Virtual scrolling               |
+| Frontend | Lucide React            | current     | Icon library                    |
+| Frontend | date-fns                | current     | Date utilities                  |
+| Backend  | Hono                    | 4.12.x      | HTTP framework                  |
+| Backend  | Drizzle ORM             | 0.45.x      | Type-safe ORM                   |
+| Backend  | PostgreSQL              | ≥ 16        | Database server                 |
+| Backend  | Better Auth             | 1.6.x       | Authentication                  |
+| Backend  | Pino                    | 9.x         | Structured logging (JSON)       |
+| Backend  | pino-roll               | 3.x         | Log file rotation               |
+| Backend  | grammy                  | 1.x         | Telegram bot (notification)     |
+| Shared   | Zod                     | 3.x         | Validation schemas              |
+| Shared   | TypeScript              | strict mode | Ngôn ngữ                        |
 
 **Ràng buộc phiên bản quan trọng:**
 
@@ -76,6 +86,7 @@ kiotviet-lite/
 ### Import
 
 Thứ tự import (ESLint enforce tự động):
+
 1. React / thư viện ngoài
 2. `@kiotviet-lite/shared`
 3. Internal modules (absolute path `@/`)
@@ -98,6 +109,7 @@ Thứ tự import (ESLint enforce tự động):
 ### Backend Architecture
 
 Ba tầng tách biệt trong `apps/api/src/`:
+
 - `routes/`: parse request, validate input (Zod), gọi service, format response. KHÔNG chứa business logic
 - `services/`: business logic thuần, không biết HTTP, nhận typed params. KHÔNG gọi trực tiếp DB
 - `db/`: Drizzle queries, không business logic
@@ -120,11 +132,13 @@ Ba tầng tách biệt trong `apps/api/src/`:
 ### Frontend (React)
 
 **State management:**
+
 - TanStack Query: server state (products, customers, orders). Cache + background refetch + optimistic updates
 - Zustand: UI state (cart POS, theme, modals, sidebar, offline status). Store đặt tên `use{Name}Store`
 - PGlite: offline data store. Khi offline, query PGlite thay vì API
 
 **Component:**
+
 - shadcn/ui + Tailwind CSS. KHÔNG viết CSS custom. KHÔNG dùng styled-components/CSS modules
 - Component file: PascalCase (`ProductCard.tsx`)
 - Non-component file: kebab-case (`pricing-engine.ts`)
@@ -135,6 +149,7 @@ Ba tầng tách biệt trong `apps/api/src/`:
 - Hooks encapsulate data fetching. Component chỉ render
 
 **Routing:**
+
 - TanStack Router file-based routing trong `src/routes/`
 - Layout authenticated: `_authenticated.tsx`
 - Dynamic params dùng `$` prefix: `$productId.tsx`
@@ -169,14 +184,103 @@ Ba tầng tách biệt trong `apps/api/src/`:
 
 Tách hoàn toàn với Notification Service. Vai trò: ghi structured log cho ops/debug.
 
-**Backend (Hono):**
+**Cơ sở hạ tầng:**
+
 - Output: JSON stdout (production), pino-pretty (dev)
-- Level: `trace | debug | info | warn | error | fatal`. Default `info`, override qua env `LOG_LEVEL`
-- Redact tự động: `req.headers.authorization`, `*.password`, `*.pin`, `*.botToken`, `*.secret`. Thêm field nhạy cảm mới → CẬP NHẬT redact config
-- Correlation: middleware inject `requestId` (uuid v7) vào mọi log line + response header. Dùng để trace request xuyên suốt
-- File rotation: pino-roll, rotate theo ngày, giữ 30 ngày, max 100MB/file. Production ship sang Cloudflare R2 hàng ngày (cron)
+- Default level: `info`, override qua env `LOG_LEVEL`
+- Redact tự động: `req.headers.authorization`, `*.password`, `*.pin`, `*.botToken`, `*.secret`. Thêm field nhạy cảm mới → CẬP NHẬT redact config trong `REDACT_PATHS` (`apps/api/src/lib/logger.ts`)
+- Correlation: middleware inject `requestId` vào mọi log line + response header `X-Request-Id`. Dùng để trace request xuyên suốt
+- File rotation: pino-roll, rotate theo ngày, giữ 30 ngày, max 100MB/file
+
+**Hướng dẫn level (từ thấp đến cao):**
+
+| Level   | Khi nào dùng                                                                   | Ví dụ                                                                                                      |
+| ------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `trace` | Chi tiết từng bước xử lý, chỉ bật khi debug cục bộ. KHÔNG bật production       | Input/output hàm nội bộ, giá trị biến trung gian, vòng lặp iteration                                       |
+| `debug` | Thông tin hữu ích khi troubleshoot, không cần trong vận hành bình thường       | Query params, cache hit/miss, kết quả tính toán pricing, payload gửi đi                                    |
+| `info`  | Sự kiện nghiệp vụ thành công, mốc quan trọng trong flow. Đây là level MẶC ĐỊNH | Tạo/sửa/xoá entity, đăng nhập thành công, sync hoàn tất, migration chạy xong                               |
+| `warn`  | Bất thường nhưng hệ thống tự xử lý được, hoặc cần chú ý sớm                    | Auth fail (sai mật khẩu), gần hạn mức nợ, retry thành công sau lần fail, input hợp lệ nhưng đáng ngờ       |
+| `error` | Thao tác thất bại, cần xem xét và có thể cần sửa                               | Gọi external service fail (sau hết retry), ghi DB thất bại, nghiệp vụ vi phạm ràng buộc không recover được |
+| `fatal` | Hệ thống không thể tiếp tục, phải tắt process. Rất hiếm khi dùng               | Init logger fail, kết nối DB fail lúc khởi động, migration fail, config bắt buộc thiếu                     |
+
+**Quy tắc chọn level:**
+
+- Nếu phân vân giữa 2 level, chọn level thấp hơn. Thà thừa data hơn thiếu khi debug
+- `info` trở lên LUÔN BẬT ở production. Chỉ log vào `info` những gì thực sự quan trọng, tránh noise
+- `debug` bật khi cần troubleshoot (`LOG_LEVEL=debug`). Log đủ data để reproduce vấn đề mà không cần đọc code
+- `trace` chỉ bật local. KHÔNG bật trên production (volume quá lớn)
+
+**Tầng nào log gì:**
+
+| Tầng          | Log                                                                 | Không log                                 |
+| ------------- | ------------------------------------------------------------------- | ----------------------------------------- |
+| Route handler | KHÔNG log (middleware request-logger đã lo request/response)        | Business logic, DB query                  |
+| Service       | Business decision, input chính, kết quả. Đây là tầng log NHIỀU NHẤT | Request/response HTTP (tầng route lo rồi) |
+| DB layer      | KHÔNG log (Drizzle có logger riêng nếu cần)                         | Query detail                              |
+| Middleware    | Request lifecycle (đã có), auth decision                            | Body request (có thể chứa PII)            |
+
+**Lấy logger trong handler/service:**
+
+- Trong route handler: `const log = c.get('logger')` (đã có requestId)
+- Trong service: nhận logger qua parameter, KHÔNG import trực tiếp. Ví dụ: `function createProduct(params, log: Logger)`
+- Tạo child logger cho context thêm: `log.child({ service: 'product', storeId, userId })`
+
+**Structured fields bắt buộc khi log business operation:**
+
+```ts
+log.info({ entity: 'product', entityId: id, action: 'create', storeId, userId }, 'product created')
+```
+
+| Field      | Bắt buộc     | Mô tả                                                    |
+| ---------- | ------------ | -------------------------------------------------------- |
+| `entity`   | Có           | Tên entity: `product`, `order`, `customer`, `priceList`  |
+| `entityId` | Có (khi có)  | ID của entity đang thao tác                              |
+| `action`   | Có           | Hành động: `create`, `update`, `delete`, `login`, `sync` |
+| `storeId`  | Có           | Multi-tenant ID                                          |
+| `userId`   | Có (khi có)  | Ai thực hiện                                             |
+| `duration` | Nên có       | Cho thao tác mất thời gian (ms)                          |
+| `reason`   | Khi relevant | Lý do warn/error, ví dụ `'pin_locked_5_attempts'`        |
+| `input`    | debug level  | Dữ liệu đầu vào (đã redact field nhạy cảm)               |
+| `result`   | debug level  | Kết quả tính toán, số lượng affected rows                |
+
+**Message format:**
+
+- Ngắn gọn, lowercase, mô tả sự kiện đã xảy ra (past tense hoặc trạng thái)
+- Data đặt trong object (tham số đầu tiên), KHÔNG nối string
+- Đúng: `log.info({ orderId, total }, 'order created')`
+- Sai: `log.info('Order ' + orderId + ' created with total ' + total)`
+
+**Pattern mẫu cho service:**
+
+```ts
+// Service nhận logger qua parameter
+async function createProduct(params: CreateProductInput, log: Logger) {
+  log.debug({ input: params }, 'creating product')
+
+  const product = await db.insert(products).values(params).returning()
+
+  log.info(
+    { entity: 'product', entityId: product.id, action: 'create', storeId: params.storeId },
+    'product created',
+  )
+  return product
+}
+
+// Warn khi bất thường nhưng vẫn xử lý được
+log.warn(
+  { entity: 'order', entityId, action: 'create', storeId, debtAmount, debtLimit },
+  'order created near debt limit',
+)
+
+// Error khi thao tác fail
+log.error(
+  { err, entity: 'notification', action: 'send', transport: 'telegram', storeId },
+  'notification delivery failed after retries',
+)
+```
 
 **Frontend:**
+
 - Dev: `console.*` bình thường
 - Production: giữ `console.error` + `console.warn`, loại bỏ `console.log/debug` (Vite build plugin)
 - Error thực sự vẫn đi Sentry như cũ
@@ -186,44 +290,50 @@ Tách hoàn toàn với Notification Service. Vai trò: ghi structured log cho o
 Hai lớp độc lập: Logger nền (Pino, cho dev/ops) và Notification Service (cho alert nghiệp vụ tới user/admin).
 
 **Kiến trúc:**
+
 - Module nằm ở `packages/notifications/`, gọi từ service layer qua `notify(event)`
 - 4 transport: console, file, webhook (undici native), Telegram (grammy)
 - Thêm transport mới (Slack, Zalo, email): implement interface `Transport`, không động router
 - Rule routing lưu DB (`notification_rules`), không hard-code. Router query rule theo `store_id + type + severity` → fan-out
 
 **Event schema (Zod):**
+
 - Mọi event có: `id` (uuid v7), `storeId`, `type` (enum), `severity` (`info|warn|error|critical`), `title`, `body`, `occurredAt`, `correlationId` (optional, link với request log)
 - Event type theo namespace: `<domain>.<action>[.<qualifier>]`. Ví dụ: `stock.negative`, `auth.pin.locked`, `order.high_value`
 - Thêm event mới: bổ sung enum + Zod schema + Event Catalog
 
 **7 event MVP khởi tạo:**
 
-| Type | Severity | Trigger |
-| --- | --- | --- |
-| `auth.login.suspicious` | warn | Login từ IP/UA bất thường |
-| `auth.pin.locked` | warn | PIN sai 5 lần |
-| `order.high_value` | info | Đơn vượt ngưỡng cấu hình |
-| `stock.negative` | error | Tồn kho âm sau giao dịch |
-| `sync.failed_repeatedly` | error | Sync fail 3 lần liên tiếp |
-| `audit.price_override` | warn | Sửa giá dưới vốn |
-| `system.error.unhandled` | critical | Exception không bắt |
+| Type                     | Severity | Trigger                   |
+| ------------------------ | -------- | ------------------------- |
+| `auth.login.suspicious`  | warn     | Login từ IP/UA bất thường |
+| `auth.pin.locked`        | warn     | PIN sai 5 lần             |
+| `order.high_value`       | info     | Đơn vượt ngưỡng cấu hình  |
+| `stock.negative`         | error    | Tồn kho âm sau giao dịch  |
+| `sync.failed_repeatedly` | error    | Sync fail 3 lần liên tiếp |
+| `audit.price_override`   | warn     | Sửa giá dưới vốn          |
+| `system.error.unhandled` | critical | Exception không bắt       |
 
 **Frontend notification:**
+
 - Frontend KHÔNG gọi transport trực tiếp (Telegram, webhook). Lý do: offline fail, lộ token, thiếu audit
 - Outbox pattern: action → lưu `outbox_events` (PGlite) → toast ngay → khi online sync worker đẩy qua `POST /api/notifications/emit` → backend validate + route
 - 3 loại thông báo client: Toast (react-hot-toast, chỉ user hiện tại), In-app inbox (query API), External push (outbox → backend → transport)
 
 **Multi-tenant config:**
+
 - Mỗi store cấu hình kênh riêng qua bảng `notification_channels`
 - Config (token, URL, secret) lưu mã hoá AES-256-GCM. Key: env var `NOTIFICATION_CONFIG_KEY` (32 byte). Rotation 6 tháng
 - Decrypt chỉ trong Notification Service runtime, KHÔNG trả về client, KHÔNG log
 
 **Retry, throttle, dead-letter:**
+
 - Retry: webhook/Telegram 3 lần, exponential backoff (1s, 4s, 16s)
 - Throttle: theo rule (`throttle_seconds`). Ví dụ `order.high_value` throttle 300s = max 1 notification/5 phút cùng type cùng store
 - Dead-letter: fail sau retry → `notification_deliveries` với `status='dead'`. Cron hàng ngày quét dead-letter, gửi summary cho admin
 
 **Security:**
+
 - Webhook outbound ký HMAC-SHA256 header `X-KVL-Signature` bằng secret per-channel
 - Rate-limit endpoint `/api/notifications/emit`: 60 req/phút per JWT user
 - Client KHÔNG được chỉ định transport hoặc override rule. Client chỉ emit event type đã whitelist
@@ -238,6 +348,7 @@ Hai lớp độc lập: Logger nền (Pino, cho dev/ops) và Notification Servic
 ### Business Logic quan trọng
 
 **Pricing Engine (6 tầng ưu tiên, cao → thấp):**
+
 1. Giá riêng khách hàng
 2. Chiết khấu danh mục
 3. Giá nhập thủ công trên đơn
@@ -250,11 +361,13 @@ Hai lớp độc lập: Logger nền (Pino, cho dev/ops) và Notification Servic
 - Pricing engine là pure function trong `packages/shared`, chạy cả client và server
 
 **Công nợ:**
+
 - FIFO allocation: thu tiền phân bổ vào nợ cũ nhất trước
 - Hạn mức nợ: vượt hạn mức cần PIN owner override
 - Debt allocator là pure function trong `packages/shared`
 
 **Tồn kho:**
+
 - Giá vốn bình quân gia quyền (Weighted Average Cost)
 - Integer arithmetic cho mọi tính toán tiền
 
@@ -316,14 +429,16 @@ Hai lớp độc lập: Logger nền (Pino, cho dev/ops) và Notification Servic
 ## Hướng dẫn sử dụng
 
 **Cho AI Agent:**
+
 - Đọc file này TRƯỚC khi implement bất kỳ code nào
 - Tuân thủ TẤT CẢ quy tắc đúng như tài liệu
 - Khi không chắc, chọn phương án chặt chẽ hơn
 - Cập nhật file này nếu phát hiện pattern mới
 
 **Cho người dùng:**
+
 - Giữ file này ngắn gọn, tập trung vào nhu cầu agent
 - Cập nhật khi technology stack thay đổi
 - Review định kỳ để loại bỏ quy tắc lỗi thời
 
-Cập nhật lần cuối: 2026-04-24 (bổ sung Logging + Notification Service)
+Cập nhật lần cuối: 2026-04-25 (bổ sung hướng dẫn logging chi tiết: level, tầng, structured fields, pattern mẫu)

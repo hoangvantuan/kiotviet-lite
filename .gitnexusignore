@@ -1,0 +1,34 @@
+# AI/agent config (không phải source code)
+_bmad
+_bmad-output
+.agent
+.claude
+AGENTS.md
+CLAUDE.md
+
+# Build output & dependencies
+node_modules
+dist
+.next
+.vite
+
+# Test & coverage
+coverage
+
+# Git & CI
+.husky
+.git
+
+# Environment & secrets
+.env*
+
+# OS & editor
+.DS_Store
+
+# GitNexus internal
+.gitnexus
+.gitnexusignore
+.mcp.json
+
+# Lock files (không cần index)
+pnpm-lock.yaml

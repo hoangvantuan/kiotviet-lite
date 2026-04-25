@@ -35,4 +35,13 @@ export const env = {
   get bcryptRounds(): number {
     return Number.parseInt(optional('BCRYPT_ROUNDS', '12'), 10)
   },
+  get logLevel(): string {
+    return optional('LOG_LEVEL', 'info')
+  },
+  get logDir(): string {
+    return optional('LOG_DIR', './logs')
+  },
+  get notificationConfigKey(): string {
+    return optional('NOTIFICATION_CONFIG_KEY', '')
+  },
 } as const

@@ -6,10 +6,13 @@ import { cors } from 'hono/cors'
 import { users } from '@kiotviet-lite/shared'
 
 import { db } from './db/index.js'
+import { initLogger } from './lib/logger.js'
 import { requireAuth } from './middleware/auth.middleware.js'
 import { errorHandler } from './middleware/error-handler.js'
+import { requestLoggerMiddleware } from './middleware/request-logger.middleware.js'
 import { createAuditRoutes } from './routes/audit.routes.js'
 import { createAuthRoutes } from './routes/auth.routes.js'
+import { createNotificationRoutes } from './routes/notifications.routes.js'
 import { createStoreRoutes } from './routes/store.routes.js'
 import { createUsersRoutes } from './routes/users.routes.js'
 
@@ -31,6 +34,8 @@ app.use(
   }),
 )
 
+app.use('/api/*', requestLoggerMiddleware)
+
 app.onError(errorHandler)
 
 app.get('/', (c) => {
@@ -45,6 +50,7 @@ app.route('/api/v1/auth', createAuthRoutes({ db }))
 app.route('/api/v1/users', createUsersRoutes({ db }))
 app.route('/api/v1/store', createStoreRoutes({ db }))
 app.route('/api/v1/audit-logs', createAuditRoutes({ db }))
+app.route('/api/v1/notifications', createNotificationRoutes({ db }))
 
 app.get('/api/v1/me', requireAuth, async (c) => {
   const auth = c.get('auth')
@@ -68,9 +74,15 @@ app.get('/api/v1/me', requireAuth, async (c) => {
 const port = Number(process.env.PORT) || 3000
 
 if (process.env.NODE_ENV !== 'test') {
-  serve({ fetch: app.fetch, port }, (info) => {
-    console.log(`API server running at http://localhost:${info.port}`)
-  })
+  initLogger()
+    .catch((err) => {
+      console.error('Failed to initialize logger, using fallback:', err)
+    })
+    .then(() => {
+      serve({ fetch: app.fetch, port }, (info) => {
+        console.log(`API server running at http://localhost:${info.port}`)
+      })
+    })
 }
 
 export default app

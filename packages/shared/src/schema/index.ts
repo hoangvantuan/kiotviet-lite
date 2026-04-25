@@ -1,6 +1,7 @@
 export * from './audit-log.js'
 export * from './audit-logs.js'
 export * from './auth.js'
+export * from './notifications.js'
 export * from './refresh-tokens.js'
 export * from './store-settings.js'
 export * from './stores.js'
