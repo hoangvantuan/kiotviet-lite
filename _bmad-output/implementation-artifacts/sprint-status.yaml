@@ -1,5 +1,5 @@
 # generated: 2026-04-24
-# last_updated: 2026-04-25
+# last_updated: 2026-04-26
 # project: kiotviet-lite
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-24
-last_updated: 2026-04-25
+last_updated: 2026-04-26
 project: kiotviet-lite
 project_key: NOKEY
 tracking_system: file-system
@@ -48,7 +48,7 @@ development_status:
   1-2-dang-ky-cua-hang-dang-nhap: done
   1-3-layout-ung-dung-navigation: done
   1-4-quan-ly-nhan-vien-phan-quyen: done
-  1-5-ci-cd-development-pipeline: backlog
+  1-5-ci-cd-development-pipeline: ready-for-dev
   epic-1-retrospective: optional
 
   # Epic 2: Quan ly Hang hoa
@@ -114,8 +114,8 @@ development_status:
   epic-9-retrospective: optional
 
   # Epic 10: Canh bao & Giam sat cua hang
-  epic-10: backlog
-  10-1-structured-logging-cho-backend: backlog
+  epic-10: in-progress
+  10-1-structured-logging-cho-backend: ready-for-dev
   10-2-notification-service-core: backlog
   10-3-webhook-telegram-transport-bao-mat: backlog
   10-4-ket-noi-7-event-nghiep-vu-mvp: backlog
