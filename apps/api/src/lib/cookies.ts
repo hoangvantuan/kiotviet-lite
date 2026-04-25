@@ -18,6 +18,9 @@ export function setRefreshCookie(c: Context, token: string): void {
 
 export function clearRefreshCookie(c: Context): void {
   deleteCookie(c, REFRESH_COOKIE_NAME, {
+    httpOnly: true,
+    secure: env.cookieSecure,
+    sameSite: 'Lax',
     path: '/api/v1/auth',
     domain: env.cookieDomain,
   })

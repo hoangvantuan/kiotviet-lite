@@ -39,6 +39,7 @@ async function tryRefresh(): Promise<boolean> {
         })
         if (!res.ok) {
           useAuthStore.getState().clearAuth()
+          window.location.href = '/login'
           return false
         }
         const json = (await res.json()) as { data: { accessToken: string; expiresIn: number } }
@@ -46,6 +47,7 @@ async function tryRefresh(): Promise<boolean> {
         return true
       } catch {
         useAuthStore.getState().clearAuth()
+        window.location.href = '/login'
         return false
       } finally {
         refreshPromise = null
@@ -87,7 +89,17 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   }
 
   const text = await res.text()
-  const json: unknown = text.length > 0 ? JSON.parse(text) : null
+  let json: unknown = null
+  if (text.length > 0) {
+    try {
+      json = JSON.parse(text)
+    } catch {
+      throw new ApiClientError(res.status, {
+        code: 'INTERNAL_ERROR',
+        message: 'Server trả response không hợp lệ',
+      })
+    }
+  }
 
   if (!res.ok) {
     const errBody = (json as { error?: ApiErrorBody } | null)?.error ?? {
@@ -101,7 +113,8 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 }
 
 export const apiClient = {
-  get: <T>(path: string, options?: RequestOptions) => apiFetch<T>(path, { ...options, method: 'GET' }),
+  get: <T>(path: string, options?: RequestOptions) =>
+    apiFetch<T>(path, { ...options, method: 'GET' }),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     apiFetch<T>(path, { ...options, method: 'POST', body }),
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>

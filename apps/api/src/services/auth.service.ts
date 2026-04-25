@@ -89,11 +89,14 @@ interface LoginDeps {
   input: LoginInput
 }
 
+const DUMMY_HASH = '$2a$12$x/Y5Y5Y5Y5Y5Y5Y5Y5Y5Y.x/Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y'
+
 export async function loginUser({ db, input }: LoginDeps): Promise<IssuedTokens> {
   const user = await db.query.users.findFirst({
     where: eq(users.phone, input.phone),
   })
   if (!user || !user.isActive) {
+    await verifyPassword(input.password, DUMMY_HASH)
     throw new ApiError('UNAUTHORIZED', 'Số điện thoại hoặc mật khẩu không đúng')
   }
 
@@ -129,13 +132,17 @@ interface RefreshDeps {
   token: string
 }
 
-export async function rotateRefreshToken({ db, token }: RefreshDeps): Promise<RefreshResponse & { refreshToken: string }> {
+export async function rotateRefreshToken({
+  db,
+  token,
+}: RefreshDeps): Promise<RefreshResponse & { refreshToken: string }> {
   const payload = verifyRefreshToken(token)
   const tokenHash = hashToken(token)
 
   const stored = await db.query.refreshTokens.findFirst({
     where: and(
       eq(refreshTokens.tokenHash, tokenHash),
+      eq(refreshTokens.userId, payload.sub),
       isNull(refreshTokens.revokedAt),
       gt(refreshTokens.expiresAt, new Date()),
     ),

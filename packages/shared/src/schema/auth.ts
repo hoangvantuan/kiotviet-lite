@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const VN_PHONE_REGEX = /^(0|\+?84)(3|5|7|8|9)\d{8}$/
+const VN_PHONE_REGEX = /^0(3|5|7|8|9)\d{8}$/
 
 export const phoneSchema = z
   .string({ required_error: 'Vui lòng nhập số điện thoại' })
@@ -29,9 +29,7 @@ export const registerSchema = z.object({
 
 export const loginSchema = z.object({
   phone: phoneSchema,
-  password: z
-    .string({ required_error: 'Vui lòng nhập mật khẩu' })
-    .min(1, 'Vui lòng nhập mật khẩu'),
+  password: z.string({ required_error: 'Vui lòng nhập mật khẩu' }).min(1, 'Vui lòng nhập mật khẩu'),
 })
 
 export const userRoleSchema = z.enum(['owner', 'manager', 'staff'])

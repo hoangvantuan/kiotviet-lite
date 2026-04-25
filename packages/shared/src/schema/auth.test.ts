@@ -6,8 +6,13 @@ describe('phoneSchema', () => {
   it('chấp nhận số VN bắt đầu 03/05/07/08/09', () => {
     expect(phoneSchema.safeParse('0901234567').success).toBe(true)
     expect(phoneSchema.safeParse('0312345678').success).toBe(true)
-    expect(phoneSchema.safeParse('+84901234567').success).toBe(true)
-    expect(phoneSchema.safeParse('84901234567').success).toBe(true)
+    expect(phoneSchema.safeParse('0581234567').success).toBe(true)
+    expect(phoneSchema.safeParse('0701234567').success).toBe(true)
+  })
+
+  it('từ chối format +84/84 (chỉ chấp nhận 0xxxxxxxxx)', () => {
+    expect(phoneSchema.safeParse('+84901234567').success).toBe(false)
+    expect(phoneSchema.safeParse('84901234567').success).toBe(false)
   })
 
   it('từ chối số sai định dạng', () => {

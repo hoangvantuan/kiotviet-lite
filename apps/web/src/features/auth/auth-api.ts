@@ -1,4 +1,4 @@
-import type { AuthResponse, LoginInput, RegisterInput } from '@kiotviet-lite/shared'
+import type { AuthResponse, AuthUser, LoginInput, RegisterInput } from '@kiotviet-lite/shared'
 
 import { apiClient } from '@/lib/api-client'
 
@@ -19,5 +19,21 @@ export function logoutApi() {
 }
 
 export function meApi() {
-  return apiClient.get<ApiEnvelope<{ userId: string; storeId: string; role: string }>>('/api/v1/me')
+  return apiClient.get<ApiEnvelope<AuthUser>>('/api/v1/me')
+}
+
+export async function refreshApi(): Promise<{ accessToken: string; expiresIn: number } | null> {
+  try {
+    const API_BASE_URL =
+      (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000'
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+    })
+    if (!res.ok) return null
+    const json = (await res.json()) as { data: { accessToken: string; expiresIn: number } }
+    return json.data
+  } catch {
+    return null
+  }
 }

@@ -19,7 +19,7 @@ export function LoginForm() {
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
-    mode: 'onBlur',
+    mode: 'onTouched',
     defaultValues: { phone: '', password: '' },
   })
 
@@ -27,7 +27,10 @@ export function LoginForm() {
     try {
       await login.mutateAsync(values)
       toast.success('Đăng nhập thành công')
-      navigate({ to: search.redirect ?? '/', replace: true })
+      const redirect = search.redirect
+      const safePath =
+        redirect && redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/'
+      navigate({ to: safePath, replace: true })
     } catch (err) {
       handleApiError(err, form)
     }
@@ -62,7 +65,11 @@ export function LoginForm() {
         ) : null}
       </div>
 
-      <Button type="submit" className="w-full" disabled={!form.formState.isValid || login.isPending}>
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={!form.formState.isValid || login.isPending}
+      >
         {login.isPending ? 'Đang đăng nhập…' : 'Đăng nhập'}
       </Button>
 

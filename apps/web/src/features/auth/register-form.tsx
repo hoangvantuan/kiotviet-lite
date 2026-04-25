@@ -18,7 +18,7 @@ export function RegisterForm() {
 
   const form = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
-    mode: 'onBlur',
+    mode: 'onTouched',
     defaultValues: { storeName: '', ownerName: '', phone: '', password: '' },
   })
 
@@ -78,7 +78,11 @@ export function RegisterForm() {
         ) : null}
       </div>
 
-      <Button type="submit" className="w-full" disabled={!form.formState.isValid || register.isPending}>
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={!form.formState.isValid || register.isPending}
+      >
         {register.isPending ? 'Đang tạo cửa hàng…' : 'Tạo cửa hàng'}
       </Button>
 
