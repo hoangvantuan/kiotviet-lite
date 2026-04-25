@@ -37,21 +37,21 @@
 generated: 2026-04-24
 last_updated: 2026-04-25
 project: kiotviet-lite
-# updated: Story 1.4 code review done, all patches applied, 128/128 tests pass
 project_key: NOKEY
 tracking_system: file-system
 story_location: '{project-root}/_bmad-output/implementation-artifacts'
 
 development_status:
-  # Epic 1: Khởi tạo dự án & Quản trị cửa hàng
+  # Epic 1: Khoi tao du an & Quan tri cua hang
   epic-1: in-progress
   1-1-khoi-tao-monorepo-database-design-system-co-ban: done
   1-2-dang-ky-cua-hang-dang-nhap: done
   1-3-layout-ung-dung-navigation: done
   1-4-quan-ly-nhan-vien-phan-quyen: done
+  1-5-ci-cd-development-pipeline: backlog
   epic-1-retrospective: optional
 
-  # Epic 2: Quản lý Hàng hóa
+  # Epic 2: Quan ly Hang hoa
   epic-2: backlog
   2-1-quan-ly-danh-muc-san-pham: backlog
   2-2-crud-san-pham-co-ban: backlog
@@ -59,23 +59,26 @@ development_status:
   2-4-don-vi-quy-doi-ton-kho: backlog
   epic-2-retrospective: optional
 
-  # Epic 3: Bán hàng (POS)
+  # Epic 3: Ban hang (POS) - Luong ban le
   epic-3: backlog
   3-1-giao-dien-pos-tim-kiem-san-pham: backlog
   3-2-gio-hang-quan-ly-don-hang: backlog
   3-3-thanh-toan-hoan-thanh-don-hang: backlog
   epic-3-retrospective: optional
 
-  # Epic 4: Khách hàng & Hệ thống Đơn giá
+  # Epic 4: Khach hang & He thong Don gia
   epic-4: backlog
   4-1-quan-ly-khach-hang-nhom-khach-hang: backlog
   4-2-trang-chi-tiet-khach-hang: backlog
-  4-3-bang-gia-chain-formula: backlog
-  4-4-gia-rieng-khach-hang-gia-theo-so-luong-chiet-khau-danh-muc: backlog
+  4-3-bang-gia-direct-formula: backlog
+  4-3b-chain-formula-clone-import-bang-gia: backlog
+  4-3c-so-sanh-bang-gia: backlog
+  4-4-gia-rieng-khach-hang-gia-theo-so-luong: backlog
+  4-4b-chiet-khau-danh-muc-kiem-soat-sua-gia: backlog
   4-5-tich-hop-6-tang-gia-vao-pos: backlog
   epic-4-retrospective: optional
 
-  # Epic 5: Quản lý Công nợ
+  # Epic 5: Quan ly Cong no
   epic-5: backlog
   5-1-ghi-no-trong-pos-kiem-tra-han-muc: backlog
   5-2-phieu-thu-phan-bo-fifo: backlog
@@ -84,19 +87,21 @@ development_status:
   5-5-canh-bao-no-bao-cao-cong-no: backlog
   epic-5-retrospective: optional
 
-  # Epic 6: Nhập hàng & Nhà cung cấp
+  # Epic 6: Nhap hang & Nha cung cap
   epic-6: backlog
   6-1-quan-ly-ncc-phieu-nhap-kho: backlog
   6-2-kiem-kho-lich-su-nhap-hang: backlog
   epic-6-retrospective: optional
 
-  # Epic 7: Hóa đơn & In ấn
+  # Epic 7: Hoa don & In an
   epic-7: backlog
   7-1-danh-sach-chi-tiet-hoa-don: backlog
-  7-2-tra-hang-in-an: backlog
+  7-2-tra-hang: backlog
+  7-3-in-hoa-don-thermal-a4: backlog
+  7-4-cai-dat-mau-in: backlog
   epic-7-retrospective: optional
 
-  # Epic 8: Báo cáo & Dashboard
+  # Epic 8: Bao cao & Dashboard
   epic-8: backlog
   8-1-dashboard-tong-quan: backlog
   8-2-bao-cao-chi-tiet-export: backlog
@@ -104,6 +109,15 @@ development_status:
 
   # Epic 9: Offline & PWA
   epic-9: backlog
-  9-1-pglite-offline-database-service-worker: backlog
-  9-2-sync-engine-conflict-resolution: backlog
+  9-1-app-hoat-dong-day-du-khi-mat-mang: backlog
+  9-2-don-hang-offline-tu-dong-dong-bo-khi-co-mang: backlog
   epic-9-retrospective: optional
+
+  # Epic 10: Canh bao & Giam sat cua hang
+  epic-10: backlog
+  10-1-structured-logging-cho-backend: backlog
+  10-2-notification-service-core: backlog
+  10-3-webhook-telegram-transport-bao-mat: backlog
+  10-4-ket-noi-7-event-nghiep-vu-mvp: backlog
+  10-5-frontend-outbox-cho-notification: backlog
+  epic-10-retrospective: optional
