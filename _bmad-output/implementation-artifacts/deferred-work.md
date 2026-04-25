@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of story 1.3 (2026-04-25)
+
+- Mobile drawer focus trap (WCAG 2.1 AA AC8): focus đi vào drawer khi mở, focus trả về hamburger khi đóng. Hiện chỉ có Escape + backdrop click.
+- Unit tests cho layout components (Sidebar, AppLayout, ErrorBoundary, EmptyState). Spec chưa bắt buộc nhưng nên có.
+- HomePage hiển thị "Xin chào, " (tên trống) khi user null. Auth guard đã chặn nhưng nên defensive default value.
+
 ## Deferred from: code review of story 1.2 (2026-04-25)
 
 - Rate limit cho auth endpoints (5 req/min/IP cho login, 3/hour cho register)

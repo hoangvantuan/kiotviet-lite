@@ -1,26 +1,31 @@
-import { useNavigate } from '@tanstack/react-router'
+import { useEffect } from 'react'
+import { useNavigate, useSearch } from '@tanstack/react-router'
+import { LayoutDashboard } from 'lucide-react'
 
-import { Button } from '@/components/ui/button'
-import { useLogout } from '@/features/auth/use-logout'
+import { EmptyState } from '@/components/shared/empty-state'
+import { showWarning } from '@/lib/toast'
 import { useAuthStore } from '@/stores/use-auth-store'
 
 export function HomePage() {
   const user = useAuthStore((s) => s.user)
-  const logout = useLogout()
+  const search = useSearch({ strict: false }) as { error?: string }
   const navigate = useNavigate()
 
-  const onLogout = async () => {
-    await logout.mutateAsync()
-    navigate({ to: '/login', replace: true })
-  }
+  useEffect(() => {
+    if (search.error === 'forbidden') {
+      showWarning('Bạn không có quyền truy cập trang này')
+      navigate({ to: '/', replace: true, search: {} as never })
+    }
+  }, [search.error, navigate])
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background text-foreground">
-      <h1 className="text-3xl font-bold text-primary">Xin chào {user?.name ?? ''}</h1>
-      <p className="text-muted-foreground">Cửa hàng của bạn đã sẵn sàng.</p>
-      <Button variant="outline" onClick={onLogout} disabled={logout.isPending}>
-        {logout.isPending ? 'Đang đăng xuất…' : 'Đăng xuất'}
-      </Button>
+    <div>
+      <h2 className="mb-4 text-xl font-semibold text-foreground">Xin chào, {user?.name ?? ''}</h2>
+      <EmptyState
+        icon={LayoutDashboard}
+        title="Chào mừng đến KiotViet Lite"
+        description="Dashboard tổng quan sẽ hiển thị khi có dữ liệu bán hàng."
+      />
     </div>
   )
 }

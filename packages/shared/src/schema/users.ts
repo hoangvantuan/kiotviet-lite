@@ -1,5 +1,6 @@
 import {
   boolean,
+  integer,
   pgEnum,
   pgTable,
   text,
@@ -28,6 +29,8 @@ export const users = pgTable(
     passwordHash: text().notNull(),
     role: userRoleEnum().notNull(),
     pinHash: text(),
+    failedPinAttempts: integer().notNull().default(0),
+    pinLockedUntil: timestamp({ withTimezone: true }),
     isActive: boolean().notNull().default(true),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })

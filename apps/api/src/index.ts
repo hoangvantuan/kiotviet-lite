@@ -8,11 +8,16 @@ import { users } from '@kiotviet-lite/shared'
 import { db } from './db/index.js'
 import { requireAuth } from './middleware/auth.middleware.js'
 import { errorHandler } from './middleware/error-handler.js'
+import { createAuditRoutes } from './routes/audit.routes.js'
 import { createAuthRoutes } from './routes/auth.routes.js'
+import { createStoreRoutes } from './routes/store.routes.js'
+import { createUsersRoutes } from './routes/users.routes.js'
 
 const app = new Hono()
 
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')
+const ALLOWED_ORIGINS = (
+  process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173,http://localhost:5174'
+)
   .split(',')
   .map((o) => o.trim())
 
@@ -37,6 +42,9 @@ app.get('/api/v1/health', (c) => {
 })
 
 app.route('/api/v1/auth', createAuthRoutes({ db }))
+app.route('/api/v1/users', createUsersRoutes({ db }))
+app.route('/api/v1/store', createStoreRoutes({ db }))
+app.route('/api/v1/audit-logs', createAuditRoutes({ db }))
 
 app.get('/api/v1/me', requireAuth, async (c) => {
   const auth = c.get('auth')
