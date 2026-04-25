@@ -30,6 +30,7 @@ export interface LogActionInput {
   db: Db
   storeId: string
   actorId: string
+  actorRole?: string
   action: AuditAction
   targetType?: string
   targetId?: string
@@ -39,11 +40,22 @@ export interface LogActionInput {
 }
 
 export async function logAction(input: LogActionInput): Promise<void> {
-  const { db, storeId, actorId, action, targetType, targetId, changes, ipAddress, userAgent } =
-    input
+  const {
+    db,
+    storeId,
+    actorId,
+    actorRole,
+    action,
+    targetType,
+    targetId,
+    changes,
+    ipAddress,
+    userAgent,
+  } = input
   await db.insert(auditLogs).values({
     storeId,
     actorId,
+    actorRole,
     action,
     targetType,
     targetId,
@@ -80,7 +92,9 @@ export async function listAudit({ db, actor, query }: ListAuditDeps): Promise<Au
   if (hasPermission(actor.role, 'audit.viewAll')) {
     // owner: tất cả store
   } else if (hasPermission(actor.role, 'audit.viewTeam')) {
-    const scope = or(eq(auditLogs.actorId, actor.userId), eq(users.role, 'staff'))
+    const isStaffByStoredRole = eq(auditLogs.actorRole, 'staff')
+    const isStaffByCurrentRole = and(sql`${auditLogs.actorRole} IS NULL`, eq(users.role, 'staff'))
+    const scope = or(eq(auditLogs.actorId, actor.userId), isStaffByStoredRole, isStaffByCurrentRole)
     if (scope) conditions.push(scope)
   } else {
     conditions.push(eq(auditLogs.actorId, actor.userId))

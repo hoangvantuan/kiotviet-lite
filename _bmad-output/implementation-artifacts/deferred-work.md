@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 1-4-quan-ly-nhan-vien-phan-quyen (2026-04-25)
+
+- REVOKE UPDATE, DELETE trên audit_logs chỉ áp dụng FROM PUBLIC, không chặn app role cụ thể. Cần REVOKE cho application role hoặc dùng trigger BEFORE UPDATE/DELETE RAISE EXCEPTION. Áp dụng khi deploy production.
+- X-Forwarded-For có thể giả mạo khi không có reverse proxy, audit log ghi IP sai. Cần trust proxy config hoặc fallback sang socket remote address. Phụ thuộc deployment infrastructure.
+- orders.viewAll thiếu trong permissions.ts dù bảng ma trận quyền AC3 liệt kê. Orders module chưa implement, sẽ thêm permission khi implement Epic 3.
+
 ## Deferred from: code review of story 1.3 (2026-04-25)
 
 - Mobile drawer focus trap (WCAG 2.1 AA AC8): focus đi vào drawer khi mở, focus trả về hamburger khi đóng. Hiện chỉ có Escape + backdrop click.

@@ -5,6 +5,7 @@ export type ApiErrorCode =
   | 'NOT_FOUND'
   | 'CONFLICT'
   | 'BUSINESS_RULE_VIOLATION'
+  | 'LOCKED'
   | 'RATE_LIMITED'
   | 'INTERNAL_ERROR'
 
@@ -15,6 +16,7 @@ const STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   NOT_FOUND: 404,
   CONFLICT: 409,
   BUSINESS_RULE_VIOLATION: 422,
+  LOCKED: 423,
   RATE_LIMITED: 429,
   INTERNAL_ERROR: 500,
 }

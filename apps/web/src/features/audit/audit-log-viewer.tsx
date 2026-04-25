@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/table'
 import { RoleBadge } from '@/features/users/role-badge'
 import { useUsersQuery } from '@/features/users/use-users'
+import { usePermission } from '@/hooks/use-permission'
 
 import { getActionLabel } from './action-labels'
 import { AuditDetailSheet } from './audit-detail-sheet'
@@ -35,7 +36,8 @@ export function AuditLogViewer() {
   const [filterOpen, setFilterOpen] = useState(false)
   const [detail, setDetail] = useState<AuditLogItem | null>(null)
 
-  const usersQuery = useUsersQuery()
+  const canManageUsers = usePermission('users.manage')
+  const usersQuery = useUsersQuery({ enabled: canManageUsers })
 
   const query = useMemo(
     () => ({

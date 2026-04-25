@@ -154,9 +154,14 @@ describe('PATCH /store', () => {
       body: JSON.stringify({ logoUrl: dataUrl }),
     })
     expect(res.status).toBe(400)
-    const body = (await res.json()) as { error: { code: string; message: string } }
+    const body = (await res.json()) as {
+      error: { code: string; message: string; details?: Array<{ message: string }> }
+    }
     expect(body.error.code).toBe('VALIDATION_ERROR')
-    expect(body.error.message).toContain('2MB')
+    const has2MB =
+      body.error.message.includes('2MB') ||
+      body.error.details?.some((d) => d.message.includes('2MB'))
+    expect(has2MB).toBe(true)
   })
 
   it('Phone sai format → 400', async () => {

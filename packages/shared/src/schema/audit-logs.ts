@@ -16,6 +16,7 @@ export const auditLogs = pgTable(
     actorId: uuid()
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
+    actorRole: varchar({ length: 32 }),
     action: varchar({ length: 64 }).notNull(),
     targetType: varchar({ length: 32 }),
     targetId: uuid(),

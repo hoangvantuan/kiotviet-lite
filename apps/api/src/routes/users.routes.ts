@@ -1,6 +1,9 @@
 import { Hono } from 'hono'
+import { z } from 'zod'
 
 import { createUserSchema, updateUserSchema, verifyPinSchema } from '@kiotviet-lite/shared'
+
+const uuidParam = z.string().uuid('ID không hợp lệ')
 
 import type { Db } from '../db/index.js'
 import { parseJson } from '../lib/http.js'
@@ -60,7 +63,7 @@ export function createUsersRoutes({ db }: UsersRoutesDeps) {
 
   app.patch('/:id', requirePermission('users.manage'), async (c) => {
     const auth = c.get('auth')
-    const targetId = c.req.param('id')
+    const targetId = uuidParam.parse(c.req.param('id'))
     const input = await parseJson(c, updateUserSchema)
     const data = await updateUser({
       db,
@@ -74,7 +77,7 @@ export function createUsersRoutes({ db }: UsersRoutesDeps) {
 
   app.post('/:id/lock', requirePermission('users.manage'), async (c) => {
     const auth = c.get('auth')
-    const targetId = c.req.param('id')
+    const targetId = uuidParam.parse(c.req.param('id'))
     const data = await lockUser({
       db,
       actor: auth,
@@ -86,7 +89,7 @@ export function createUsersRoutes({ db }: UsersRoutesDeps) {
 
   app.post('/:id/unlock', requirePermission('users.manage'), async (c) => {
     const auth = c.get('auth')
-    const targetId = c.req.param('id')
+    const targetId = uuidParam.parse(c.req.param('id'))
     const data = await unlockUser({
       db,
       actor: auth,

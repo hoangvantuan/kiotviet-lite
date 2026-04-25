@@ -62,10 +62,10 @@ export async function createUser({
   meta,
 }: CreateUserDeps): Promise<UserListItem> {
   const existing = await db.query.users.findFirst({
-    where: and(eq(users.storeId, actor.storeId), eq(users.phone, input.phone)),
+    where: eq(users.phone, input.phone),
   })
   if (existing) {
-    throw new ApiError('CONFLICT', 'Số điện thoại đã được sử dụng trong cửa hàng', {
+    throw new ApiError('CONFLICT', 'Số điện thoại đã được sử dụng', {
       field: 'phone',
     })
   }
@@ -73,35 +73,49 @@ export async function createUser({
   const passwordHash = await hashPassword(crypto.randomUUID())
   const pinHash = await hashPassword(input.pin)
 
-  const [created] = await db
-    .insert(users)
-    .values({
+  return db.transaction(async (tx) => {
+    let created: typeof users.$inferSelect
+    try {
+      const [row] = await tx
+        .insert(users)
+        .values({
+          storeId: actor.storeId,
+          name: input.name,
+          phone: input.phone,
+          passwordHash,
+          pinHash,
+          role: input.role,
+        })
+        .returning()
+
+      if (!row) {
+        throw new ApiError('INTERNAL_ERROR', 'Không tạo được nhân viên')
+      }
+      created = row
+    } catch (err) {
+      if (err instanceof ApiError) throw err
+      const msg = err instanceof Error ? err.message : ''
+      if (msg.includes('unique') || msg.includes('duplicate')) {
+        throw new ApiError('CONFLICT', 'Số điện thoại đã được sử dụng', { field: 'phone' })
+      }
+      throw err
+    }
+
+    await logAction({
+      db: tx as unknown as Db,
       storeId: actor.storeId,
-      name: input.name,
-      phone: input.phone,
-      passwordHash,
-      pinHash,
-      role: input.role,
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: 'user.created',
+      targetType: 'user',
+      targetId: created.id,
+      changes: { name: input.name, phone: input.phone, role: input.role },
+      ipAddress: meta?.ipAddress,
+      userAgent: meta?.userAgent,
     })
-    .returning()
 
-  if (!created) {
-    throw new ApiError('INTERNAL_ERROR', 'Không tạo được nhân viên')
-  }
-
-  await logAction({
-    db,
-    storeId: actor.storeId,
-    actorId: actor.userId,
-    action: 'user.created',
-    targetType: 'user',
-    targetId: created.id,
-    changes: { name: input.name, phone: input.phone, role: input.role },
-    ipAddress: meta?.ipAddress,
-    userAgent: meta?.userAgent,
+    return toUserListItem(created)
   })
-
-  return toUserListItem(created)
 }
 
 export interface UpdateUserDeps {
@@ -164,50 +178,53 @@ export async function updateUser({
     return toUserListItem(target)
   }
 
-  const [updated] = await db.update(users).set(updates).where(eq(users.id, targetId)).returning()
+  return db.transaction(async (tx) => {
+    const [updated] = await tx.update(users).set(updates).where(eq(users.id, targetId)).returning()
 
-  if (!updated) {
-    throw new ApiError('INTERNAL_ERROR', 'Không cập nhật được nhân viên')
-  }
+    if (!updated) {
+      throw new ApiError('INTERNAL_ERROR', 'Không cập nhật được nhân viên')
+    }
 
-  // Nếu user bị khoá (isActive false) → revoke tất cả refresh tokens
-  if (input.isActive === false && target.isActive) {
-    await db
-      .update(refreshTokens)
-      .set({ revokedAt: new Date() })
-      .where(and(eq(refreshTokens.userId, targetId), isNull(refreshTokens.revokedAt)))
-  }
+    if (input.isActive === false && target.isActive) {
+      await tx
+        .update(refreshTokens)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(refreshTokens.userId, targetId), isNull(refreshTokens.revokedAt)))
+    }
 
-  const fieldDiff = diffObjects(before, after)
-  if (Object.keys(fieldDiff).length > 0) {
-    await logAction({
-      db,
-      storeId: actor.storeId,
-      actorId: actor.userId,
-      action: 'user.updated',
-      targetType: 'user',
-      targetId,
-      changes: fieldDiff,
-      ipAddress: meta?.ipAddress,
-      userAgent: meta?.userAgent,
-    })
-  }
+    const fieldDiff = diffObjects(before, after)
+    if (Object.keys(fieldDiff).length > 0) {
+      await logAction({
+        db: tx as unknown as Db,
+        storeId: actor.storeId,
+        actorId: actor.userId,
+        actorRole: actor.role,
+        action: 'user.updated',
+        targetType: 'user',
+        targetId,
+        changes: fieldDiff,
+        ipAddress: meta?.ipAddress,
+        userAgent: meta?.userAgent,
+      })
+    }
 
-  if (pinChange) {
-    await logAction({
-      db,
-      storeId: actor.storeId,
-      actorId: actor.userId,
-      action: 'user.pin_reset',
-      targetType: 'user',
-      targetId,
-      changes: { pin: 'reset' },
-      ipAddress: meta?.ipAddress,
-      userAgent: meta?.userAgent,
-    })
-  }
+    if (pinChange) {
+      await logAction({
+        db: tx as unknown as Db,
+        storeId: actor.storeId,
+        actorId: actor.userId,
+        actorRole: actor.role,
+        action: 'user.pin_reset',
+        targetType: 'user',
+        targetId,
+        changes: { pin: 'reset' },
+        ipAddress: meta?.ipAddress,
+        userAgent: meta?.userAgent,
+      })
+    }
 
-  return toUserListItem(updated)
+    return toUserListItem(updated)
+  })
 }
 
 export interface LockUserDeps {
@@ -227,34 +244,37 @@ export async function lockUser({ db, actor, targetId, meta }: LockUserDeps): Pro
     throw new ApiError('NOT_FOUND', 'Không tìm thấy nhân viên')
   }
 
-  const [updated] = await db
-    .update(users)
-    .set({ isActive: false })
-    .where(and(eq(users.id, targetId), ne(users.id, actor.userId)))
-    .returning()
+  return db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(users)
+      .set({ isActive: false })
+      .where(and(eq(users.id, targetId), ne(users.id, actor.userId)))
+      .returning()
 
-  if (!updated) {
-    throw new ApiError('INTERNAL_ERROR', 'Không khoá được nhân viên')
-  }
+    if (!updated) {
+      throw new ApiError('INTERNAL_ERROR', 'Không khoá được nhân viên')
+    }
 
-  await db
-    .update(refreshTokens)
-    .set({ revokedAt: new Date() })
-    .where(and(eq(refreshTokens.userId, targetId), isNull(refreshTokens.revokedAt)))
+    await tx
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(refreshTokens.userId, targetId), isNull(refreshTokens.revokedAt)))
 
-  await logAction({
-    db,
-    storeId: actor.storeId,
-    actorId: actor.userId,
-    action: 'user.locked',
-    targetType: 'user',
-    targetId,
-    changes: { isActive: { before: target.isActive, after: false } },
-    ipAddress: meta?.ipAddress,
-    userAgent: meta?.userAgent,
+    await logAction({
+      db: tx as unknown as Db,
+      storeId: actor.storeId,
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: 'user.locked',
+      targetType: 'user',
+      targetId,
+      changes: { isActive: { before: target.isActive, after: false } },
+      ipAddress: meta?.ipAddress,
+      userAgent: meta?.userAgent,
+    })
+
+    return toUserListItem(updated)
   })
-
-  return toUserListItem(updated)
 }
 
 export async function unlockUser({
@@ -268,27 +288,30 @@ export async function unlockUser({
     throw new ApiError('NOT_FOUND', 'Không tìm thấy nhân viên')
   }
 
-  const [updated] = await db
-    .update(users)
-    .set({ isActive: true, failedPinAttempts: 0, pinLockedUntil: null })
-    .where(eq(users.id, targetId))
-    .returning()
+  return db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(users)
+      .set({ isActive: true, failedPinAttempts: 0, pinLockedUntil: null })
+      .where(eq(users.id, targetId))
+      .returning()
 
-  if (!updated) {
-    throw new ApiError('INTERNAL_ERROR', 'Không mở khoá được nhân viên')
-  }
+    if (!updated) {
+      throw new ApiError('INTERNAL_ERROR', 'Không mở khoá được nhân viên')
+    }
 
-  await logAction({
-    db,
-    storeId: actor.storeId,
-    actorId: actor.userId,
-    action: 'user.unlocked',
-    targetType: 'user',
-    targetId,
-    changes: { isActive: { before: target.isActive, after: true } },
-    ipAddress: meta?.ipAddress,
-    userAgent: meta?.userAgent,
+    await logAction({
+      db: tx as unknown as Db,
+      storeId: actor.storeId,
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: 'user.unlocked',
+      targetType: 'user',
+      targetId,
+      changes: { isActive: { before: target.isActive, after: true } },
+      ipAddress: meta?.ipAddress,
+      userAgent: meta?.userAgent,
+    })
+
+    return toUserListItem(updated)
   })
-
-  return toUserListItem(updated)
 }

@@ -6,10 +6,11 @@ import { createUserApi, listUsersApi, lockUserApi, unlockUserApi, updateUserApi 
 
 const USERS_KEY = ['users'] as const
 
-export function useUsersQuery() {
+export function useUsersQuery(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: USERS_KEY,
     queryFn: async () => (await listUsersApi()).data,
+    enabled: options?.enabled,
   })
 }
 

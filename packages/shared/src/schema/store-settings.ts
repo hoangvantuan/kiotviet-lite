@@ -16,6 +16,7 @@ export const updateStoreSchema = z
     phone: phoneSchema.optional().nullable(),
     logoUrl: z
       .string()
+      .max(2_800_000, 'Logo vượt quá 2MB')
       .regex(LOGO_DATA_URL_REGEX, 'Logo phải là PNG hoặc JPEG (data URL)')
       .optional()
       .nullable(),

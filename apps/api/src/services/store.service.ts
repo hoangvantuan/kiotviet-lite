@@ -66,7 +66,7 @@ export async function updateStore({
     throw new ApiError('NOT_FOUND', 'Không tìm thấy cửa hàng')
   }
 
-  if (input.logoUrl) {
+  if (input.logoUrl !== undefined && input.logoUrl !== null) {
     validateLogoSize(input.logoUrl)
   }
 
@@ -76,43 +76,45 @@ export async function updateStore({
   if (input.phone !== undefined) updates.phone = input.phone
   if (input.logoUrl !== undefined) updates.logoUrl = input.logoUrl
 
-  const [updated] = await db
-    .update(stores)
-    .set(updates)
-    .where(eq(stores.id, actor.storeId))
-    .returning()
+  return db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(stores)
+      .set(updates)
+      .where(eq(stores.id, actor.storeId))
+      .returning()
 
-  if (!updated) {
-    throw new ApiError('INTERNAL_ERROR', 'Không cập nhật được cửa hàng')
-  }
+    if (!updated) {
+      throw new ApiError('INTERNAL_ERROR', 'Không cập nhật được cửa hàng')
+    }
 
-  const beforeFields = {
-    name: before.name,
-    address: before.address,
-    phone: before.phone,
-    logoUrl: before.logoUrl ? '<base64>' : null,
-  }
-  const afterFields = {
-    name: updated.name,
-    address: updated.address,
-    phone: updated.phone,
-    logoUrl: updated.logoUrl ? '<base64>' : null,
-  }
-  const fieldDiff = diffObjects(beforeFields, afterFields)
+    const beforeFields = {
+      name: before.name,
+      address: before.address,
+      phone: before.phone,
+      logoUrl: before.logoUrl ? '<base64>' : null,
+    }
+    const afterFields = {
+      name: updated.name,
+      address: updated.address,
+      phone: updated.phone,
+      logoUrl: updated.logoUrl ? '<base64>' : null,
+    }
+    const fieldDiff = diffObjects(beforeFields, afterFields)
 
-  if (Object.keys(fieldDiff).length > 0) {
-    await logAction({
-      db,
-      storeId: actor.storeId,
-      actorId: actor.userId,
-      action: 'store.updated',
-      targetType: 'store',
-      targetId: actor.storeId,
-      changes: fieldDiff,
-      ipAddress: meta?.ipAddress,
-      userAgent: meta?.userAgent,
-    })
-  }
+    if (Object.keys(fieldDiff).length > 0) {
+      await logAction({
+        db: tx as unknown as Db,
+        storeId: actor.storeId,
+        actorId: actor.userId,
+        action: 'store.updated',
+        targetType: 'store',
+        targetId: actor.storeId,
+        changes: fieldDiff,
+        ipAddress: meta?.ipAddress,
+        userAgent: meta?.userAgent,
+      })
+    }
 
-  return toStoreSettings(updated)
+    return toStoreSettings(updated)
+  })
 }

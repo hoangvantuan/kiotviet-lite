@@ -1,6 +1,6 @@
 # Story 1.4: Quản lý nhân viên & Phân quyền
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -518,6 +518,35 @@ Story này AC1 chỉ yêu cầu nhập PIN khi tạo NV (không nhập password)
 - [Web: shadcn/ui Sheet](https://ui.shadcn.com/docs/components/sheet) cho audit detail drawer
 - [Web: shadcn/ui Tabs](https://ui.shadcn.com/docs/components/tabs) cho settings layout
 - [Web: PostgreSQL REVOKE](https://www.postgresql.org/docs/current/sql-revoke.html) cho audit_logs append-only
+
+### Review Findings
+
+#### Decision Needed (Resolved)
+
+- [x] [Review][Decision] D1: Cho phép tạo nhiều Owner trong cùng store? → **Cho phép** (by design)
+- [x] [Review][Decision] D2: HTTP status code khi PIN bị khoá: 423 vs 422? → **Thêm LOCKED=423** ✅ Fixed
+- [x] [Review][Decision] D3: Phone unique scope: toàn hệ thống vs trong store? → **Global unique** (1 SĐT = 1 tài khoản). ✅ Fixed: check global + catch constraint error
+- [x] [Review][Decision] D4: Audit log scoping theo role hiện tại hay role lúc ghi? → **Lưu actorRole vào audit_logs** ✅ Fixed: migration 0004, logAction lưu role, query fallback
+
+#### Patch (Fixed)
+
+- [x] [Review][Patch] P1: Race condition PIN verification ✅ Fixed: db.transaction() + SELECT...FOR UPDATE + return outcome thay vì throw trong transaction [pin.service.ts]
+- [x] [Review][Patch] P2: Audit log ngoài transaction ✅ Fixed: wrap operation+audit trong db.transaction() [users.service.ts, store.service.ts, pin.service.ts]
+- [x] [Review][Patch] P3: isActive check khi verify PIN ✅ Fixed: thêm check user.isActive trước verify [pin.service.ts]
+- [x] [Review][Patch] P4: TOCTOU race khi tạo user ✅ Fixed: try-catch DB constraint error, convert sang CONFLICT [users.service.ts]
+- [x] [Review][Patch] P5: UUID validation route params ✅ Fixed: Zod uuid validation cho :id [users.routes.ts]
+- [x] [Review][Patch] P6: Manager/Staff useUsersQuery 403 ✅ Fixed: conditional fetch khi có permission users.manage [audit-log-viewer.tsx, use-users.ts]
+- [x] [Review][Patch] P7: logoUrl empty string ✅ Fixed: `!== undefined && !== null` thay vì truthy check [store.service.ts]
+- [x] [Review][Patch] P8: Date filter timezone — Dismissed: behavior hiện tại đúng (local time → UTC conversion)
+- [x] [Review][Patch] P9: PIN timing side-channel ✅ Fixed: dummy bcrypt compare khi user không tồn tại [pin.service.ts]
+- [x] [Review][Patch] P10: Logo Zod max size ✅ Fixed: `.max(2_800_000)` trước `.regex()` [store-settings.ts]
+- [ ] [Review][Patch] P10: Logo Zod schema không có .max() trên string, client-side regex chạy trên chuỗi multi-MB gây lag — Thêm `.max(2_800_000)` vào Zod string trước `.regex()` [store-settings.ts:18-21]
+
+#### Deferred
+
+- [x] [Review][Defer] W1: REVOKE UPDATE, DELETE chỉ áp dụng FROM PUBLIC, không chặn app role cụ thể [0003_curved_vargas.sql] — deferred, production deployment concern, đã ghi nhận trong spec Dev Notes
+- [x] [Review][Defer] W2: X-Forwarded-For có thể giả mạo khi không có reverse proxy, audit log ghi IP sai [audit.service.ts:22-27] — deferred, phụ thuộc deployment infrastructure
+- [x] [Review][Defer] W3: orders.viewAll thiếu trong permissions.ts dù AC3 ma trận quyền liệt kê — deferred, orders module chưa implement, sẽ thêm ở Epic 3
 
 ## Dev Agent Record
 

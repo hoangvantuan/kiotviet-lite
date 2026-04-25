@@ -384,7 +384,7 @@ describe('POST /users/verify-pin (AC4)', () => {
     expect(body.error.details?.remaining).toBe(4)
   })
 
-  it('PIN sai 5 lần liên tiếp → khoá 15 phút, lần thứ 5 trả 422', async () => {
+  it('PIN sai 5 lần liên tiếp → khoá 15 phút, lần thứ 5 trả 423', async () => {
     let lastStatus = 0
     for (let i = 1; i <= 5; i++) {
       const r = await env.app.request('/verify-pin', {
@@ -394,7 +394,7 @@ describe('POST /users/verify-pin (AC4)', () => {
       })
       lastStatus = r.status
     }
-    expect(lastStatus).toBe(422)
+    expect(lastStatus).toBe(423)
 
     const after = await env.base.db.query.users.findFirst({
       where: eq(users.id, env.base.staff.id),
@@ -404,7 +404,7 @@ describe('POST /users/verify-pin (AC4)', () => {
     expect(after?.pinLockedUntil!.getTime()).toBeGreaterThan(Date.now() + 14 * 60 * 1000)
   })
 
-  it('Đang lock → request mới trả 422 dù PIN đúng', async () => {
+  it('Đang lock → request mới trả 423 dù PIN đúng', async () => {
     await env.base.db
       .update(users)
       .set({
@@ -418,9 +418,9 @@ describe('POST /users/verify-pin (AC4)', () => {
       headers: { 'Content-Type': 'application/json', ...env.base.staff.authHeader },
       body: JSON.stringify({ pin: env.base.staff.pin }),
     })
-    expect(res.status).toBe(422)
+    expect(res.status).toBe(423)
     const body = (await res.json()) as { error: { code: string } }
-    expect(body.error.code).toBe('BUSINESS_RULE_VIOLATION')
+    expect(body.error.code).toBe('LOCKED')
   })
 
   it('Lock đã hết hạn → cho phép thử lại (lazy reset)', async () => {
