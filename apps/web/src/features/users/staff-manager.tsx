@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Plus, Search, Users } from 'lucide-react'
 
 import type { UserListItem, UserRole } from '@kiotviet-lite/shared'
@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useDebounced } from '@/hooks/use-debounced'
 import { useMediaQuery } from '@/hooks/use-media-query'
 
 import { LockConfirmDialog } from './lock-confirm-dialog'
@@ -22,15 +23,6 @@ import { StaffTable } from './staff-table'
 import { useUsersQuery } from './use-users'
 
 type RoleFilter = 'all' | UserRole
-
-function useDebounced<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(value), delayMs)
-    return () => clearTimeout(id)
-  }, [value, delayMs])
-  return debounced
-}
 
 export function StaffManager() {
   const [searchInput, setSearchInput] = useState('')

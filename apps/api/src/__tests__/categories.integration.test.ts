@@ -4,6 +4,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { auditLogs, categories } from '@kiotviet-lite/shared'
 
 import { createCategoriesRoutes } from '../routes/categories.routes.js'
+import { createProductsRoutes } from '../routes/products.routes.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 beforeAll(() => {
@@ -517,6 +518,33 @@ describe('DELETE /categories/:id', () => {
     )
     expect(r.status).toBe(404)
     expect(r.body.error.code).toBe('NOT_FOUND')
+  })
+
+  it('Xoá danh mục có 2 sản phẩm sống → 422 với count chính xác (Story 2.2)', async () => {
+    const cat = await postJson<{ data: CategoryResponse }>(
+      env,
+      '/',
+      { name: 'Đồ uống' },
+      env.base.owner.authHeader,
+    )
+    const productsApp = createProductsRoutes({ db: env.base.db })
+    for (let i = 0; i < 2; i++) {
+      const res = await productsApp.request('/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...env.base.owner.authHeader },
+        body: JSON.stringify({ name: `SP ${i}`, sellingPrice: 0, categoryId: cat.body.data.id }),
+      })
+      expect(res.status).toBe(201)
+    }
+
+    const r = await deletePath<{ error: { code: string; message: string } }>(
+      env,
+      `/${cat.body.data.id}`,
+      env.base.owner.authHeader,
+    )
+    expect(r.status).toBe(422)
+    expect(r.body.error.code).toBe('BUSINESS_RULE_VIOLATION')
+    expect(r.body.error.message).toContain('2 sản phẩm')
   })
 
   it('audit ghi category.deleted với snapshot', async () => {

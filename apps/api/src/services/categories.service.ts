@@ -4,6 +4,7 @@ import {
   categories,
   type CategoryItem,
   type CreateCategoryInput,
+  products,
   type ReorderCategoriesInput,
   type UpdateCategoryInput,
   type UserRole,
@@ -31,21 +32,38 @@ function toCategoryItem(row: typeof categories.$inferSelect): CategoryItem {
   }
 }
 
+function unwrapDriverError(err: unknown): unknown {
+  // Drizzle wraps PG errors in DrizzleQueryError; gốc nằm ở `cause`
+  let current: unknown = err
+  for (let i = 0; i < 5; i++) {
+    if (!current || typeof current !== 'object') break
+    if ('code' in current || 'constraint_name' in current || 'constraint' in current) return current
+    if ('cause' in current) {
+      current = (current as { cause: unknown }).cause
+      continue
+    }
+    break
+  }
+  return current
+}
+
 function getPgErrorCode(err: unknown): string | undefined {
-  if (err && typeof err === 'object' && 'code' in err) {
-    const code = (err as { code: unknown }).code
+  const unwrapped = unwrapDriverError(err)
+  if (unwrapped && typeof unwrapped === 'object' && 'code' in unwrapped) {
+    const code = (unwrapped as { code: unknown }).code
     if (typeof code === 'string') return code
   }
   return undefined
 }
 
 function getPgConstraint(err: unknown): string | undefined {
-  if (err && typeof err === 'object' && 'constraint_name' in err) {
-    const name = (err as { constraint_name: unknown }).constraint_name
+  const unwrapped = unwrapDriverError(err)
+  if (unwrapped && typeof unwrapped === 'object' && 'constraint_name' in unwrapped) {
+    const name = (unwrapped as { constraint_name: unknown }).constraint_name
     if (typeof name === 'string') return name
   }
-  if (err && typeof err === 'object' && 'constraint' in err) {
-    const name = (err as { constraint: unknown }).constraint
+  if (unwrapped && typeof unwrapped === 'object' && 'constraint' in unwrapped) {
+    const name = (unwrapped as { constraint: unknown }).constraint
     if (typeof name === 'string') return name
   }
   return undefined
@@ -456,8 +474,20 @@ export async function deleteCategory({
     }
   }
 
-  // TODO Story 2.2: count products in this category before delete
-  // Hiện tại products chưa có; dùng try-catch FK error phòng thủ
+  // Story 2.2: đếm chính xác số sản phẩm sống đang gán vào danh mục
+  const productCountRows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(products)
+    .where(and(eq(products.categoryId, targetId), isNull(products.deletedAt)))
+  const productCount = productCountRows[0]?.count ?? 0
+  if (productCount > 0) {
+    throw new ApiError(
+      'BUSINESS_RULE_VIOLATION',
+      `Danh mục đang chứa ${productCount} sản phẩm, không thể xoá`,
+    )
+  }
+
+  // Defense-in-depth: nếu race condition giữa count và delete xảy ra, FK violation 23503 vẫn được catch ở dưới
 
   return db.transaction(async (tx) => {
     try {

@@ -13,6 +13,11 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'category.updated': 'Sửa danh mục',
   'category.deleted': 'Xoá danh mục',
   'category.reordered': 'Sắp xếp danh mục',
+  'product.created': 'Tạo sản phẩm',
+  'product.updated': 'Sửa sản phẩm',
+  'product.deleted': 'Xoá sản phẩm',
+  'product.restored': 'Khôi phục sản phẩm',
+  'product.stock_initialized': 'Khởi tạo tồn kho',
 }
 
 export interface ActionGroup {
@@ -36,6 +41,16 @@ export const ACTION_GROUPS: ActionGroup[] = [
   {
     label: 'Danh mục',
     actions: ['category.created', 'category.updated', 'category.deleted', 'category.reordered'],
+  },
+  {
+    label: 'Sản phẩm',
+    actions: [
+      'product.created',
+      'product.updated',
+      'product.deleted',
+      'product.restored',
+      'product.stock_initialized',
+    ],
   },
 ]
 

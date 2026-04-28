@@ -1,0 +1,683 @@
+import { useEffect } from 'react'
+import {
+  type Control,
+  Controller,
+  type FieldErrors,
+  type FieldValues,
+  type Path,
+  useForm,
+  type UseFormRegister,
+  type UseFormReturn,
+} from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+
+import {
+  type CategoryItem,
+  type CreateProductInput,
+  createProductSchema,
+  type ProductDetail,
+  type UpdateProductInput,
+  updateProductSchema,
+} from '@kiotviet-lite/shared'
+
+import { CurrencyInput } from '@/components/shared/currency-input'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { ApiClientError } from '@/lib/api-client'
+import { showError, showSuccess } from '@/lib/toast'
+
+import { buildCategoryTree } from '../categories/utils'
+import { generateRandomSku } from './sku'
+import { useCreateProductMutation, useUpdateProductMutation } from './use-products'
+
+const NO_CATEGORY = '__NONE__'
+
+type Mode = 'create' | 'edit'
+
+interface ProductFormDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  mode: Mode
+  product?: ProductDetail
+  categories: CategoryItem[]
+}
+
+export function ProductFormDialog(props: ProductFormDialogProps) {
+  if (props.mode === 'create') {
+    return <CreateDialog {...props} />
+  }
+  if (!props.product) return null
+  return <EditDialog {...props} product={props.product} />
+}
+
+interface CreateFormShape {
+  name: string
+  sku: string
+  barcode: string
+  categoryId: string | null
+  sellingPrice: number
+  costPrice: number | null
+  unit: string
+  imageUrl: string
+  status: 'active' | 'inactive'
+  trackInventory: boolean
+  minStock: number
+  initialStock: number
+}
+
+const createDefaults: CreateFormShape = {
+  name: '',
+  sku: '',
+  barcode: '',
+  categoryId: null,
+  sellingPrice: 0,
+  costPrice: null,
+  unit: 'Cái',
+  imageUrl: '',
+  status: 'active',
+  trackInventory: false,
+  minStock: 0,
+  initialStock: 0,
+}
+
+function CreateDialog({ open, onOpenChange, categories }: ProductFormDialogProps) {
+  const mutation = useCreateProductMutation()
+  const form = useForm<CreateFormShape>({
+    resolver: zodResolver(createProductSchema) as never,
+    mode: 'onTouched',
+    defaultValues: createDefaults,
+  })
+
+  useEffect(() => {
+    if (open) {
+      form.reset(createDefaults)
+    }
+  }, [open, form])
+
+  const trackInventory = form.watch('trackInventory')
+
+  const submit = form.handleSubmit(async (values) => {
+    const payload: CreateProductInput = {
+      name: values.name,
+      sellingPrice: values.sellingPrice,
+      unit: values.unit || 'Cái',
+      status: values.status,
+      trackInventory: values.trackInventory,
+      minStock: values.trackInventory ? values.minStock : 0,
+      initialStock: values.trackInventory ? values.initialStock : 0,
+    }
+    const skuTrim = values.sku.trim()
+    if (skuTrim) payload.sku = skuTrim
+    const barcodeTrim = values.barcode.trim()
+    if (barcodeTrim) payload.barcode = barcodeTrim
+    if (values.categoryId) payload.categoryId = values.categoryId
+    if (values.costPrice !== null && values.costPrice !== undefined) {
+      payload.costPrice = values.costPrice
+    }
+    const imgTrim = values.imageUrl.trim()
+    if (imgTrim) payload.imageUrl = imgTrim
+
+    try {
+      await mutation.mutateAsync(payload)
+      showSuccess('Đã tạo sản phẩm')
+      onOpenChange(false)
+    } catch (err) {
+      handleApiError(err, asFormSetError(form))
+    }
+  })
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Thêm sản phẩm</DialogTitle>
+          <DialogDescription>Tạo sản phẩm mới cho cửa hàng.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-6" noValidate>
+          <BasicSection<CreateFormShape> form={form} categories={categories} />
+          <PriceSection<CreateFormShape> form={form} />
+          <ImageSection<CreateFormShape> form={form} />
+          <StatusSection<CreateFormShape> form={form} />
+          <InventorySection<CreateFormShape>
+            form={form}
+            mode="create"
+            trackInventory={trackInventory}
+          />
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={mutation.isPending}
+            >
+              Hủy
+            </Button>
+            <Button type="submit" disabled={!form.formState.isValid || mutation.isPending}>
+              {mutation.isPending ? 'Đang lưu…' : 'Lưu'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+interface EditFormShape {
+  name: string
+  sku: string
+  barcode: string
+  categoryId: string | null
+  sellingPrice: number
+  costPrice: number | null
+  unit: string
+  imageUrl: string
+  status: 'active' | 'inactive'
+  trackInventory: boolean
+  minStock: number
+}
+
+function EditDialog({
+  open,
+  onOpenChange,
+  product,
+  categories,
+}: ProductFormDialogProps & { product: ProductDetail }) {
+  const mutation = useUpdateProductMutation()
+  const initial: EditFormShape = {
+    name: product.name,
+    sku: product.sku,
+    barcode: product.barcode ?? '',
+    categoryId: product.categoryId,
+    sellingPrice: product.sellingPrice,
+    costPrice: product.costPrice,
+    unit: product.unit,
+    imageUrl: product.imageUrl ?? '',
+    status: product.status,
+    trackInventory: product.trackInventory,
+    minStock: product.minStock,
+  }
+  const form = useForm<EditFormShape>({
+    resolver: zodResolver(updateProductSchema) as never,
+    mode: 'onTouched',
+    defaultValues: initial,
+  })
+
+  useEffect(() => {
+    if (open) form.reset(initial)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, product])
+
+  const trackInventory = form.watch('trackInventory')
+
+  const submit = form.handleSubmit(async (values) => {
+    const payload: UpdateProductInput = {}
+    if (values.name !== product.name) payload.name = values.name
+    const skuTrim = values.sku.trim()
+    if (skuTrim && skuTrim !== product.sku) payload.sku = skuTrim
+    const barcodeTrim = values.barcode.trim()
+    const newBarcode = barcodeTrim || null
+    if (newBarcode !== product.barcode) payload.barcode = newBarcode
+    if (values.categoryId !== product.categoryId) payload.categoryId = values.categoryId
+    if (values.sellingPrice !== product.sellingPrice) payload.sellingPrice = values.sellingPrice
+    if (values.costPrice !== product.costPrice) payload.costPrice = values.costPrice
+    if (values.unit !== product.unit) payload.unit = values.unit
+    const newImg = values.imageUrl.trim() || null
+    if (newImg !== product.imageUrl) payload.imageUrl = newImg
+    if (values.status !== product.status) payload.status = values.status
+    if (values.trackInventory !== product.trackInventory) {
+      payload.trackInventory = values.trackInventory
+    }
+    if (values.minStock !== product.minStock) payload.minStock = values.minStock
+
+    if (Object.keys(payload).length === 0) {
+      onOpenChange(false)
+      return
+    }
+
+    try {
+      await mutation.mutateAsync({ id: product.id, input: payload })
+      showSuccess('Đã cập nhật sản phẩm')
+      onOpenChange(false)
+    } catch (err) {
+      handleApiError(err, asFormSetError(form))
+    }
+  })
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Sửa sản phẩm</DialogTitle>
+          <DialogDescription>Cập nhật thông tin sản phẩm.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-6" noValidate>
+          <BasicSection<EditFormShape> form={form} categories={categories} />
+          <PriceSection<EditFormShape> form={form} />
+          <ImageSection<EditFormShape> form={form} />
+          <StatusSection<EditFormShape> form={form} />
+          <InventorySection<EditFormShape>
+            form={form}
+            mode="edit"
+            trackInventory={trackInventory}
+            currentStock={product.currentStock}
+          />
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={mutation.isPending}
+            >
+              Hủy
+            </Button>
+            <Button type="submit" disabled={!form.formState.isValid || mutation.isPending}>
+              {mutation.isPending ? 'Đang lưu…' : 'Lưu'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// Generic helper types
+interface ProductFormFields extends FieldValues {
+  name: string
+  sku: string
+  barcode: string
+  categoryId: string | null
+  sellingPrice: number
+  costPrice: number | null
+  unit: string
+  imageUrl: string
+  status: 'active' | 'inactive'
+  trackInventory: boolean
+  minStock: number
+  initialStock?: number
+}
+
+function getError<T extends FieldValues>(
+  errors: FieldErrors<T>,
+  key: keyof ProductFormFields,
+): string | undefined {
+  const node = (errors as Record<string, { message?: string } | undefined>)[key as string]
+  return node?.message
+}
+
+function BasicSection<T extends FieldValues & ProductFormFields>({
+  form,
+  categories,
+}: {
+  form: UseFormReturn<T>
+  categories: CategoryItem[]
+}) {
+  const tree = buildCategoryTree(categories)
+  const register = form.register as unknown as UseFormRegister<ProductFormFields>
+  const setValue = form.setValue as unknown as (
+    name: keyof ProductFormFields,
+    value: unknown,
+    opts?: unknown,
+  ) => void
+  const watch = form.watch as unknown as (name: keyof ProductFormFields) => unknown
+  const categoryValue = (watch('categoryId') as string | null) ?? null
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-sm font-semibold text-foreground">Thông tin cơ bản</h3>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-1 md:col-span-2">
+          <Label htmlFor="p-name">
+            Tên sản phẩm <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="p-name"
+            autoFocus
+            maxLength={255}
+            placeholder="VD: Cà phê đen đá"
+            {...register('name' as Path<ProductFormFields>)}
+          />
+          {getError(form.formState.errors, 'name') && (
+            <p className="text-sm text-destructive">{getError(form.formState.errors, 'name')}</p>
+          )}
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="p-sku">SKU</Label>
+          <div className="flex gap-2">
+            <Input
+              id="p-sku"
+              placeholder="Để trống để tự sinh"
+              maxLength={64}
+              {...register('sku' as Path<ProductFormFields>)}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setValue('sku', generateRandomSku(), {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
+            >
+              Sinh SKU
+            </Button>
+          </div>
+          {getError(form.formState.errors, 'sku') && (
+            <p className="text-sm text-destructive">{getError(form.formState.errors, 'sku')}</p>
+          )}
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="p-barcode">Barcode</Label>
+          <Input
+            id="p-barcode"
+            placeholder="VD: 8934567890123"
+            maxLength={64}
+            {...register('barcode' as Path<ProductFormFields>)}
+          />
+          {getError(form.formState.errors, 'barcode') && (
+            <p className="text-sm text-destructive">{getError(form.formState.errors, 'barcode')}</p>
+          )}
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="p-category">Danh mục</Label>
+          <Select
+            value={categoryValue ?? NO_CATEGORY}
+            onValueChange={(v) =>
+              setValue('categoryId', v === NO_CATEGORY ? null : v, {
+                shouldValidate: true,
+                shouldDirty: true,
+              })
+            }
+          >
+            <SelectTrigger id="p-category">
+              <SelectValue placeholder="Chọn danh mục" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_CATEGORY}>Không phân loại</SelectItem>
+              {tree.map((parent) => (
+                <div key={parent.id}>
+                  <SelectItem value={parent.id}>{parent.name}</SelectItem>
+                  {parent.children.map((child) => (
+                    <SelectItem key={child.id} value={child.id}>
+                      {`    ${child.name}`}
+                    </SelectItem>
+                  ))}
+                </div>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="p-unit">Đơn vị tính</Label>
+          <Input
+            id="p-unit"
+            placeholder="VD: Cái, Ly, Hộp"
+            maxLength={32}
+            {...register('unit' as Path<ProductFormFields>)}
+          />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function PriceSection<T extends FieldValues & ProductFormFields>({
+  form,
+}: {
+  form: UseFormReturn<T>
+}) {
+  const control = form.control as unknown as Control<ProductFormFields>
+  return (
+    <section className="space-y-3">
+      <h3 className="text-sm font-semibold text-foreground">Giá</h3>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-1">
+          <Label htmlFor="p-price">
+            Giá bán <span className="text-destructive">*</span>
+          </Label>
+          <Controller
+            name="sellingPrice"
+            control={control}
+            render={({ field }) => (
+              <CurrencyInput
+                id="p-price"
+                value={field.value}
+                onChange={(v) => field.onChange(v ?? 0)}
+              />
+            )}
+          />
+          {getError(form.formState.errors, 'sellingPrice') && (
+            <p className="text-sm text-destructive">
+              {getError(form.formState.errors, 'sellingPrice')}
+            </p>
+          )}
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="p-cost">Giá vốn</Label>
+          <Controller
+            name="costPrice"
+            control={control}
+            render={({ field }) => (
+              <CurrencyInput id="p-cost" value={field.value} onChange={field.onChange} />
+            )}
+          />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function ImageSection<T extends FieldValues & ProductFormFields>({
+  form,
+}: {
+  form: UseFormReturn<T>
+}) {
+  const register = form.register as unknown as UseFormRegister<ProductFormFields>
+  return (
+    <section className="space-y-3">
+      <h3 className="text-sm font-semibold text-foreground">Hình ảnh</h3>
+      <div className="space-y-1">
+        <Label htmlFor="p-image">URL ảnh</Label>
+        <Input
+          id="p-image"
+          placeholder="https://..."
+          {...register('imageUrl' as Path<ProductFormFields>)}
+        />
+        <p className="text-xs text-muted-foreground">
+          Tối đa 1 ảnh, ≤5MB, jpg/png/webp. Story 2.2 chỉ hỗ trợ dán URL ảnh, upload thực sẽ làm ở
+          story tương lai.
+        </p>
+        {getError(form.formState.errors, 'imageUrl') && (
+          <p className="text-sm text-destructive">{getError(form.formState.errors, 'imageUrl')}</p>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function StatusSection<T extends FieldValues & ProductFormFields>({
+  form,
+}: {
+  form: UseFormReturn<T>
+}) {
+  const setValue = form.setValue as unknown as (
+    name: keyof ProductFormFields,
+    value: unknown,
+    opts?: unknown,
+  ) => void
+  const watch = form.watch as unknown as (name: keyof ProductFormFields) => unknown
+  const status = (watch('status') as 'active' | 'inactive') ?? 'active'
+  return (
+    <section className="space-y-3">
+      <h3 className="text-sm font-semibold text-foreground">Trạng thái</h3>
+      <Select
+        value={status}
+        onValueChange={(v) =>
+          setValue('status', v, {
+            shouldValidate: true,
+            shouldDirty: true,
+          })
+        }
+      >
+        <SelectTrigger className="md:w-60">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="active">Đang bán</SelectItem>
+          <SelectItem value="inactive">Ngừng bán</SelectItem>
+        </SelectContent>
+      </Select>
+    </section>
+  )
+}
+
+function InventorySection<T extends FieldValues & ProductFormFields>({
+  form,
+  mode,
+  trackInventory,
+  currentStock,
+}: {
+  form: UseFormReturn<T>
+  mode: Mode
+  trackInventory: boolean
+  currentStock?: number
+}) {
+  const setValue = form.setValue as unknown as (
+    name: keyof ProductFormFields,
+    value: unknown,
+    opts?: unknown,
+  ) => void
+  const register = form.register as unknown as UseFormRegister<ProductFormFields>
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-foreground">Theo dõi tồn kho</h3>
+        <Switch
+          checked={trackInventory}
+          onCheckedChange={(v) =>
+            setValue('trackInventory', v, {
+              shouldValidate: true,
+              shouldDirty: true,
+            })
+          }
+        />
+      </div>
+      {trackInventory && (
+        <div className="grid gap-3 md:grid-cols-2">
+          {mode === 'create' && (
+            <div className="space-y-1">
+              <Label htmlFor="p-initial">Tồn kho ban đầu</Label>
+              <Input
+                id="p-initial"
+                type="number"
+                min={0}
+                inputMode="numeric"
+                {...register('initialStock' as Path<ProductFormFields>, {
+                  valueAsNumber: true,
+                })}
+              />
+              {getError(form.formState.errors, 'initialStock') && (
+                <p className="text-sm text-destructive">
+                  {getError(form.formState.errors, 'initialStock')}
+                </p>
+              )}
+            </div>
+          )}
+          <div className="space-y-1">
+            <Label htmlFor="p-min">Định mức tối thiểu</Label>
+            <Input
+              id="p-min"
+              type="number"
+              min={0}
+              inputMode="numeric"
+              {...register('minStock' as Path<ProductFormFields>, { valueAsNumber: true })}
+            />
+            {getError(form.formState.errors, 'minStock') && (
+              <p className="text-sm text-destructive">
+                {getError(form.formState.errors, 'minStock')}
+              </p>
+            )}
+          </div>
+          {mode === 'edit' && (
+            <div className="space-y-1">
+              <Label>Tồn kho hiện tại</Label>
+              <Input value={currentStock ?? 0} readOnly disabled />
+              <p className="text-xs text-muted-foreground">
+                Cập nhật qua phiếu nhập kho/kiểm kho ở Story 2.4
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+interface FormSetError {
+  setError: (name: string, error: { message: string }) => void
+}
+
+function asFormSetError(form: { setError: (...args: never[]) => void }): FormSetError {
+  return {
+    setError: (name, error) => {
+      ;(form.setError as unknown as (n: string, e: { message: string }) => void)(name, error)
+    },
+  }
+}
+
+const KNOWN_FIELDS = [
+  'name',
+  'sku',
+  'barcode',
+  'categoryId',
+  'sellingPrice',
+  'costPrice',
+  'unit',
+  'imageUrl',
+]
+
+function handleApiError(err: unknown, form: FormSetError) {
+  if (err instanceof ApiClientError) {
+    if (err.code === 'CONFLICT') {
+      const detail = err.details as { field?: string } | undefined
+      if (detail?.field === 'sku') {
+        form.setError('sku', { message: err.message })
+        showError(err.message)
+        return
+      }
+      if (detail?.field === 'barcode') {
+        form.setError('barcode', { message: err.message })
+        showError(err.message)
+        return
+      }
+    }
+    if (err.code === 'VALIDATION_ERROR' && Array.isArray(err.details)) {
+      for (const issue of err.details as Array<{ path: string; message: string }>) {
+        if (KNOWN_FIELDS.includes(issue.path)) {
+          form.setError(issue.path, { message: issue.message })
+        }
+      }
+    }
+    showError(err.message)
+    return
+  }
+  showError('Đã xảy ra lỗi không xác định')
+}
