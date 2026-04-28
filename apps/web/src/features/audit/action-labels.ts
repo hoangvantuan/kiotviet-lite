@@ -35,6 +35,20 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'customer_group.created': 'Tạo nhóm khách hàng',
   'customer_group.updated': 'Sửa nhóm khách hàng',
   'customer_group.deleted': 'Xoá nhóm khách hàng',
+  'price_list.created': 'Tạo bảng giá',
+  'price_list.updated': 'Sửa bảng giá',
+  'price_list.deleted': 'Xoá bảng giá',
+  'price_list.restored': 'Khôi phục bảng giá',
+  'price_list.recalculated': 'Tính lại bảng giá',
+  'price_list_item.created': 'Tạo dòng bảng giá',
+  'price_list_item.updated': 'Sửa dòng bảng giá',
+  'price_list_item.deleted': 'Xoá dòng bảng giá',
+  'supplier.created': 'Tạo nhà cung cấp',
+  'supplier.updated': 'Sửa nhà cung cấp',
+  'supplier.deleted': 'Xoá nhà cung cấp',
+  'supplier.restored': 'Khôi phục nhà cung cấp',
+  'supplier.debt_changed': 'Cập nhật công nợ NCC',
+  'purchase_order.created': 'Tạo phiếu nhập kho',
 }
 
 export interface ActionGroup {
@@ -88,6 +102,31 @@ export const ACTION_GROUPS: ActionGroup[] = [
   {
     label: 'Nhóm khách hàng',
     actions: ['customer_group.created', 'customer_group.updated', 'customer_group.deleted'],
+  },
+  {
+    label: 'Bảng giá',
+    actions: [
+      'price_list.created',
+      'price_list.updated',
+      'price_list.deleted',
+      'price_list.restored',
+      'price_list.recalculated',
+    ],
+  },
+  {
+    label: 'Mục bảng giá',
+    actions: ['price_list_item.created', 'price_list_item.updated', 'price_list_item.deleted'],
+  },
+  {
+    label: 'Nhập hàng',
+    actions: [
+      'supplier.created',
+      'supplier.updated',
+      'supplier.deleted',
+      'supplier.restored',
+      'supplier.debt_changed',
+      'purchase_order.created',
+    ],
   },
 ]
 

@@ -16,8 +16,12 @@ import { createCategoriesRoutes } from './routes/categories.routes.js'
 import { createCustomerGroupsRoutes } from './routes/customer-groups.routes.js'
 import { createCustomersRoutes } from './routes/customers.routes.js'
 import { createNotificationRoutes } from './routes/notifications.routes.js'
+import { createPosRoutes } from './routes/pos.routes.js'
+import { createPriceListsRoutes } from './routes/price-lists.routes.js'
 import { createProductsRoutes } from './routes/products.routes.js'
+import { createPurchaseOrdersRoutes } from './routes/purchase-orders.routes.js'
 import { createStoreRoutes } from './routes/store.routes.js'
+import { createSuppliersRoutes } from './routes/suppliers.routes.js'
 import { createUsersRoutes } from './routes/users.routes.js'
 
 const app = new Hono()
@@ -54,8 +58,12 @@ app.route('/api/v1/auth', createAuthRoutes({ db }))
 app.route('/api/v1/users', createUsersRoutes({ db }))
 app.route('/api/v1/categories', createCategoriesRoutes({ db }))
 app.route('/api/v1/products', createProductsRoutes({ db }))
+app.route('/api/v1/pos', createPosRoutes({ db }))
 app.route('/api/v1/customer-groups', createCustomerGroupsRoutes({ db }))
 app.route('/api/v1/customers', createCustomersRoutes({ db }))
+app.route('/api/v1/suppliers', createSuppliersRoutes({ db }))
+app.route('/api/v1/purchase-orders', createPurchaseOrdersRoutes({ db }))
+app.route('/api/v1/price-lists', createPriceListsRoutes({ db }))
 app.route('/api/v1/store', createStoreRoutes({ db }))
 app.route('/api/v1/audit-logs', createAuditRoutes({ db }))
 app.route('/api/v1/notifications', createNotificationRoutes({ db }))

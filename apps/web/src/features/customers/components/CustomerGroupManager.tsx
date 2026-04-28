@@ -34,6 +34,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Table,
   TableBody,
   TableCell,
@@ -44,12 +51,15 @@ import {
 import { ApiClientError } from '@/lib/api-client'
 import { showError, showSuccess } from '@/lib/toast'
 
+import { useDirectPriceListsQuery } from '../../pricing/use-price-lists'
 import {
   useCreateCustomerGroupMutation,
   useCustomerGroupsQuery,
   useDeleteCustomerGroupMutation,
   useUpdateCustomerGroupMutation,
 } from '../use-customers'
+
+const NO_PRICE_LIST = '__NONE__'
 
 const VND_FORMATTER = new Intl.NumberFormat('vi-VN')
 
@@ -60,11 +70,14 @@ function formatDebtLimit(value: number | null): string {
 
 export function CustomerGroupManager() {
   const groupsQuery = useCustomerGroupsQuery()
+  const directPriceLists = useDirectPriceListsQuery({ enabled: true })
   const [createOpen, setCreateOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<CustomerGroupItem | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<CustomerGroupItem | null>(null)
 
   const groups = groupsQuery.data ?? []
+  const priceListItems = directPriceLists.data?.data ?? []
+  const priceListMap = new Map(priceListItems.map((p) => [p.id, p.name]))
 
   return (
     <div className="space-y-4">
@@ -100,6 +113,7 @@ export function CustomerGroupManager() {
               <TableRow>
                 <TableHead>Tên nhóm</TableHead>
                 <TableHead>Mô tả</TableHead>
+                <TableHead>Bảng giá</TableHead>
                 <TableHead>Hạn mức nợ</TableHead>
                 <TableHead className="text-right">Số khách hàng</TableHead>
                 <TableHead className="w-32 text-right">Thao tác</TableHead>
@@ -111,6 +125,11 @@ export function CustomerGroupManager() {
                   <TableCell className="font-medium">{group.name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {group.description ?? '—'}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {group.defaultPriceListId
+                      ? (priceListMap.get(group.defaultPriceListId) ?? '—')
+                      : '—'}
                   </TableCell>
                   <TableCell>{formatDebtLimit(group.debtLimit)}</TableCell>
                   <TableCell className="text-right">{group.customerCount}</TableCell>
@@ -167,16 +186,18 @@ interface CreateGroupDialogProps {
 
 function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps) {
   const mutation = useCreateCustomerGroupMutation()
+  const directPriceLists = useDirectPriceListsQuery({ enabled: open })
+  const priceLists = directPriceLists.data?.data ?? []
   const form = useForm<CreateCustomerGroupInput>({
     resolver: zodResolver(createCustomerGroupSchema),
     mode: 'onTouched',
-    defaultValues: { name: '', description: null, debtLimit: null },
+    defaultValues: { name: '', description: null, defaultPriceListId: null, debtLimit: null },
   })
   const [debtLimitText, setDebtLimitText] = useState('')
 
   useEffect(() => {
     if (open) {
-      form.reset({ name: '', description: null, debtLimit: null })
+      form.reset({ name: '', description: null, defaultPriceListId: null, debtLimit: null })
       setDebtLimitText('')
     }
   }, [open, form])
@@ -185,6 +206,7 @@ function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps) {
     const payload: CreateCustomerGroupInput = {
       name: values.name,
       description: values.description?.trim() || null,
+      defaultPriceListId: values.defaultPriceListId ?? null,
       debtLimit: values.debtLimit ?? null,
     }
     try {
@@ -195,6 +217,8 @@ function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps) {
       handleApiError(err, asFormSetError(form), ['name'])
     }
   })
+
+  const priceListValue = form.watch('defaultPriceListId') ?? null
 
   const handleDebtLimitChange = (text: string) => {
     setDebtLimitText(text)
@@ -239,6 +263,32 @@ function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps) {
             />
           </div>
           <div className="space-y-2">
+            <Label>Bảng giá mặc định</Label>
+            <Select
+              value={priceListValue ?? NO_PRICE_LIST}
+              onValueChange={(v) =>
+                form.setValue('defaultPriceListId', v === NO_PRICE_LIST ? null : v, {
+                  shouldValidate: true,
+                })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Không áp dụng bảng giá riêng" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_PRICE_LIST}>Không áp dụng</SelectItem>
+                {priceLists.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Khi chọn, mọi khách hàng trong nhóm sẽ áp dụng bảng giá này.
+            </p>
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="group-debt-limit">Hạn mức nợ (VND)</Label>
             <Input
               id="group-debt-limit"
@@ -278,6 +328,8 @@ interface EditGroupDialogProps {
 
 function EditGroupDialog({ open, onOpenChange, group }: EditGroupDialogProps) {
   const mutation = useUpdateCustomerGroupMutation()
+  const directPriceLists = useDirectPriceListsQuery({ enabled: open })
+  const priceLists = directPriceLists.data?.data ?? []
   const form = useForm<UpdateCustomerGroupInput>({
     resolver: zodResolver(updateCustomerGroupSchema),
     mode: 'onTouched',
@@ -289,6 +341,7 @@ function EditGroupDialog({ open, onOpenChange, group }: EditGroupDialogProps) {
       form.reset({
         name: group.name,
         description: group.description,
+        defaultPriceListId: group.defaultPriceListId,
         debtLimit: group.debtLimit,
       })
       setDebtLimitText(group.debtLimit === null ? '' : String(group.debtLimit))
@@ -302,6 +355,12 @@ function EditGroupDialog({ open, onOpenChange, group }: EditGroupDialogProps) {
     if (values.name !== undefined && values.name !== group.name) payload.name = values.name
     const desc = values.description?.trim() || null
     if (desc !== group.description) payload.description = desc
+    if (
+      values.defaultPriceListId !== undefined &&
+      values.defaultPriceListId !== group.defaultPriceListId
+    ) {
+      payload.defaultPriceListId = values.defaultPriceListId
+    }
     if (values.debtLimit !== undefined && values.debtLimit !== group.debtLimit) {
       payload.debtLimit = values.debtLimit
     }
@@ -317,6 +376,8 @@ function EditGroupDialog({ open, onOpenChange, group }: EditGroupDialogProps) {
       handleApiError(err, asFormSetError(form), ['name'])
     }
   })
+
+  const priceListValue = form.watch('defaultPriceListId') ?? null
 
   const handleDebtLimitChange = (text: string) => {
     setDebtLimitText(text)
@@ -353,6 +414,29 @@ function EditGroupDialog({ open, onOpenChange, group }: EditGroupDialogProps) {
                 setValueAs: (v) => (v === '' ? null : v),
               })}
             />
+          </div>
+          <div className="space-y-2">
+            <Label>Bảng giá mặc định</Label>
+            <Select
+              value={priceListValue ?? NO_PRICE_LIST}
+              onValueChange={(v) =>
+                form.setValue('defaultPriceListId', v === NO_PRICE_LIST ? null : v, {
+                  shouldValidate: true,
+                })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Không áp dụng bảng giá riêng" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_PRICE_LIST}>Không áp dụng</SelectItem>
+                {priceLists.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="edit-group-debt-limit">Hạn mức nợ (VND)</Label>

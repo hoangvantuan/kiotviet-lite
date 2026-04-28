@@ -92,6 +92,20 @@
       "when": 1777371873325,
       "tag": "0012_elite_mole_man",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1777380883480,
+      "tag": "0013_harsh_dreadnoughts",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1777381124004,
+      "tag": "0014_typical_morlun",
+      "breakpoints": true
     }
   ]
 }

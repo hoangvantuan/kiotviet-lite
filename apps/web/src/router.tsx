@@ -18,14 +18,20 @@ import { CustomersPage } from '@/pages/customers-page'
 import { HomePage } from '@/pages/home-page'
 import { LoginPage } from '@/pages/login-page'
 import { PosPage } from '@/pages/pos-page'
+import { PricingDetailPage } from '@/pages/pricing-detail-page'
+import { PricingPage } from '@/pages/pricing-page'
 import { ProductsCategoriesPage } from '@/pages/products-categories-page'
 import { ProductsPage } from '@/pages/products-page'
+import { PurchaseOrderCreatePage } from '@/pages/purchase-order-create-page'
+import { PurchaseOrderDetailPage } from '@/pages/purchase-order-detail-page'
+import { PurchaseOrdersPage } from '@/pages/purchase-orders-page'
 import { RegisterPage } from '@/pages/register-page'
 import { ReportsPage } from '@/pages/reports-page'
 import { SettingsAuditPage } from '@/pages/settings-audit-page'
 import { SettingsPage } from '@/pages/settings-page'
 import { SettingsStaffPage } from '@/pages/settings-staff-page'
 import { SettingsStorePage } from '@/pages/settings-store-page'
+import { SuppliersPage } from '@/pages/suppliers-page'
 import { useAuthStore } from '@/stores/use-auth-store'
 
 const rootRoute = createRootRoute({
@@ -126,6 +132,48 @@ const customersGroupsRoute = createRoute({
   component: CustomersGroupsPage,
 })
 
+const pricingRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/pricing',
+  beforeLoad: requirePermissionGuard('pricing.manage'),
+  component: PricingPage,
+})
+
+const pricingDetailRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/pricing/$id',
+  beforeLoad: requirePermissionGuard('pricing.manage'),
+  component: PricingDetailPage,
+})
+
+const inventorySuppliersRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/inventory/suppliers',
+  beforeLoad: requirePermissionGuard('inventory.manage'),
+  component: SuppliersPage,
+})
+
+const inventoryPurchaseOrdersRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/inventory/purchase-orders',
+  beforeLoad: requirePermissionGuard('inventory.manage'),
+  component: PurchaseOrdersPage,
+})
+
+const inventoryPurchaseOrderCreateRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/inventory/purchase-orders/new',
+  beforeLoad: requirePermissionGuard('inventory.manage'),
+  component: PurchaseOrderCreatePage,
+})
+
+const inventoryPurchaseOrderDetailRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/inventory/purchase-orders/$orderId',
+  beforeLoad: requirePermissionGuard('inventory.manage'),
+  component: PurchaseOrderDetailPage,
+})
+
 const reportsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/reports',
@@ -193,6 +241,12 @@ const routeTree = rootRoute.addChildren([
       productsCategoriesRoute,
       customersRoute,
       customersGroupsRoute,
+      pricingRoute,
+      pricingDetailRoute,
+      inventorySuppliersRoute,
+      inventoryPurchaseOrdersRoute,
+      inventoryPurchaseOrderCreateRoute,
+      inventoryPurchaseOrderDetailRoute,
       reportsRoute,
       settingsRoute.addChildren([
         settingsIndexRoute,

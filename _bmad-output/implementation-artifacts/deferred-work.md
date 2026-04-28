@@ -88,6 +88,32 @@
 - Bottom tab bar mobile hiển thị tất cả nav items (hiện 7 mục). Trên màn hình nhỏ (320-375px) quá chật, label bị cắt. Cần giới hạn 4-5 tab hoặc gom sub-items. [apps/web/src/components/layout/bottom-tab-bar.tsx]
 - Settings nav item dùng permission `audit.viewOwn` cho phép tất cả role thấy. Pre-existing, không phải regression. [apps/web/src/components/layout/nav-items.ts:21]
 
+## Deferred from: code review of 3-1-giao-dien-pos-tim-kiem-san-pham (2026-04-28)
+
+- W1: Duplicate variant mapping logic trong searchProductsForPos, cần extract helper function [products.service.ts]
+- W2: N+1 queries variant barcode search (5 round-trips), cần merge vào single query [products.service.ts]
+- W3: const rows mutated via push, nên dùng let hoặc build final list explicitly [products.service.ts]
+- W4: PosProductItem/PosVariantItem duplicated backend/frontend, nên đưa vào @kiotviet-lite/shared [products.service.ts, types.ts]
+- W5: No min query length server-side, frontend guard đủ cho MVP [pos.routes.ts]
+- W6: Touch targets < 44px: CartItem buttons 28px, CategoryFilter chips 32px, scanner button 36px [CartItem.tsx, CategoryFilter.tsx, PosSearchBar.tsx]
+- W7: Autocomplete dropdown thiếu ARIA combobox roles (role="combobox", role="listbox", aria-expanded) [PosSearchBar.tsx]
+- W8: ProductGrid cards thiếu aria-label cho screen reader [ProductGrid.tsx]
+- W9: CartPanel width 384px vs spec 380px, sai lệch 4px [PosScreen.tsx]
+- W10: Breakpoint desktop dùng 768px thay vì spec 1024px, 2 trạng thái thay vì 3 [PosScreen.tsx]
+- W11: Integer overflow risk totalAmount khi VND lớn (không thực tế đạt MAX_SAFE_INTEGER) [use-cart-store.ts]
+- W12: Stock validation giữa dialog open và checkout, sẽ validate server-side ở Story 3.3 [VariantSelectionDialog.tsx]
+- W13: attribute1Value empty string khi attribute1Name có giá trị [products.service.ts]
+
+## Deferred from: code review of 4-3-bang-gia-direct-formula (2026-04-28)
+
+- Thiếu inline toggle isActive trên trang chi tiết bảng giá. AC14 nói "switch toggle inline qua PATCH". Hiện phải mở dialog. UX nice-to-have. [apps/web/src/features/pricing/components/PriceListDetail.tsx:174-196]
+- AlertDialog xoá item formula chưa override không disable nút "Xoá". Click vẫn nhận error toast 422 từ BE, nhưng UX tốt hơn nếu disable. [PriceListDetail.tsx:277-283]
+- useProductsQuery pageSize=100 cap số sản phẩm hiển thị trong wizard tạo direct + add item. Store >100 SP sẽ thiếu. Đã được Dev Notes H4/note 10 acknowledge MVP. [CreatePriceListDialog.tsx:186, AddPriceListItemDialog.tsx:49]
+- listPriceLists subquery itemCount correlated chạy 1 query/row. Hiệu năng OK MVP (≤100 bảng giá). Có thể tối ưu LEFT JOIN GROUP BY. [apps/api/src/services/price-lists.service.ts:117-120]
+- Recalculate không filter product alive. Base có item của product đã soft delete sẽ vào formula list. Dev Notes H8 đã defer xử lý orphan items. [price-lists.service.ts:886]
+- validateProductsAlive race condition với soft delete. Product có thể soft delete giữa validate và insert; FK CASCADE chỉ trigger trên hard delete nên insert vẫn pass. Tác động consistency, không corruption. Story 4.5 sẽ filter trong pricing engine. [price-list-items.service.ts:208-213]
+- FK customer_groups.defaultPriceListId không enforce same-store ở DB. Service layer Story 4.1 đảm nhận. [test note customer-groups-pricing-fk]
+
 ## Deferred from: code review of 1-1-khoi-tao-monorepo-database-design-system-co-ban (2026-04-24)
 
 - DB connection không có graceful shutdown (`apps/api/src/db/index.ts`): cần `process.on('SIGTERM/SIGINT')` để đóng connection pool. Scope story deploy/production-readiness.

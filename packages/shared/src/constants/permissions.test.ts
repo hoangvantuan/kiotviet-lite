@@ -16,10 +16,13 @@ const MATRIX: Record<Permission, Record<UserRole, boolean>> = {
   'pos.sell': { owner: true, manager: true, staff: true },
   'customers.view': { owner: true, manager: true, staff: true },
   'customers.manage': { owner: true, manager: true, staff: false },
+  'pricing.view': { owner: true, manager: true, staff: true },
+  'pricing.manage': { owner: true, manager: true, staff: false },
+  'inventory.manage': { owner: true, manager: true, staff: false },
 }
 
 describe('PERMISSIONS map', () => {
-  it('khai báo đầy đủ permission keys (8 base + 2 customer)', () => {
+  it('khai báo đầy đủ permission keys (8 base + 2 customer + 2 pricing + 1 inventory)', () => {
     const keys = Object.keys(PERMISSIONS).sort()
     expect(keys).toEqual(
       [
@@ -28,7 +31,10 @@ describe('PERMISSIONS map', () => {
         'audit.viewTeam',
         'customers.manage',
         'customers.view',
+        'inventory.manage',
         'pos.sell',
+        'pricing.manage',
+        'pricing.view',
         'products.manage',
         'reports.view',
         'store.manage',
@@ -67,6 +73,7 @@ describe('hasPermission - các kết hợp đặc trưng', () => {
     expect(hasPermission('owner', 'products.manage')).toBe(true)
     expect(hasPermission('owner', 'pos.sell')).toBe(true)
     expect(hasPermission('owner', 'audit.viewTeam')).toBe(false)
+    expect(hasPermission('owner', 'inventory.manage')).toBe(true)
   })
 
   it('Manager: KHÔNG có users.manage / store.manage / audit.viewAll', () => {
@@ -77,9 +84,10 @@ describe('hasPermission - các kết hợp đặc trưng', () => {
     expect(hasPermission('manager', 'reports.view')).toBe(true)
     expect(hasPermission('manager', 'products.manage')).toBe(true)
     expect(hasPermission('manager', 'pos.sell')).toBe(true)
+    expect(hasPermission('manager', 'inventory.manage')).toBe(true)
   })
 
-  it('Staff: chỉ có audit.viewOwn và pos.sell', () => {
+  it('Staff: chỉ có audit.viewOwn, pos.sell, customers.view, pricing.view', () => {
     expect(hasPermission('staff', 'users.manage')).toBe(false)
     expect(hasPermission('staff', 'store.manage')).toBe(false)
     expect(hasPermission('staff', 'audit.viewAll')).toBe(false)
@@ -88,5 +96,10 @@ describe('hasPermission - các kết hợp đặc trưng', () => {
     expect(hasPermission('staff', 'reports.view')).toBe(false)
     expect(hasPermission('staff', 'products.manage')).toBe(false)
     expect(hasPermission('staff', 'pos.sell')).toBe(true)
+    expect(hasPermission('staff', 'customers.view')).toBe(true)
+    expect(hasPermission('staff', 'customers.manage')).toBe(false)
+    expect(hasPermission('staff', 'pricing.view')).toBe(true)
+    expect(hasPermission('staff', 'pricing.manage')).toBe(false)
+    expect(hasPermission('staff', 'inventory.manage')).toBe(false)
   })
 })

@@ -22,6 +22,7 @@ import {
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
+import { escapeLikePattern } from '../lib/strings.js'
 import { diffObjects, logAction, type RequestMeta } from './audit.service.js'
 import {
   classifyVariantViolation,
@@ -1815,4 +1816,262 @@ export async function restoreProduct({
       unitConversions,
     )
   })
+}
+
+// ========== Story 3.1: POS product search ==========
+
+export interface PosUnitConversion {
+  id: string
+  unit: string
+  conversionFactor: number
+  sellingPrice: number
+}
+
+export interface PosProductItem {
+  id: string
+  name: string
+  sku: string
+  barcode: string | null
+  unit: string
+  basePrice: number
+  imageUrl: string | null
+  trackInventory: boolean
+  stockQuantity: number
+  hasVariants: boolean
+  categoryId: string | null
+  variants: PosVariantItem[]
+  unitConversions: PosUnitConversion[]
+}
+
+export interface PosVariantItem {
+  id: string
+  name: string
+  sku: string
+  barcode: string | null
+  price: number
+  stockQuantity: number
+  attributes: Record<string, string>
+}
+
+export interface SearchProductsForPosDeps {
+  db: Db
+  storeId: string
+  search?: string
+  categoryId?: string
+}
+
+export async function searchProductsForPos({
+  db,
+  storeId,
+  search,
+  categoryId,
+}: SearchProductsForPosDeps): Promise<PosProductItem[]> {
+  // Build conditions
+  const conds: SQL[] = [
+    eq(products.storeId, storeId),
+    isNull(products.deletedAt),
+    eq(products.status, 'active'),
+  ]
+
+  if (search && search.trim().length > 0) {
+    const escaped = escapeLikePattern(search.trim().toLowerCase())
+    const like = `%${escaped}%`
+    const searchCond = or(
+      sql`LOWER(${products.name}) LIKE ${like}`,
+      sql`LOWER(${products.sku}) LIKE ${like}`,
+      eq(products.barcode, search.trim()),
+    )
+    if (searchCond) conds.push(searchCond)
+  }
+
+  if (categoryId) {
+    conds.push(eq(products.categoryId, categoryId))
+  }
+
+  const whereClause = and(...conds)!
+
+  const rows = await db
+    .select({
+      id: products.id,
+      name: products.name,
+      sku: products.sku,
+      barcode: products.barcode,
+      unit: products.unit,
+      sellingPrice: products.sellingPrice,
+      imageUrl: products.imageUrl,
+      trackInventory: products.trackInventory,
+      currentStock: products.currentStock,
+      hasVariants: products.hasVariants,
+      categoryId: products.categoryId,
+    })
+    .from(products)
+    .where(whereClause)
+    .orderBy(asc(products.name))
+    .limit(500)
+
+  // Load variants for products that have them
+  const variantProductIds = rows.filter((r) => r.hasVariants).map((r) => r.id)
+  const variantsMap = new Map<string, PosVariantItem[]>()
+
+  if (variantProductIds.length > 0) {
+    const variantRows = await db
+      .select()
+      .from(productVariants)
+      .where(
+        and(
+          inArray(productVariants.productId, variantProductIds),
+          isNull(productVariants.deletedAt),
+          eq(productVariants.status, 'active'),
+        ),
+      )
+      .orderBy(asc(productVariants.createdAt))
+
+    for (const v of variantRows) {
+      const attrs: Record<string, string> = {}
+      if (v.attribute1Name) attrs[v.attribute1Name] = v.attribute1Value
+      if (v.attribute2Name && v.attribute2Value) attrs[v.attribute2Name] = v.attribute2Value
+
+      const item: PosVariantItem = {
+        id: v.id,
+        name: [v.attribute1Value, v.attribute2Value].filter(Boolean).join(' - '),
+        sku: v.sku,
+        barcode: v.barcode,
+        price: Number(v.sellingPrice),
+        stockQuantity: v.stockQuantity,
+        attributes: attrs,
+      }
+
+      const list = variantsMap.get(v.productId) ?? []
+      list.push(item)
+      variantsMap.set(v.productId, list)
+    }
+  }
+
+  // Also search in variant barcodes/SKUs if search term provided
+  if (search && search.trim().length > 0) {
+    const searchTerm = search.trim()
+    const escapedLower = escapeLikePattern(searchTerm.toLowerCase())
+    const likeTerm = `%${escapedLower}%`
+
+    const variantMatchRows = await db
+      .select({
+        productId: productVariants.productId,
+      })
+      .from(productVariants)
+      .innerJoin(products, eq(productVariants.productId, products.id))
+      .where(
+        and(
+          eq(products.storeId, storeId),
+          isNull(products.deletedAt),
+          eq(products.status, 'active'),
+          isNull(productVariants.deletedAt),
+          or(
+            sql`LOWER(${productVariants.sku}) LIKE ${likeTerm}`,
+            eq(productVariants.barcode, searchTerm),
+          ),
+        ),
+      )
+
+    const extraProductIds = [...new Set(variantMatchRows.map((r) => r.productId))].filter(
+      (id) => !rows.some((r) => r.id === id),
+    )
+
+    if (extraProductIds.length > 0) {
+      const extraRows = await db
+        .select({
+          id: products.id,
+          name: products.name,
+          sku: products.sku,
+          barcode: products.barcode,
+          unit: products.unit,
+          sellingPrice: products.sellingPrice,
+          imageUrl: products.imageUrl,
+          trackInventory: products.trackInventory,
+          currentStock: products.currentStock,
+          hasVariants: products.hasVariants,
+          categoryId: products.categoryId,
+        })
+        .from(products)
+        .where(inArray(products.id, extraProductIds))
+
+      rows.push(...extraRows)
+
+      // Load variants for extra products
+      const extraVariantRows = await db
+        .select()
+        .from(productVariants)
+        .where(
+          and(
+            inArray(productVariants.productId, extraProductIds),
+            isNull(productVariants.deletedAt),
+            eq(productVariants.status, 'active'),
+          ),
+        )
+        .orderBy(asc(productVariants.createdAt))
+
+      for (const v of extraVariantRows) {
+        const attrs: Record<string, string> = {}
+        if (v.attribute1Name) attrs[v.attribute1Name] = v.attribute1Value
+        if (v.attribute2Name && v.attribute2Value) attrs[v.attribute2Name] = v.attribute2Value
+
+        const item: PosVariantItem = {
+          id: v.id,
+          name: [v.attribute1Value, v.attribute2Value].filter(Boolean).join(' - '),
+          sku: v.sku,
+          barcode: v.barcode,
+          price: Number(v.sellingPrice),
+          stockQuantity: v.stockQuantity,
+          attributes: attrs,
+        }
+
+        const list = variantsMap.get(v.productId) ?? []
+        list.push(item)
+        variantsMap.set(v.productId, list)
+      }
+    }
+  }
+
+  // Aggregate variant stock
+  const allVariantProductIds = rows.filter((r) => r.hasVariants).map((r) => r.id)
+  const variantStockMap = await aggregateVariantStock({ db, productIds: allVariantProductIds })
+
+  // Load unit conversions for all products
+  const allProductIds = rows.map((r) => r.id)
+  const unitConversionsMap = new Map<string, PosUnitConversion[]>()
+
+  if (allProductIds.length > 0) {
+    const ucRows = await db
+      .select()
+      .from(productUnitConversions)
+      .where(inArray(productUnitConversions.productId, allProductIds))
+      .orderBy(asc(productUnitConversions.sortOrder), asc(productUnitConversions.createdAt))
+
+    for (const uc of ucRows) {
+      const item: PosUnitConversion = {
+        id: uc.id,
+        unit: uc.unit,
+        conversionFactor: uc.conversionFactor,
+        sellingPrice: Number(uc.sellingPrice),
+      }
+      const list = unitConversionsMap.get(uc.productId) ?? []
+      list.push(item)
+      unitConversionsMap.set(uc.productId, list)
+    }
+  }
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    sku: row.sku,
+    barcode: row.barcode,
+    unit: row.unit,
+    basePrice: Number(row.sellingPrice),
+    imageUrl: row.imageUrl,
+    trackInventory: row.trackInventory,
+    stockQuantity: row.hasVariants ? (variantStockMap.get(row.id) ?? 0) : row.currentStock,
+    hasVariants: row.hasVariants,
+    categoryId: row.categoryId,
+    variants: variantsMap.get(row.id) ?? [],
+    unitConversions: unitConversionsMap.get(row.id) ?? [],
+  }))
 }

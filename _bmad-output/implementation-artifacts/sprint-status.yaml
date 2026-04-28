@@ -4,6 +4,9 @@
 # Story 2-3 dev started 2026-04-28
 # Story 2-4 created 2026-04-28
 # Story 4-1 review 2026-04-28: 28 findings (8 HIGH, 13 MEDIUM, 7 LOW); 8 AC FAIL, 3 PARTIAL; back to dev
+# Story 3-1 created 2026-04-28
+# Story 4-3 created 2026-04-28
+# Story 6-1 created 2026-04-28
 # project: kiotviet-lite
 # project_key: NOKEY
 # tracking_system: file-system
@@ -43,6 +46,12 @@
 
 generated: 2026-04-24
 last_updated: 2026-04-28
+# Story 4-3 dev started 2026-04-28
+# Story 6-1 dev started 2026-04-28
+# Story 6-1 dev completed 2026-04-28 → review
+# Story 4-3 dev completed 2026-04-28 → review
+# Story 4-3 review 2026-04-28: 7 patches (5 MAJOR + 2 MINOR), 7 defer, 2 dismiss; back to dev
+# Story 4-3 dev fixed 7 patches 2026-04-28 → review
 project: kiotviet-lite
 
 project_key: NOKEY
@@ -68,8 +77,8 @@ development_status:
   epic-2-retrospective: optional
 
   # Epic 3: Ban hang (POS) - Luong ban le
-  epic-3: backlog
-  3-1-giao-dien-pos-tim-kiem-san-pham: backlog
+  epic-3: in-progress
+  3-1-giao-dien-pos-tim-kiem-san-pham: done
   3-2-gio-hang-quan-ly-don-hang: backlog
   3-3-thanh-toan-hoan-thanh-don-hang: backlog
   epic-3-retrospective: optional
@@ -78,7 +87,7 @@ development_status:
   epic-4: in-progress
   4-1-quan-ly-khach-hang-nhom-khach-hang: done
   4-2-trang-chi-tiet-khach-hang: backlog
-  4-3-bang-gia-direct-formula: backlog
+  4-3-bang-gia-direct-formula: review
   4-3b-chain-formula-clone-import-bang-gia: backlog
   4-3c-so-sanh-bang-gia: backlog
   4-4-gia-rieng-khach-hang-gia-theo-so-luong: backlog
@@ -96,8 +105,8 @@ development_status:
   epic-5-retrospective: optional
 
   # Epic 6: Nhap hang & Nha cung cap
-  epic-6: backlog
-  6-1-quan-ly-ncc-phieu-nhap-kho: backlog
+  epic-6: in-progress
+  6-1-quan-ly-ncc-phieu-nhap-kho: review
   6-2-kiem-kho-lich-su-nhap-hang: backlog
   epic-6-retrospective: optional
 

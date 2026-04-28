@@ -1,11 +1,14 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   BarChart3,
+  ClipboardList,
   FolderTree,
   LayoutDashboard,
   Package,
   Settings,
   ShoppingCart,
+  Tags,
+  Truck,
   Users,
 } from 'lucide-react'
 
@@ -41,6 +44,19 @@ export const NAV_ITEMS: NavItem[] = [
     requiredPermission: 'products.manage',
   },
   { path: '/customers', label: 'Khách hàng', icon: Users, requiredPermission: 'customers.manage' },
+  { path: '/pricing', label: 'Bảng giá', icon: Tags, requiredPermission: 'pricing.manage' },
+  {
+    path: '/inventory/suppliers',
+    label: 'Nhà cung cấp',
+    icon: Truck,
+    requiredPermission: 'inventory.manage',
+  },
+  {
+    path: '/inventory/purchase-orders',
+    label: 'Phiếu nhập kho',
+    icon: ClipboardList,
+    requiredPermission: 'inventory.manage',
+  },
   { path: '/reports', label: 'Báo cáo', icon: BarChart3, requiredPermission: 'reports.view' },
   { path: '/settings', label: 'Cài đặt', icon: Settings, requiredPermission: 'audit.viewOwn' },
 ]
