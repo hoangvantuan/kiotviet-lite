@@ -2,11 +2,16 @@ import { Link, useRouterState } from '@tanstack/react-router'
 
 import { cn } from '@/lib/utils'
 
+import { findActivePath } from './nav-items'
 import { useFilteredNavItems } from './use-filtered-nav-items'
 
 export function BottomTabBar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const navItems = useFilteredNavItems()
+  const activePath = findActivePath(
+    pathname,
+    navItems.map((i) => i.path),
+  )
 
   return (
     <nav
@@ -15,10 +20,7 @@ export function BottomTabBar() {
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       {navItems.map((item) => {
-        const isActive =
-          item.path === '/'
-            ? pathname === '/'
-            : pathname === item.path || pathname.startsWith(item.path + '/')
+        const isActive = item.path === activePath
         return (
           <Link
             key={item.path}

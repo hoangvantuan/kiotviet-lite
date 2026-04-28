@@ -23,6 +23,18 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'product.variant_deleted': 'Xoá biến thể',
   'product.variants_enabled': 'Bật biến thể sản phẩm',
   'product.variants_disabled': 'Tắt biến thể sản phẩm',
+  'product.unit_conversion_created': 'Tạo đơn vị quy đổi',
+  'product.unit_conversion_updated': 'Sửa đơn vị quy đổi',
+  'product.unit_conversion_deleted': 'Xoá đơn vị quy đổi',
+  'inventory.purchase_recorded': 'Ghi nhận nhập hàng',
+  'inventory.manual_adjusted': 'Điều chỉnh tồn kho thủ công',
+  'customer.created': 'Tạo khách hàng',
+  'customer.updated': 'Sửa khách hàng',
+  'customer.deleted': 'Xoá khách hàng',
+  'customer.restored': 'Khôi phục khách hàng',
+  'customer_group.created': 'Tạo nhóm khách hàng',
+  'customer_group.updated': 'Sửa nhóm khách hàng',
+  'customer_group.deleted': 'Xoá nhóm khách hàng',
 }
 
 export interface ActionGroup {
@@ -60,7 +72,22 @@ export const ACTION_GROUPS: ActionGroup[] = [
       'product.variant_deleted',
       'product.variants_enabled',
       'product.variants_disabled',
+      'product.unit_conversion_created',
+      'product.unit_conversion_updated',
+      'product.unit_conversion_deleted',
     ],
+  },
+  {
+    label: 'Tồn kho',
+    actions: ['inventory.purchase_recorded', 'inventory.manual_adjusted'],
+  },
+  {
+    label: 'Khách hàng',
+    actions: ['customer.created', 'customer.updated', 'customer.deleted', 'customer.restored'],
+  },
+  {
+    label: 'Nhóm khách hàng',
+    actions: ['customer_group.created', 'customer_group.updated', 'customer_group.deleted'],
   },
 ]
 

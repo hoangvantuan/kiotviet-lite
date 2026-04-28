@@ -363,3 +363,33 @@ describe('updateProductSchema variantsConfig', () => {
     expect(r.success).toBe(true)
   })
 })
+
+describe('createProductSchema unitConversions (Story 2.4)', () => {
+  it('chấp nhận unitConversions với 3 phần tử valid', () => {
+    const r = createProductSchema.safeParse({
+      name: 'Coca-cola lon',
+      sellingPrice: 10000,
+      unit: 'Lon',
+      unitConversions: [
+        { unit: 'Lốc', conversionFactor: 6, sellingPrice: 60000 },
+        { unit: 'Thùng', conversionFactor: 24, sellingPrice: 240000 },
+        { unit: 'Pallet', conversionFactor: 240, sellingPrice: 2400000 },
+      ],
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('từ chối unitConversions với 4 phần tử (max 3)', () => {
+    const r = createProductSchema.safeParse({
+      name: 'X',
+      sellingPrice: 0,
+      unitConversions: [
+        { unit: 'A', conversionFactor: 2, sellingPrice: 0 },
+        { unit: 'B', conversionFactor: 3, sellingPrice: 0 },
+        { unit: 'C', conversionFactor: 4, sellingPrice: 0 },
+        { unit: 'D', conversionFactor: 5, sellingPrice: 0 },
+      ],
+    })
+    expect(r.success).toBe(false)
+  })
+})

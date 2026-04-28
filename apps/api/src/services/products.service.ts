@@ -9,7 +9,9 @@ import {
   type ProductListItem,
   products,
   type ProductStatus,
+  productUnitConversions,
   productVariants,
+  type UnitConversionItem,
   type UpdateProductInput,
   type UserRole,
   type VariantInput,
@@ -30,6 +32,7 @@ import {
   hasVariantTransactions,
   toVariantItem,
 } from './product-variants.service.js'
+import { createUnitConversion, toUnitConversionItem } from './unit-conversions.service.js'
 
 export interface ProductsActor {
   userId: string
@@ -63,6 +66,7 @@ function toProductDetail(
   categoryName: string | null = null,
   variantsConfig: VariantsConfigResponse | null = null,
   effectiveStock?: number,
+  unitConversions: UnitConversionItem[] = [],
 ): ProductDetail {
   return {
     id: row.id,
@@ -85,7 +89,23 @@ function toProductDetail(
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     variantsConfig,
+    unitConversions,
   }
+}
+
+async function loadUnitConversionsForProduct({
+  db,
+  productId,
+}: {
+  db: Db
+  productId: string
+}): Promise<UnitConversionItem[]> {
+  const rows = await db
+    .select()
+    .from(productUnitConversions)
+    .where(eq(productUnitConversions.productId, productId))
+    .orderBy(asc(productUnitConversions.sortOrder), asc(productUnitConversions.createdAt))
+  return rows.map((r) => toUnitConversionItem(r))
 }
 
 function toProductListItem(
@@ -535,7 +555,15 @@ export async function getProduct({
     effectiveStock = items.reduce((s, v) => s + v.stockQuantity, 0)
   }
 
-  return toProductDetail(target as ProductRow, categoryName, variantsConfig, effectiveStock)
+  const unitConversions = await loadUnitConversionsForProduct({ db, productId: target.id })
+
+  return toProductDetail(
+    target as ProductRow,
+    categoryName,
+    variantsConfig,
+    effectiveStock,
+    unitConversions,
+  )
 }
 
 interface InsertVariantRowsArgs {
@@ -896,11 +924,45 @@ export async function createProduct({
       effectiveStock = items.reduce((s, v) => s + v.stockQuantity, 0)
     }
 
+    const unitConversionsResult: UnitConversionItem[] = []
+    if (input.unitConversions && input.unitConversions.length > 0) {
+      if (input.unitConversions.length > 3) {
+        throw new ApiError('BUSINESS_RULE_VIOLATION', 'Tối đa 3 đơn vị quy đổi/sản phẩm')
+      }
+      const seen = new Set<string>()
+      for (let i = 0; i < input.unitConversions.length; i++) {
+        const uc = input.unitConversions[i]!
+        const key = uc.unit.trim().toLowerCase()
+        if (seen.has(key)) {
+          throw new ApiError('CONFLICT', 'Đơn vị quy đổi đã tồn tại', {
+            field: 'unit',
+            index: i,
+          })
+        }
+        seen.add(key)
+        const item = await createUnitConversion({
+          db: tx as unknown as Db,
+          actor,
+          productId: created.id,
+          input: uc,
+          meta,
+          skipCountCheck: true,
+        })
+        unitConversionsResult.push(item)
+      }
+    }
+
     const categoryName = await fetchCategoryName({
       db: tx as unknown as Db,
       categoryId: created.categoryId,
     })
-    return toProductDetail(created as ProductRow, categoryName, variantsConfig, effectiveStock)
+    return toProductDetail(
+      created as ProductRow,
+      categoryName,
+      variantsConfig,
+      effectiveStock,
+      unitConversionsResult,
+    )
   })
 }
 
@@ -985,7 +1047,23 @@ export async function updateProduct({
     const cur = target.costPrice === null ? null : Number(target.costPrice)
     if (newCost !== cur) updates.costPrice = newCost
   }
-  if (input.unit !== undefined && input.unit !== target.unit) updates.unit = input.unit
+  if (input.unit !== undefined && input.unit !== target.unit) {
+    // Validate đơn vị mới không trùng đơn vị quy đổi hiện có (case-insensitive)
+    const newUnitLower = input.unit.trim().toLowerCase()
+    const existingConversions = await db
+      .select({ unit: productUnitConversions.unit })
+      .from(productUnitConversions)
+      .where(eq(productUnitConversions.productId, target.id))
+    const conflict = existingConversions.find((c) => c.unit.trim().toLowerCase() === newUnitLower)
+    if (conflict) {
+      throw new ApiError(
+        'BUSINESS_RULE_VIOLATION',
+        'Đơn vị tính mới đang trùng với một đơn vị quy đổi đã có. Vui lòng đổi/xoá đơn vị quy đổi đó trước.',
+        { field: 'unit', conflictWith: conflict.unit },
+      )
+    }
+    updates.unit = input.unit
+  }
   if (input.imageUrl !== undefined && input.imageUrl !== target.imageUrl)
     updates.imageUrl = input.imageUrl
   if (input.status !== undefined && input.status !== target.status) updates.status = input.status
@@ -1222,7 +1300,18 @@ export async function updateProduct({
       effectiveStock = items.reduce((s, v) => s + v.stockQuantity, 0)
     }
 
-    return toProductDetail(updated as ProductRow, categoryName, variantsConfigResp, effectiveStock)
+    const unitConversions = await loadUnitConversionsForProduct({
+      db: tx as unknown as Db,
+      productId: updated.id,
+    })
+
+    return toProductDetail(
+      updated as ProductRow,
+      categoryName,
+      variantsConfigResp,
+      effectiveStock,
+      unitConversions,
+    )
   })
 }
 
@@ -1713,6 +1802,17 @@ export async function restoreProduct({
       effectiveStock = items.reduce((s, v) => s + v.stockQuantity, 0)
     }
 
-    return toProductDetail(updated as ProductRow, categoryName, variantsConfigResp, effectiveStock)
+    const unitConversions = await loadUnitConversionsForProduct({
+      db: tx as unknown as Db,
+      productId: updated.id,
+    })
+
+    return toProductDetail(
+      updated as ProductRow,
+      categoryName,
+      variantsConfigResp,
+      effectiveStock,
+      unitConversions,
+    )
   })
 }

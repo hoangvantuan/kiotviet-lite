@@ -1,8 +1,11 @@
 import { useNavigate } from '@tanstack/react-router'
 import { LogOut, Menu } from 'lucide-react'
 
+import { hasPermission } from '@kiotviet-lite/shared'
+
 import { Button } from '@/components/ui/button'
 import { useLogout } from '@/features/auth/use-logout'
+import { LowStockBell } from '@/features/products/low-stock-bell'
 import { useSidebarStore } from '@/hooks/use-sidebar'
 import { useAuthStore } from '@/stores/use-auth-store'
 
@@ -33,18 +36,21 @@ export function Header() {
           {user?.name ?? 'KiotViet Lite'}
         </h1>
       </div>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onLogout}
-        disabled={logout.isPending}
-        className="gap-2"
-      >
-        <LogOut className="h-4 w-4" />
-        <span className="hidden sm:inline">
-          {logout.isPending ? 'Đang đăng xuất…' : 'Đăng xuất'}
-        </span>
-      </Button>
+      <div className="flex items-center gap-2">
+        {user?.role && hasPermission(user.role, 'products.manage') && <LowStockBell />}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onLogout}
+          disabled={logout.isPending}
+          className="gap-2"
+        >
+          <LogOut className="h-4 w-4" />
+          <span className="hidden sm:inline">
+            {logout.isPending ? 'Đang đăng xuất…' : 'Đăng xuất'}
+          </span>
+        </Button>
+      </div>
     </header>
   )
 }

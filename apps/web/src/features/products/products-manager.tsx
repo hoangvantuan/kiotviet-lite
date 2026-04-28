@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from '@tanstack/react-router'
-import { FolderTree, Package, Plus, SearchX, Trash2 } from 'lucide-react'
+import { Package, Plus, SearchX, Trash2 } from 'lucide-react'
 
 import type { ListProductsQuery, ProductListItem, StockFilter } from '@kiotviet-lite/shared'
 
@@ -79,12 +78,6 @@ export function ProductsManager() {
           <Button variant="outline" size="sm" onClick={() => setTrashedOpen(true)}>
             <Trash2 className="h-4 w-4" />
             <span>Sản phẩm đã xoá</span>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/products/categories">
-              <FolderTree className="h-4 w-4" />
-              <span>Quản lý danh mục</span>
-            </Link>
           </Button>
           <Button size="sm" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" />

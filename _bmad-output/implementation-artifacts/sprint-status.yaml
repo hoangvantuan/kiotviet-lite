@@ -1,6 +1,9 @@
 # generated: 2026-04-24
 # last_updated: 2026-04-28
+# Story 4-1 created 2026-04-28
 # Story 2-3 dev started 2026-04-28
+# Story 2-4 created 2026-04-28
+# Story 4-1 review 2026-04-28: 28 findings (8 HIGH, 13 MEDIUM, 7 LOW); 8 AC FAIL, 3 PARTIAL; back to dev
 # project: kiotviet-lite
 # project_key: NOKEY
 # tracking_system: file-system
@@ -59,9 +62,9 @@ development_status:
   # Epic 2: Quan ly Hang hoa
   epic-2: in-progress
   2-1-quan-ly-danh-muc-san-pham: done
-  2-2-crud-san-pham-co-ban: review
-  2-3-bien-the-san-pham: review
-  2-4-don-vi-quy-doi-ton-kho: backlog
+  2-2-crud-san-pham-co-ban: done
+  2-3-bien-the-san-pham: done
+  2-4-don-vi-quy-doi-ton-kho: done
   epic-2-retrospective: optional
 
   # Epic 3: Ban hang (POS) - Luong ban le
@@ -72,8 +75,8 @@ development_status:
   epic-3-retrospective: optional
 
   # Epic 4: Khach hang & He thong Don gia
-  epic-4: backlog
-  4-1-quan-ly-khach-hang-nhom-khach-hang: backlog
+  epic-4: in-progress
+  4-1-quan-ly-khach-hang-nhom-khach-hang: done
   4-2-trang-chi-tiet-khach-hang: backlog
   4-3-bang-gia-direct-formula: backlog
   4-3b-chain-formula-clone-import-bang-gia: backlog

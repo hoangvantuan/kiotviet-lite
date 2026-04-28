@@ -14,16 +14,20 @@ const MATRIX: Record<Permission, Record<UserRole, boolean>> = {
   'reports.view': { owner: true, manager: true, staff: false },
   'products.manage': { owner: true, manager: true, staff: false },
   'pos.sell': { owner: true, manager: true, staff: true },
+  'customers.view': { owner: true, manager: true, staff: true },
+  'customers.manage': { owner: true, manager: true, staff: false },
 }
 
 describe('PERMISSIONS map', () => {
-  it('khai báo đầy đủ 8 permission keys cho story 1.4', () => {
+  it('khai báo đầy đủ permission keys (8 base + 2 customer)', () => {
     const keys = Object.keys(PERMISSIONS).sort()
     expect(keys).toEqual(
       [
         'audit.viewAll',
         'audit.viewOwn',
         'audit.viewTeam',
+        'customers.manage',
+        'customers.view',
         'pos.sell',
         'products.manage',
         'reports.view',

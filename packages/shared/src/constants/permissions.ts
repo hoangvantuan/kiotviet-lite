@@ -9,6 +9,8 @@ export const PERMISSIONS = {
   'reports.view': ['owner', 'manager'],
   'products.manage': ['owner', 'manager'],
   'pos.sell': ['owner', 'manager', 'staff'],
+  'customers.view': ['owner', 'manager', 'staff'],
+  'customers.manage': ['owner', 'manager'],
 } as const satisfies Record<string, ReadonlyArray<UserRole>>
 
 export type Permission = keyof typeof PERMISSIONS

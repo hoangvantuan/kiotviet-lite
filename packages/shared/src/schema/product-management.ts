@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { unitConversionInputSchema, unitConversionItemSchema } from './unit-conversions.js'
+
 const NAME_REGEX = /^[\p{L}\p{N}\s\-_&()'./,]+$/u
 const SKU_REGEX = /^[A-Za-z0-9_\-./]+$/
 const BARCODE_REGEX = /^[A-Za-z0-9]+$/
@@ -225,6 +227,7 @@ export const createProductSchema = z.object({
     .min(0, 'Tồn kho ≥ 0')
     .default(0),
   variantsConfig: variantsConfigSchema.nullable().optional(),
+  unitConversions: z.array(unitConversionInputSchema).max(3, 'Tối đa 3 đơn vị quy đổi').optional(),
 })
 
 export const updateProductSchema = z
@@ -305,6 +308,7 @@ export const productDetailSchema = productListItemSchema.extend({
   storeId: z.string().uuid(),
   deletedAt: z.string().nullable(),
   variantsConfig: variantsConfigResponseSchema.nullable(),
+  unitConversions: z.array(unitConversionItemSchema).default([]),
 })
 
 export type CreateProductInput = z.infer<typeof createProductSchema>

@@ -13,6 +13,8 @@ import { AppLayout } from '@/components/layout/app-layout'
 import { ErrorBoundary } from '@/components/layout/error-boundary'
 import { Toaster } from '@/components/ui/sonner'
 import { useMediaQuery as useMediaQueryRoot } from '@/hooks/use-media-query'
+import { CustomersGroupsPage } from '@/pages/customers-groups-page'
+import { CustomersPage } from '@/pages/customers-page'
 import { HomePage } from '@/pages/home-page'
 import { LoginPage } from '@/pages/login-page'
 import { PosPage } from '@/pages/pos-page'
@@ -110,6 +112,20 @@ const productsCategoriesRoute = createRoute({
   component: ProductsCategoriesPage,
 })
 
+const customersRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/customers',
+  beforeLoad: requirePermissionGuard('customers.manage'),
+  component: CustomersPage,
+})
+
+const customersGroupsRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/customers/groups',
+  beforeLoad: requirePermissionGuard('customers.manage'),
+  component: CustomersGroupsPage,
+})
+
 const reportsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/reports',
@@ -175,6 +191,8 @@ const routeTree = rootRoute.addChildren([
       homeRoute,
       productsRoute,
       productsCategoriesRoute,
+      customersRoute,
+      customersGroupsRoute,
       reportsRoute,
       settingsRoute.addChildren([
         settingsIndexRoute,

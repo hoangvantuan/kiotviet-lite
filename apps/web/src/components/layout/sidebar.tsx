@@ -6,12 +6,8 @@ import { useMediaQuery } from '@/hooks/use-media-query'
 import { useSidebarStore } from '@/hooks/use-sidebar'
 import { cn } from '@/lib/utils'
 
+import { findActivePath } from './nav-items'
 import { useFilteredNavItems } from './use-filtered-nav-items'
-
-function isPathActive(currentPath: string, itemPath: string) {
-  if (itemPath === '/') return currentPath === '/'
-  return currentPath === itemPath || currentPath.startsWith(itemPath + '/')
-}
 
 const SIDEBAR_WIDTH = 240
 const SIDEBAR_COLLAPSED_WIDTH = 64
@@ -25,6 +21,10 @@ export function Sidebar() {
 
   const isCollapsed = isDesktop ? isCollapsedPref : true
   const isTablet = !isDesktop
+  const activePath = findActivePath(
+    pathname,
+    navItems.map((i) => i.path),
+  )
 
   return (
     <aside
@@ -61,7 +61,7 @@ export function Sidebar() {
       </div>
       <nav aria-label="Menu chính" className="flex flex-col gap-1 p-2">
         {navItems.map((item) => {
-          const isActive = isPathActive(pathname, item.path)
+          const isActive = item.path === activePath
           const showLabel = isTablet ? false : !isCollapsed
           return (
             <Link
@@ -94,6 +94,10 @@ export function MobileDrawer() {
   const closeMobile = useSidebarStore((s) => s.closeMobile)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const navItems = useFilteredNavItems()
+  const activePath = findActivePath(
+    pathname,
+    navItems.map((i) => i.path),
+  )
 
   useEffect(() => {
     if (!isMobileOpen) return
@@ -122,7 +126,7 @@ export function MobileDrawer() {
         </div>
         <nav aria-label="Menu chính" className="flex flex-col gap-1 p-2">
           {navItems.map((item) => {
-            const isActive = item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)
+            const isActive = item.path === activePath
             return (
               <Link
                 key={item.path}

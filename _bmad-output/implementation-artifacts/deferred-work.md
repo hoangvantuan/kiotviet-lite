@@ -83,6 +83,11 @@
 - QueryClient global error handler + staleTime config
 - Password leading/trailing space UX warning
 
+## Deferred from: tách danh mục thành màn hình riêng (2026-04-28)
+
+- Bottom tab bar mobile hiển thị tất cả nav items (hiện 7 mục). Trên màn hình nhỏ (320-375px) quá chật, label bị cắt. Cần giới hạn 4-5 tab hoặc gom sub-items. [apps/web/src/components/layout/bottom-tab-bar.tsx]
+- Settings nav item dùng permission `audit.viewOwn` cho phép tất cả role thấy. Pre-existing, không phải regression. [apps/web/src/components/layout/nav-items.ts:21]
+
 ## Deferred from: code review of 1-1-khoi-tao-monorepo-database-design-system-co-ban (2026-04-24)
 
 - DB connection không có graceful shutdown (`apps/api/src/db/index.ts`): cần `process.on('SIGTERM/SIGINT')` để đóng connection pool. Scope story deploy/production-readiness.

@@ -1,4 +1,13 @@
-import { index, integer, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import {
+  bigint,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
 import { productVariants } from './product-variants.js'
@@ -21,6 +30,9 @@ export const inventoryTransactions = pgTable(
     variantId: uuid().references(() => productVariants.id, { onDelete: 'restrict' }),
     type: varchar({ length: 32 }).notNull(),
     quantity: integer().notNull(),
+    unitCost: bigint({ mode: 'number' }),
+    costAfter: bigint({ mode: 'number' }),
+    stockAfter: integer(),
     note: text(),
     createdBy: uuid()
       .notNull()
@@ -30,5 +42,6 @@ export const inventoryTransactions = pgTable(
   (table) => [
     index('idx_inventory_tx_product_created').on(table.productId, table.createdAt),
     index('idx_inventory_tx_variant_created').on(table.variantId, table.createdAt),
+    index('idx_inventory_tx_store_created').on(table.storeId, table.createdAt),
   ],
 )

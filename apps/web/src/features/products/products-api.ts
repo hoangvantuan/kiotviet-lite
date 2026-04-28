@@ -1,8 +1,14 @@
 import type {
   CreateProductInput,
+  InventoryTransactionItem,
   ListProductsQuery,
   ProductDetail,
   ProductListItem,
+  RecordManualAdjustInput,
+  RecordPurchaseInput,
+  UnitConversionInput,
+  UnitConversionItem,
+  UnitConversionUpdate,
   UpdateProductInput,
 } from '@kiotviet-lite/shared'
 
@@ -57,4 +63,66 @@ export function deleteProductApi(id: string) {
 
 export function restoreProductApi(id: string) {
   return apiClient.post<Envelope<ProductDetail>>(`/api/v1/products/${id}/restore`)
+}
+
+// ========== Story 2.4: Unit conversions ==========
+
+export function listUnitConversionsApi(productId: string) {
+  return apiClient.get<Envelope<UnitConversionItem[]>>(
+    `/api/v1/products/${productId}/unit-conversions`,
+  )
+}
+
+export function createUnitConversionApi(productId: string, input: UnitConversionInput) {
+  return apiClient.post<Envelope<UnitConversionItem>>(
+    `/api/v1/products/${productId}/unit-conversions`,
+    input,
+  )
+}
+
+export function updateUnitConversionApi(
+  productId: string,
+  conversionId: string,
+  input: UnitConversionUpdate,
+) {
+  return apiClient.patch<Envelope<UnitConversionItem>>(
+    `/api/v1/products/${productId}/unit-conversions/${conversionId}`,
+    input,
+  )
+}
+
+export function deleteUnitConversionApi(productId: string, conversionId: string) {
+  return apiClient.delete<void>(`/api/v1/products/${productId}/unit-conversions/${conversionId}`)
+}
+
+// ========== Story 2.4: Low stock ==========
+
+export function getLowStockCountApi() {
+  return apiClient.get<Envelope<{ count: number }>>('/api/v1/products/low-stock-count')
+}
+
+export function listLowStockProductsApi(page = 1, pageSize = 50) {
+  return apiClient.get<ListEnvelope<ProductListItem[]>>(
+    `/api/v1/products/low-stock?page=${page}&pageSize=${pageSize}`,
+  )
+}
+
+// ========== Story 2.4: Inventory transactions (helpers) ==========
+
+export function recordPurchaseApi(productId: string, input: RecordPurchaseInput) {
+  return apiClient.post<
+    Envelope<{ product: ProductDetail; transaction: InventoryTransactionItem }>
+  >(`/api/v1/products/${productId}/inventory/purchase`, input)
+}
+
+export function recordManualAdjustmentApi(productId: string, input: RecordManualAdjustInput) {
+  return apiClient.post<
+    Envelope<{ product: ProductDetail; transaction: InventoryTransactionItem }>
+  >(`/api/v1/products/${productId}/inventory/adjust`, input)
+}
+
+export function listInventoryTransactionsApi(productId: string, page = 1, pageSize = 20) {
+  return apiClient.get<ListEnvelope<InventoryTransactionItem[]>>(
+    `/api/v1/products/${productId}/inventory-transactions?page=${page}&pageSize=${pageSize}`,
+  )
 }

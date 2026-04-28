@@ -1,4 +1,4 @@
-import { Layers, Package, Pencil, Trash2 } from 'lucide-react'
+import { Info, Layers, Package, Pencil, Trash2 } from 'lucide-react'
 
 import type { ProductListItem } from '@kiotviet-lite/shared'
 
@@ -32,6 +32,15 @@ export function ProductTable({ items, onEdit, onDelete }: ProductTableProps) {
             <TableHead>SKU</TableHead>
             <TableHead>Danh mục</TableHead>
             <TableHead className="text-right">Giá bán</TableHead>
+            <TableHead className="text-right">
+              <span
+                className="inline-flex items-center gap-1"
+                title="Giá vốn bình quân gia quyền (WAC), tự cập nhật khi nhập hàng"
+              >
+                Giá vốn
+                <Info className="h-3 w-3 text-muted-foreground" />
+              </span>
+            </TableHead>
             <TableHead className="text-right">Tồn kho</TableHead>
             <TableHead>Trạng thái</TableHead>
             <TableHead className="text-right">Thao tác</TableHead>
@@ -73,6 +82,26 @@ export function ProductTable({ items, onEdit, onDelete }: ProductTableProps) {
                   <span className="text-xs italic text-muted-foreground">Theo biến thể</span>
                 ) : (
                   formatVndWithSuffix(p.sellingPrice)
+                )}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {p.hasVariants ? (
+                  <span
+                    className="text-xs italic text-muted-foreground"
+                    title={
+                      p.costPrice !== null
+                        ? `Giá vốn BQ ở cấp sản phẩm: ${formatVndWithSuffix(p.costPrice)}`
+                        : undefined
+                    }
+                  >
+                    Theo biến thể
+                  </span>
+                ) : p.costPrice === null ? (
+                  <span className="text-xs italic text-muted-foreground">Chưa có</span>
+                ) : (
+                  <span className="text-sm text-muted-foreground">
+                    {formatVndWithSuffix(p.costPrice)}
+                  </span>
                 )}
               </TableCell>
               <TableCell className="text-right">

@@ -16,6 +16,7 @@ import {
   type CreateProductInput,
   createProductSchema,
   type ProductDetail,
+  type UnitConversionInput,
   type UpdateProductInput,
   updateProductSchema,
 } from '@kiotviet-lite/shared'
@@ -44,7 +45,9 @@ import { ApiClientError } from '@/lib/api-client'
 import { showError, showSuccess } from '@/lib/toast'
 
 import { buildCategoryTree } from '../categories/utils'
+import { InventoryHistoryTable } from './inventory-history-table'
 import { generateRandomSku } from './sku'
+import { UnitConversionEditor } from './unit-conversion-editor'
 import { useCreateProductMutation, useUpdateProductMutation } from './use-products'
 import { VariantBulkActions } from './variant-bulk-actions'
 import { VariantConfirmDialog } from './variant-confirm-dialog'
@@ -128,6 +131,7 @@ function CreateDialog({ open, onOpenChange, categories }: ProductFormDialogProps
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingPayload, setPendingPayload] = useState<CreateProductInput | null>(null)
+  const [unitConversions, setUnitConversions] = useState<UnitConversionInput[]>([])
 
   useEffect(() => {
     if (open) {
@@ -135,6 +139,7 @@ function CreateDialog({ open, onOpenChange, categories }: ProductFormDialogProps
       setHasVariants(false)
       setVariantsForm(emptyVariantsForm)
       setSelected(new Set())
+      setUnitConversions([])
     }
   }, [open, form])
 
@@ -185,6 +190,10 @@ function CreateDialog({ open, onOpenChange, categories }: ProductFormDialogProps
     const imgTrim = values.imageUrl.trim()
     if (imgTrim) payload.imageUrl = imgTrim
 
+    if (unitConversions.length > 0) {
+      payload.unitConversions = unitConversions
+    }
+
     if (hasVariants) {
       const variantsPayload = toPayload(variantsForm)
       if (!variantsPayload || variantsPayload.variants.length === 0) {
@@ -231,6 +240,15 @@ function CreateDialog({ open, onOpenChange, categories }: ProductFormDialogProps
             mode="create"
             trackInventory={trackInventory}
             hideInitialStock={hasVariants}
+            hasVariants={hasVariants}
+          />
+
+          <UnitConversionEditor
+            mode="create"
+            value={unitConversions}
+            onChange={setUnitConversions}
+            parentUnit={form.watch('unit') || 'Cái'}
+            parentSellingPrice={sellingPrice}
           />
 
           <section className="space-y-3">
@@ -492,6 +510,14 @@ function EditDialog({
             trackInventory={trackInventory}
             currentStock={product.currentStock}
             hideInitialStock={hasVariants}
+            hasVariants={hasVariants}
+          />
+
+          <UnitConversionEditor
+            mode="edit"
+            productId={product.id}
+            parentUnit={form.watch('unit') || product.unit}
+            parentSellingPrice={sellingPriceValue}
           />
 
           <section className="space-y-3">
@@ -548,6 +574,8 @@ function EditDialog({
               />
             </>
           )}
+
+          {trackInventory && <InventoryHistoryTable productId={product.id} />}
 
           <DialogFooter>
             <Button
@@ -843,12 +871,14 @@ function InventorySection<T extends FieldValues & ProductFormFields>({
   trackInventory,
   currentStock,
   hideInitialStock,
+  hasVariants,
 }: {
   form: UseFormReturn<T>
   mode: Mode
   trackInventory: boolean
   currentStock?: number
   hideInitialStock?: boolean
+  hasVariants?: boolean
 }) {
   const setValue = form.setValue as unknown as (
     name: keyof ProductFormFields,
@@ -870,6 +900,16 @@ function InventorySection<T extends FieldValues & ProductFormFields>({
           }
         />
       </div>
+      {!trackInventory && (
+        <p className="text-xs text-muted-foreground">
+          Sản phẩm sẽ luôn còn hàng (không trừ kho khi bán). Tồn kho hiện ∞ trên danh sách.
+        </p>
+      )}
+      {trackInventory && hasVariants && (
+        <p className="text-xs text-muted-foreground">
+          Tồn kho được quản lý ở từng biến thể. Cảnh báo sắp hết áp dụng cho từng biến thể.
+        </p>
+      )}
       {trackInventory && (
         <div className="grid gap-3 md:grid-cols-2">
           {mode === 'create' && !hideInitialStock && (
@@ -892,7 +932,7 @@ function InventorySection<T extends FieldValues & ProductFormFields>({
             </div>
           )}
           <div className="space-y-1">
-            <Label htmlFor="p-min">Định mức tối thiểu</Label>
+            <Label htmlFor="p-min">Định mức tồn tối thiểu (báo sắp hết khi tồn ≤ định mức)</Label>
             <Input
               id="p-min"
               type="number"
@@ -900,6 +940,7 @@ function InventorySection<T extends FieldValues & ProductFormFields>({
               inputMode="numeric"
               {...register('minStock' as Path<ProductFormFields>, { valueAsNumber: true })}
             />
+            <p className="text-xs text-muted-foreground">Để 0 nếu không cần cảnh báo.</p>
             {getError(form.formState.errors, 'minStock') && (
               <p className="text-sm text-destructive">
                 {getError(form.formState.errors, 'minStock')}
@@ -910,9 +951,7 @@ function InventorySection<T extends FieldValues & ProductFormFields>({
             <div className="space-y-1">
               <Label>Tồn kho hiện tại</Label>
               <Input value={currentStock ?? 0} readOnly disabled />
-              <p className="text-xs text-muted-foreground">
-                Cập nhật qua phiếu nhập kho/kiểm kho ở Story 2.4
-              </p>
+              <p className="text-xs text-muted-foreground">Cập nhật qua phiếu nhập kho/kiểm kho.</p>
             </div>
           )}
         </div>
