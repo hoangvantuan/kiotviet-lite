@@ -106,7 +106,7 @@ development_status:
 
   # Epic 6: Nhap hang & Nha cung cap
   epic-6: in-progress
-  6-1-quan-ly-ncc-phieu-nhap-kho: review
+  6-1-quan-ly-ncc-phieu-nhap-kho: done
   6-2-kiem-kho-lich-su-nhap-hang: backlog
   epic-6-retrospective: optional
 
