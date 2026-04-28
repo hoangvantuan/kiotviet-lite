@@ -55,8 +55,8 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Quan ly Hang hoa
-  epic-2: backlog
-  2-1-quan-ly-danh-muc-san-pham: backlog
+  epic-2: in-progress
+  2-1-quan-ly-danh-muc-san-pham: done
   2-2-crud-san-pham-co-ban: backlog
   2-3-bien-the-san-pham: backlog
   2-4-don-vi-quy-doi-ton-kho: backlog

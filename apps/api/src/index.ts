@@ -12,6 +12,7 @@ import { errorHandler } from './middleware/error-handler.js'
 import { requestLoggerMiddleware } from './middleware/request-logger.middleware.js'
 import { createAuditRoutes } from './routes/audit.routes.js'
 import { createAuthRoutes } from './routes/auth.routes.js'
+import { createCategoriesRoutes } from './routes/categories.routes.js'
 import { createNotificationRoutes } from './routes/notifications.routes.js'
 import { createStoreRoutes } from './routes/store.routes.js'
 import { createUsersRoutes } from './routes/users.routes.js'
@@ -48,6 +49,7 @@ app.get('/api/v1/health', (c) => {
 
 app.route('/api/v1/auth', createAuthRoutes({ db }))
 app.route('/api/v1/users', createUsersRoutes({ db }))
+app.route('/api/v1/categories', createCategoriesRoutes({ db }))
 app.route('/api/v1/store', createStoreRoutes({ db }))
 app.route('/api/v1/audit-logs', createAuditRoutes({ db }))
 app.route('/api/v1/notifications', createNotificationRoutes({ db }))

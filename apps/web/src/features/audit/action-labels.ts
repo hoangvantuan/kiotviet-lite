@@ -9,6 +9,10 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'store.updated': 'Cập nhật cửa hàng',
   'auth.pin_failed': 'Nhập sai PIN',
   'auth.pin_locked': 'PIN bị khoá tạm thời',
+  'category.created': 'Tạo danh mục',
+  'category.updated': 'Sửa danh mục',
+  'category.deleted': 'Xoá danh mục',
+  'category.reordered': 'Sắp xếp danh mục',
 }
 
 export interface ActionGroup {
@@ -28,6 +32,10 @@ export const ACTION_GROUPS: ActionGroup[] = [
   {
     label: 'Xác thực',
     actions: ['auth.pin_failed', 'auth.pin_locked'],
+  },
+  {
+    label: 'Danh mục',
+    actions: ['category.created', 'category.updated', 'category.deleted', 'category.reordered'],
   },
 ]
 

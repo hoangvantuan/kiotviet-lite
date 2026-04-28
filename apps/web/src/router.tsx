@@ -16,6 +16,7 @@ import { useMediaQuery as useMediaQueryRoot } from '@/hooks/use-media-query'
 import { HomePage } from '@/pages/home-page'
 import { LoginPage } from '@/pages/login-page'
 import { PosPage } from '@/pages/pos-page'
+import { ProductsCategoriesPage } from '@/pages/products-categories-page'
 import { ProductsPage } from '@/pages/products-page'
 import { RegisterPage } from '@/pages/register-page'
 import { ReportsPage } from '@/pages/reports-page'
@@ -102,6 +103,13 @@ const productsRoute = createRoute({
   component: ProductsPage,
 })
 
+const productsCategoriesRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/products/categories',
+  beforeLoad: requirePermissionGuard('products.manage'),
+  component: ProductsCategoriesPage,
+})
+
 const reportsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/reports',
@@ -166,6 +174,7 @@ const routeTree = rootRoute.addChildren([
     appLayoutRoute.addChildren([
       homeRoute,
       productsRoute,
+      productsCategoriesRoute,
       reportsRoute,
       settingsRoute.addChildren([
         settingsIndexRoute,

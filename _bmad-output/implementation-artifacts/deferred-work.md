@@ -1,5 +1,14 @@
 # Deferred Work
 
+## Deferred from: code review of 2-1-quan-ly-danh-muc-san-pham (2026-04-25)
+
+- Race condition khi 2 concurrent updates đổi parent của 2 categories khác → 2 row cùng sortOrder (không có unique constraint trên (parent, sortOrder)). [apps/api/src/services/categories.service.ts:309-316]
+- `asFormSetError` cast cồng kềnh giữa CreateCategoryInput và UpdateCategoryInput, type adapter code smell. [apps/web/src/features/categories/category-form-dialog.tsx:280-285]
+- Reorder không enforce orderedIds completeness; race với user khác thêm cấp 1 mới có thể tạo lỗ trong sortOrder dãy. [apps/api/src/services/categories.service.ts:374-389]
+- Reorder transaction sequential update loop. N=200 sequential queries chậm; có thể dùng UPDATE ... CASE WHEN bulk. [apps/api/src/services/categories.service.ts:392-396]
+- Migration 0007 cuối file thiếu `--> statement-breakpoint`. Drizzle có thể nối với migration tiếp sau. [apps/api/src/db/migrations/0007_lyrical_joseph.sql:14]
+- Schema name regex cho phép multiple internal whitespace, không collapse → "Cà phê" vs "Cà phê" coi là khác category. UX inconsistency. [packages/shared/src/schema/category-management.ts:5-10]
+
 ## Deferred from: code review of 10-3-webhook-telegram-transport-bao-mat (2026-04-25)
 
 - HMAC khong co timestamp, cho phep replay attacks. Spec chi yeu cau HMAC-SHA256 signing, khong yeu cau replay protection. Can them timestamp + nonce khi scale. [webhook.ts]
