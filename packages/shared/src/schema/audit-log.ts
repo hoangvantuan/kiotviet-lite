@@ -20,6 +20,11 @@ export const auditActionSchema = z.enum([
   'product.deleted',
   'product.restored',
   'product.stock_initialized',
+  'product.variant_created',
+  'product.variant_updated',
+  'product.variant_deleted',
+  'product.variants_enabled',
+  'product.variants_disabled',
 ])
 
 export const auditLogItemSchema = z.object({

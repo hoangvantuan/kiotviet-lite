@@ -1,5 +1,6 @@
 # generated: 2026-04-24
 # last_updated: 2026-04-28
+# Story 2-3 dev started 2026-04-28
 # project: kiotviet-lite
 # project_key: NOKEY
 # tracking_system: file-system
@@ -40,6 +41,7 @@
 generated: 2026-04-24
 last_updated: 2026-04-28
 project: kiotviet-lite
+
 project_key: NOKEY
 tracking_system: file-system
 story_location: '{project-root}/_bmad-output/implementation-artifacts'
@@ -58,7 +60,7 @@ development_status:
   epic-2: in-progress
   2-1-quan-ly-danh-muc-san-pham: done
   2-2-crud-san-pham-co-ban: review
-  2-3-bien-the-san-pham: backlog
+  2-3-bien-the-san-pham: review
   2-4-don-vi-quy-doi-ton-kho: backlog
   epic-2-retrospective: optional
 

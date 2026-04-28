@@ -1,4 +1,4 @@
-import { Package, Pencil, Trash2 } from 'lucide-react'
+import { Layers, Package, Pencil, Trash2 } from 'lucide-react'
 
 import type { ProductListItem } from '@kiotviet-lite/shared'
 
@@ -53,13 +53,27 @@ export function ProductTable({ items, onEdit, onDelete }: ProductTableProps) {
                   </div>
                 )}
               </TableCell>
-              <TableCell className="font-medium">{p.name}</TableCell>
+              <TableCell className="font-medium">
+                <span className="inline-flex items-center gap-1">
+                  {p.hasVariants && (
+                    <Layers
+                      className="h-3.5 w-3.5 text-muted-foreground"
+                      aria-label="Sản phẩm có biến thể"
+                    />
+                  )}
+                  <span>{p.name}</span>
+                </span>
+              </TableCell>
               <TableCell className="font-mono text-xs text-muted-foreground">{p.sku}</TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {p.categoryName ?? '—'}
               </TableCell>
               <TableCell className="text-right font-medium tabular-nums">
-                {formatVndWithSuffix(p.sellingPrice)}
+                {p.hasVariants ? (
+                  <span className="text-xs italic text-muted-foreground">Theo biến thể</span>
+                ) : (
+                  formatVndWithSuffix(p.sellingPrice)
+                )}
               </TableCell>
               <TableCell className="text-right">
                 <StockBadge

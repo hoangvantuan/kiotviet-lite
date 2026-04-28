@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   type Control,
   Controller,
@@ -46,8 +46,25 @@ import { showError, showSuccess } from '@/lib/toast'
 import { buildCategoryTree } from '../categories/utils'
 import { generateRandomSku } from './sku'
 import { useCreateProductMutation, useUpdateProductMutation } from './use-products'
+import { VariantBulkActions } from './variant-bulk-actions'
+import { VariantConfirmDialog } from './variant-confirm-dialog'
+import { VariantEditor } from './variant-editor'
+import { VariantTable } from './variant-table'
+import {
+  countAdditions,
+  countDeletions,
+  fromResponse,
+  toPayload,
+  type VariantsForm,
+} from './variants-utils'
 
 const NO_CATEGORY = '__NONE__'
+
+const emptyVariantsForm: VariantsForm = {
+  attribute1: null,
+  attribute2: null,
+  variants: [],
+}
 
 type Mode = 'create' | 'edit'
 
@@ -67,7 +84,7 @@ export function ProductFormDialog(props: ProductFormDialogProps) {
   return <EditDialog {...props} product={props.product} />
 }
 
-interface CreateFormShape {
+interface BasicFormShape {
   name: string
   sku: string
   barcode: string
@@ -79,8 +96,10 @@ interface CreateFormShape {
   status: 'active' | 'inactive'
   trackInventory: boolean
   minStock: number
-  initialStock: number
+  initialStock?: number
 }
+
+type CreateFormShape = BasicFormShape & { initialStock: number }
 
 const createDefaults: CreateFormShape = {
   name: '',
@@ -104,36 +123,84 @@ function CreateDialog({ open, onOpenChange, categories }: ProductFormDialogProps
     mode: 'onTouched',
     defaultValues: createDefaults,
   })
+  const [hasVariants, setHasVariants] = useState(false)
+  const [variantsForm, setVariantsForm] = useState<VariantsForm>(emptyVariantsForm)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingPayload, setPendingPayload] = useState<CreateProductInput | null>(null)
 
   useEffect(() => {
     if (open) {
       form.reset(createDefaults)
+      setHasVariants(false)
+      setVariantsForm(emptyVariantsForm)
+      setSelected(new Set())
     }
   }, [open, form])
 
   const trackInventory = form.watch('trackInventory')
+  const skuValue = form.watch('sku')
+  const sellingPrice = form.watch('sellingPrice')
+  const costPrice = form.watch('costPrice')
+
+  function applyBulkPrice(value: number) {
+    setVariantsForm((prev) => ({
+      ...prev,
+      variants: prev.variants.map((v, i) => (selected.has(i) ? { ...v, sellingPrice: value } : v)),
+    }))
+  }
+  function applyBulkCost(value: number | null) {
+    setVariantsForm((prev) => ({
+      ...prev,
+      variants: prev.variants.map((v, i) => (selected.has(i) ? { ...v, costPrice: value } : v)),
+    }))
+  }
+  function applyBulkStock(value: number) {
+    setVariantsForm((prev) => ({
+      ...prev,
+      variants: prev.variants.map((v, i) => (selected.has(i) ? { ...v, stockQuantity: value } : v)),
+    }))
+  }
 
   const submit = form.handleSubmit(async (values) => {
     const payload: CreateProductInput = {
       name: values.name,
-      sellingPrice: values.sellingPrice,
+      sellingPrice: hasVariants ? 0 : values.sellingPrice,
       unit: values.unit || 'Cái',
       status: values.status,
       trackInventory: values.trackInventory,
       minStock: values.trackInventory ? values.minStock : 0,
-      initialStock: values.trackInventory ? values.initialStock : 0,
+      initialStock: hasVariants ? 0 : values.trackInventory ? values.initialStock : 0,
     }
     const skuTrim = values.sku.trim()
     if (skuTrim) payload.sku = skuTrim
-    const barcodeTrim = values.barcode.trim()
-    if (barcodeTrim) payload.barcode = barcodeTrim
-    if (values.categoryId) payload.categoryId = values.categoryId
-    if (values.costPrice !== null && values.costPrice !== undefined) {
-      payload.costPrice = values.costPrice
+    if (!hasVariants) {
+      const barcodeTrim = values.barcode.trim()
+      if (barcodeTrim) payload.barcode = barcodeTrim
+      if (values.costPrice !== null && values.costPrice !== undefined) {
+        payload.costPrice = values.costPrice
+      }
     }
+    if (values.categoryId) payload.categoryId = values.categoryId
     const imgTrim = values.imageUrl.trim()
     if (imgTrim) payload.imageUrl = imgTrim
 
+    if (hasVariants) {
+      const variantsPayload = toPayload(variantsForm)
+      if (!variantsPayload || variantsPayload.variants.length === 0) {
+        showError('Vui lòng thêm ít nhất 1 biến thể')
+        return
+      }
+      payload.variantsConfig = variantsPayload as never
+      setPendingPayload(payload)
+      setConfirmOpen(true)
+      return
+    }
+
+    await sendCreate(payload)
+  })
+
+  async function sendCreate(payload: CreateProductInput) {
     try {
       await mutation.mutateAsync(payload)
       showSuccess('Đã tạo sản phẩm')
@@ -141,25 +208,70 @@ function CreateDialog({ open, onOpenChange, categories }: ProductFormDialogProps
     } catch (err) {
       handleApiError(err, asFormSetError(form))
     }
-  })
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Thêm sản phẩm</DialogTitle>
           <DialogDescription>Tạo sản phẩm mới cho cửa hàng.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-6" noValidate>
-          <BasicSection<CreateFormShape> form={form} categories={categories} />
-          <PriceSection<CreateFormShape> form={form} />
+          <BasicSection<CreateFormShape>
+            form={form}
+            categories={categories}
+            hideBarcode={hasVariants}
+          />
+          {!hasVariants && <PriceSection<CreateFormShape> form={form} />}
           <ImageSection<CreateFormShape> form={form} />
           <StatusSection<CreateFormShape> form={form} />
           <InventorySection<CreateFormShape>
             form={form}
             mode="create"
             trackInventory={trackInventory}
+            hideInitialStock={hasVariants}
           />
+
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground">Sản phẩm có biến thể</h3>
+              <Switch checked={hasVariants} onCheckedChange={setHasVariants} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Bật khi sản phẩm có nhiều phiên bản (màu sắc, kích cỡ...). Khi bật, giá và barcode sẽ
+              được nhập riêng cho từng biến thể.
+            </p>
+          </section>
+
+          {hasVariants && (
+            <>
+              <VariantEditor
+                value={variantsForm}
+                onChange={setVariantsForm}
+                parentSku={skuValue || 'SP'}
+                defaultSellingPrice={sellingPrice}
+                defaultCostPrice={costPrice}
+              />
+              <VariantBulkActions
+                selectedCount={selected.size}
+                onApplyPrice={applyBulkPrice}
+                onApplyCost={applyBulkCost}
+                onApplyStock={applyBulkStock}
+                onClear={() => setSelected(new Set())}
+              />
+              <VariantTable
+                variants={variantsForm.variants}
+                onChange={(next) => setVariantsForm((p) => ({ ...p, variants: next }))}
+                attribute1Name={variantsForm.attribute1?.name ?? ''}
+                attribute2Name={variantsForm.attribute2?.name ?? null}
+                trackInventory={trackInventory}
+                selected={selected}
+                onSelectionChange={setSelected}
+              />
+            </>
+          )}
+
           <DialogFooter>
             <Button
               type="button"
@@ -169,29 +281,28 @@ function CreateDialog({ open, onOpenChange, categories }: ProductFormDialogProps
             >
               Hủy
             </Button>
-            <Button type="submit" disabled={!form.formState.isValid || mutation.isPending}>
+            <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending ? 'Đang lưu…' : 'Lưu'}
             </Button>
           </DialogFooter>
         </form>
+
+        <VariantConfirmDialog
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          additions={countAdditions(variantsForm.variants)}
+          hardDeletions={0}
+          softDeletions={0}
+          onConfirm={async () => {
+            if (pendingPayload) await sendCreate(pendingPayload)
+          }}
+        />
       </DialogContent>
     </Dialog>
   )
 }
 
-interface EditFormShape {
-  name: string
-  sku: string
-  barcode: string
-  categoryId: string | null
-  sellingPrice: number
-  costPrice: number | null
-  unit: string
-  imageUrl: string
-  status: 'active' | 'inactive'
-  trackInventory: boolean
-  minStock: number
-}
+type EditFormShape = BasicFormShape
 
 function EditDialog({
   open,
@@ -200,43 +311,87 @@ function EditDialog({
   categories,
 }: ProductFormDialogProps & { product: ProductDetail }) {
   const mutation = useUpdateProductMutation()
-  const initial: EditFormShape = {
-    name: product.name,
-    sku: product.sku,
-    barcode: product.barcode ?? '',
-    categoryId: product.categoryId,
-    sellingPrice: product.sellingPrice,
-    costPrice: product.costPrice,
-    unit: product.unit,
-    imageUrl: product.imageUrl ?? '',
-    status: product.status,
-    trackInventory: product.trackInventory,
-    minStock: product.minStock,
-  }
+  const initial: EditFormShape = useMemo(
+    () => ({
+      name: product.name,
+      sku: product.sku,
+      barcode: product.barcode ?? '',
+      categoryId: product.categoryId,
+      sellingPrice: product.sellingPrice,
+      costPrice: product.costPrice,
+      unit: product.unit,
+      imageUrl: product.imageUrl ?? '',
+      status: product.status,
+      trackInventory: product.trackInventory,
+      minStock: product.minStock,
+    }),
+    [product],
+  )
   const form = useForm<EditFormShape>({
     resolver: zodResolver(updateProductSchema) as never,
     mode: 'onTouched',
     defaultValues: initial,
   })
+  const [hasVariants, setHasVariants] = useState(product.hasVariants)
+  const [variantsForm, setVariantsForm] = useState<VariantsForm>(() =>
+    product.variantsConfig ? fromResponse(product.variantsConfig) : emptyVariantsForm,
+  )
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingPayload, setPendingPayload] = useState<{
+    id: string
+    input: UpdateProductInput
+  } | null>(null)
 
   useEffect(() => {
-    if (open) form.reset(initial)
+    if (open) {
+      form.reset(initial)
+      setHasVariants(product.hasVariants)
+      setVariantsForm(
+        product.variantsConfig ? fromResponse(product.variantsConfig) : emptyVariantsForm,
+      )
+      setSelected(new Set())
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, product])
 
   const trackInventory = form.watch('trackInventory')
+  const skuValue = form.watch('sku')
+  const sellingPriceValue = form.watch('sellingPrice')
+  const costPriceValue = form.watch('costPrice')
+
+  function applyBulkPrice(value: number) {
+    setVariantsForm((prev) => ({
+      ...prev,
+      variants: prev.variants.map((v, i) => (selected.has(i) ? { ...v, sellingPrice: value } : v)),
+    }))
+  }
+  function applyBulkCost(value: number | null) {
+    setVariantsForm((prev) => ({
+      ...prev,
+      variants: prev.variants.map((v, i) => (selected.has(i) ? { ...v, costPrice: value } : v)),
+    }))
+  }
+  function applyBulkStock(value: number) {
+    setVariantsForm((prev) => ({
+      ...prev,
+      variants: prev.variants.map((v, i) => (selected.has(i) ? { ...v, stockQuantity: value } : v)),
+    }))
+  }
 
   const submit = form.handleSubmit(async (values) => {
     const payload: UpdateProductInput = {}
     if (values.name !== product.name) payload.name = values.name
     const skuTrim = values.sku.trim()
     if (skuTrim && skuTrim !== product.sku) payload.sku = skuTrim
-    const barcodeTrim = values.barcode.trim()
-    const newBarcode = barcodeTrim || null
-    if (newBarcode !== product.barcode) payload.barcode = newBarcode
+    if (!hasVariants) {
+      const barcodeTrim = values.barcode.trim()
+      const newBarcode = barcodeTrim || null
+      if (newBarcode !== product.barcode) payload.barcode = newBarcode
+      if (values.sellingPrice !== product.sellingPrice) payload.sellingPrice = values.sellingPrice
+      if (values.costPrice !== product.costPrice) payload.costPrice = values.costPrice
+    }
     if (values.categoryId !== product.categoryId) payload.categoryId = values.categoryId
-    if (values.sellingPrice !== product.sellingPrice) payload.sellingPrice = values.sellingPrice
-    if (values.costPrice !== product.costPrice) payload.costPrice = values.costPrice
     if (values.unit !== product.unit) payload.unit = values.unit
     const newImg = values.imageUrl.trim() || null
     if (newImg !== product.imageUrl) payload.imageUrl = newImg
@@ -246,30 +401,89 @@ function EditDialog({
     }
     if (values.minStock !== product.minStock) payload.minStock = values.minStock
 
+    // Determine variantsConfig change
+    const wasHasVariants = product.hasVariants
+    let needsConfirm = false
+    let additions = 0
+    let hardDeletions = 0
+    let softDeletions = 0
+
+    if (hasVariants && !wasHasVariants) {
+      // Turning ON
+      const variantsPayload = toPayload(variantsForm)
+      if (!variantsPayload || variantsPayload.variants.length === 0) {
+        showError('Vui lòng thêm ít nhất 1 biến thể')
+        return
+      }
+      payload.variantsConfig = variantsPayload as never
+      additions = variantsPayload.variants.length
+      needsConfirm = true
+    } else if (!hasVariants && wasHasVariants) {
+      // Turning OFF
+      payload.variantsConfig = null as never
+      hardDeletions = product.variantsConfig?.variants.length ?? 0
+      needsConfirm = true
+    } else if (hasVariants && wasHasVariants) {
+      // Modifying variants
+      const variantsPayload = toPayload(variantsForm)
+      if (!variantsPayload || variantsPayload.variants.length === 0) {
+        showError('Vui lòng thêm ít nhất 1 biến thể')
+        return
+      }
+      payload.variantsConfig = variantsPayload as never
+      additions = countAdditions(variantsForm.variants)
+      const counts = countDeletions(variantsForm.variants)
+      hardDeletions = counts.hardDelete
+      softDeletions = counts.softDelete
+      needsConfirm = additions + hardDeletions + softDeletions > 0
+    }
+
     if (Object.keys(payload).length === 0) {
       onOpenChange(false)
       return
     }
 
+    if (needsConfirm) {
+      setPendingPayload({ id: product.id, input: payload })
+      setConfirmOpen(true)
+      // Save these counts via closure indirectly through state below
+      setConfirmCounts({ additions, hardDeletions, softDeletions })
+      return
+    }
+
+    await sendUpdate(product.id, payload)
+  })
+
+  const [confirmCounts, setConfirmCounts] = useState({
+    additions: 0,
+    hardDeletions: 0,
+    softDeletions: 0,
+  })
+
+  async function sendUpdate(id: string, input: UpdateProductInput) {
     try {
-      await mutation.mutateAsync({ id: product.id, input: payload })
+      await mutation.mutateAsync({ id, input })
       showSuccess('Đã cập nhật sản phẩm')
       onOpenChange(false)
     } catch (err) {
       handleApiError(err, asFormSetError(form))
     }
-  })
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Sửa sản phẩm</DialogTitle>
           <DialogDescription>Cập nhật thông tin sản phẩm.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-6" noValidate>
-          <BasicSection<EditFormShape> form={form} categories={categories} />
-          <PriceSection<EditFormShape> form={form} />
+          <BasicSection<EditFormShape>
+            form={form}
+            categories={categories}
+            hideBarcode={hasVariants}
+          />
+          {!hasVariants && <PriceSection<EditFormShape> form={form} />}
           <ImageSection<EditFormShape> form={form} />
           <StatusSection<EditFormShape> form={form} />
           <InventorySection<EditFormShape>
@@ -277,7 +491,64 @@ function EditDialog({
             mode="edit"
             trackInventory={trackInventory}
             currentStock={product.currentStock}
+            hideInitialStock={hasVariants}
           />
+
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground">Sản phẩm có biến thể</h3>
+              <Switch
+                checked={hasVariants}
+                onCheckedChange={(v) => {
+                  if (!v && product.hasVariants) {
+                    // Mark all variants as pendingDelete preview
+                  }
+                  setHasVariants(v)
+                }}
+              />
+            </div>
+            {!hasVariants && product.hasVariants && (
+              <p className="text-xs text-amber-700">
+                Tắt biến thể sẽ xoá tất cả biến thể. Yêu cầu mọi biến thể có tồn kho = 0 và chưa có
+                giao dịch.
+              </p>
+            )}
+            {hasVariants && !product.hasVariants && product.currentStock > 0 && (
+              <p className="text-xs text-amber-700">
+                Tồn kho hiện tại {product.currentStock} &gt; 0. Vui lòng kiểm kho về 0 trước khi bật
+                biến thể.
+              </p>
+            )}
+          </section>
+
+          {hasVariants && (
+            <>
+              <VariantEditor
+                value={variantsForm}
+                onChange={setVariantsForm}
+                parentSku={skuValue || product.sku}
+                defaultSellingPrice={sellingPriceValue}
+                defaultCostPrice={costPriceValue}
+              />
+              <VariantBulkActions
+                selectedCount={selected.size}
+                onApplyPrice={applyBulkPrice}
+                onApplyCost={applyBulkCost}
+                onApplyStock={applyBulkStock}
+                onClear={() => setSelected(new Set())}
+              />
+              <VariantTable
+                variants={variantsForm.variants}
+                onChange={(next) => setVariantsForm((p) => ({ ...p, variants: next }))}
+                attribute1Name={variantsForm.attribute1?.name ?? ''}
+                attribute2Name={variantsForm.attribute2?.name ?? null}
+                trackInventory={trackInventory}
+                selected={selected}
+                onSelectionChange={setSelected}
+              />
+            </>
+          )}
+
           <DialogFooter>
             <Button
               type="button"
@@ -287,11 +558,22 @@ function EditDialog({
             >
               Hủy
             </Button>
-            <Button type="submit" disabled={!form.formState.isValid || mutation.isPending}>
+            <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending ? 'Đang lưu…' : 'Lưu'}
             </Button>
           </DialogFooter>
         </form>
+
+        <VariantConfirmDialog
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          additions={confirmCounts.additions}
+          hardDeletions={confirmCounts.hardDeletions}
+          softDeletions={confirmCounts.softDeletions}
+          onConfirm={async () => {
+            if (pendingPayload) await sendUpdate(pendingPayload.id, pendingPayload.input)
+          }}
+        />
       </DialogContent>
     </Dialog>
   )
@@ -324,9 +606,11 @@ function getError<T extends FieldValues>(
 function BasicSection<T extends FieldValues & ProductFormFields>({
   form,
   categories,
+  hideBarcode,
 }: {
   form: UseFormReturn<T>
   categories: CategoryItem[]
+  hideBarcode?: boolean
 }) {
   const tree = buildCategoryTree(categories)
   const register = form.register as unknown as UseFormRegister<ProductFormFields>
@@ -384,18 +668,22 @@ function BasicSection<T extends FieldValues & ProductFormFields>({
             <p className="text-sm text-destructive">{getError(form.formState.errors, 'sku')}</p>
           )}
         </div>
-        <div className="space-y-1">
-          <Label htmlFor="p-barcode">Barcode</Label>
-          <Input
-            id="p-barcode"
-            placeholder="VD: 8934567890123"
-            maxLength={64}
-            {...register('barcode' as Path<ProductFormFields>)}
-          />
-          {getError(form.formState.errors, 'barcode') && (
-            <p className="text-sm text-destructive">{getError(form.formState.errors, 'barcode')}</p>
-          )}
-        </div>
+        {!hideBarcode && (
+          <div className="space-y-1">
+            <Label htmlFor="p-barcode">Barcode</Label>
+            <Input
+              id="p-barcode"
+              placeholder="VD: 8934567890123"
+              maxLength={64}
+              {...register('barcode' as Path<ProductFormFields>)}
+            />
+            {getError(form.formState.errors, 'barcode') && (
+              <p className="text-sm text-destructive">
+                {getError(form.formState.errors, 'barcode')}
+              </p>
+            )}
+          </div>
+        )}
         <div className="space-y-1">
           <Label htmlFor="p-category">Danh mục</Label>
           <Select
@@ -554,11 +842,13 @@ function InventorySection<T extends FieldValues & ProductFormFields>({
   mode,
   trackInventory,
   currentStock,
+  hideInitialStock,
 }: {
   form: UseFormReturn<T>
   mode: Mode
   trackInventory: boolean
   currentStock?: number
+  hideInitialStock?: boolean
 }) {
   const setValue = form.setValue as unknown as (
     name: keyof ProductFormFields,
@@ -582,7 +872,7 @@ function InventorySection<T extends FieldValues & ProductFormFields>({
       </div>
       {trackInventory && (
         <div className="grid gap-3 md:grid-cols-2">
-          {mode === 'create' && (
+          {mode === 'create' && !hideInitialStock && (
             <div className="space-y-1">
               <Label htmlFor="p-initial">Tồn kho ban đầu</Label>
               <Input
@@ -616,7 +906,7 @@ function InventorySection<T extends FieldValues & ProductFormFields>({
               </p>
             )}
           </div>
-          {mode === 'edit' && (
+          {mode === 'edit' && !hideInitialStock && (
             <div className="space-y-1">
               <Label>Tồn kho hiện tại</Label>
               <Input value={currentStock ?? 0} readOnly disabled />
@@ -657,17 +947,24 @@ const KNOWN_FIELDS = [
 function handleApiError(err: unknown, form: FormSetError) {
   if (err instanceof ApiClientError) {
     if (err.code === 'CONFLICT') {
-      const detail = err.details as { field?: string } | undefined
-      if (detail?.field === 'sku') {
+      const detail = err.details as { field?: string; variantIndex?: number } | undefined
+      if (detail?.field === 'sku' && detail.variantIndex === undefined) {
         form.setError('sku', { message: err.message })
         showError(err.message)
         return
       }
-      if (detail?.field === 'barcode') {
+      if (detail?.field === 'barcode' && detail.variantIndex === undefined) {
         form.setError('barcode', { message: err.message })
         showError(err.message)
         return
       }
+      // Variant-level conflict: just toast (highlight UI extension future)
+      showError(err.message)
+      return
+    }
+    if (err.code === 'BUSINESS_RULE_VIOLATION') {
+      showError(err.message)
+      return
     }
     if (err.code === 'VALIDATION_ERROR' && Array.isArray(err.details)) {
       for (const issue of err.details as Array<{ path: string; message: string }>) {

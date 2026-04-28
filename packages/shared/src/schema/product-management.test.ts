@@ -4,6 +4,7 @@ import {
   createProductSchema,
   listProductsQuerySchema,
   updateProductSchema,
+  variantsConfigSchema,
 } from './product-management.js'
 
 const validUuid = '0190d000-0000-7000-8000-000000000001'
@@ -174,5 +175,191 @@ describe('listProductsQuerySchema', () => {
 
   it('từ chối stockFilter sai enum', () => {
     expect(listProductsQuerySchema.safeParse({ stockFilter: 'unknown' }).success).toBe(false)
+  })
+})
+
+describe('variantsConfigSchema', () => {
+  const baseVariant = {
+    sku: 'AT-001-do-s',
+    attribute1Value: 'Đỏ',
+    attribute2Value: 'S',
+    sellingPrice: 100000,
+    stockQuantity: 0,
+  }
+
+  it('chấp nhận 1 thuộc tính (attribute2Name = null)', () => {
+    const r = variantsConfigSchema.safeParse({
+      attribute1Name: 'Màu sắc',
+      attribute2Name: null,
+      variants: [
+        { sku: 'AT-001-do', attribute1Value: 'Đỏ', sellingPrice: 100000 },
+        { sku: 'AT-001-xanh', attribute1Value: 'Xanh', sellingPrice: 100000 },
+      ],
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('chấp nhận 2 thuộc tính đầy đủ', () => {
+    const r = variantsConfigSchema.safeParse({
+      attribute1Name: 'Màu sắc',
+      attribute2Name: 'Kích cỡ',
+      variants: [baseVariant, { ...baseVariant, sku: 'AT-001-do-m', attribute2Value: 'M' }],
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('chấp nhận variant có id (update existing)', () => {
+    const r = variantsConfigSchema.safeParse({
+      attribute1Name: 'Màu',
+      variants: [
+        {
+          id: '0190d000-0000-7000-8000-000000000010',
+          sku: 'AT-001-do',
+          attribute1Value: 'Đỏ',
+          sellingPrice: 100000,
+        },
+      ],
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('từ chối tổ hợp (attribute1Value, attribute2Value) trùng', () => {
+    const r = variantsConfigSchema.safeParse({
+      attribute1Name: 'Màu',
+      attribute2Name: 'Size',
+      variants: [baseVariant, { ...baseVariant, sku: 'AT-001-do-s-2' }],
+    })
+    expect(r.success).toBe(false)
+    if (!r.success) {
+      expect(r.error.issues.some((i) => i.message.includes('Tổ hợp'))).toBe(true)
+    }
+  })
+
+  it('từ chối SKU trùng trong array (case-insensitive)', () => {
+    const r = variantsConfigSchema.safeParse({
+      attribute1Name: 'Màu',
+      attribute2Name: 'Size',
+      variants: [baseVariant, { ...baseVariant, sku: 'AT-001-DO-S', attribute2Value: 'M' }],
+    })
+    expect(r.success).toBe(false)
+    if (!r.success) {
+      expect(r.error.issues.some((i) => i.message.includes('SKU biến thể bị trùng'))).toBe(true)
+    }
+  })
+
+  it('từ chối barcode trùng', () => {
+    const r = variantsConfigSchema.safeParse({
+      attribute1Name: 'Màu',
+      attribute2Name: 'Size',
+      variants: [
+        { ...baseVariant, barcode: '1234567890' },
+        { ...baseVariant, sku: 'AT-001-do-m', attribute2Value: 'M', barcode: '1234567890' },
+      ],
+    })
+    expect(r.success).toBe(false)
+    if (!r.success) {
+      expect(r.error.issues.some((i) => i.message.includes('Barcode'))).toBe(true)
+    }
+  })
+
+  it('từ chối khi attribute2Name set nhưng variant.attribute2Value null', () => {
+    const r = variantsConfigSchema.safeParse({
+      attribute1Name: 'Màu',
+      attribute2Name: 'Size',
+      variants: [{ ...baseVariant, attribute2Value: null }],
+    })
+    expect(r.success).toBe(false)
+  })
+
+  it('từ chối khi attribute2Name null nhưng có variant.attribute2Value', () => {
+    const r = variantsConfigSchema.safeParse({
+      attribute1Name: 'Màu',
+      attribute2Name: null,
+      variants: [{ ...baseVariant, attribute2Value: 'M' }],
+    })
+    expect(r.success).toBe(false)
+  })
+
+  it('từ chối tên 2 thuộc tính trùng case-insensitive', () => {
+    const r = variantsConfigSchema.safeParse({
+      attribute1Name: 'Màu',
+      attribute2Name: 'màu',
+      variants: [{ ...baseVariant, attribute2Value: 'M' }],
+    })
+    expect(r.success).toBe(false)
+  })
+
+  it('từ chối > 100 variants', () => {
+    const variants = Array.from({ length: 101 }, (_, i) => ({
+      sku: `AT-${String(i).padStart(3, '0')}`,
+      attribute1Value: `V${i}`,
+      sellingPrice: 1000,
+    }))
+    const r = variantsConfigSchema.safeParse({
+      attribute1Name: 'X',
+      variants,
+    })
+    expect(r.success).toBe(false)
+  })
+
+  it('từ chối 0 variant', () => {
+    const r = variantsConfigSchema.safeParse({ attribute1Name: 'X', variants: [] })
+    expect(r.success).toBe(false)
+  })
+
+  it('từ chối tên thuộc tính có ký tự không hợp lệ (emoji)', () => {
+    const r = variantsConfigSchema.safeParse({
+      attribute1Name: 'Màu 🎨',
+      variants: [{ sku: 'X-1', attribute1Value: 'Đỏ', sellingPrice: 100 }],
+    })
+    expect(r.success).toBe(false)
+  })
+
+  it('chấp nhận giá trị thuộc tính có dấu chấm (1.5L)', () => {
+    const r = variantsConfigSchema.safeParse({
+      attribute1Name: 'Dung tích',
+      variants: [{ sku: 'X-15', attribute1Value: '1.5L', sellingPrice: 100 }],
+    })
+    expect(r.success).toBe(true)
+  })
+})
+
+describe('createProductSchema variantsConfig', () => {
+  it('chấp nhận create kèm variantsConfig', () => {
+    const r = createProductSchema.safeParse({
+      name: 'Áo thun',
+      sellingPrice: 0,
+      variantsConfig: {
+        attribute1Name: 'Màu',
+        variants: [{ sku: 'AT-do', attribute1Value: 'Đỏ', sellingPrice: 100000 }],
+      },
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('chấp nhận variantsConfig = null', () => {
+    const r = createProductSchema.safeParse({
+      name: 'X',
+      sellingPrice: 0,
+      variantsConfig: null,
+    })
+    expect(r.success).toBe(true)
+  })
+})
+
+describe('updateProductSchema variantsConfig', () => {
+  it('chấp nhận chỉ variantsConfig', () => {
+    const r = updateProductSchema.safeParse({
+      variantsConfig: {
+        attribute1Name: 'Màu',
+        variants: [{ sku: 'AT-do', attribute1Value: 'Đỏ', sellingPrice: 100000 }],
+      },
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('chấp nhận variantsConfig = null (tắt biến thể)', () => {
+    const r = updateProductSchema.safeParse({ variantsConfig: null })
+    expect(r.success).toBe(true)
   })
 })

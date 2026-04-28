@@ -1,4 +1,4 @@
-import { MoreVertical, Package, Pencil, Trash2 } from 'lucide-react'
+import { Layers, MoreVertical, Package, Pencil, Trash2 } from 'lucide-react'
 
 import type { ProductListItem } from '@kiotviet-lite/shared'
 
@@ -44,10 +44,17 @@ export function ProductCardList({ items, onEdit, onDelete }: ProductCardListProp
               </div>
             )}
             <div className="min-w-0 flex-1 space-y-1">
-              <p className="truncate font-medium text-foreground">{p.name}</p>
+              <p className="flex items-center gap-1 truncate font-medium text-foreground">
+                {p.hasVariants && <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+                <span className="truncate">{p.name}</span>
+              </p>
               <p className="font-mono text-xs text-muted-foreground">{p.sku}</p>
               <p className="text-sm font-medium tabular-nums">
-                {formatVndWithSuffix(p.sellingPrice)}
+                {p.hasVariants ? (
+                  <span className="italic text-muted-foreground">Theo biến thể</span>
+                ) : (
+                  formatVndWithSuffix(p.sellingPrice)
+                )}
               </p>
               <div className="flex items-center gap-2">
                 <StockBadge

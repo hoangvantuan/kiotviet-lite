@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, isNull, ne, or, type SQL, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, type SQL, sql } from 'drizzle-orm'
 
 import {
   categories,
@@ -9,13 +9,27 @@ import {
   type ProductListItem,
   products,
   type ProductStatus,
+  productVariants,
   type UpdateProductInput,
   type UserRole,
+  type VariantInput,
+  type VariantItem,
+  type VariantsConfig,
+  type VariantsConfigResponse,
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { diffObjects, logAction, type RequestMeta } from './audit.service.js'
+import {
+  classifyVariantViolation,
+  findTakenVariantBarcodes,
+  findTakenVariantSkus,
+  findVariantsWithTransactions,
+  generateUniqueVariantSku,
+  hasVariantTransactions,
+  toVariantItem,
+} from './product-variants.service.js'
 
 export interface ProductsActor {
   userId: string
@@ -44,7 +58,12 @@ interface ProductRow {
   updatedAt: Date
 }
 
-function toProductDetail(row: ProductRow, categoryName: string | null = null): ProductDetail {
+function toProductDetail(
+  row: ProductRow,
+  categoryName: string | null = null,
+  variantsConfig: VariantsConfigResponse | null = null,
+  effectiveStock?: number,
+): ProductDetail {
   return {
     id: row.id,
     storeId: row.storeId,
@@ -60,35 +79,38 @@ function toProductDetail(row: ProductRow, categoryName: string | null = null): P
     status: (row.status as ProductStatus) ?? 'active',
     hasVariants: row.hasVariants,
     trackInventory: row.trackInventory,
-    currentStock: row.currentStock,
+    currentStock: effectiveStock !== undefined ? effectiveStock : row.currentStock,
     minStock: row.minStock,
     deletedAt: row.deletedAt ? row.deletedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    variantsConfig,
   }
 }
 
-function toProductListItem(row: ProductRow, categoryName: string | null): ProductListItem {
-  const detail = toProductDetail(row, categoryName)
-  // ProductListItem là subset của ProductDetail (không có storeId, deletedAt)
+function toProductListItem(
+  row: ProductRow,
+  categoryName: string | null,
+  effectiveStock: number,
+): ProductListItem {
   return {
-    id: detail.id,
-    name: detail.name,
-    sku: detail.sku,
-    barcode: detail.barcode,
-    categoryId: detail.categoryId,
-    categoryName: detail.categoryName,
-    sellingPrice: detail.sellingPrice,
-    costPrice: detail.costPrice,
-    unit: detail.unit,
-    imageUrl: detail.imageUrl,
-    status: detail.status,
-    trackInventory: detail.trackInventory,
-    currentStock: detail.currentStock,
-    minStock: detail.minStock,
-    hasVariants: detail.hasVariants,
-    createdAt: detail.createdAt,
-    updatedAt: detail.updatedAt,
+    id: row.id,
+    name: row.name,
+    sku: row.sku,
+    barcode: row.barcode,
+    categoryId: row.categoryId,
+    categoryName,
+    sellingPrice: Number(row.sellingPrice),
+    costPrice: row.costPrice === null ? null : Number(row.costPrice),
+    unit: row.unit,
+    imageUrl: row.imageUrl,
+    status: (row.status as ProductStatus) ?? 'active',
+    trackInventory: row.trackInventory,
+    currentStock: effectiveStock,
+    minStock: row.minStock,
+    hasVariants: row.hasVariants,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   }
 }
 
@@ -144,6 +166,26 @@ function isCategoryFkViolation(err: unknown): boolean {
   if (getPgErrorCode(err) !== '23503') return false
   const constraint = getPgConstraint(err)
   return constraint === 'products_category_id_categories_id_fk'
+}
+
+function mapVariantViolationToApiError(err: unknown, variantIndex?: number): ApiError | null {
+  const v = classifyVariantViolation(err)
+  if (!v) return null
+  if (v.field === 'sku') {
+    return new ApiError('CONFLICT', 'SKU biến thể đã tồn tại trong cửa hàng', {
+      field: 'sku',
+      variantIndex,
+    })
+  }
+  if (v.field === 'barcode') {
+    return new ApiError('CONFLICT', 'Barcode biến thể đã tồn tại trong cửa hàng', {
+      field: 'barcode',
+      variantIndex,
+    })
+  }
+  return new ApiError('BUSINESS_RULE_VIOLATION', 'Tổ hợp giá trị thuộc tính bị trùng', {
+    variantIndex,
+  })
 }
 
 async function ensureCategoryInStore({
@@ -250,6 +292,57 @@ async function fetchCategoryName({
   return cat?.name ?? null
 }
 
+async function aggregateVariantStock({
+  db,
+  productIds,
+}: {
+  db: Db
+  productIds: string[]
+}): Promise<Map<string, number>> {
+  if (productIds.length === 0) return new Map()
+  const rows = await db
+    .select({
+      productId: productVariants.productId,
+      total: sql<number>`COALESCE(SUM(${productVariants.stockQuantity}), 0)::int`,
+    })
+    .from(productVariants)
+    .where(and(inArray(productVariants.productId, productIds), isNull(productVariants.deletedAt)))
+    .groupBy(productVariants.productId)
+  const map = new Map<string, number>()
+  for (const r of rows) map.set(r.productId, Number(r.total))
+  return map
+}
+
+async function loadVariantsForProduct({
+  db,
+  productId,
+}: {
+  db: Db
+  productId: string
+}): Promise<VariantItem[]> {
+  const rows = await db
+    .select()
+    .from(productVariants)
+    .where(and(eq(productVariants.productId, productId), isNull(productVariants.deletedAt)))
+    .orderBy(asc(productVariants.createdAt))
+  if (rows.length === 0) return []
+  const withTx = await findVariantsWithTransactions({
+    db,
+    variantIds: rows.map((r) => r.id),
+  })
+  return rows.map((r) => toVariantItem(r, withTx.has(r.id)))
+}
+
+function buildVariantsConfigResponse(items: VariantItem[]): VariantsConfigResponse | null {
+  if (items.length === 0) return null
+  const first = items[0]!
+  return {
+    attribute1Name: first.attribute1Name,
+    attribute2Name: first.attribute2Name,
+    variants: items,
+  }
+}
+
 export interface ListProductsDeps {
   db: Db
   storeId: string
@@ -298,12 +391,14 @@ function buildListConditions({
 
   if (query.stockFilter) {
     conds.push(eq(products.trackInventory, true))
+    // effectiveStock = COALESCE(SUM(variants.stock_quantity) WHERE deleted_at IS NULL, current_stock)
+    const effective = sql`(CASE WHEN ${products.hasVariants} THEN COALESCE((SELECT SUM(${productVariants.stockQuantity}) FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL), 0) ELSE ${products.currentStock} END)`
     if (query.stockFilter === 'in_stock') {
-      conds.push(sql`${products.currentStock} > 0`)
+      conds.push(sql`${effective} > 0`)
     } else if (query.stockFilter === 'out_of_stock') {
-      conds.push(sql`${products.currentStock} = 0`)
+      conds.push(sql`${effective} = 0`)
     } else if (query.stockFilter === 'below_min') {
-      conds.push(sql`${products.currentStock} <= ${products.minStock}`)
+      conds.push(sql`${effective} <= ${products.minStock}`)
       conds.push(sql`${products.minStock} > 0`)
     }
   }
@@ -361,31 +456,33 @@ async function queryProductsList({
     .where(whereClause)
   const total = totalRows[0]?.count ?? 0
 
-  const items = rows.map((row) =>
-    toProductListItem(
-      {
-        id: row.id,
-        storeId: row.storeId,
-        name: row.name,
-        sku: row.sku,
-        barcode: row.barcode,
-        categoryId: row.categoryId,
-        sellingPrice: row.sellingPrice,
-        costPrice: row.costPrice,
-        unit: row.unit,
-        imageUrl: row.imageUrl,
-        status: row.status,
-        hasVariants: row.hasVariants,
-        trackInventory: row.trackInventory,
-        currentStock: row.currentStock,
-        minStock: row.minStock,
-        deletedAt: row.deletedAt,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-      },
-      row.categoryName,
-    ),
-  )
+  const variantProductIds = rows.filter((r) => r.hasVariants).map((r) => r.id)
+  const stockMap = await aggregateVariantStock({ db, productIds: variantProductIds })
+
+  const items = rows.map((row) => {
+    const baseRow: ProductRow = {
+      id: row.id,
+      storeId: row.storeId,
+      name: row.name,
+      sku: row.sku,
+      barcode: row.barcode,
+      categoryId: row.categoryId,
+      sellingPrice: row.sellingPrice,
+      costPrice: row.costPrice,
+      unit: row.unit,
+      imageUrl: row.imageUrl,
+      status: row.status,
+      hasVariants: row.hasVariants,
+      trackInventory: row.trackInventory,
+      currentStock: row.currentStock,
+      minStock: row.minStock,
+      deletedAt: row.deletedAt,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }
+    const effectiveStock = row.hasVariants ? (stockMap.get(row.id) ?? 0) : row.currentStock
+    return toProductListItem(baseRow, row.categoryName, effectiveStock)
+  })
 
   return { items, total }
 }
@@ -429,7 +526,213 @@ export async function getProduct({
     throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm')
   }
   const categoryName = await fetchCategoryName({ db, categoryId: target.categoryId })
-  return toProductDetail(target as ProductRow, categoryName)
+
+  let variantsConfig: VariantsConfigResponse | null = null
+  let effectiveStock: number | undefined
+  if (target.hasVariants) {
+    const items = await loadVariantsForProduct({ db, productId: target.id })
+    variantsConfig = buildVariantsConfigResponse(items)
+    effectiveStock = items.reduce((s, v) => s + v.stockQuantity, 0)
+  }
+
+  return toProductDetail(target as ProductRow, categoryName, variantsConfig, effectiveStock)
+}
+
+interface InsertVariantRowsArgs {
+  tx: Db
+  storeId: string
+  productId: string
+  parentSku: string
+  config: VariantsConfig
+  trackInventory: boolean
+  actor: ProductsActor
+  meta?: RequestMeta
+}
+
+async function insertVariantsBatch({
+  tx,
+  storeId,
+  productId,
+  parentSku,
+  config,
+  trackInventory,
+  actor,
+  meta,
+}: InsertVariantRowsArgs): Promise<VariantItem[]> {
+  // Pre-validate uniqueness in batch
+  const reservedSkus = new Set<string>()
+  const explicitSkus: { sku: string; index: number }[] = []
+  config.variants.forEach((v, i) => {
+    const trimmed = v.sku?.trim()
+    if (trimmed) {
+      explicitSkus.push({ sku: trimmed, index: i })
+      reservedSkus.add(trimmed.toLowerCase())
+    }
+  })
+
+  // Check explicit SKUs against DB
+  if (explicitSkus.length > 0) {
+    const taken = await findTakenVariantSkus({
+      db: tx,
+      storeId,
+      skus: explicitSkus.map((x) => x.sku),
+      excludeIds: [],
+    })
+    if (taken.size > 0) {
+      const conflicting = explicitSkus.find((x) => taken.has(x.sku.toLowerCase()))
+      if (conflicting) {
+        throw new ApiError('CONFLICT', 'SKU biến thể đã tồn tại trong cửa hàng', {
+          field: 'sku',
+          variantIndex: conflicting.index,
+        })
+      }
+    }
+  }
+
+  // Check explicit barcodes against DB
+  const explicitBarcodes: { barcode: string; index: number }[] = []
+  config.variants.forEach((v, i) => {
+    if (v.barcode) explicitBarcodes.push({ barcode: v.barcode, index: i })
+  })
+  if (explicitBarcodes.length > 0) {
+    const taken = await findTakenVariantBarcodes({
+      db: tx,
+      storeId,
+      barcodes: explicitBarcodes.map((x) => x.barcode),
+      excludeIds: [],
+    })
+    if (taken.size > 0) {
+      const conflicting = explicitBarcodes.find((x) => taken.has(x.barcode))
+      if (conflicting) {
+        throw new ApiError('CONFLICT', 'Barcode biến thể đã tồn tại trong cửa hàng', {
+          field: 'barcode',
+          variantIndex: conflicting.index,
+        })
+      }
+    }
+  }
+
+  // Auto-gen SKU for variants without explicit (defensive: schema requires sku)
+  const finalRows: Array<{
+    sku: string
+    barcode: string | null
+    attribute1Value: string
+    attribute2Value: string | null
+    sellingPrice: number
+    costPrice: number | null
+    stockQuantity: number
+    status: string
+    index: number
+  }> = []
+  for (let i = 0; i < config.variants.length; i++) {
+    const v = config.variants[i]!
+    let sku = v.sku?.trim()
+    if (!sku) {
+      sku = await generateUniqueVariantSku({
+        db: tx,
+        storeId,
+        parentSku,
+        value1: v.attribute1Value,
+        value2: v.attribute2Value ?? null,
+        index: i,
+        reserved: reservedSkus,
+      })
+    }
+    finalRows.push({
+      sku,
+      barcode: v.barcode ?? null,
+      attribute1Value: v.attribute1Value,
+      attribute2Value: v.attribute2Value ?? null,
+      sellingPrice: v.sellingPrice,
+      costPrice: v.costPrice ?? null,
+      stockQuantity: v.stockQuantity ?? 0,
+      status: v.status ?? 'active',
+      index: i,
+    })
+  }
+
+  let inserted: Array<typeof productVariants.$inferSelect>
+  try {
+    inserted = await tx
+      .insert(productVariants)
+      .values(
+        finalRows.map((r) => ({
+          storeId,
+          productId,
+          sku: r.sku,
+          barcode: r.barcode,
+          attribute1Name: config.attribute1Name,
+          attribute1Value: r.attribute1Value,
+          attribute2Name: config.attribute2Name ?? null,
+          attribute2Value: r.attribute2Value,
+          sellingPrice: r.sellingPrice,
+          costPrice: r.costPrice,
+          stockQuantity: r.stockQuantity,
+          status: r.status,
+        })),
+      )
+      .returning()
+  } catch (err) {
+    const apiErr = mapVariantViolationToApiError(err)
+    if (apiErr) throw apiErr
+    throw err
+  }
+
+  const items = inserted.map((r) => toVariantItem(r))
+
+  for (let i = 0; i < items.length; i++) {
+    const variant = items[i]!
+    const original = finalRows[i]!
+
+    await logAction({
+      db: tx,
+      storeId,
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: 'product.variant_created',
+      targetType: 'product_variant',
+      targetId: variant.id,
+      changes: {
+        sku: variant.sku,
+        attribute1Name: config.attribute1Name,
+        attribute1Value: variant.attribute1Value,
+        attribute2Name: config.attribute2Name ?? null,
+        attribute2Value: variant.attribute2Value,
+        sellingPrice: variant.sellingPrice,
+        costPrice: variant.costPrice,
+        stockQuantity: variant.stockQuantity,
+      },
+      ipAddress: meta?.ipAddress,
+      userAgent: meta?.userAgent,
+    })
+
+    if (trackInventory && original.stockQuantity > 0) {
+      await tx.insert(inventoryTransactions).values({
+        storeId,
+        productId,
+        variantId: variant.id,
+        type: 'initial_stock',
+        quantity: original.stockQuantity,
+        createdBy: actor.userId,
+        note: 'Khởi tạo tồn kho biến thể',
+      })
+
+      await logAction({
+        db: tx,
+        storeId,
+        actorId: actor.userId,
+        actorRole: actor.role,
+        action: 'product.stock_initialized',
+        targetType: 'product_variant',
+        targetId: variant.id,
+        changes: { quantity: original.stockQuantity },
+        ipAddress: meta?.ipAddress,
+        userAgent: meta?.userAgent,
+      })
+    }
+  }
+
+  return items
 }
 
 export interface CreateProductDeps {
@@ -445,8 +748,9 @@ export async function createProduct({
   input,
   meta,
 }: CreateProductDeps): Promise<ProductDetail> {
+  const hasVariantsConfig = input.variantsConfig !== null && input.variantsConfig !== undefined
   const trackInventory = input.trackInventory ?? false
-  const initialStock = trackInventory ? (input.initialStock ?? 0) : 0
+  const initialStock = !hasVariantsConfig && trackInventory ? (input.initialStock ?? 0) : 0
   const minStock = input.minStock ?? 0
 
   if (input.categoryId) {
@@ -462,9 +766,10 @@ export async function createProduct({
     }
   }
 
-  const barcode = input.barcode?.trim() || null
-  if (barcode) {
-    if (await isBarcodeTaken({ db, storeId: actor.storeId, barcode })) {
+  // Khi has variants → product-level barcode bị set null
+  const productBarcode = hasVariantsConfig ? null : input.barcode?.trim() || null
+  if (productBarcode) {
+    if (await isBarcodeTaken({ db, storeId: actor.storeId, barcode: productBarcode })) {
       throw new ApiError('CONFLICT', 'Barcode đã tồn tại trong cửa hàng', { field: 'barcode' })
     }
   }
@@ -478,16 +783,17 @@ export async function createProduct({
           storeId: actor.storeId,
           name: input.name,
           sku,
-          barcode,
+          barcode: productBarcode,
           categoryId: input.categoryId ?? null,
-          sellingPrice: input.sellingPrice,
-          costPrice: input.costPrice ?? null,
+          sellingPrice: hasVariantsConfig ? 0 : input.sellingPrice,
+          costPrice: hasVariantsConfig ? null : (input.costPrice ?? null),
           unit: input.unit ?? 'Cái',
           imageUrl: input.imageUrl ?? null,
           status: input.status ?? 'active',
+          hasVariants: hasVariantsConfig,
           trackInventory,
           minStock,
-          currentStock: trackInventory ? initialStock : 0,
+          currentStock: hasVariantsConfig ? 0 : trackInventory ? initialStock : 0,
         })
         .returning()
       if (!row) {
@@ -524,13 +830,14 @@ export async function createProduct({
         sellingPrice: Number(created.sellingPrice),
         categoryId: created.categoryId,
         trackInventory: created.trackInventory,
-        initialStock: trackInventory ? initialStock : 0,
+        hasVariants: created.hasVariants,
+        initialStock: hasVariantsConfig ? 0 : trackInventory ? initialStock : 0,
       },
       ipAddress: meta?.ipAddress,
       userAgent: meta?.userAgent,
     })
 
-    if (trackInventory && initialStock > 0) {
+    if (!hasVariantsConfig && trackInventory && initialStock > 0) {
       await tx.insert(inventoryTransactions).values({
         storeId: actor.storeId,
         productId: created.id,
@@ -554,11 +861,46 @@ export async function createProduct({
       })
     }
 
+    let variantsConfig: VariantsConfigResponse | null = null
+    let effectiveStock: number | undefined
+    if (hasVariantsConfig && input.variantsConfig) {
+      const items = await insertVariantsBatch({
+        tx: tx as unknown as Db,
+        storeId: actor.storeId,
+        productId: created.id,
+        parentSku: created.sku,
+        config: input.variantsConfig,
+        trackInventory,
+        actor,
+        meta,
+      })
+
+      await logAction({
+        db: tx as unknown as Db,
+        storeId: actor.storeId,
+        actorId: actor.userId,
+        actorRole: actor.role,
+        action: 'product.variants_enabled',
+        targetType: 'product',
+        targetId: created.id,
+        changes: {
+          variantCount: items.length,
+          attribute1Name: input.variantsConfig.attribute1Name,
+          attribute2Name: input.variantsConfig.attribute2Name ?? null,
+        },
+        ipAddress: meta?.ipAddress,
+        userAgent: meta?.userAgent,
+      })
+
+      variantsConfig = buildVariantsConfigResponse(items)
+      effectiveStock = items.reduce((s, v) => s + v.stockQuantity, 0)
+    }
+
     const categoryName = await fetchCategoryName({
       db: tx as unknown as Db,
       categoryId: created.categoryId,
     })
-    return toProductDetail(created as ProductRow, categoryName)
+    return toProductDetail(created as ProductRow, categoryName, variantsConfig, effectiveStock)
   })
 }
 
@@ -583,6 +925,11 @@ export async function updateProduct({
   if (!target || target.storeId !== actor.storeId || target.deletedAt !== null) {
     throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm')
   }
+
+  const variantsConfigField = Object.prototype.hasOwnProperty.call(input, 'variantsConfig')
+    ? input.variantsConfig
+    : undefined
+  const hasVariantsConfigField = variantsConfigField !== undefined
 
   const updates: Partial<typeof products.$inferInsert> = {}
 
@@ -655,73 +1002,139 @@ export async function updateProduct({
     updates.trackInventory = input.trackInventory
   }
 
-  if (Object.keys(updates).length === 0) {
-    const categoryName = await fetchCategoryName({ db, categoryId: target.categoryId })
-    return toProductDetail(target as ProductRow, categoryName)
-  }
-
-  const before: Record<string, unknown> = {
-    name: target.name,
-    sku: target.sku,
-    barcode: target.barcode,
-    categoryId: target.categoryId,
-    sellingPrice: Number(target.sellingPrice),
-    costPrice: target.costPrice === null ? null : Number(target.costPrice),
-    unit: target.unit,
-    imageUrl: target.imageUrl,
-    status: target.status,
-    trackInventory: target.trackInventory,
-    minStock: target.minStock,
-  }
-  const after: Record<string, unknown> = {
-    name: updates.name ?? target.name,
-    sku: updates.sku ?? target.sku,
-    barcode: updates.barcode !== undefined ? updates.barcode : target.barcode,
-    categoryId: updates.categoryId !== undefined ? updates.categoryId : target.categoryId,
-    sellingPrice:
-      updates.sellingPrice !== undefined ? updates.sellingPrice : Number(target.sellingPrice),
-    costPrice:
-      updates.costPrice !== undefined
-        ? updates.costPrice
-        : target.costPrice === null
-          ? null
-          : Number(target.costPrice),
-    unit: updates.unit ?? target.unit,
-    imageUrl: updates.imageUrl !== undefined ? updates.imageUrl : target.imageUrl,
-    status: updates.status ?? target.status,
-    trackInventory:
-      updates.trackInventory !== undefined ? updates.trackInventory : target.trackInventory,
-    minStock: updates.minStock ?? target.minStock,
+  // Pre-checks for variant transitions
+  if (hasVariantsConfigField) {
+    if (variantsConfigField === null && target.hasVariants) {
+      // TURN OFF variants
+      const existing = await db
+        .select({ id: productVariants.id, stockQuantity: productVariants.stockQuantity })
+        .from(productVariants)
+        .where(and(eq(productVariants.productId, target.id), isNull(productVariants.deletedAt)))
+      const totalStock = existing.reduce((s, r) => s + r.stockQuantity, 0)
+      if (totalStock > 0) {
+        throw new ApiError(
+          'BUSINESS_RULE_VIOLATION',
+          'Vui lòng kiểm kho biến thể về 0 trước khi tắt biến thể',
+        )
+      }
+      for (const e of existing) {
+        if (await hasVariantTransactions({ db, variantId: e.id })) {
+          throw new ApiError(
+            'BUSINESS_RULE_VIOLATION',
+            'Có biến thể đã được dùng, không thể tắt biến thể',
+          )
+        }
+      }
+    } else if (variantsConfigField !== null && !target.hasVariants) {
+      // TURN ON variants from non-variant product
+      if (target.currentStock > 0) {
+        throw new ApiError(
+          'BUSINESS_RULE_VIOLATION',
+          'Vui lòng kiểm kho về 0 trước khi bật biến thể',
+        )
+      }
+    }
   }
 
   return db.transaction(async (tx) => {
-    let updated: typeof products.$inferSelect
-    try {
-      const [row] = await tx
-        .update(products)
-        .set(updates)
-        .where(eq(products.id, productId))
-        .returning()
-      if (!row) {
-        throw new ApiError('INTERNAL_ERROR', 'Không cập nhật được sản phẩm')
+    let updated: typeof products.$inferSelect = target
+    let variantUpdateRan = false
+
+    // Handle variants transitions
+    if (hasVariantsConfigField) {
+      if (variantsConfigField === null && target.hasVariants) {
+        // TURN OFF: hard delete all variants (validated no transactions above)
+        const existing = await tx
+          .select()
+          .from(productVariants)
+          .where(and(eq(productVariants.productId, target.id), isNull(productVariants.deletedAt)))
+        for (const e of existing) {
+          await tx.delete(productVariants).where(eq(productVariants.id, e.id))
+          await logAction({
+            db: tx as unknown as Db,
+            storeId: actor.storeId,
+            actorId: actor.userId,
+            actorRole: actor.role,
+            action: 'product.variant_deleted',
+            targetType: 'product_variant',
+            targetId: e.id,
+            changes: { softDelete: false, sku: e.sku },
+            ipAddress: meta?.ipAddress,
+            userAgent: meta?.userAgent,
+          })
+        }
+        updates.hasVariants = false
+        updates.currentStock = 0
+        variantUpdateRan = true
+      } else if (variantsConfigField !== null && !target.hasVariants) {
+        // TURN ON
+        updates.hasVariants = true
+        updates.sellingPrice = 0
+        updates.costPrice = null
+        updates.barcode = null
+        updates.currentStock = 0
+        variantUpdateRan = true
+      } else if (variantsConfigField !== null && target.hasVariants) {
+        // CRUD on existing variants
+        variantUpdateRan = true
       }
-      updated = row
-    } catch (err) {
-      if (err instanceof ApiError) throw err
-      const violation = classifyUniqueProductViolation(err)
-      if (violation) {
-        const msg =
-          violation.field === 'sku'
-            ? 'Mã SKU đã tồn tại trong cửa hàng'
-            : 'Barcode đã tồn tại trong cửa hàng'
-        throw new ApiError('CONFLICT', msg, { field: violation.field })
-      }
-      if (isCategoryFkViolation(err)) {
-        throw new ApiError('NOT_FOUND', 'Không tìm thấy danh mục')
-      }
-      throw err
     }
 
+    if (Object.keys(updates).length > 0) {
+      try {
+        const [row] = await tx
+          .update(products)
+          .set(updates)
+          .where(eq(products.id, productId))
+          .returning()
+        if (!row) {
+          throw new ApiError('INTERNAL_ERROR', 'Không cập nhật được sản phẩm')
+        }
+        updated = row
+      } catch (err) {
+        if (err instanceof ApiError) throw err
+        const violation = classifyUniqueProductViolation(err)
+        if (violation) {
+          const msg =
+            violation.field === 'sku'
+              ? 'Mã SKU đã tồn tại trong cửa hàng'
+              : 'Barcode đã tồn tại trong cửa hàng'
+          throw new ApiError('CONFLICT', msg, { field: violation.field })
+        }
+        if (isCategoryFkViolation(err)) {
+          throw new ApiError('NOT_FOUND', 'Không tìm thấy danh mục')
+        }
+        throw err
+      }
+    }
+
+    // Audit product fields
+    const before: Record<string, unknown> = {
+      name: target.name,
+      sku: target.sku,
+      barcode: target.barcode,
+      categoryId: target.categoryId,
+      sellingPrice: Number(target.sellingPrice),
+      costPrice: target.costPrice === null ? null : Number(target.costPrice),
+      unit: target.unit,
+      imageUrl: target.imageUrl,
+      status: target.status,
+      trackInventory: target.trackInventory,
+      minStock: target.minStock,
+    }
+    const after: Record<string, unknown> = {
+      name: updated.name,
+      sku: updated.sku,
+      barcode: updated.barcode,
+      categoryId: updated.categoryId,
+      sellingPrice: Number(updated.sellingPrice),
+      costPrice: updated.costPrice === null ? null : Number(updated.costPrice),
+      unit: updated.unit,
+      imageUrl: updated.imageUrl,
+      status: updated.status,
+      trackInventory: updated.trackInventory,
+      minStock: updated.minStock,
+    }
     const fieldDiff = diffObjects(before, after)
     if (Object.keys(fieldDiff).length > 0) {
       await logAction({
@@ -738,12 +1151,432 @@ export async function updateProduct({
       })
     }
 
+    // Variants CRUD detail
+    if (variantUpdateRan && hasVariantsConfigField) {
+      const cfg = variantsConfigField as VariantsConfig | null
+      if (cfg === null && target.hasVariants) {
+        await logAction({
+          db: tx as unknown as Db,
+          storeId: actor.storeId,
+          actorId: actor.userId,
+          actorRole: actor.role,
+          action: 'product.variants_disabled',
+          targetType: 'product',
+          targetId: productId,
+          changes: {},
+          ipAddress: meta?.ipAddress,
+          userAgent: meta?.userAgent,
+        })
+      } else if (cfg !== null && !target.hasVariants) {
+        await insertVariantsBatch({
+          tx: tx as unknown as Db,
+          storeId: actor.storeId,
+          productId: updated.id,
+          parentSku: updated.sku,
+          config: cfg,
+          trackInventory: updated.trackInventory,
+          actor,
+          meta,
+        })
+
+        await logAction({
+          db: tx as unknown as Db,
+          storeId: actor.storeId,
+          actorId: actor.userId,
+          actorRole: actor.role,
+          action: 'product.variants_enabled',
+          targetType: 'product',
+          targetId: productId,
+          changes: {
+            variantCount: cfg.variants.length,
+            attribute1Name: cfg.attribute1Name,
+            attribute2Name: cfg.attribute2Name ?? null,
+          },
+          ipAddress: meta?.ipAddress,
+          userAgent: meta?.userAgent,
+        })
+      } else if (cfg !== null && target.hasVariants) {
+        await applyVariantDiff({
+          tx: tx as unknown as Db,
+          storeId: actor.storeId,
+          productId: updated.id,
+          parentSku: updated.sku,
+          config: cfg,
+          trackInventory: updated.trackInventory,
+          actor,
+          meta,
+        })
+      }
+    }
+
     const categoryName = await fetchCategoryName({
       db: tx as unknown as Db,
       categoryId: updated.categoryId,
     })
-    return toProductDetail(updated as ProductRow, categoryName)
+
+    let variantsConfigResp: VariantsConfigResponse | null = null
+    let effectiveStock: number | undefined
+    if (updated.hasVariants) {
+      const items = await loadVariantsForProduct({ db: tx as unknown as Db, productId: updated.id })
+      variantsConfigResp = buildVariantsConfigResponse(items)
+      effectiveStock = items.reduce((s, v) => s + v.stockQuantity, 0)
+    }
+
+    return toProductDetail(updated as ProductRow, categoryName, variantsConfigResp, effectiveStock)
   })
+}
+
+interface ApplyVariantDiffArgs {
+  tx: Db
+  storeId: string
+  productId: string
+  parentSku: string
+  config: VariantsConfig
+  trackInventory: boolean
+  actor: ProductsActor
+  meta?: RequestMeta
+}
+
+async function applyVariantDiff({
+  tx,
+  storeId,
+  productId,
+  parentSku,
+  config,
+  trackInventory,
+  actor,
+  meta,
+}: ApplyVariantDiffArgs): Promise<void> {
+  // Load alive existing variants
+  const existing = await tx
+    .select()
+    .from(productVariants)
+    .where(and(eq(productVariants.productId, productId), isNull(productVariants.deletedAt)))
+
+  const existingMap = new Map(existing.map((e) => [e.id, e]))
+  const incomingMap = new Map<string, VariantInput>()
+  for (const v of config.variants) {
+    if (v.id) incomingMap.set(v.id, v)
+  }
+
+  const toInsert: Array<{ v: VariantInput; index: number }> = []
+  const toUpdate: Array<{ v: VariantInput; existing: (typeof existing)[number]; index: number }> =
+    []
+  config.variants.forEach((v, i) => {
+    if (!v.id) {
+      toInsert.push({ v, index: i })
+      return
+    }
+    const ex = existingMap.get(v.id)
+    if (!ex) return
+    toUpdate.push({ v, existing: ex, index: i })
+  })
+
+  const incomingIds = new Set([...incomingMap.keys()])
+  const toDelete = existing.filter((e) => !incomingIds.has(e.id))
+
+  // Pre-validate uniqueness for new SKUs/barcodes (against DB excluding all involved variant ids)
+  const allInvolvedIds = existing.map((e) => e.id)
+  const updateSkuConflicts = toUpdate.filter(
+    (x) => x.v.sku && x.v.sku.toLowerCase() !== x.existing.sku.toLowerCase(),
+  )
+  const insertSkus = toInsert.filter((x) => x.v.sku).map((x) => ({ sku: x.v.sku!, index: x.index }))
+  const allSkuChecks = [
+    ...insertSkus,
+    ...updateSkuConflicts.map((x) => ({ sku: x.v.sku!, index: x.index })),
+  ]
+  if (allSkuChecks.length > 0) {
+    const taken = await findTakenVariantSkus({
+      db: tx,
+      storeId,
+      skus: allSkuChecks.map((x) => x.sku),
+      excludeIds: allInvolvedIds,
+    })
+    if (taken.size > 0) {
+      const conflicting = allSkuChecks.find((x) => taken.has(x.sku.toLowerCase()))
+      if (conflicting) {
+        throw new ApiError('CONFLICT', 'SKU biến thể đã tồn tại trong cửa hàng', {
+          field: 'sku',
+          variantIndex: conflicting.index,
+        })
+      }
+    }
+  }
+
+  const insertBarcodes = toInsert
+    .filter((x) => x.v.barcode)
+    .map((x) => ({ barcode: x.v.barcode!, index: x.index }))
+  const updateBarcodes = toUpdate
+    .filter((x) => x.v.barcode && x.v.barcode !== x.existing.barcode)
+    .map((x) => ({ barcode: x.v.barcode!, index: x.index }))
+  const allBarcodeChecks = [...insertBarcodes, ...updateBarcodes]
+  if (allBarcodeChecks.length > 0) {
+    const taken = await findTakenVariantBarcodes({
+      db: tx,
+      storeId,
+      barcodes: allBarcodeChecks.map((x) => x.barcode),
+      excludeIds: allInvolvedIds,
+    })
+    if (taken.size > 0) {
+      const conflicting = allBarcodeChecks.find((x) => taken.has(x.barcode))
+      if (conflicting) {
+        throw new ApiError('CONFLICT', 'Barcode biến thể đã tồn tại trong cửa hàng', {
+          field: 'barcode',
+          variantIndex: conflicting.index,
+        })
+      }
+    }
+  }
+
+  // INSERT new variants
+  if (toInsert.length > 0) {
+    const reservedSkus = new Set<string>()
+    existing.forEach((e) => reservedSkus.add(e.sku.toLowerCase()))
+    toInsert.forEach((x) => {
+      if (x.v.sku) reservedSkus.add(x.v.sku.toLowerCase())
+    })
+    toUpdate.forEach((x) => {
+      const sku = x.v.sku ?? x.existing.sku
+      reservedSkus.add(sku.toLowerCase())
+    })
+
+    const insertRows: Array<{
+      sku: string
+      barcode: string | null
+      attribute1Value: string
+      attribute2Value: string | null
+      sellingPrice: number
+      costPrice: number | null
+      stockQuantity: number
+      status: string
+      index: number
+    }> = []
+
+    for (const item of toInsert) {
+      let sku = item.v.sku?.trim()
+      if (!sku) {
+        sku = await generateUniqueVariantSku({
+          db: tx,
+          storeId,
+          parentSku,
+          value1: item.v.attribute1Value,
+          value2: item.v.attribute2Value ?? null,
+          index: item.index,
+          reserved: reservedSkus,
+        })
+      }
+      insertRows.push({
+        sku,
+        barcode: item.v.barcode ?? null,
+        attribute1Value: item.v.attribute1Value,
+        attribute2Value: item.v.attribute2Value ?? null,
+        sellingPrice: item.v.sellingPrice,
+        costPrice: item.v.costPrice ?? null,
+        stockQuantity: item.v.stockQuantity ?? 0,
+        status: item.v.status ?? 'active',
+        index: item.index,
+      })
+    }
+
+    let inserted: Array<typeof productVariants.$inferSelect>
+    try {
+      inserted = await tx
+        .insert(productVariants)
+        .values(
+          insertRows.map((r) => ({
+            storeId,
+            productId,
+            sku: r.sku,
+            barcode: r.barcode,
+            attribute1Name: config.attribute1Name,
+            attribute1Value: r.attribute1Value,
+            attribute2Name: config.attribute2Name ?? null,
+            attribute2Value: r.attribute2Value,
+            sellingPrice: r.sellingPrice,
+            costPrice: r.costPrice,
+            stockQuantity: r.stockQuantity,
+            status: r.status,
+          })),
+        )
+        .returning()
+    } catch (err) {
+      const apiErr = mapVariantViolationToApiError(err)
+      if (apiErr) throw apiErr
+      throw err
+    }
+
+    for (let i = 0; i < inserted.length; i++) {
+      const v = inserted[i]!
+      const original = insertRows[i]!
+
+      await logAction({
+        db: tx,
+        storeId,
+        actorId: actor.userId,
+        actorRole: actor.role,
+        action: 'product.variant_created',
+        targetType: 'product_variant',
+        targetId: v.id,
+        changes: {
+          sku: v.sku,
+          attribute1Name: config.attribute1Name,
+          attribute1Value: v.attribute1Value,
+          attribute2Name: config.attribute2Name ?? null,
+          attribute2Value: v.attribute2Value,
+          sellingPrice: Number(v.sellingPrice),
+          costPrice: v.costPrice === null ? null : Number(v.costPrice),
+          stockQuantity: v.stockQuantity,
+        },
+        ipAddress: meta?.ipAddress,
+        userAgent: meta?.userAgent,
+      })
+
+      if (trackInventory && original.stockQuantity > 0) {
+        await tx.insert(inventoryTransactions).values({
+          storeId,
+          productId,
+          variantId: v.id,
+          type: 'initial_stock',
+          quantity: original.stockQuantity,
+          createdBy: actor.userId,
+          note: 'Khởi tạo tồn kho biến thể',
+        })
+
+        await logAction({
+          db: tx,
+          storeId,
+          actorId: actor.userId,
+          actorRole: actor.role,
+          action: 'product.stock_initialized',
+          targetType: 'product_variant',
+          targetId: v.id,
+          changes: { quantity: original.stockQuantity },
+          ipAddress: meta?.ipAddress,
+          userAgent: meta?.userAgent,
+        })
+      }
+    }
+  }
+
+  // UPDATE existing variants
+  for (const item of toUpdate) {
+    const ex = item.existing
+    const v = item.v
+    const setObj: Partial<typeof productVariants.$inferInsert> = {}
+    const beforeRec: Record<string, unknown> = {}
+    const afterRec: Record<string, unknown> = {}
+
+    if (v.sku && v.sku !== ex.sku) {
+      setObj.sku = v.sku
+      beforeRec.sku = ex.sku
+      afterRec.sku = v.sku
+    }
+    const newBarcode = v.barcode ?? null
+    if (newBarcode !== ex.barcode) {
+      setObj.barcode = newBarcode
+      beforeRec.barcode = ex.barcode
+      afterRec.barcode = newBarcode
+    }
+    if (v.attribute1Value !== ex.attribute1Value) {
+      setObj.attribute1Value = v.attribute1Value
+      beforeRec.attribute1Value = ex.attribute1Value
+      afterRec.attribute1Value = v.attribute1Value
+    }
+    const newAttr2 = v.attribute2Value ?? null
+    if (newAttr2 !== ex.attribute2Value) {
+      setObj.attribute2Value = newAttr2
+      beforeRec.attribute2Value = ex.attribute2Value
+      afterRec.attribute2Value = newAttr2
+    }
+    if (v.sellingPrice !== Number(ex.sellingPrice)) {
+      setObj.sellingPrice = v.sellingPrice
+      beforeRec.sellingPrice = Number(ex.sellingPrice)
+      afterRec.sellingPrice = v.sellingPrice
+    }
+    const newCost = v.costPrice ?? null
+    const exCost = ex.costPrice === null ? null : Number(ex.costPrice)
+    if (newCost !== exCost) {
+      setObj.costPrice = newCost
+      beforeRec.costPrice = exCost
+      afterRec.costPrice = newCost
+    }
+    if (v.status && v.status !== ex.status) {
+      setObj.status = v.status
+      beforeRec.status = ex.status
+      afterRec.status = v.status
+    }
+    // Sync attribute names too if config changed
+    if (config.attribute1Name !== ex.attribute1Name) {
+      setObj.attribute1Name = config.attribute1Name
+    }
+    const cfgAttr2 = config.attribute2Name ?? null
+    if (cfgAttr2 !== ex.attribute2Name) {
+      setObj.attribute2Name = cfgAttr2
+    }
+
+    if (Object.keys(setObj).length > 0) {
+      try {
+        await tx.update(productVariants).set(setObj).where(eq(productVariants.id, ex.id))
+      } catch (err) {
+        const apiErr = mapVariantViolationToApiError(err, item.index)
+        if (apiErr) throw apiErr
+        throw err
+      }
+    }
+
+    const diff = diffObjects(beforeRec, afterRec)
+    if (Object.keys(diff).length > 0) {
+      await logAction({
+        db: tx,
+        storeId,
+        actorId: actor.userId,
+        actorRole: actor.role,
+        action: 'product.variant_updated',
+        targetType: 'product_variant',
+        targetId: ex.id,
+        changes: diff,
+        ipAddress: meta?.ipAddress,
+        userAgent: meta?.userAgent,
+      })
+    }
+  }
+
+  // DELETE variants not in incoming
+  for (const e of toDelete) {
+    const hasTx = await hasVariantTransactions({ db: tx, variantId: e.id })
+    if (hasTx) {
+      await tx
+        .update(productVariants)
+        .set({ deletedAt: new Date(), status: 'inactive' })
+        .where(eq(productVariants.id, e.id))
+      await logAction({
+        db: tx,
+        storeId,
+        actorId: actor.userId,
+        actorRole: actor.role,
+        action: 'product.variant_deleted',
+        targetType: 'product_variant',
+        targetId: e.id,
+        changes: { softDelete: true, sku: e.sku },
+        ipAddress: meta?.ipAddress,
+        userAgent: meta?.userAgent,
+      })
+    } else {
+      await tx.delete(productVariants).where(eq(productVariants.id, e.id))
+      await logAction({
+        db: tx,
+        storeId,
+        actorId: actor.userId,
+        actorRole: actor.role,
+        action: 'product.variant_deleted',
+        targetType: 'product_variant',
+        targetId: e.id,
+        changes: { softDelete: false, sku: e.sku },
+        ipAddress: meta?.ipAddress,
+        userAgent: meta?.userAgent,
+      })
+    }
+  }
 }
 
 export interface DeleteProductDeps {
@@ -820,7 +1653,6 @@ export async function restoreProduct({
     throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm đã xoá')
   }
 
-  // Vì partial unique chỉ enforce alive rows, kiểm tra SKU/barcode không bị chiếm
   if (await isSkuTaken({ db, storeId: actor.storeId, sku: target.sku, excludeId: target.id })) {
     throw new ApiError(
       'CONFLICT',
@@ -872,6 +1704,15 @@ export async function restoreProduct({
       db: tx as unknown as Db,
       categoryId: updated.categoryId,
     })
-    return toProductDetail(updated as ProductRow, categoryName)
+
+    let variantsConfigResp: VariantsConfigResponse | null = null
+    let effectiveStock: number | undefined
+    if (updated.hasVariants) {
+      const items = await loadVariantsForProduct({ db: tx as unknown as Db, productId: updated.id })
+      variantsConfigResp = buildVariantsConfigResponse(items)
+      effectiveStock = items.reduce((s, v) => s + v.stockQuantity, 0)
+    }
+
+    return toProductDetail(updated as ProductRow, categoryName, variantsConfigResp, effectiveStock)
   })
 }
