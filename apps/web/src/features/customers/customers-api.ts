@@ -1,9 +1,13 @@
 import type {
   CreateCustomerGroupInput,
   CreateCustomerInput,
+  CustomerDebtsResponse,
   CustomerDetail,
   CustomerGroupItem,
   CustomerListItem,
+  CustomerOrderItem,
+  CustomerStats,
+  ListCustomerOrdersQuery,
   ListCustomersQuery,
   QuickCreateCustomerInput,
   UpdateCustomerGroupInput,
@@ -84,4 +88,31 @@ export function deleteCustomerApi(id: string) {
 
 export function restoreCustomerApi(id: string) {
   return apiClient.post<Envelope<CustomerDetail>>(`/api/v1/customers/${id}/restore`)
+}
+
+// ========== Customer Detail Tabs ==========
+
+function buildOrdersQuery(q: Partial<ListCustomerOrdersQuery>): string {
+  const params = new URLSearchParams()
+  if (q.page) params.set('page', String(q.page))
+  if (q.pageSize) params.set('pageSize', String(q.pageSize))
+  if (q.status) params.set('status', q.status)
+  if (q.dateFrom) params.set('dateFrom', q.dateFrom)
+  if (q.dateTo) params.set('dateTo', q.dateTo)
+  const s = params.toString()
+  return s ? `?${s}` : ''
+}
+
+export function getCustomerOrdersApi(id: string, query: Partial<ListCustomerOrdersQuery>) {
+  return apiClient.get<ListEnvelope<CustomerOrderItem[]>>(
+    `/api/v1/customers/${id}/orders${buildOrdersQuery(query)}`,
+  )
+}
+
+export function getCustomerDebtsApi(id: string) {
+  return apiClient.get<Envelope<CustomerDebtsResponse>>(`/api/v1/customers/${id}/debts`)
+}
+
+export function getCustomerStatsApi(id: string) {
+  return apiClient.get<Envelope<CustomerStats>>(`/api/v1/customers/${id}/stats`)
 }

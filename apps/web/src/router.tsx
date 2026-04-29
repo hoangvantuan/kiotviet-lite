@@ -13,6 +13,8 @@ import { AppLayout } from '@/components/layout/app-layout'
 import { ErrorBoundary } from '@/components/layout/error-boundary'
 import { Toaster } from '@/components/ui/sonner'
 import { useMediaQuery as useMediaQueryRoot } from '@/hooks/use-media-query'
+import { CustomerDetailPage } from '@/pages/customer-detail-page'
+import { CustomerPricesPage } from '@/pages/customer-prices-page'
 import { CustomersGroupsPage } from '@/pages/customers-groups-page'
 import { CustomersPage } from '@/pages/customers-page'
 import { HomePage } from '@/pages/home-page'
@@ -31,7 +33,12 @@ import { SettingsAuditPage } from '@/pages/settings-audit-page'
 import { SettingsPage } from '@/pages/settings-page'
 import { SettingsStaffPage } from '@/pages/settings-staff-page'
 import { SettingsStorePage } from '@/pages/settings-store-page'
+import { StockCheckCreatePage } from '@/pages/stock-check-create-page'
+import { StockCheckDetailPage } from '@/pages/stock-check-detail-page'
+import { StockCheckEditPage } from '@/pages/stock-check-edit-page'
+import { StockChecksPage } from '@/pages/stock-checks-page'
 import { SuppliersPage } from '@/pages/suppliers-page'
+import { VolumePricesPage } from '@/pages/volume-prices-page'
 import { useAuthStore } from '@/stores/use-auth-store'
 
 const rootRoute = createRootRoute({
@@ -132,11 +139,32 @@ const customersGroupsRoute = createRoute({
   component: CustomersGroupsPage,
 })
 
+const customerDetailRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/customers/$customerId',
+  beforeLoad: requirePermissionGuard('customers.manage'),
+  component: CustomerDetailPage,
+})
+
 const pricingRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/pricing',
   beforeLoad: requirePermissionGuard('pricing.manage'),
   component: PricingPage,
+})
+
+const customerPricesRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/pricing/customer-prices',
+  beforeLoad: requirePermissionGuard('pricing.manage'),
+  component: CustomerPricesPage,
+})
+
+const volumePricesRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/pricing/volume-prices',
+  beforeLoad: requirePermissionGuard('pricing.manage'),
+  component: VolumePricesPage,
 })
 
 const pricingDetailRoute = createRoute({
@@ -172,6 +200,34 @@ const inventoryPurchaseOrderDetailRoute = createRoute({
   path: '/inventory/purchase-orders/$orderId',
   beforeLoad: requirePermissionGuard('inventory.manage'),
   component: PurchaseOrderDetailPage,
+})
+
+const inventoryStockChecksRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/inventory/stock-checks',
+  beforeLoad: requirePermissionGuard('inventory.manage'),
+  component: StockChecksPage,
+})
+
+const inventoryStockCheckCreateRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/inventory/stock-checks/new',
+  beforeLoad: requirePermissionGuard('inventory.manage'),
+  component: StockCheckCreatePage,
+})
+
+const inventoryStockCheckDetailRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/inventory/stock-checks/$id',
+  beforeLoad: requirePermissionGuard('inventory.manage'),
+  component: StockCheckDetailPage,
+})
+
+const inventoryStockCheckEditRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/inventory/stock-checks/$id/edit',
+  beforeLoad: requirePermissionGuard('inventory.manage'),
+  component: StockCheckEditPage,
 })
 
 const reportsRoute = createRoute({
@@ -241,12 +297,19 @@ const routeTree = rootRoute.addChildren([
       productsCategoriesRoute,
       customersRoute,
       customersGroupsRoute,
+      customerDetailRoute,
       pricingRoute,
+      customerPricesRoute,
+      volumePricesRoute,
       pricingDetailRoute,
       inventorySuppliersRoute,
       inventoryPurchaseOrdersRoute,
       inventoryPurchaseOrderCreateRoute,
       inventoryPurchaseOrderDetailRoute,
+      inventoryStockChecksRoute,
+      inventoryStockCheckCreateRoute,
+      inventoryStockCheckDetailRoute,
+      inventoryStockCheckEditRoute,
       reportsRoute,
       settingsRoute.addChildren([
         settingsIndexRoute,

@@ -45,7 +45,7 @@ import { ApiClientError } from '@/lib/api-client'
 import { showError, showSuccess } from '@/lib/toast'
 
 import { buildCategoryTree } from '../categories/utils'
-import { InventoryHistoryTable } from './inventory-history-table'
+import { ProductHistoryTabs } from './product-history-tabs'
 import { generateRandomSku } from './sku'
 import { UnitConversionEditor } from './unit-conversion-editor'
 import { useCreateProductMutation, useUpdateProductMutation } from './use-products'
@@ -575,7 +575,7 @@ function EditDialog({
             </>
           )}
 
-          {trackInventory && <InventoryHistoryTable productId={product.id} />}
+          {trackInventory && <ProductHistoryTabs productId={product.id} />}
 
           <DialogFooter>
             <Button

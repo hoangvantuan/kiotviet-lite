@@ -121,3 +121,10 @@
 - Bảng stores/users thiếu indexes cho truy vấn (`packages/shared/src/schema/`): chưa cần khi bảng trống, thêm khi có data và query patterns rõ.
 - `next-themes` dependency trong Vite project (`apps/web/package.json`): shadcn/ui tạo, hoạt động được nhưng cần ThemeProvider wrap app. Xem xét thay bằng giải pháp nhẹ hơn khi implement dark mode.
 - Test dùng plaintext cho password_hash (`apps/web/src/lib/pglite.test.ts:67`): chấp nhận trong test, nhưng khi viết auth logic cần validation layer đảm bảo không lưu plaintext.
+
+## Deferred from: code review of 4-4-gia-rieng-khach-hang-gia-theo-so-luong (2026-04-29)
+
+- Race condition `ensureProductAlive`/`ensureCustomerAlive` ngoài transaction. FK CASCADE + DB CHECK đã guard. Spec H7 chấp nhận risk MVP. [apps/api/src/services/customer-prices.service.ts:243-244, volume-prices.service.ts:248]
+- Concurrency 2 user replace volume_prices cùng productId: tx2 ghi đè tx1. Spec H7 chấp nhận, không cần SELECT FOR UPDATE cho MVP. [volume-prices.service.ts:241-320]
+- Migration naming spec đề `0015_*.sql` nhưng thực tế `0016_sleepy_odin.sql` do dev tạo song song với Story 6-2 (0015 là stock-checks). Không ảnh hưởng functionality. [apps/api/src/db/migrations/0016_sleepy_odin.sql]
+- Performance `listCustomerPrices` 2 queries (data + count) đều innerJoin lặp lại. Pattern chuẩn của project, MVP scale OK. Có thể optimize bằng window function/CTE. [customer-prices.service.ts:128-143]

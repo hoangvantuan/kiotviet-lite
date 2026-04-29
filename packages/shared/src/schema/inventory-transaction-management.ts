@@ -6,6 +6,7 @@ export const inventoryTransactionTypeSchema = z.enum([
   'sale',
   'manual_adjustment',
   'return',
+  'stock_check',
 ])
 
 export const inventoryTransactionItemSchema = z.object({

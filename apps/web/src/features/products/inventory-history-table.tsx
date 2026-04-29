@@ -26,6 +26,7 @@ const TYPE_LABELS: Record<InventoryTransactionItem['type'], string> = {
   sale: 'Bán',
   manual_adjustment: 'Điều chỉnh',
   return: 'Trả hàng',
+  stock_check: 'Kiểm kho',
 }
 
 const TYPE_VARIANTS: Record<
@@ -37,6 +38,7 @@ const TYPE_VARIANTS: Record<
   sale: 'outline',
   manual_adjustment: 'secondary',
   return: 'outline',
+  stock_check: 'secondary',
 }
 
 function formatDateTime(iso: string): string {

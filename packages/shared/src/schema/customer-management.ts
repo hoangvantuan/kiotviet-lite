@@ -149,6 +149,59 @@ export const customerDetailSchema = customerListItemSchema.extend({
     .nullable(),
 })
 
+// ========== Customer Detail Tabs ==========
+
+export const customerOrderStatusSchema = z.enum(['draft', 'completed', 'cancelled', 'refunded'])
+
+export const customerOrderItemSchema = z.object({
+  id: z.string().uuid(),
+  orderCode: z.string(),
+  date: z.string(),
+  total: z.number(),
+  status: customerOrderStatusSchema,
+})
+
+export const customerDebtItemSchema = z.object({
+  id: z.string().uuid(),
+  orderCode: z.string(),
+  date: z.string(),
+  originalAmount: z.number(),
+  paidAmount: z.number(),
+  remainingAmount: z.number(),
+})
+
+export const customerDebtsResponseSchema = z.object({
+  currentDebt: z.number(),
+  effectiveDebtLimit: z.number().nullable(),
+  usagePercent: z.number(),
+  items: z.array(customerDebtItemSchema),
+})
+
+export const customerStatsTopProductSchema = z.object({
+  productId: z.string().uuid(),
+  productName: z.string(),
+  quantity: z.number(),
+  total: z.number(),
+})
+
+export const customerStatsMonthlySaleSchema = z.object({
+  month: z.string(),
+  total: z.number(),
+})
+
+export const customerStatsSchema = z.object({
+  topProducts: z.array(customerStatsTopProductSchema),
+  monthlySales: z.array(customerStatsMonthlySaleSchema),
+})
+
+export const listCustomerOrdersQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  status: customerOrderStatusSchema.optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+})
+
 export type CreateCustomerGroupInput = z.infer<typeof createCustomerGroupSchema>
 export type UpdateCustomerGroupInput = z.infer<typeof updateCustomerGroupSchema>
 export type CustomerGroupItem = z.infer<typeof customerGroupItemSchema>
@@ -158,3 +211,11 @@ export type QuickCreateCustomerInput = z.infer<typeof quickCreateCustomerSchema>
 export type ListCustomersQuery = z.infer<typeof listCustomersQuerySchema>
 export type CustomerListItem = z.infer<typeof customerListItemSchema>
 export type CustomerDetail = z.infer<typeof customerDetailSchema>
+export type CustomerOrderStatus = z.infer<typeof customerOrderStatusSchema>
+export type CustomerOrderItem = z.infer<typeof customerOrderItemSchema>
+export type CustomerDebtItem = z.infer<typeof customerDebtItemSchema>
+export type CustomerDebtsResponse = z.infer<typeof customerDebtsResponseSchema>
+export type CustomerStatsTopProduct = z.infer<typeof customerStatsTopProductSchema>
+export type CustomerStatsMonthlySale = z.infer<typeof customerStatsMonthlySaleSchema>
+export type CustomerStats = z.infer<typeof customerStatsSchema>
+export type ListCustomerOrdersQuery = z.infer<typeof listCustomerOrdersQuerySchema>

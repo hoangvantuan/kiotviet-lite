@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 import {
   createCustomerSchema,
+  listCustomerOrdersQuerySchema,
   listCustomersQuerySchema,
   quickCreateCustomerSchema,
   updateCustomerSchema,
@@ -18,6 +19,9 @@ import {
   createCustomer,
   deleteCustomer,
   getCustomer,
+  getCustomerDebts,
+  getCustomerStats,
+  listCustomerOrders,
   listCustomers,
   listTrashedCustomers,
   quickCreateCustomer,
@@ -135,6 +139,49 @@ export function createCustomersRoutes({ db }: CustomersRoutesDeps) {
       actor: auth,
       targetId,
       meta: getRequestMeta(c),
+    })
+    return c.json({ data })
+  })
+
+  app.get('/:id/orders', async (c) => {
+    const auth = c.get('auth')
+    const targetId = uuidParam.parse(c.req.param('id'))
+    const query = listCustomerOrdersQuerySchema.parse(c.req.query())
+    const result = await listCustomerOrders({
+      db,
+      storeId: auth.storeId,
+      targetId,
+      query,
+    })
+    return c.json({
+      data: result.items,
+      meta: {
+        page: result.page,
+        pageSize: result.pageSize,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    })
+  })
+
+  app.get('/:id/debts', async (c) => {
+    const auth = c.get('auth')
+    const targetId = uuidParam.parse(c.req.param('id'))
+    const data = await getCustomerDebts({
+      db,
+      storeId: auth.storeId,
+      targetId,
+    })
+    return c.json({ data })
+  })
+
+  app.get('/:id/stats', async (c) => {
+    const auth = c.get('auth')
+    const targetId = uuidParam.parse(c.req.param('id'))
+    const data = await getCustomerStats({
+      db,
+      storeId: auth.storeId,
+      targetId,
     })
     return c.json({ data })
   })

@@ -45,13 +45,25 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-24
-last_updated: 2026-04-28
+last_updated: 2026-04-29
+# Story 6-2 round 2 review fix 2026-04-29: 12/12 findings fixed; tests 38→68 cases; in-progress → review
+# Story 6-2 round 2 review 2026-04-29: 11/12 fix đạt; F7 implement sai pattern (Rules of Hooks violation) → 1 MUST-FIX + 1 NICE-TO-HAVE; review → in-progress
 # Story 4-3 dev started 2026-04-28
 # Story 6-1 dev started 2026-04-28
 # Story 6-1 dev completed 2026-04-28 → review
 # Story 4-3 dev completed 2026-04-28 → review
 # Story 4-3 review 2026-04-28: 7 patches (5 MAJOR + 2 MINOR), 7 defer, 2 dismiss; back to dev
 # Story 4-3 dev fixed 7 patches 2026-04-28 → review
+# Story 4-4 created 2026-04-29
+# Story 4-4 dev started 2026-04-29
+# Story 4-4 dev completed 2026-04-29
+# Story 4-4 review 2026-04-29: 8 patches (4 MEDIUM + 4 LOW), 4 defer, 2 dismiss; back to dev
+# Story 4-4 dev fixed 8 patches 2026-04-29 → review
+# Story 6-2 created 2026-04-29
+# Story 6-2 dev started 2026-04-29
+# Story 6-2 dev completed 2026-04-29
+# Story 4-2 created + dev + review 2026-04-29: APPROVE_WITH_SUGGESTIONS (1 MAJOR fix breadcrumb, 2 MINOR fix VND symbol + query, 4 suggestions deferred)
+# Story 3-2 created+dev+review 2026-04-29: team 5 agents (3 dev + 2 review), 7 patches applied, 7 deferred
 project: kiotviet-lite
 
 project_key: NOKEY
@@ -79,18 +91,18 @@ development_status:
   # Epic 3: Ban hang (POS) - Luong ban le
   epic-3: in-progress
   3-1-giao-dien-pos-tim-kiem-san-pham: done
-  3-2-gio-hang-quan-ly-don-hang: backlog
+  3-2-gio-hang-quan-ly-don-hang: done
   3-3-thanh-toan-hoan-thanh-don-hang: backlog
   epic-3-retrospective: optional
 
   # Epic 4: Khach hang & He thong Don gia
   epic-4: in-progress
   4-1-quan-ly-khach-hang-nhom-khach-hang: done
-  4-2-trang-chi-tiet-khach-hang: backlog
+  4-2-trang-chi-tiet-khach-hang: done
   4-3-bang-gia-direct-formula: review
   4-3b-chain-formula-clone-import-bang-gia: backlog
   4-3c-so-sanh-bang-gia: backlog
-  4-4-gia-rieng-khach-hang-gia-theo-so-luong: backlog
+  4-4-gia-rieng-khach-hang-gia-theo-so-luong: done
   4-4b-chiet-khau-danh-muc-kiem-soat-sua-gia: backlog
   4-5-tich-hop-6-tang-gia-vao-pos: backlog
   epic-4-retrospective: optional
@@ -105,9 +117,9 @@ development_status:
   epic-5-retrospective: optional
 
   # Epic 6: Nhap hang & Nha cung cap
-  epic-6: in-progress
+  epic-6: done
   6-1-quan-ly-ncc-phieu-nhap-kho: done
-  6-2-kiem-kho-lich-su-nhap-hang: backlog
+  6-2-kiem-kho-lich-su-nhap-hang: done # 2026-04-29 round 3 fix F-NEW-1 (hooks order) + F-NEW-2 (import sort), approved
   epic-6-retrospective: optional
 
   # Epic 7: Hoa don & In an

@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react'
 import { ShoppingCart } from 'lucide-react'
 
-import { Badge } from '@/components/ui/badge'
 import {
   Sheet,
   SheetContent,
@@ -10,6 +9,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { useMediaQuery } from '@/hooks/use-media-query'
+import { formatVndWithSuffix } from '@/lib/currency'
 import { useCartStore } from '@/stores/use-cart-store'
 
 import { usePosProducts } from '../hooks/use-pos-products'
@@ -30,7 +30,15 @@ export function PosScreen() {
   const [variantProduct, setVariantProduct] = useState<PosProductItem | null>(null)
   const [variantDialogOpen, setVariantDialogOpen] = useState(false)
 
-  const cartCount = useCartStore((s) => s.items.reduce((sum, i) => sum + i.quantity, 0))
+  const cartCount = useCartStore((s) =>
+    (s.tabs[s.activeTab]?.items ?? []).reduce((sum, i) => sum + i.quantity, 0),
+  )
+  const cartGrandTotal = useCartStore((s) => {
+    const tab = s.tabs[s.activeTab]
+    if (!tab) return 0
+    const subtotal = tab.items.reduce((sum, i) => sum + i.lineTotal, 0)
+    return subtotal - tab.orderDiscountAmount
+  })
   const mode = useCartStore((s) => s.mode)
   const addItem = useCartStore((s) => s.addItem)
 
@@ -82,7 +90,7 @@ export function PosScreen() {
             />
             <CategoryFilter selectedId={selectedCategory} onSelect={setSelectedCategory} />
           </div>
-          <div className="flex-1 overflow-y-auto p-3">
+          <div className="flex-1 overflow-y-auto p-3 pb-24 md:pb-3">
             <ProductGrid
               products={products}
               isLoading={isLoading}
@@ -102,14 +110,23 @@ export function PosScreen() {
             <button
               type="button"
               onClick={() => setCartSheetOpen(true)}
-              className="fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
-              aria-label="Mở giỏ hàng"
+              className="fixed bottom-4 left-4 right-4 z-40 flex h-14 items-center justify-between gap-3 rounded-full bg-primary px-5 text-primary-foreground shadow-lg transition-transform active:scale-[0.98]"
+              aria-label={
+                cartCount > 0
+                  ? `Mở giỏ hàng: ${cartCount} sản phẩm, tổng ${formatVndWithSuffix(cartGrandTotal)}`
+                  : 'Mở giỏ hàng trống'
+              }
             >
-              <ShoppingCart className="h-6 w-6" />
+              <span className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5" aria-hidden="true" />
+                <span className="text-sm font-semibold">
+                  {cartCount > 0 ? `${cartCount} SP` : 'Giỏ hàng trống'}
+                </span>
+              </span>
               {cartCount > 0 && (
-                <Badge className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs">
-                  {cartCount}
-                </Badge>
+                <span className="font-mono text-base font-bold">
+                  Tổng: {formatVndWithSuffix(cartGrandTotal)}
+                </span>
               )}
             </button>
 

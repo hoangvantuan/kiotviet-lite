@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { Archive, Pencil, Plus, RotateCcw, SearchX, Trash2, Users } from 'lucide-react'
 
 import type { CustomerListItem, ListCustomersQuery } from '@kiotviet-lite/shared'
@@ -240,7 +241,15 @@ export function CustomerList() {
             <TableBody>
               {items.map((customer) => (
                 <TableRow key={customer.id}>
-                  <TableCell className="font-medium">{customer.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link
+                      to="/customers/$customerId"
+                      params={{ customerId: customer.id }}
+                      className="text-primary hover:underline"
+                    >
+                      {customer.name}
+                    </Link>
+                  </TableCell>
                   <TableCell className="font-mono text-sm">{customer.phone}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {customer.email ?? '—'}

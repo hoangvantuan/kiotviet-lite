@@ -14,15 +14,19 @@ import { createAuditRoutes } from './routes/audit.routes.js'
 import { createAuthRoutes } from './routes/auth.routes.js'
 import { createCategoriesRoutes } from './routes/categories.routes.js'
 import { createCustomerGroupsRoutes } from './routes/customer-groups.routes.js'
+import { createCustomerPricesRoutes } from './routes/customer-prices.routes.js'
 import { createCustomersRoutes } from './routes/customers.routes.js'
 import { createNotificationRoutes } from './routes/notifications.routes.js'
 import { createPosRoutes } from './routes/pos.routes.js'
 import { createPriceListsRoutes } from './routes/price-lists.routes.js'
+import { createProductHistoryRoutes } from './routes/product-history.routes.js'
 import { createProductsRoutes } from './routes/products.routes.js'
 import { createPurchaseOrdersRoutes } from './routes/purchase-orders.routes.js'
+import { createStockChecksRoutes } from './routes/stock-checks.routes.js'
 import { createStoreRoutes } from './routes/store.routes.js'
 import { createSuppliersRoutes } from './routes/suppliers.routes.js'
 import { createUsersRoutes } from './routes/users.routes.js'
+import { createVolumePricesRoutes } from './routes/volume-prices.routes.js'
 
 const app = new Hono()
 
@@ -38,7 +42,7 @@ app.use(
     origin: (origin) => (origin && ALLOWED_ORIGINS.includes(origin) ? origin : null),
     credentials: true,
     allowHeaders: ['Authorization', 'Content-Type'],
-    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   }),
 )
 
@@ -58,12 +62,16 @@ app.route('/api/v1/auth', createAuthRoutes({ db }))
 app.route('/api/v1/users', createUsersRoutes({ db }))
 app.route('/api/v1/categories', createCategoriesRoutes({ db }))
 app.route('/api/v1/products', createProductsRoutes({ db }))
+app.route('/api/v1/products', createProductHistoryRoutes({ db }))
 app.route('/api/v1/pos', createPosRoutes({ db }))
 app.route('/api/v1/customer-groups', createCustomerGroupsRoutes({ db }))
 app.route('/api/v1/customers', createCustomersRoutes({ db }))
 app.route('/api/v1/suppliers', createSuppliersRoutes({ db }))
 app.route('/api/v1/purchase-orders', createPurchaseOrdersRoutes({ db }))
+app.route('/api/v1/stock-checks', createStockChecksRoutes({ db }))
 app.route('/api/v1/price-lists', createPriceListsRoutes({ db }))
+app.route('/api/v1/customer-prices', createCustomerPricesRoutes({ db }))
+app.route('/api/v1/volume-prices', createVolumePricesRoutes({ db }))
 app.route('/api/v1/store', createStoreRoutes({ db }))
 app.route('/api/v1/audit-logs', createAuditRoutes({ db }))
 app.route('/api/v1/notifications', createNotificationRoutes({ db }))

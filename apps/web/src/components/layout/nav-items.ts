@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   BarChart3,
+  ClipboardCheck,
   ClipboardList,
   FolderTree,
   LayoutDashboard,
@@ -55,6 +56,12 @@ export const NAV_ITEMS: NavItem[] = [
     path: '/inventory/purchase-orders',
     label: 'Phiếu nhập kho',
     icon: ClipboardList,
+    requiredPermission: 'inventory.manage',
+  },
+  {
+    path: '/inventory/stock-checks',
+    label: 'Kiểm kho',
+    icon: ClipboardCheck,
     requiredPermission: 'inventory.manage',
   },
   { path: '/reports', label: 'Báo cáo', icon: BarChart3, requiredPermission: 'reports.view' },

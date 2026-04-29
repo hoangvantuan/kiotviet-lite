@@ -2,10 +2,14 @@ import { and, asc, desc, eq, ilike, isNotNull, isNull, or, type SQL, sql } from 
 
 import {
   type CreateCustomerInput,
+  type CustomerDebtsResponse,
   type CustomerDetail,
   customerGroups,
   type CustomerListItem,
+  type CustomerOrderItem,
   customers,
+  type CustomerStats,
+  type ListCustomerOrdersQuery,
   type ListCustomersQuery,
   type QuickCreateCustomerInput,
   type UpdateCustomerInput,
@@ -626,4 +630,100 @@ export async function restoreCustomer({
 
     return getCustomer({ db: tx as unknown as Db, storeId: actor.storeId, targetId })
   })
+}
+
+// ========== Customer Detail Tabs ==========
+
+async function ensureCustomerExists({
+  db,
+  storeId,
+  targetId,
+}: {
+  db: Db
+  storeId: string
+  targetId: string
+}) {
+  const target = await db.query.customers.findFirst({
+    where: eq(customers.id, targetId),
+  })
+  if (!target || target.storeId !== storeId || target.deletedAt !== null) {
+    throw new ApiError('NOT_FOUND', 'Không tìm thấy khách hàng')
+  }
+  return target
+}
+
+export interface ListCustomerOrdersDeps {
+  db: Db
+  storeId: string
+  targetId: string
+  query: ListCustomerOrdersQuery
+}
+
+export interface CustomerOrdersResult {
+  items: CustomerOrderItem[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export async function listCustomerOrders({
+  db,
+  storeId,
+  targetId,
+  query,
+}: ListCustomerOrdersDeps): Promise<CustomerOrdersResult> {
+  await ensureCustomerExists({ db, storeId, targetId })
+  const { page, pageSize } = query
+  return {
+    items: [],
+    total: 0,
+    page,
+    pageSize,
+    totalPages: 1,
+  }
+}
+
+export interface GetCustomerDebtsDeps {
+  db: Db
+  storeId: string
+  targetId: string
+}
+
+export async function getCustomerDebts({
+  db,
+  storeId,
+  targetId,
+}: GetCustomerDebtsDeps): Promise<CustomerDebtsResponse> {
+  const detail = await getCustomer({ db, storeId, targetId })
+  const currentDebt = detail.currentDebt
+  const effectiveDebtLimit = detail.effectiveDebtLimit
+  const usagePercent =
+    effectiveDebtLimit && effectiveDebtLimit > 0
+      ? Math.round((currentDebt / effectiveDebtLimit) * 100)
+      : 0
+  return {
+    currentDebt,
+    effectiveDebtLimit,
+    usagePercent,
+    items: [],
+  }
+}
+
+export interface GetCustomerStatsDeps {
+  db: Db
+  storeId: string
+  targetId: string
+}
+
+export async function getCustomerStats({
+  db,
+  storeId,
+  targetId,
+}: GetCustomerStatsDeps): Promise<CustomerStats> {
+  await ensureCustomerExists({ db, storeId, targetId })
+  return {
+    topProducts: [],
+    monthlySales: [],
+  }
 }
