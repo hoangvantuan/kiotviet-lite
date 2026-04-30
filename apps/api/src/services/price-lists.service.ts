@@ -17,9 +17,12 @@ import {
 import {
   applyFormula,
   applyRounding,
+  type ClonePriceListInput,
   type CreatePriceListInput,
   customerGroups,
   type FormulaType,
+  type ImportPriceListInput,
+  type ImportPriceListSummary,
   type ListPriceListsQuery,
   type PriceListDetail,
   priceListItems,
@@ -84,7 +87,7 @@ function toPriceListListItem(row: PriceListJoinRow): PriceListListItem {
     id: row.id,
     name: row.name,
     description: row.description,
-    method: row.method as 'direct' | 'formula',
+    method: row.method as 'direct' | 'formula' | 'chain',
     baseListId: row.basePriceListId,
     baseName: row.baseName,
     formulaType: row.formulaType as PriceListListItem['formulaType'],
@@ -365,6 +368,126 @@ function detectDuplicateProducts(items: { productId: string }[]): string | null 
   return null
 }
 
+// Max 10 cấp tổng cộng (bao gồm cả bảng giá mới + tổ tiên).
+const MAX_CHAIN_DEPTH = 10
+
+async function validateChainDepth({
+  db,
+  storeId,
+  baseListId,
+  maxDepth = MAX_CHAIN_DEPTH,
+}: {
+  db: Db
+  storeId: string
+  baseListId: string
+  maxDepth?: number
+}): Promise<void> {
+  const visited = new Set<string>()
+  const path: string[] = []
+  let currentId: string | null = baseListId
+  let ancestorCount = 0
+  while (currentId !== null) {
+    if (visited.has(currentId)) {
+      throw new ApiError(
+        'BUSINESS_RULE_VIOLATION',
+        `Phát hiện vòng lặp công thức: ${path.join(' -> ')}`,
+      )
+    }
+    visited.add(currentId)
+    const row: typeof priceLists.$inferSelect | undefined = await db.query.priceLists.findFirst({
+      where: eq(priceLists.id, currentId),
+    })
+    if (!row || row.storeId !== storeId || row.deletedAt !== null) break
+    path.push(row.name)
+    ancestorCount++
+    // ancestorCount + 1 = tổng số cấp khi tạo bảng mới (1 cho bảng mới + ancestors).
+    if (ancestorCount + 1 > maxDepth) {
+      throw new ApiError(
+        'BUSINESS_RULE_VIOLATION',
+        `Chuỗi công thức quá sâu (>${maxDepth} cấp), vui lòng đơn giản hoá`,
+      )
+    }
+    currentId = row.basePriceListId
+  }
+}
+
+async function resolveChainPrices({
+  tx,
+  storeId,
+  listId,
+  memo,
+  visited = new Set<string>(),
+  depth = 0,
+}: {
+  tx: Db
+  storeId: string
+  listId: string
+  memo: Map<string, Map<string, number>>
+  visited?: Set<string>
+  depth?: number
+}): Promise<Map<string, number>> {
+  const cached = memo.get(listId)
+  if (cached) return cached
+  if (visited.has(listId)) {
+    throw new ApiError('BUSINESS_RULE_VIOLATION', 'Phát hiện vòng lặp công thức')
+  }
+  if (depth >= MAX_CHAIN_DEPTH) {
+    throw new ApiError(
+      'BUSINESS_RULE_VIOLATION',
+      `Chuỗi công thức quá sâu (>${MAX_CHAIN_DEPTH} cấp), vui lòng đơn giản hoá`,
+    )
+  }
+  visited.add(listId)
+
+  const row = await tx.query.priceLists.findFirst({ where: eq(priceLists.id, listId) })
+  if (!row || row.storeId !== storeId || row.deletedAt !== null) {
+    throw new ApiError('BUSINESS_RULE_VIOLATION', 'Bảng giá nền không hợp lệ hoặc đã bị xoá')
+  }
+
+  if (row.method === 'direct') {
+    const items = await tx
+      .select({ productId: priceListItems.productId, price: priceListItems.price })
+      .from(priceListItems)
+      .where(eq(priceListItems.priceListId, listId))
+    const map = new Map<string, number>(items.map((it) => [it.productId, Number(it.price)]))
+    memo.set(listId, map)
+    return map
+  }
+
+  if (row.method !== 'formula' && row.method !== 'chain') {
+    throw new ApiError(
+      'BUSINESS_RULE_VIOLATION',
+      `Phương thức bảng giá không hợp lệ: ${row.method}`,
+    )
+  }
+  if (!row.basePriceListId || !row.formulaType || row.formulaValue === null) {
+    throw new ApiError('INTERNAL_ERROR', 'Bảng giá thiếu thông tin công thức')
+  }
+
+  const basePrices = await resolveChainPrices({
+    tx,
+    storeId,
+    listId: row.basePriceListId,
+    memo,
+    visited: new Set(visited),
+    depth: depth + 1,
+  })
+
+  const formulaType = row.formulaType as FormulaType
+  const formulaValue = Number(row.formulaValue)
+  const roundingRule = row.roundingRule as RoundingRule
+
+  const result = new Map<string, number>()
+  for (const [productId, basePrice] of basePrices.entries()) {
+    const computed = applyFormula(basePrice, formulaType, formulaValue)
+    const final = Math.max(0, applyRounding(computed, roundingRule))
+    result.set(productId, final)
+  }
+
+  memo.set(listId, result)
+  return result
+}
+
 export interface CreatePriceListDeps {
   db: Db
   actor: PriceListsActor
@@ -463,18 +586,31 @@ export async function createPriceList({
     })
   }
 
-  // ===== formula =====
+  // ===== formula or chain =====
   const baseList = await db.query.priceLists.findFirst({
     where: eq(priceLists.id, input.baseListId),
   })
   if (!baseList || baseList.storeId !== actor.storeId || baseList.deletedAt !== null) {
     throw new ApiError('NOT_FOUND', 'Không tìm thấy bảng giá nền')
   }
-  if (baseList.method !== 'direct') {
+  if (input.method === 'formula' && baseList.method !== 'direct') {
     throw new ApiError(
       'BUSINESS_RULE_VIOLATION',
-      "Bảng giá nền phải có phương thức 'direct'. Bảng giá nối chuỗi sẽ hỗ trợ ở Story 4.3b",
+      "Bảng giá nền phải có phương thức 'direct'. Vui lòng dùng phương thức 'chain' nếu muốn nối chuỗi",
     )
+  }
+  if (input.method === 'chain') {
+    if (
+      baseList.method !== 'direct' &&
+      baseList.method !== 'formula' &&
+      baseList.method !== 'chain'
+    ) {
+      throw new ApiError(
+        'BUSINESS_RULE_VIOLATION',
+        'Bảng giá nền không hợp lệ cho phương thức nối chuỗi',
+      )
+    }
+    await validateChainDepth({ db, storeId: actor.storeId, baseListId: input.baseListId })
   }
 
   const overrideDup = detectDuplicateProducts(input.overrides)
@@ -490,29 +626,42 @@ export async function createPriceList({
     productIds: input.overrides.map((o) => o.productId),
   })
 
+  const persistedMethod = input.method
+
   return db.transaction(async (tx) => {
-    const baseItems = await tx
-      .select({ productId: priceListItems.productId, price: priceListItems.price })
-      .from(priceListItems)
-      .where(eq(priceListItems.priceListId, input.baseListId))
+    let basePriceMap: Map<string, number>
+    if (input.method === 'chain') {
+      basePriceMap = await resolveChainPrices({
+        tx: tx as unknown as Db,
+        storeId: actor.storeId,
+        listId: input.baseListId,
+        memo: new Map(),
+      })
+    } else {
+      const baseItems = await tx
+        .select({ productId: priceListItems.productId, price: priceListItems.price })
+        .from(priceListItems)
+        .where(eq(priceListItems.priceListId, input.baseListId))
+      basePriceMap = new Map(baseItems.map((it) => [it.productId, Number(it.price)]))
+    }
 
     const overrideMap = new Map(input.overrides.map((o) => [o.productId, o.price]))
     const productIdsAccumulated = new Set<string>()
     const itemsToInsert: { productId: string; price: number; isOverridden: boolean }[] = []
 
-    for (const baseItem of baseItems) {
-      productIdsAccumulated.add(baseItem.productId)
-      const override = overrideMap.get(baseItem.productId)
+    for (const [productId, basePrice] of basePriceMap.entries()) {
+      productIdsAccumulated.add(productId)
+      const override = overrideMap.get(productId)
       if (override !== undefined) {
-        itemsToInsert.push({ productId: baseItem.productId, price: override, isOverridden: true })
+        itemsToInsert.push({ productId, price: override, isOverridden: true })
       } else {
         const computed = applyFormula(
-          Number(baseItem.price),
+          basePrice,
           input.formulaType as FormulaType,
           input.formulaValue,
         )
         const final = Math.max(0, applyRounding(computed, input.roundingRule))
-        itemsToInsert.push({ productId: baseItem.productId, price: final, isOverridden: false })
+        itemsToInsert.push({ productId, price: final, isOverridden: false })
       }
     }
 
@@ -531,7 +680,7 @@ export async function createPriceList({
           storeId: actor.storeId,
           name: input.name,
           description: input.description ?? null,
-          method: 'formula',
+          method: persistedMethod,
           basePriceListId: input.baseListId,
           formulaType: input.formulaType,
           formulaValue: input.formulaValue,
@@ -574,7 +723,7 @@ export async function createPriceList({
       targetId: createdId,
       changes: {
         name: input.name,
-        method: 'formula',
+        method: persistedMethod,
         baseListId: input.baseListId,
         formulaType: input.formulaType,
         formulaValue: input.formulaValue,
@@ -743,6 +892,29 @@ export async function deletePriceList({
     )
   }
 
+  const dependentWhere = and(
+    eq(priceLists.storeId, actor.storeId),
+    eq(priceLists.basePriceListId, targetId),
+    isNull(priceLists.deletedAt),
+  )
+  const dependentLists = await db
+    .select({ id: priceLists.id, name: priceLists.name })
+    .from(priceLists)
+    .where(dependentWhere)
+    .limit(5)
+  if (dependentLists.length > 0) {
+    const dependentTotalRows = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(priceLists)
+      .where(dependentWhere)
+    const dependentTotal = dependentTotalRows[0]?.count ?? dependentLists.length
+    throw new ApiError(
+      'CONFLICT',
+      'Bảng giá đang là nền của 1 bảng giá khác. Vui lòng xoá hoặc sửa các bảng phụ thuộc trước.',
+      { dependentLists, dependentTotal },
+    )
+  }
+
   return db.transaction(async (tx) => {
     try {
       const [row] = await tx
@@ -804,7 +976,7 @@ export async function restorePriceList({
 
   await ensureNameUnique({ db, storeId: actor.storeId, name: target.name, excludeId: targetId })
 
-  if (target.method === 'formula' && target.basePriceListId) {
+  if ((target.method === 'formula' || target.method === 'chain') && target.basePriceListId) {
     const base = await db.query.priceLists.findFirst({
       where: eq(priceLists.id, target.basePriceListId),
     })
@@ -881,15 +1053,18 @@ export async function recalculatePriceList({
   if (!target || target.storeId !== actor.storeId || target.deletedAt !== null) {
     throw new ApiError('NOT_FOUND', 'Không tìm thấy bảng giá')
   }
-  if (target.method !== 'formula') {
-    throw new ApiError('BUSINESS_RULE_VIOLATION', 'Chỉ bảng giá công thức mới có thể tính lại')
+  if (target.method !== 'formula' && target.method !== 'chain') {
+    throw new ApiError(
+      'BUSINESS_RULE_VIOLATION',
+      'Chỉ bảng giá công thức hoặc nối chuỗi mới có thể tính lại',
+    )
   }
   if (!target.basePriceListId || !target.formulaType || target.formulaValue === null) {
     throw new ApiError('INTERNAL_ERROR', 'Bảng giá thiếu thông tin công thức')
   }
 
   const base = await db.query.priceLists.findFirst({
-    where: eq(priceLists.id, target.basePriceListId),
+    where: and(eq(priceLists.id, target.basePriceListId), eq(priceLists.storeId, actor.storeId)),
   })
   if (!base || base.deletedAt !== null) {
     throw new ApiError('BUSINESS_RULE_VIOLATION', 'Bảng giá nền không hợp lệ hoặc đã bị xoá')
@@ -900,10 +1075,21 @@ export async function recalculatePriceList({
   const roundingRule = target.roundingRule as RoundingRule
 
   return db.transaction(async (tx) => {
-    const baseItems = await tx
-      .select({ productId: priceListItems.productId, price: priceListItems.price })
-      .from(priceListItems)
-      .where(eq(priceListItems.priceListId, target.basePriceListId as string))
+    let baseMap: Map<string, number>
+    if (target.method === 'chain') {
+      baseMap = await resolveChainPrices({
+        tx: tx as unknown as Db,
+        storeId: actor.storeId,
+        listId: target.basePriceListId as string,
+        memo: new Map(),
+      })
+    } else {
+      const baseItems = await tx
+        .select({ productId: priceListItems.productId, price: priceListItems.price })
+        .from(priceListItems)
+        .where(eq(priceListItems.priceListId, target.basePriceListId as string))
+      baseMap = new Map(baseItems.map((it) => [it.productId, Number(it.price)]))
+    }
 
     const existingItems = await tx
       .select({
@@ -916,7 +1102,6 @@ export async function recalculatePriceList({
       .where(eq(priceListItems.priceListId, targetId))
 
     const existingMap = new Map(existingItems.map((it) => [it.productId, it]))
-    const baseMap = new Map(baseItems.map((it) => [it.productId, Number(it.price)]))
 
     let updatedCount = 0
     let addedCount = 0
@@ -981,6 +1166,317 @@ export async function recalculatePriceList({
 
     return { updatedCount, addedCount, removedCount, preservedOverrideCount }
   })
+}
+
+export interface ClonePriceListDeps {
+  db: Db
+  actor: PriceListsActor
+  sourceId: string
+  input: ClonePriceListInput
+  meta?: RequestMeta
+}
+
+export async function clonePriceList({
+  db,
+  actor,
+  sourceId,
+  input,
+  meta,
+}: ClonePriceListDeps): Promise<PriceListDetail> {
+  const source = await db.query.priceLists.findFirst({
+    where: eq(priceLists.id, sourceId),
+  })
+  if (!source || source.storeId !== actor.storeId || source.deletedAt !== null) {
+    throw new ApiError('NOT_FOUND', 'Không tìm thấy bảng giá nguồn')
+  }
+
+  await ensureNameUnique({ db, storeId: actor.storeId, name: input.name })
+
+  const description =
+    input.description !== undefined && input.description !== null
+      ? input.description
+      : `Bản sao của ${source.name}`
+
+  return db.transaction(async (tx) => {
+    let createdId: string
+    try {
+      const [row] = await tx
+        .insert(priceLists)
+        .values({
+          storeId: actor.storeId,
+          name: input.name,
+          description,
+          method: 'direct',
+          basePriceListId: null,
+          formulaType: null,
+          formulaValue: null,
+          roundingRule: 'none',
+          effectiveFrom: null,
+          effectiveTo: null,
+          isActive: input.isActive,
+        })
+        .returning({ id: priceLists.id })
+      if (!row) throw new ApiError('INTERNAL_ERROR', 'Không tạo được bảng giá')
+      createdId = row.id
+    } catch (err) {
+      if (err instanceof ApiError) throw err
+      if (isUniqueViolation(err, 'uniq_price_lists_store_name_alive')) {
+        throw new ApiError('CONFLICT', 'Tên bảng giá đã được sử dụng', { field: 'name' })
+      }
+      throw err
+    }
+
+    const sourceItems = await tx
+      .select({ productId: priceListItems.productId, price: priceListItems.price })
+      .from(priceListItems)
+      .where(eq(priceListItems.priceListId, sourceId))
+
+    if (sourceItems.length > 0) {
+      await tx.insert(priceListItems).values(
+        sourceItems.map((it) => ({
+          priceListId: createdId,
+          productId: it.productId,
+          price: Number(it.price),
+          isOverridden: false,
+        })),
+      )
+    }
+
+    await logAction({
+      db: tx as unknown as Db,
+      storeId: actor.storeId,
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: 'price_list.cloned',
+      targetType: 'price_list',
+      targetId: createdId,
+      changes: {
+        name: input.name,
+        sourceListId: sourceId,
+        sourceName: source.name,
+        itemCount: sourceItems.length,
+        isActive: input.isActive,
+      },
+      ipAddress: meta?.ipAddress,
+      userAgent: meta?.userAgent,
+    })
+
+    return getPriceList({ db: tx as unknown as Db, storeId: actor.storeId, targetId: createdId })
+  })
+}
+
+export interface ImportPriceListDeps {
+  db: Db
+  actor: PriceListsActor
+  priceListId: string
+  input: ImportPriceListInput
+  meta?: RequestMeta
+}
+
+export interface ImportPriceListResult {
+  summary: ImportPriceListSummary
+  priceList: PriceListDetail
+}
+
+const MAX_CSV_ROWS = 5000
+
+interface CsvParsedRow {
+  rowNumber: number
+  cells: string[]
+}
+
+interface CsvParseResult {
+  headers: string[]
+  rows: CsvParsedRow[]
+}
+
+// Strip dấu nháy bao bọc đơn giản. Không hỗ trợ embedded comma trong quoted field.
+function stripQuotes(cell: string): string {
+  const trimmed = cell.trim()
+  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1).replace(/""/g, '"')
+  }
+  return trimmed
+}
+
+function parseCsv(text: string): CsvParseResult {
+  const stripped = text.replace(/^\uFEFF/, '')
+  const allLines = stripped.split(/\r?\n/)
+  let headerIndex = -1
+  for (let i = 0; i < allLines.length; i++) {
+    if ((allLines[i] ?? '').trim().length > 0) {
+      headerIndex = i
+      break
+    }
+  }
+  if (headerIndex < 0) {
+    throw new ApiError('VALIDATION_ERROR', 'File CSV trống hoặc không có dòng dữ liệu')
+  }
+  const headerLine = allLines[headerIndex] as string
+  const headers = headerLine.split(',').map((h) => stripQuotes(h).toLowerCase())
+
+  const rows: CsvParsedRow[] = []
+  for (let i = headerIndex + 1; i < allLines.length; i++) {
+    const line = allLines[i] ?? ''
+    if (line.trim().length === 0) continue
+    // rowNumber theo file gốc (1-based), giữ nguyên dù có dòng trắng giữa file.
+    rows.push({ rowNumber: i + 1, cells: line.split(',').map((c) => stripQuotes(c)) })
+  }
+  if (rows.length === 0) {
+    throw new ApiError('VALIDATION_ERROR', 'File CSV trống hoặc không có dòng dữ liệu')
+  }
+  return { headers, rows }
+}
+
+export async function importPriceList({
+  db,
+  actor,
+  priceListId,
+  input,
+  meta,
+}: ImportPriceListDeps): Promise<ImportPriceListResult> {
+  const target = await db.query.priceLists.findFirst({
+    where: eq(priceLists.id, priceListId),
+  })
+  if (!target || target.storeId !== actor.storeId || target.deletedAt !== null) {
+    throw new ApiError('NOT_FOUND', 'Không tìm thấy bảng giá')
+  }
+  if (target.method !== 'direct') {
+    throw new ApiError('BUSINESS_RULE_VIOLATION', 'Chỉ có thể import vào bảng giá Trực tiếp')
+  }
+
+  const { headers, rows } = parseCsv(input.csvText)
+  const codeIdx = headers.indexOf('product_code')
+  const priceIdx = headers.indexOf('price')
+  if (codeIdx < 0 || priceIdx < 0) {
+    throw new ApiError('VALIDATION_ERROR', 'CSV phải có header: product_code,price')
+  }
+  if (rows.length > MAX_CSV_ROWS) {
+    throw new ApiError('VALIDATION_ERROR', `Số dòng vượt giới hạn ${MAX_CSV_ROWS}`)
+  }
+
+  const totalRows = rows.length
+  const errors: ImportPriceListSummary['errors'] = []
+  const validInputs: { row: number; code: string; price: number }[] = []
+
+  rows.forEach(({ rowNumber, cells }) => {
+    const rawCode = (cells[codeIdx] ?? '').trim()
+    const rawPrice = (cells[priceIdx] ?? '').trim()
+    if (!rawCode) {
+      errors.push({ row: rowNumber, code: rawCode, reason: 'Mã sản phẩm trống' })
+      return
+    }
+    if (!/^\d+$/.test(rawPrice)) {
+      errors.push({ row: rowNumber, code: rawCode, reason: `Giá không hợp lệ: '${rawPrice}'` })
+      return
+    }
+    const priceNum = Number(rawPrice)
+    if (!Number.isFinite(priceNum) || priceNum < 0) {
+      errors.push({ row: rowNumber, code: rawCode, reason: `Giá không hợp lệ: '${rawPrice}'` })
+      return
+    }
+    validInputs.push({ row: rowNumber, code: rawCode, price: priceNum })
+  })
+
+  // Lookup theo LOWER(sku) vì DB index dùng LOWER(sku) - SKU lookup phải case-insensitive.
+  const codes = Array.from(new Set(validInputs.map((v) => v.code.toLowerCase())))
+  let codeToProductId = new Map<string, string>()
+  if (codes.length > 0) {
+    const productRows = await db
+      .select({ id: products.id, sku: products.sku })
+      .from(products)
+      .where(
+        and(
+          eq(products.storeId, actor.storeId),
+          sql`LOWER(${products.sku}) IN (${sql.join(
+            codes.map((c) => sql`${c}`),
+            sql`, `,
+          )})`,
+          isNull(products.deletedAt),
+        ),
+      )
+    codeToProductId = new Map(productRows.map((p) => [p.sku.toLowerCase(), p.id]))
+  }
+
+  const roundingRule = target.roundingRule as RoundingRule
+
+  const itemsByProductId = new Map<string, number>()
+  const seenProductIds = new Set<string>()
+  for (const v of validInputs) {
+    const productId = codeToProductId.get(v.code.toLowerCase())
+    if (!productId) {
+      errors.push({ row: v.row, code: v.code, reason: 'Không tìm thấy SKU' })
+      continue
+    }
+    if (seenProductIds.has(productId)) {
+      errors.push({ row: v.row, code: v.code, reason: 'SKU trùng dòng trước' })
+      continue
+    }
+    seenProductIds.add(productId)
+    const finalPrice = Math.max(0, applyRounding(v.price, roundingRule))
+    itemsByProductId.set(productId, finalPrice)
+  }
+
+  const imported = itemsByProductId.size
+  const skipped = totalRows - imported
+
+  // Guard: replace mode cần ít nhất 1 dòng hợp lệ - tránh wipe data khi CSV toàn invalid.
+  if (input.mode === 'replace' && itemsByProductId.size === 0) {
+    throw new ApiError('VALIDATION_ERROR', 'Chế độ thay thế yêu cầu ít nhất 1 dòng hợp lệ', {
+      errors: errors.slice(0, 20),
+    })
+  }
+
+  const summary: ImportPriceListSummary = { totalRows, imported, skipped, errors }
+
+  const priceList = await db.transaction(async (tx) => {
+    if (input.mode === 'replace') {
+      await tx.delete(priceListItems).where(eq(priceListItems.priceListId, priceListId))
+    }
+
+    if (itemsByProductId.size > 0) {
+      const values = Array.from(itemsByProductId.entries()).map(([productId, price]) => ({
+        priceListId,
+        productId,
+        price,
+        isOverridden: false,
+      }))
+
+      await tx
+        .insert(priceListItems)
+        .values(values)
+        .onConflictDoUpdate({
+          target: [priceListItems.priceListId, priceListItems.productId],
+          set: {
+            price: sql`EXCLUDED.price`,
+            isOverridden: sql`false`,
+          },
+        })
+    }
+
+    await logAction({
+      db: tx as unknown as Db,
+      storeId: actor.storeId,
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: 'price_list.imported',
+      targetType: 'price_list',
+      targetId: priceListId,
+      changes: {
+        mode: input.mode,
+        totalRows,
+        imported,
+        skipped,
+        errors: errors.slice(0, 20),
+      },
+      ipAddress: meta?.ipAddress,
+      userAgent: meta?.userAgent,
+    })
+
+    return getPriceList({ db: tx as unknown as Db, storeId: actor.storeId, targetId: priceListId })
+  })
+
+  return { summary, priceList }
 }
 
 // Re-export gte/lte/gt to silence unused warnings in case future need

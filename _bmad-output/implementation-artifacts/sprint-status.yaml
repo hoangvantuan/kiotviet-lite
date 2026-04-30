@@ -49,7 +49,11 @@
 
 generated: 2026-04-24
 last_updated: 2026-04-30
+# Story 4-3b dev xong 2026-04-30: 15/15 tasks, 21 integration test mới pass, full suite 978/979, in-progress → review
+# Story 4-3b created 2026-04-30 (chain + clone + import; 10 ACs, 15 tasks)
+# Story 5-3 created 2026-04-30 + Epic 5 → in-progress
 # Story 4-4b dev started 2026-04-30
+# Story 4-4b code-review 2026-04-30: 1 decision-needed (F1 cost null PIN gate), 2 patch (F2 tests, F6 audit note), 4 defer, 2 dismiss; review → in-progress
 # Story 6-2 round 2 review fix 2026-04-29: 12/12 findings fixed; tests 38→68 cases; in-progress → review
 # Story 6-2 round 2 review 2026-04-29: 11/12 fix đạt; F7 implement sai pattern (Rules of Hooks violation) → 1 MUST-FIX + 1 NICE-TO-HAVE; review → in-progress
 # Story 4-3 dev started 2026-04-28
@@ -104,7 +108,7 @@ development_status:
   4-1-quan-ly-khach-hang-nhom-khach-hang: done
   4-2-trang-chi-tiet-khach-hang: done
   4-3-bang-gia-direct-formula: review
-  4-3b-chain-formula-clone-import-bang-gia: backlog
+  4-3b-chain-formula-clone-import-bang-gia: done # 2026-04-30 dev xong 15/15 tasks, 21 test mới pass, full suite 978/979
   4-3c-so-sanh-bang-gia: backlog
   4-4-gia-rieng-khach-hang-gia-theo-so-luong: done
   4-4b-chiet-khau-danh-muc-kiem-soat-sua-gia: review # 2026-04-30 dev xong all 15 tasks, 30/30 tests pass, full suite 882/882
@@ -112,10 +116,10 @@ development_status:
   epic-4-retrospective: optional
 
   # Epic 5: Quan ly Cong no
-  epic-5: backlog
+  epic-5: in-progress
   5-1-ghi-no-trong-pos-kiem-tra-han-muc: backlog
   5-2-phieu-thu-phan-bo-fifo: backlog
-  5-3-phieu-chi-tra-no-ncc: backlog
+  5-3-phieu-chi-tra-no-ncc: done
   5-4-dieu-chinh-no-thu-cong: backlog
   5-5-canh-bao-no-bao-cao-cong-no: backlog
   epic-5-retrospective: optional

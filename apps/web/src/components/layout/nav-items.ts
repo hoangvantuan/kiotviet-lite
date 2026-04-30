@@ -11,6 +11,7 @@ import {
   Tags,
   Truck,
   Users,
+  Wallet,
 } from 'lucide-react'
 
 import type { Permission } from '@kiotviet-lite/shared'
@@ -56,6 +57,12 @@ export const NAV_ITEMS: NavItem[] = [
     path: '/inventory/purchase-orders',
     label: 'Phiếu nhập kho',
     icon: ClipboardList,
+    requiredPermission: 'inventory.manage',
+  },
+  {
+    path: '/inventory/supplier-payments',
+    label: 'Phiếu chi NCC',
+    icon: Wallet,
     requiredPermission: 'inventory.manage',
   },
   {

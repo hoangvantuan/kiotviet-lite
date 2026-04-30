@@ -1,0 +1,2 @@
+ALTER TABLE "price_lists" DROP CONSTRAINT "check_formula_required";--> statement-breakpoint
+ALTER TABLE "price_lists" ADD CONSTRAINT "check_formula_required" CHECK ((method = 'direct' AND base_price_list_id IS NULL AND formula_type IS NULL AND formula_value IS NULL) OR (method IN ('formula', 'chain') AND base_price_list_id IS NOT NULL AND formula_type IS NOT NULL AND formula_value IS NOT NULL));

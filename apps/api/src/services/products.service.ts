@@ -1834,6 +1834,7 @@ export interface PosProductItem {
   barcode: string | null
   unit: string
   basePrice: number
+  costPrice: number | null
   imageUrl: string | null
   trackInventory: boolean
   stockQuantity: number
@@ -1849,6 +1850,7 @@ export interface PosVariantItem {
   sku: string
   barcode: string | null
   price: number
+  costPrice: number | null
   stockQuantity: number
   attributes: Record<string, string>
 }
@@ -1898,6 +1900,7 @@ export async function searchProductsForPos({
       barcode: products.barcode,
       unit: products.unit,
       sellingPrice: products.sellingPrice,
+      costPrice: products.costPrice,
       imageUrl: products.imageUrl,
       trackInventory: products.trackInventory,
       currentStock: products.currentStock,
@@ -1937,6 +1940,7 @@ export async function searchProductsForPos({
         sku: v.sku,
         barcode: v.barcode,
         price: Number(v.sellingPrice),
+        costPrice: v.costPrice === null ? null : Number(v.costPrice),
         stockQuantity: v.stockQuantity,
         attributes: attrs,
       }
@@ -1985,6 +1989,7 @@ export async function searchProductsForPos({
           barcode: products.barcode,
           unit: products.unit,
           sellingPrice: products.sellingPrice,
+          costPrice: products.costPrice,
           imageUrl: products.imageUrl,
           trackInventory: products.trackInventory,
           currentStock: products.currentStock,
@@ -2020,6 +2025,7 @@ export async function searchProductsForPos({
           sku: v.sku,
           barcode: v.barcode,
           price: Number(v.sellingPrice),
+          costPrice: v.costPrice === null ? null : Number(v.costPrice),
           stockQuantity: v.stockQuantity,
           attributes: attrs,
         }
@@ -2066,6 +2072,7 @@ export async function searchProductsForPos({
     barcode: row.barcode,
     unit: row.unit,
     basePrice: Number(row.sellingPrice),
+    costPrice: row.costPrice === null ? null : Number(row.costPrice),
     imageUrl: row.imageUrl,
     trackInventory: row.trackInventory,
     stockQuantity: row.hasVariants ? (variantStockMap.get(row.id) ?? 0) : row.currentStock,

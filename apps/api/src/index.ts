@@ -13,6 +13,7 @@ import { requestLoggerMiddleware } from './middleware/request-logger.middleware.
 import { createAuditRoutes } from './routes/audit.routes.js'
 import { createAuthRoutes } from './routes/auth.routes.js'
 import { createCategoriesRoutes } from './routes/categories.routes.js'
+import { createCategoryDiscountsRoutes } from './routes/category-discounts.routes.js'
 import { createCustomerGroupsRoutes } from './routes/customer-groups.routes.js'
 import { createCustomerPricesRoutes } from './routes/customer-prices.routes.js'
 import { createCustomersRoutes } from './routes/customers.routes.js'
@@ -24,6 +25,7 @@ import { createProductsRoutes } from './routes/products.routes.js'
 import { createPurchaseOrdersRoutes } from './routes/purchase-orders.routes.js'
 import { createStockChecksRoutes } from './routes/stock-checks.routes.js'
 import { createStoreRoutes } from './routes/store.routes.js'
+import { createSupplierPaymentsRoutes } from './routes/supplier-payments.routes.js'
 import { createSuppliersRoutes } from './routes/suppliers.routes.js'
 import { createUsersRoutes } from './routes/users.routes.js'
 import { createVolumePricesRoutes } from './routes/volume-prices.routes.js'
@@ -68,10 +70,12 @@ app.route('/api/v1/customer-groups', createCustomerGroupsRoutes({ db }))
 app.route('/api/v1/customers', createCustomersRoutes({ db }))
 app.route('/api/v1/suppliers', createSuppliersRoutes({ db }))
 app.route('/api/v1/purchase-orders', createPurchaseOrdersRoutes({ db }))
+app.route('/api/v1/supplier-payments', createSupplierPaymentsRoutes({ db }))
 app.route('/api/v1/stock-checks', createStockChecksRoutes({ db }))
 app.route('/api/v1/price-lists', createPriceListsRoutes({ db }))
 app.route('/api/v1/customer-prices', createCustomerPricesRoutes({ db }))
 app.route('/api/v1/volume-prices', createVolumePricesRoutes({ db }))
+app.route('/api/v1/category-discounts', createCategoryDiscountsRoutes({ db }))
 app.route('/api/v1/store', createStoreRoutes({ db }))
 app.route('/api/v1/audit-logs', createAuditRoutes({ db }))
 app.route('/api/v1/notifications', createNotificationRoutes({ db }))

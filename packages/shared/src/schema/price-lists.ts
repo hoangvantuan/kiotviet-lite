@@ -50,7 +50,7 @@ export const priceLists = pgTable(
     index('idx_price_lists_store_method_active').on(table.storeId, table.method, table.isActive),
     check(
       'check_formula_required',
-      sql`(method = 'direct' AND base_price_list_id IS NULL AND formula_type IS NULL AND formula_value IS NULL) OR (method = 'formula' AND base_price_list_id IS NOT NULL AND formula_type IS NOT NULL AND formula_value IS NOT NULL)`,
+      sql`(method = 'direct' AND base_price_list_id IS NULL AND formula_type IS NULL AND formula_value IS NULL) OR (method IN ('formula', 'chain') AND base_price_list_id IS NOT NULL AND formula_type IS NOT NULL AND formula_value IS NOT NULL)`,
     ),
     check(
       'check_effective_range',

@@ -19,10 +19,12 @@ const MATRIX: Record<Permission, Record<UserRole, boolean>> = {
   'pricing.view': { owner: true, manager: true, staff: true },
   'pricing.manage': { owner: true, manager: true, staff: false },
   'inventory.manage': { owner: true, manager: true, staff: false },
+  'pos.editPrice': { owner: true, manager: true, staff: false },
+  'pos.editPriceBelowCost': { owner: true, manager: false, staff: false },
 }
 
 describe('PERMISSIONS map', () => {
-  it('khai báo đầy đủ permission keys (8 base + 2 customer + 2 pricing + 1 inventory)', () => {
+  it('khai báo đầy đủ permission keys (8 base + 2 customer + 2 pricing + 1 inventory + 2 pos.editPrice)', () => {
     const keys = Object.keys(PERMISSIONS).sort()
     expect(keys).toEqual(
       [
@@ -32,6 +34,8 @@ describe('PERMISSIONS map', () => {
         'customers.manage',
         'customers.view',
         'inventory.manage',
+        'pos.editPrice',
+        'pos.editPriceBelowCost',
         'pos.sell',
         'pricing.manage',
         'pricing.view',

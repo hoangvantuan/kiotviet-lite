@@ -33,6 +33,17 @@ export function DeletePriceListDialog({ open, onOpenChange, priceList }: Props) 
       onOpenChange(false)
     } catch (err) {
       if (err instanceof ApiClientError) {
+        if (err.code === 'CONFLICT') {
+          const detail = err.details as
+            | { dependentLists?: { id: string; name: string }[]; dependentTotal?: number }
+            | undefined
+          const list = detail?.dependentLists ?? []
+          const total = detail?.dependentTotal ?? list.length
+          const names = list.map((l) => l.name).join(', ')
+          const remaining = total > list.length ? ` (và ${total - list.length} khác)` : ''
+          showError(names ? `${err.message} (${names})${remaining}` : err.message)
+          return
+        }
         showError(err.message)
       } else {
         showError('Đã xảy ra lỗi không xác định')

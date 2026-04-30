@@ -1,6 +1,9 @@
 import type {
+  ClonePriceListInput,
   CreatePriceListInput,
   CreatePriceListItemInput,
+  ImportPriceListInput,
+  ImportPriceListSummary,
   ListPriceListItemsQuery,
   ListPriceListsQuery,
   PriceListDetail,
@@ -113,5 +116,16 @@ export function updatePriceListItemApi(
 export function deletePriceListItemApi(priceListId: string, itemId: string) {
   return apiClient.delete<Envelope<{ ok: true }>>(
     `/api/v1/price-lists/${priceListId}/items/${itemId}`,
+  )
+}
+
+export function clonePriceListApi(id: string, input: ClonePriceListInput) {
+  return apiClient.post<Envelope<PriceListDetail>>(`/api/v1/price-lists/${id}/clone`, input)
+}
+
+export function importPriceListApi(id: string, input: ImportPriceListInput) {
+  return apiClient.post<Envelope<{ summary: ImportPriceListSummary; priceList: PriceListDetail }>>(
+    `/api/v1/price-lists/${id}/import`,
+    input,
   )
 }

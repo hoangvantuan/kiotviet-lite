@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 const NAME_REGEX = /^[\p{L}\p{N}\s\-_&()'./,]+$/u
 
-export const priceListMethodSchema = z.enum(['direct', 'formula'])
+export const priceListMethodSchema = z.enum(['direct', 'formula', 'chain'])
 export const formulaTypeSchema = z.enum([
   'percent_increase',
   'percent_decrease',
@@ -84,8 +84,22 @@ const formulaBranch = z.object({
   overrides: z.array(priceListItemInputSchema).default([]),
 })
 
+const chainBranch = z.object({
+  method: z.literal('chain'),
+  name: priceListNameSchema,
+  description: z.string().trim().max(255, 'Mô tả tối đa 255 ký tự').nullable().optional(),
+  baseListId: z.string().uuid('Bảng giá nền không hợp lệ'),
+  formulaType: formulaTypeSchema,
+  formulaValue: formulaValueSchema,
+  roundingRule: roundingRuleSchema.default('none'),
+  effectiveFrom: dateStringSchema,
+  effectiveTo: dateStringSchema,
+  isActive: z.boolean().default(true),
+  overrides: z.array(priceListItemInputSchema).default([]),
+})
+
 export const createPriceListSchema = z
-  .discriminatedUnion('method', [directBranch, formulaBranch])
+  .discriminatedUnion('method', [directBranch, formulaBranch, chainBranch])
   .superRefine((data, ctx) => {
     if (data.effectiveFrom && data.effectiveTo && data.effectiveTo < data.effectiveFrom) {
       ctx.addIssue({
@@ -182,6 +196,33 @@ export const priceListItemListItemSchema = z.object({
   updatedAt: z.string(),
 })
 
+export const clonePriceListSchema = z.object({
+  name: priceListNameSchema,
+  isActive: z.boolean().default(false),
+  description: z.string().trim().max(255, 'Mô tả tối đa 255 ký tự').nullable().optional(),
+})
+
+export const importPriceListSchema = z.object({
+  csvText: z
+    .string({ required_error: 'Vui lòng nhập nội dung CSV' })
+    .min(1, 'Nội dung CSV không được để trống')
+    .max(500_000, 'Nội dung CSV vượt giới hạn cho phép'),
+  mode: z.enum(['upsert', 'replace']).default('upsert'),
+})
+
+export const importPriceListErrorSchema = z.object({
+  row: z.number().int().min(1),
+  code: z.string(),
+  reason: z.string(),
+})
+
+export const importPriceListSummarySchema = z.object({
+  totalRows: z.number().int().min(0),
+  imported: z.number().int().min(0),
+  skipped: z.number().int().min(0),
+  errors: z.array(importPriceListErrorSchema),
+})
+
 export type PriceListMethod = z.infer<typeof priceListMethodSchema>
 export type FormulaType = z.infer<typeof formulaTypeSchema>
 export type RoundingRule = z.infer<typeof roundingRuleSchema>
@@ -196,3 +237,7 @@ export type ListTrashedPriceListsQuery = z.infer<typeof listTrashedPriceListsQue
 export type PriceListListItem = z.infer<typeof priceListListItemSchema>
 export type PriceListDetail = z.infer<typeof priceListDetailSchema>
 export type PriceListItemListItem = z.infer<typeof priceListItemListItemSchema>
+export type ClonePriceListInput = z.infer<typeof clonePriceListSchema>
+export type ImportPriceListInput = z.infer<typeof importPriceListSchema>
+export type ImportPriceListError = z.infer<typeof importPriceListErrorSchema>
+export type ImportPriceListSummary = z.infer<typeof importPriceListSummarySchema>

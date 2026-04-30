@@ -23,6 +23,11 @@ export interface CartItem {
   lineTotal: number
   trackInventory: boolean
   stockQuantity: number
+  costPrice: number | null
+  originalPrice: number | null
+  priceOverride: boolean
+  priceOverrideReason: string | null
+  priceOverridePinUsed: boolean
 }
 
 type CartItemInput = Omit<
@@ -35,6 +40,10 @@ type CartItemInput = Omit<
   | 'lineTotal'
   | 'trackInventory'
   | 'stockQuantity'
+  | 'originalPrice'
+  | 'priceOverride'
+  | 'priceOverrideReason'
+  | 'priceOverridePinUsed'
 > & {
   discountType?: DiscountType | null
   discountValue?: number
@@ -42,6 +51,10 @@ type CartItemInput = Omit<
   lineTotal?: number
   trackInventory?: boolean
   stockQuantity?: number
+  originalPrice?: number | null
+  priceOverride?: boolean
+  priceOverrideReason?: string | null
+  priceOverridePinUsed?: boolean
 }
 
 export interface TabState {
@@ -61,6 +74,11 @@ interface CartState {
   updateQuantity: (id: string, qty: number) => void
   updateLineDiscount: (id: string, type: DiscountType | null, value: number) => void
   updateLineNotes: (id: string, notes: string | null) => void
+  updateUnitPrice: (
+    id: string,
+    newPrice: number,
+    opts?: { reason?: string | null; pinUsed?: boolean },
+  ) => void
   updateOrderDiscount: (type: DiscountType | null, value: number) => void
   clearCart: () => void
   setMode: (mode: 'quick' | 'normal') => void
@@ -186,6 +204,11 @@ export const useCartStore = create<CartState>((set, get) => ({
             lineTotal: 0,
             trackInventory: input.trackInventory ?? false,
             stockQuantity: input.stockQuantity ?? 0,
+            costPrice: input.costPrice,
+            originalPrice: input.originalPrice ?? null,
+            priceOverride: input.priceOverride ?? false,
+            priceOverrideReason: input.priceOverrideReason ?? null,
+            priceOverridePinUsed: input.priceOverridePinUsed ?? false,
           }
           nextItems = [...tab.items, recomputeLine(baseItem)]
         }
@@ -228,6 +251,28 @@ export const useCartStore = create<CartState>((set, get) => ({
             ? recomputeLine({ ...i, discountType: type, discountValue: type ? safeValue : 0 })
             : i,
         )
+        return recomputeOrderDiscount({ ...tab, items: nextItems })
+      }),
+    )
+  },
+
+  updateUnitPrice: (id, newPrice, opts) => {
+    if (!Number.isFinite(newPrice) || newPrice < 1) return
+    const safePrice = Math.round(newPrice)
+    set((state) =>
+      updateActiveTab(state, (tab) => {
+        const nextItems = tab.items.map((i) => {
+          if (i.id !== id) return i
+          const originalPrice = i.originalPrice === null ? i.unitPrice : i.originalPrice
+          return recomputeLine({
+            ...i,
+            unitPrice: safePrice,
+            originalPrice,
+            priceOverride: true,
+            priceOverrideReason: opts?.reason ?? null,
+            priceOverridePinUsed: opts?.pinUsed ?? false,
+          })
+        })
         return recomputeOrderDiscount({ ...tab, items: nextItems })
       }),
     )

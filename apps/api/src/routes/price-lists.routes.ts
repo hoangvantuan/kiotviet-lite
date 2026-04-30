@@ -2,8 +2,10 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 
 import {
+  clonePriceListSchema,
   createPriceListItemSchema,
   createPriceListSchema,
+  importPriceListSchema,
   listPriceListItemsQuerySchema,
   listPriceListsQuerySchema,
   listTrashedPriceListsQuerySchema,
@@ -24,9 +26,11 @@ import {
   updatePriceListItem,
 } from '../services/price-list-items.service.js'
 import {
+  clonePriceList,
   createPriceList,
   deletePriceList,
   getPriceList,
+  importPriceList,
   listPriceLists,
   listTrashedPriceLists,
   recalculatePriceList,
@@ -156,6 +160,34 @@ export function createPriceListsRoutes({ db }: PriceListsRoutesDeps) {
       db,
       actor: auth,
       targetId,
+      meta: getRequestMeta(c),
+    })
+    return c.json({ data })
+  })
+
+  app.post('/:id/clone', async (c) => {
+    const auth = c.get('auth')
+    const sourceId = uuidParam.parse(c.req.param('id'))
+    const input = await parseJson(c, clonePriceListSchema)
+    const data = await clonePriceList({
+      db,
+      actor: auth,
+      sourceId,
+      input,
+      meta: getRequestMeta(c),
+    })
+    return c.json({ data }, 201)
+  })
+
+  app.post('/:id/import', async (c) => {
+    const auth = c.get('auth')
+    const priceListId = uuidParam.parse(c.req.param('id'))
+    const input = await parseJson(c, importPriceListSchema)
+    const data = await importPriceList({
+      db,
+      actor: auth,
+      priceListId,
+      input,
       meta: getRequestMeta(c),
     })
     return c.json({ data })

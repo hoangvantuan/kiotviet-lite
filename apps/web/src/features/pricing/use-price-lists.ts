@@ -1,20 +1,25 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type {
+  ClonePriceListInput,
   CreatePriceListInput,
   CreatePriceListItemInput,
+  ImportPriceListInput,
   ListPriceListItemsQuery,
   ListPriceListsQuery,
+  PriceListListItem,
   UpdatePriceListInput,
   UpdatePriceListItemInput,
 } from '@kiotviet-lite/shared'
 
 import {
+  clonePriceListApi,
   createPriceListApi,
   createPriceListItemApi,
   deletePriceListApi,
   deletePriceListItemApi,
   getPriceListApi,
+  importPriceListApi,
   listPriceListItemsApi,
   listPriceListsApi,
   listTrashedPriceListsApi,
@@ -39,6 +44,29 @@ export function useDirectPriceListsQuery(options?: { enabled?: boolean }) {
     queryKey: [...PRICE_LISTS_KEY, 'list', { method: 'direct', pageSize: 100 }],
     queryFn: async () =>
       listPriceListsApi({ method: 'direct', pageSize: 100, status: 'all', page: 1 }),
+    enabled: options?.enabled,
+  })
+}
+
+export function useChainBaseListsQuery(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: [...PRICE_LISTS_KEY, 'list', { chainBase: true }],
+    queryFn: async () => {
+      const [direct, formula] = await Promise.all([
+        listPriceListsApi({ method: 'direct', pageSize: 100, status: 'all', page: 1 }),
+        listPriceListsApi({ method: 'formula', pageSize: 100, status: 'all', page: 1 }),
+      ])
+      const list: PriceListListItem[] = [...direct.data, ...formula.data]
+      return { data: list }
+    },
+    enabled: options?.enabled,
+  })
+}
+
+export function useAllPriceListsQuery(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: [...PRICE_LISTS_KEY, 'list', { allLists: true }],
+    queryFn: async () => listPriceListsApi({ pageSize: 100, status: 'all', page: 1 }),
     enabled: options?.enabled,
   })
 }
@@ -149,6 +177,28 @@ export function useDeletePriceListItemMutation() {
   return useMutation({
     mutationFn: (vars: { priceListId: string; itemId: string }) =>
       deletePriceListItemApi(vars.priceListId, vars.itemId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: PRICE_LISTS_KEY })
+    },
+  })
+}
+
+export function useClonePriceListMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: { id: string; input: ClonePriceListInput }) =>
+      clonePriceListApi(vars.id, vars.input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: PRICE_LISTS_KEY })
+    },
+  })
+}
+
+export function useImportPriceListMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: { id: string; input: ImportPriceListInput }) =>
+      importPriceListApi(vars.id, vars.input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: PRICE_LISTS_KEY })
     },

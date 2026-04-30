@@ -63,6 +63,7 @@ export function ProductGrid({ products, isLoading, onSelectProduct }: ProductGri
         variantName: null,
         sku: product.sku,
         unitPrice: product.basePrice,
+        costPrice: product.costPrice,
         imageUrl: product.imageUrl,
         notes: null,
         unitName: null,

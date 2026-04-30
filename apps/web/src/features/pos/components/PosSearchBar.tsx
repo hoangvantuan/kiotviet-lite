@@ -80,6 +80,7 @@ export function PosSearchBar({ searchRef, onOpenScanner, onSelectProduct }: PosS
           variantName: null,
           sku: product.sku,
           unitPrice: product.basePrice,
+          costPrice: product.costPrice,
           imageUrl: product.imageUrl,
           notes: null,
           unitName: null,

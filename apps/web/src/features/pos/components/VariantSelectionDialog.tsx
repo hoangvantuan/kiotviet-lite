@@ -133,6 +133,7 @@ export function VariantSelectionDialog({
         variantName: selectedVariant?.name ?? null,
         sku: selectedVariant?.sku ?? product.sku,
         unitPrice: displayPrice,
+        costPrice: selectedVariant?.costPrice ?? product.costPrice,
         imageUrl: product.imageUrl,
         notes: notes.trim() || null,
         unitName: selectedUnit?.unit ?? null,

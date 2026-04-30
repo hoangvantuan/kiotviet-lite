@@ -85,7 +85,7 @@ export function PosScreen() {
       variantName: null,
       sku: product.sku,
       unitPrice: product.basePrice,
-      costPrice: product.costPrice ?? 0,
+      costPrice: product.costPrice,
       imageUrl: product.imageUrl,
       notes: null,
       unitName: null,

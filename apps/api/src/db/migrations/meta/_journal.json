@@ -134,6 +134,27 @@
       "when": 1777455998360,
       "tag": "0018_chubby_dexter_bennett",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1777505800725,
+      "tag": "0019_sturdy_deadpool",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1777508391832,
+      "tag": "0020_mushy_wild_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1777510292966,
+      "tag": "0021_safe_abomination",
+      "breakpoints": true
     }
   ]
 }

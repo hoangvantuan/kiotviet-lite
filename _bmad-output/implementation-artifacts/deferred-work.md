@@ -133,3 +133,10 @@
 
 - CR-004: `cashAmount` và `transferAmount` không persist vào DB. Bảng `orders` thiếu 2 cột này. Với thanh toán `combined`, không thể tra lại phần tiền mặt vs chuyển khoản sau khi tạo đơn. Cần thêm migration tạo 2 cột. [packages/shared/src/schema/orders.ts]
 - CR-005: Tất cả JSX text dùng ASCII-only Vietnamese (thiếu dấu). Pattern pre-existing từ Story 3.1. Ảnh hưởng UX nhưng cần sửa project-wide, không phải regression. [PaymentDialog.tsx, OrderCompletionDialog.tsx, CartPanel.tsx, và nhiều file khác]
+
+## Deferred from: code review of story 4-4b (2026-04-30)
+
+- F3: UI thiếu Tooltip "Bạn không có quyền sửa giá" khi user thiếu `pos.editPrice`. Hiện render text-only không feedback. Defer vì Tooltip component đã có sẵn, chỉ là UX polish. [apps/web/src/features/pos/components/CartItem.tsx:153-162]
+- F4: Form Create/Edit CategoryDiscount dùng manual validation thay vì zodResolver. Duplicate logic với schema Zod (XOR target, percent ≤ 100, dates). Defer vì server vẫn enforce qua Zod, không ảnh hưởng correctness. [apps/web/src/features/pricing/components/CreateCategoryDiscountDialog.tsx, EditCategoryDiscountDialog.tsx]
+- F7: order-management.ts validation messages bị chuyển sang KHÔNG DẤU (regression i18n). Defer vì thuộc story 3-3 review, không thuộc scope 4-4b. [packages/shared/src/schema/order-management.ts]
+- F9: pos.routes.ts mở rộng không spec trong 4-4b. Thuộc story 3-3. [apps/api/src/routes/pos.routes.ts]

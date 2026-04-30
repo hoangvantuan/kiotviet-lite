@@ -13,6 +13,7 @@ import { AppLayout } from '@/components/layout/app-layout'
 import { ErrorBoundary } from '@/components/layout/error-boundary'
 import { Toaster } from '@/components/ui/sonner'
 import { useMediaQuery as useMediaQueryRoot } from '@/hooks/use-media-query'
+import { CategoryDiscountsPage } from '@/pages/category-discounts-page'
 import { CustomerDetailPage } from '@/pages/customer-detail-page'
 import { CustomerPricesPage } from '@/pages/customer-prices-page'
 import { CustomersGroupsPage } from '@/pages/customers-groups-page'
@@ -37,6 +38,7 @@ import { StockCheckCreatePage } from '@/pages/stock-check-create-page'
 import { StockCheckDetailPage } from '@/pages/stock-check-detail-page'
 import { StockCheckEditPage } from '@/pages/stock-check-edit-page'
 import { StockChecksPage } from '@/pages/stock-checks-page'
+import { SupplierPaymentsPage } from '@/pages/supplier-payments-page'
 import { SuppliersPage } from '@/pages/suppliers-page'
 import { VolumePricesPage } from '@/pages/volume-prices-page'
 import { useAuthStore } from '@/stores/use-auth-store'
@@ -167,6 +169,13 @@ const volumePricesRoute = createRoute({
   component: VolumePricesPage,
 })
 
+const pricingCategoryDiscountsRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/pricing/category-discounts',
+  beforeLoad: requirePermissionGuard('pricing.manage'),
+  component: CategoryDiscountsPage,
+})
+
 const pricingDetailRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/pricing/$id',
@@ -200,6 +209,13 @@ const inventoryPurchaseOrderDetailRoute = createRoute({
   path: '/inventory/purchase-orders/$orderId',
   beforeLoad: requirePermissionGuard('inventory.manage'),
   component: PurchaseOrderDetailPage,
+})
+
+const inventorySupplierPaymentsRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/inventory/supplier-payments',
+  beforeLoad: requirePermissionGuard('inventory.manage'),
+  component: SupplierPaymentsPage,
 })
 
 const inventoryStockChecksRoute = createRoute({
@@ -301,11 +317,13 @@ const routeTree = rootRoute.addChildren([
       pricingRoute,
       customerPricesRoute,
       volumePricesRoute,
+      pricingCategoryDiscountsRoute,
       pricingDetailRoute,
       inventorySuppliersRoute,
       inventoryPurchaseOrdersRoute,
       inventoryPurchaseOrderCreateRoute,
       inventoryPurchaseOrderDetailRoute,
+      inventorySupplierPaymentsRoute,
       inventoryStockChecksRoute,
       inventoryStockCheckCreateRoute,
       inventoryStockCheckDetailRoute,
