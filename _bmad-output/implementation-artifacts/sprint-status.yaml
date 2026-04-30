@@ -111,7 +111,7 @@ development_status:
   4-3b-chain-formula-clone-import-bang-gia: done # 2026-04-30 dev xong 15/15 tasks, 21 test mới pass, full suite 978/979
   4-3c-so-sanh-bang-gia: backlog
   4-4-gia-rieng-khach-hang-gia-theo-so-luong: done
-  4-4b-chiet-khau-danh-muc-kiem-soat-sua-gia: review # 2026-04-30 dev xong all 15 tasks, 30/30 tests pass, full suite 882/882
+  4-4b-chiet-khau-danh-muc-kiem-soat-sua-gia: done # 2026-04-30 dev xong all 15 tasks, 30/30 tests pass, full suite 882/882
   4-5-tich-hop-6-tang-gia-vao-pos: backlog
   epic-4-retrospective: optional
 
