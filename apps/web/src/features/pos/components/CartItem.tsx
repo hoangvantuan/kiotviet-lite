@@ -1,9 +1,20 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, ChevronDown, Minus, Percent, Plus, Tag, Trash2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  ChevronDown,
+  Minus,
+  Pencil,
+  Percent,
+  Plus,
+  Shield,
+  Tag,
+  Trash2,
+} from 'lucide-react'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { usePermissions } from '@/features/auth/use-permissions'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 import {
@@ -13,6 +24,8 @@ import {
 } from '@/stores/use-cart-store'
 
 import { DISCOUNT_TYPE } from '../constants'
+import { EditUnitPriceDialog } from './EditUnitPriceDialog'
+import { StockInfoPopover } from './StockInfoPopover'
 
 interface CartItemProps {
   item: CartItemType
@@ -23,8 +36,11 @@ export function CartItem({ item }: CartItemProps) {
   const removeItem = useCartStore((s) => s.removeItem)
   const updateLineDiscount = useCartStore((s) => s.updateLineDiscount)
   const updateLineNotes = useCartStore((s) => s.updateLineNotes)
+  const permissions = usePermissions()
+  const canEditPrice = permissions.has('pos.editPrice')
 
   const [expanded, setExpanded] = useState(false)
+  const [editPriceOpen, setEditPriceOpen] = useState(false)
   const [draftQty, setDraftQty] = useState<string>(String(item.quantity))
   const [draftType, setDraftType] = useState<DiscountType>(
     item.discountType ?? DISCOUNT_TYPE.AMOUNT,
@@ -103,10 +119,55 @@ export function CartItem({ item }: CartItemProps) {
               {item.variantName && (
                 <p className="truncate text-xs text-muted-foreground">{item.variantName}</p>
               )}
-              <p className="mt-0.5 font-mono text-xs text-muted-foreground">
-                {formatVndWithSuffix(item.unitPrice)}
-                {item.unitName && <span className="font-sans"> / {item.unitName}</span>}
-              </p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                {canEditPrice ? (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setEditPriceOpen(true)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setEditPriceOpen(true)
+                      }
+                    }}
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded font-mono text-xs cursor-pointer hover:underline',
+                      item.priceOverride ? 'text-orange-500' : 'text-muted-foreground',
+                    )}
+                    aria-label="Sửa giá bán"
+                  >
+                    {formatVndWithSuffix(item.unitPrice)}
+                    {item.unitName && <span className="font-sans"> / {item.unitName}</span>}
+                    <Pencil className="h-3 w-3" aria-hidden="true" />
+                  </span>
+                ) : (
+                  <p
+                    className={cn(
+                      'font-mono text-xs',
+                      item.priceOverride ? 'text-orange-500' : 'text-muted-foreground',
+                    )}
+                  >
+                    {formatVndWithSuffix(item.unitPrice)}
+                    {item.unitName && <span className="font-sans"> / {item.unitName}</span>}
+                  </p>
+                )}
+                {item.priceOverride && (
+                  <span className="inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300">
+                    Đã sửa giá
+                    {item.priceOverridePinUsed && <Shield className="h-3 w-3" aria-hidden="true" />}
+                  </span>
+                )}
+              </div>
+              {item.priceOverride && item.originalPrice !== null && (
+                <p className="mt-0.5 font-mono text-[11px] text-muted-foreground line-through">
+                  {formatVndWithSuffix(item.originalPrice)}
+                </p>
+              )}
               {hasLineDiscount && (
                 <p className="mt-0.5 flex items-center gap-1 text-xs text-orange-500">
                   <Tag className="h-3 w-3" aria-hidden="true" />
@@ -154,14 +215,17 @@ export function CartItem({ item }: CartItemProps) {
           <p className="font-mono text-sm font-semibold text-foreground">
             {formatVndWithSuffix(item.lineTotal)}
           </p>
-          <button
-            type="button"
-            onClick={() => removeItem(item.id)}
-            className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive sm:h-7 sm:w-7"
-            aria-label="Xoá sản phẩm"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-0.5">
+            <StockInfoPopover productId={item.productId} />
+            <button
+              type="button"
+              onClick={() => removeItem(item.id)}
+              className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive sm:h-7 sm:w-7"
+              aria-label="Xoá sản phẩm"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -272,6 +336,14 @@ export function CartItem({ item }: CartItemProps) {
             />
           </div>
         </div>
+      )}
+
+      {canEditPrice && (
+        <EditUnitPriceDialog
+          item={editPriceOpen ? item : null}
+          open={editPriceOpen}
+          onOpenChange={setEditPriceOpen}
+        />
       )}
     </div>
   )

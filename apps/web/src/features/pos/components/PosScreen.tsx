@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { ShoppingCart } from 'lucide-react'
 
 import {
@@ -9,14 +9,22 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { useMediaQuery } from '@/hooks/use-media-query'
+import { ApiClientError } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
+import { showError, showSuccess } from '@/lib/toast'
 import { useCartStore } from '@/stores/use-cart-store'
 
+import { MAX_CART_TABS } from '../constants'
+import { useCheckoutMutation } from '../hooks/use-checkout'
+import { usePosKeyboard } from '../hooks/use-pos-keyboard'
 import { usePosProducts } from '../hooks/use-pos-products'
-import type { PosProductItem } from '../types'
+import type { OrderDetail, PosProductItem } from '../types'
 import { BarcodeScanner } from './BarcodeScanner'
 import { CartPanel } from './CartPanel'
 import { CategoryFilter } from './CategoryFilter'
+import { KeyboardShortcutsTooltip } from './KeyboardShortcutsTooltip'
+import { OrderCompletionDialog } from './OrderCompletionDialog'
+import { PaymentDialog } from './PaymentDialog'
 import { PosHeader } from './PosHeader'
 import { PosSearchBar } from './PosSearchBar'
 import { ProductGrid } from './ProductGrid'
@@ -30,6 +38,11 @@ export function PosScreen() {
   const [variantProduct, setVariantProduct] = useState<PosProductItem | null>(null)
   const [variantDialogOpen, setVariantDialogOpen] = useState(false)
 
+  // Story 3.3: payment & completion dialogs
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
+  const [completionDialogOpen, setCompletionDialogOpen] = useState(false)
+  const [completionOrder, setCompletionOrder] = useState<OrderDetail | null>(null)
+
   const cartCount = useCartStore((s) =>
     (s.tabs[s.activeTab]?.items ?? []).reduce((sum, i) => sum + i.quantity, 0),
   )
@@ -41,9 +54,14 @@ export function PosScreen() {
   })
   const mode = useCartStore((s) => s.mode)
   const addItem = useCartStore((s) => s.addItem)
+  const clearCart = useCartStore((s) => s.clearCart)
+  const activeTab = useCartStore((s) => s.activeTab)
+  const setActiveTab = useCartStore((s) => s.setActiveTab)
+  const tabs = useCartStore((s) => s.tabs)
 
   const searchRef = useRef<HTMLInputElement>(null)
   const { data: products, isLoading } = usePosProducts(selectedCategory)
+  const checkoutMutation = useCheckoutMutation()
 
   function handleSelectProduct(product: PosProductItem) {
     if (product.hasVariants) {
@@ -67,6 +85,7 @@ export function PosScreen() {
       variantName: null,
       sku: product.sku,
       unitPrice: product.basePrice,
+      costPrice: product.costPrice ?? 0,
       imageUrl: product.imageUrl,
       notes: null,
       unitName: null,
@@ -74,6 +93,105 @@ export function PosScreen() {
     })
     setTimeout(() => searchRef.current?.focus(), 0)
   }
+
+  // Payment flow
+  const handleOpenPayment = useCallback(() => {
+    if (cartCount === 0 || cartGrandTotal <= 0) return
+    setPaymentDialogOpen(true)
+  }, [cartCount, cartGrandTotal])
+
+  function handlePaymentComplete(payload: {
+    paymentMethod: string
+    cashAmount?: number
+    transferAmount?: number
+  }) {
+    const tab = tabs[activeTab]
+    if (!tab || tab.items.length === 0) return
+
+    const subtotal = tab.items.reduce((sum, i) => sum + i.lineTotal, 0)
+
+    checkoutMutation.mutate(
+      {
+        customerId: null,
+        subtotal,
+        discountType: tab.orderDiscountType,
+        discountValue: tab.orderDiscountValue,
+        discountAmount: tab.orderDiscountAmount,
+        total: subtotal - tab.orderDiscountAmount,
+        paymentMethod: payload.paymentMethod,
+        paymentStatus: 'paid',
+        cashAmount: payload.cashAmount,
+        transferAmount: payload.transferAmount,
+        note: null,
+        items: tab.items.map((item) => ({
+          productId: item.productId,
+          variantId: item.variantId,
+          productName: item.productName,
+          variantName: item.variantName,
+          unit: item.unitName,
+          unitPrice: item.unitPrice,
+          quantity: item.quantity,
+          discountType: item.discountType,
+          discountValue: item.discountValue,
+          discountAmount: item.discountAmount,
+          lineTotal: item.lineTotal,
+          note: item.notes,
+          unitConversionId: item.unitConversionId,
+          originalPrice: item.originalPrice,
+          priceOverride: item.priceOverride,
+          priceOverrideReason: item.priceOverrideReason,
+          priceOverridePinUsed: item.priceOverridePinUsed,
+        })),
+      },
+      {
+        onSuccess: (response) => {
+          setPaymentDialogOpen(false)
+          setCompletionOrder(response.data)
+          setCompletionDialogOpen(true)
+          showSuccess('Don hang da hoan thanh!')
+        },
+        onError: (err) => {
+          const msg =
+            err instanceof ApiClientError
+              ? err.message
+              : 'Khong the tao don hang. Vui long thu lai.'
+          showError(msg)
+        },
+      },
+    )
+  }
+
+  function handleNewOrder() {
+    clearCart()
+    setCompletionDialogOpen(false)
+    setCompletionOrder(null)
+    setTimeout(() => searchRef.current?.focus(), 0)
+  }
+
+  // Find next empty tab for F5
+  const handleNewTab = useCallback(() => {
+    for (let i = 1; i <= MAX_CART_TABS; i++) {
+      const tabItems = tabs[i]?.items ?? []
+      if (tabItems.length === 0 && i !== activeTab) {
+        setActiveTab(i)
+        setTimeout(() => searchRef.current?.focus(), 0)
+        return
+      }
+    }
+    // No empty tab found, stay on current
+  }, [tabs, activeTab, setActiveTab])
+
+  // Focus search callback (stable ref, no re-creation)
+  const handleFocusSearch = useCallback(() => {
+    searchRef.current?.focus()
+  }, [])
+
+  // Keyboard shortcuts
+  usePosKeyboard({
+    onPayment: handleOpenPayment,
+    onNewOrder: handleNewTab,
+    onFocusSearch: handleFocusSearch,
+  })
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -102,7 +220,7 @@ export function PosScreen() {
         {/* Cart area: sidebar on desktop, bottom sheet on mobile */}
         {isDesktop ? (
           <div className="w-80 shrink-0 border-l border-border bg-background lg:w-96">
-            <CartPanel />
+            <CartPanel onPayment={handleOpenPayment} />
           </div>
         ) : (
           <>
@@ -113,19 +231,19 @@ export function PosScreen() {
               className="fixed bottom-4 left-4 right-4 z-40 flex h-14 items-center justify-between gap-3 rounded-full bg-primary px-5 text-primary-foreground shadow-lg transition-transform active:scale-[0.98]"
               aria-label={
                 cartCount > 0
-                  ? `Mở giỏ hàng: ${cartCount} sản phẩm, tổng ${formatVndWithSuffix(cartGrandTotal)}`
-                  : 'Mở giỏ hàng trống'
+                  ? `Mo gio hang: ${cartCount} san pham, tong ${formatVndWithSuffix(cartGrandTotal)}`
+                  : 'Mo gio hang trong'
               }
             >
               <span className="flex items-center gap-2">
                 <ShoppingCart className="h-5 w-5" aria-hidden="true" />
                 <span className="text-sm font-semibold">
-                  {cartCount > 0 ? `${cartCount} SP` : 'Giỏ hàng trống'}
+                  {cartCount > 0 ? `${cartCount} SP` : 'Gio hang trong'}
                 </span>
               </span>
               {cartCount > 0 && (
                 <span className="font-mono text-base font-bold">
-                  Tổng: {formatVndWithSuffix(cartGrandTotal)}
+                  Tong: {formatVndWithSuffix(cartGrandTotal)}
                 </span>
               )}
             </button>
@@ -133,10 +251,10 @@ export function PosScreen() {
             <Sheet open={cartSheetOpen} onOpenChange={setCartSheetOpen}>
               <SheetContent side="bottom" className="h-[85vh] p-0">
                 <SheetHeader className="sr-only">
-                  <SheetTitle>Giỏ hàng</SheetTitle>
-                  <SheetDescription>Danh sách sản phẩm trong giỏ hàng</SheetDescription>
+                  <SheetTitle>Gio hang</SheetTitle>
+                  <SheetDescription>Danh sach san pham trong gio hang</SheetDescription>
                 </SheetHeader>
-                <CartPanel />
+                <CartPanel onPayment={handleOpenPayment} />
               </SheetContent>
             </Sheet>
           </>
@@ -162,6 +280,26 @@ export function PosScreen() {
           }
         }}
       />
+
+      {/* Story 3.3: Payment dialog */}
+      <PaymentDialog
+        open={paymentDialogOpen}
+        onOpenChange={setPaymentDialogOpen}
+        grandTotal={cartGrandTotal}
+        onComplete={handlePaymentComplete}
+        isLoading={checkoutMutation.isPending}
+      />
+
+      {/* Story 3.3: Order completion dialog */}
+      <OrderCompletionDialog
+        open={completionDialogOpen}
+        onOpenChange={setCompletionDialogOpen}
+        order={completionOrder}
+        onNewOrder={handleNewOrder}
+      />
+
+      {/* Story 3.3: Keyboard shortcuts help */}
+      <KeyboardShortcutsTooltip />
     </div>
   )
 }

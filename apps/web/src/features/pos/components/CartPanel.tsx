@@ -19,7 +19,11 @@ import { CartItem } from './CartItem'
 import { CartTabBar } from './CartTabBar'
 import { OrderDiscountPopover } from './OrderDiscountPopover'
 
-export function CartPanel() {
+interface CartPanelProps {
+  onPayment?: () => void
+}
+
+export function CartPanel({ onPayment }: CartPanelProps) {
   const items = useCartStore((s) => s.tabs[s.activeTab]?.items ?? [])
   const orderDiscountType = useCartStore((s) => s.tabs[s.activeTab]?.orderDiscountType ?? null)
   const orderDiscountValue = useCartStore((s) => s.tabs[s.activeTab]?.orderDiscountValue ?? 0)
@@ -40,13 +44,15 @@ export function CartPanel() {
     setConfirmOpen(false)
   }
 
+  const canPay = items.length > 0 && grandTotal > 0
+
   return (
     <div className="flex h-full flex-col">
       <CartTabBar />
 
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-foreground">Giỏ hàng</h2>
+          <h2 className="text-sm font-semibold text-foreground">Gio hang</h2>
           {totalQty > 0 && (
             <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
               {totalQty}
@@ -58,10 +64,10 @@ export function CartPanel() {
             type="button"
             onClick={() => setConfirmOpen(true)}
             className="flex h-8 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-            aria-label="Huỷ đơn"
+            aria-label="Huy don"
           >
             <Trash2 className="h-3.5 w-3.5" />
-            Huỷ đơn
+            Huy don
           </button>
         )}
       </div>
@@ -70,8 +76,8 @@ export function CartPanel() {
         {items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <ShoppingCart className="h-10 w-10 text-muted-foreground" />
-            <p className="mt-2 text-sm text-muted-foreground">Giỏ hàng trống</p>
-            <p className="mt-1 text-xs text-muted-foreground">Chọn sản phẩm để thêm vào giỏ hàng</p>
+            <p className="mt-2 text-sm text-muted-foreground">Gio hang trong</p>
+            <p className="mt-1 text-xs text-muted-foreground">Chon san pham de them vao gio hang</p>
           </div>
         ) : (
           items.map((item) => <CartItem key={item.id} item={item} />)
@@ -81,7 +87,7 @@ export function CartPanel() {
       {items.length > 0 && (
         <div className="shrink-0 space-y-2 border-t border-border bg-background p-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Tổng tiền hàng ({totalQty} SP)</span>
+            <span className="text-sm text-muted-foreground">Tong tien hang ({totalQty} SP)</span>
             <span className="font-mono text-sm text-muted-foreground">
               {formatVndWithSuffix(subtotal)}
             </span>
@@ -95,18 +101,18 @@ export function CartPanel() {
           />
 
           <div className="flex items-end justify-between border-t border-border pt-2">
-            <span className="text-sm font-medium text-foreground">Tổng thanh toán</span>
+            <span className="text-sm font-medium text-foreground">Tong thanh toan</span>
             <span className="font-mono text-2xl font-bold text-foreground">
               {formatVndWithSuffix(grandTotal)}
             </span>
           </div>
 
           <Button
-            disabled
+            disabled={!canPay}
+            onClick={onPayment}
             className="h-12 w-full text-base font-semibold"
-            title="Chức năng thanh toán sẽ có ở Story 3.3"
           >
-            Thanh toán
+            Thanh toan (F2)
           </Button>
         </div>
       )}
@@ -114,18 +120,18 @@ export function CartPanel() {
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Huỷ đơn hàng</AlertDialogTitle>
+            <AlertDialogTitle>Huy don hang</AlertDialogTitle>
             <AlertDialogDescription>
-              Bạn có chắc muốn huỷ đơn hàng này? Toàn bộ sản phẩm trong tab hiện tại sẽ bị xoá.
+              Ban co chac muon huy don hang nay? Toan bo san pham trong tab hien tai se bi xoa.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Quay lại</AlertDialogCancel>
+            <AlertDialogCancel>Quay lai</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmCancel}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Huỷ đơn
+              Huy don
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

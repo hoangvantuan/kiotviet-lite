@@ -128,3 +128,8 @@
 - Concurrency 2 user replace volume_prices cùng productId: tx2 ghi đè tx1. Spec H7 chấp nhận, không cần SELECT FOR UPDATE cho MVP. [volume-prices.service.ts:241-320]
 - Migration naming spec đề `0015_*.sql` nhưng thực tế `0016_sleepy_odin.sql` do dev tạo song song với Story 6-2 (0015 là stock-checks). Không ảnh hưởng functionality. [apps/api/src/db/migrations/0016_sleepy_odin.sql]
 - Performance `listCustomerPrices` 2 queries (data + count) đều innerJoin lặp lại. Pattern chuẩn của project, MVP scale OK. Có thể optimize bằng window function/CTE. [customer-prices.service.ts:128-143]
+
+## Deferred from: code review of story 3-3 (2026-04-30)
+
+- CR-004: `cashAmount` và `transferAmount` không persist vào DB. Bảng `orders` thiếu 2 cột này. Với thanh toán `combined`, không thể tra lại phần tiền mặt vs chuyển khoản sau khi tạo đơn. Cần thêm migration tạo 2 cột. [packages/shared/src/schema/orders.ts]
+- CR-005: Tất cả JSX text dùng ASCII-only Vietnamese (thiếu dấu). Pattern pre-existing từ Story 3.1. Ảnh hưởng UX nhưng cần sửa project-wide, không phải regression. [PaymentDialog.tsx, OrderCompletionDialog.tsx, CartPanel.tsx, và nhiều file khác]

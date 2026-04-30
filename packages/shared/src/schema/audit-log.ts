@@ -59,6 +59,11 @@ export const auditActionSchema = z.enum([
   'stock_check.updated',
   'stock_check.confirmed',
   'stock_check.deleted',
+  'order.created',
+  'category_discount.created',
+  'category_discount.updated',
+  'category_discount.deleted',
+  'order_item.price_overridden',
 ])
 
 export const auditLogItemSchema = z.object({

@@ -57,6 +57,11 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'stock_check.updated': 'Sửa phiếu kiểm kho',
   'stock_check.confirmed': 'Xác nhận phiếu kiểm kho',
   'stock_check.deleted': 'Xoá phiếu kiểm kho',
+  'order.created': 'Tạo đơn hàng',
+  'category_discount.created': 'Tạo chiết khấu danh mục',
+  'category_discount.updated': 'Sửa chiết khấu danh mục',
+  'category_discount.deleted': 'Xoá chiết khấu danh mục',
+  'order_item.price_overridden': 'Sửa giá trên đơn hàng',
 }
 
 export interface ActionGroup {
@@ -152,6 +157,22 @@ export const ACTION_GROUPS: ActionGroup[] = [
       'stock_check.confirmed',
       'stock_check.deleted',
     ],
+  },
+  {
+    label: 'Đơn hàng',
+    actions: ['order.created'],
+  },
+  {
+    label: 'Chiết khấu danh mục',
+    actions: [
+      'category_discount.created',
+      'category_discount.updated',
+      'category_discount.deleted',
+    ],
+  },
+  {
+    label: 'Sửa giá POS',
+    actions: ['order_item.price_overridden'],
   },
 ]
 

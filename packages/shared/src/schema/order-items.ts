@@ -1,4 +1,14 @@
-import { bigint, index, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import {
+  bigint,
+  boolean,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
 import { orders } from './orders.js'
@@ -27,6 +37,10 @@ export const orderItems = pgTable(
     discountValue: bigint({ mode: 'number' }).notNull().default(0),
     discountAmount: bigint({ mode: 'number' }).notNull().default(0),
     lineTotal: bigint({ mode: 'number' }).notNull(),
+    originalPrice: bigint({ mode: 'number' }),
+    priceOverride: boolean().notNull().default(false),
+    priceOverrideReason: varchar({ length: 255 }),
+    priceOverridePinUsed: boolean().notNull().default(false),
     note: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
@@ -34,5 +48,8 @@ export const orderItems = pgTable(
     index('idx_order_items_order').on(table.orderId),
     index('idx_order_items_product').on(table.productId, table.createdAt),
     index('idx_order_items_variant').on(table.variantId),
+    index('idx_order_items_price_override')
+      .on(table.orderId, table.priceOverride)
+      .where(sql`${table.priceOverride} = true`),
   ],
 )

@@ -1,9 +1,14 @@
 import { Hono } from 'hono'
+import { z } from 'zod'
+
+import { createOrderSchema } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
+import { getRequestMeta } from '../services/audit.service.js'
+import { createOrder, getStockInfo } from '../services/orders.service.js'
 import { searchProductsForPos } from '../services/products.service.js'
 
 export interface PosRoutesDeps {
@@ -26,6 +31,37 @@ export function createPosRoutes({ db }: PosRoutesDeps) {
       storeId: auth.storeId,
       search,
       categoryId,
+    })
+    return c.json({ data })
+  })
+
+  // Story 3.3 - Create order (POST before parameterized routes)
+  app.post('/orders', async (c) => {
+    const auth = c.get('auth')
+    const body = await c.req.json()
+    const parsed = createOrderSchema.parse(body)
+    const meta = getRequestMeta(c)
+    const data = await createOrder({
+      db,
+      actor: {
+        userId: auth.userId,
+        storeId: auth.storeId,
+        role: auth.role,
+      },
+      input: parsed,
+      meta,
+    })
+    return c.json({ data }, 201)
+  })
+
+  // Story 3.3 - Stock info (parameterized route AFTER literal routes)
+  app.get('/stock/:productId', async (c) => {
+    const auth = c.get('auth')
+    const productId = z.string().uuid().parse(c.req.param('productId'))
+    const data = await getStockInfo({
+      db,
+      storeId: auth.storeId,
+      productId,
     })
     return c.json({ data })
   })
