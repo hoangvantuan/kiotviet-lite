@@ -1,6 +1,6 @@
 # Story 4.3: Bảng giá Direct & Formula
 
-Status: in-progress
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -1180,21 +1180,22 @@ claude-opus-4-7 (1M context)
 | 2026-04-28 | 1.0       | Triển khai đầy đủ Story 4.3 (15 AC, 14 tasks). Backend + Frontend + Tests pass. Status: review.                                      |
 | 2026-04-28 | 1.1       | Code review (Blind + EdgeCase + AcceptanceAuditor). 5 MAJOR patches + 2 MINOR patches + 7 defer + 2 dismiss.                         |
 | 2026-04-28 | 1.2       | 7 patches from code review fixed (5 MAJOR + 2 MINOR). API tests 264/264 pass, shared tests 294/294 pass, typecheck api+shared clean. |
+| 2026-04-30 | 1.3       | Code review round 2: 7/7 patches verified fixed. Status: done.                                                                       |
 
 ### Review Findings
 
-**MAJOR — patch (cần xử lý trước khi đóng story):**
+**MAJOR — patch (đã fix v1.2, verified round 2: 2026-04-30):**
 
-- [ ] [Review][Patch] Race condition: load baseItems ngoài transaction khi tạo formula list [apps/api/src/services/price-lists.service.ts:475-478] — base list có thể bị thay đổi giữa lúc đọc và commit. Move việc load `baseItems` vào trong `db.transaction(...)` block.
-- [ ] [Review][Patch] Race condition: load baseItems + existingItems ngoài transaction khi recalculate [apps/api/src/services/price-lists.service.ts:886-899] — tương tự issue trên. Move toàn bộ load + compute + apply vào trong transaction (hoặc dùng `SELECT ... FOR UPDATE` để lock).
-- [ ] [Review][Patch] Bug logic: createPriceListItem cho formula list set isOverridden=false sai [apps/api/src/services/price-list-items.service.ts:226] — Theo AC3 và AC8, khi thêm SP mới (không có ở base) vào formula list, item phải đánh dấu `isOverridden=true`. Hiện tại luôn set `false`. Sửa: nếu `method === 'formula'` → `isOverridden: true`.
-- [ ] [Review][Patch] UI direct chặn submit khi items rỗng vi phạm AC2 [apps/web/src/features/pricing/components/CreatePriceListDialog.tsx:213-216] — AC2 cho phép tạo bảng giá rỗng (lưu nháp, thêm SP sau). Bỏ guard `items.length === 0` + toast, cho submit thẳng.
-- [ ] [Review][Patch] Thiếu cảnh báo "Dưới vốn" trong preview formula [apps/web/src/features/pricing/components/CreatePriceListDialog.tsx:509-525] — AC13 yêu cầu dòng đỏ khi giá tính ra < `productCostPrice`. Cần fetch `productCostPrice` qua API base items (đã có trong PriceListItemListItem) và highlight row khi `rounded < it.productCostPrice`.
+- [x] [Review][Patch] Race condition: load baseItems ngoài transaction khi tạo formula list — FIXED: `tx.select()` trong `db.transaction()` (line 631-645)
+- [x] [Review][Patch] Race condition: load baseItems + existingItems ngoài transaction khi recalculate — FIXED: cả 2 query qua `tx` trong transaction (line 1077-1102)
+- [x] [Review][Patch] Bug logic: createPriceListItem cho formula list set isOverridden=false sai — FIXED: `const isOverridden = method === 'formula'` (line 216)
+- [x] [Review][Patch] UI direct chặn submit khi items rỗng vi phạm AC2 — FIXED: bỏ guard, cho submit empty
+- [x] [Review][Patch] Thiếu cảnh báo "Dưới vốn" trong preview formula — FIXED: check `belowCost` + text đỏ + "(Dưới vốn)" (line 529-543)
 
-**MINOR — patch (nên xử lý):**
+**MINOR — patch (đã fix v1.2, verified round 2: 2026-04-30):**
 
-- [ ] [Review][Patch] updatePriceListSchema thiếu .strict() [packages/shared/src/schema/price-list-management.ts:99-119] — Spec AC9 ưu tiên `.strict()` để fail-fast khi client gửi nhầm field cấm sửa (`method`, `baseListId`, `formulaType`, `formulaValue`). Hiện Zod silent strip. Thêm `.strict()` và update test ở dòng 580-589 để verify fail explicit.
-- [ ] [Review][Patch] Route /trashed không validate query qua Zod [apps/api/src/routes/price-lists.routes.ts:63-69] — `parseInt` thủ công không nhất quán với route khác. Tạo `listTrashedPriceListsQuerySchema = z.object({ page, pageSize })` và dùng `.parse(c.req.query())`.
+- [x] [Review][Patch] updatePriceListSchema thiếu .strict() — FIXED: `.strict()` added (line 122)
+- [x] [Review][Patch] Route /trashed không validate query qua Zod — FIXED: `listTrashedPriceListsQuerySchema.parse()` (line 70)
 
 **DEFER — pre-existing hoặc acknowledged scope MVP:**
 

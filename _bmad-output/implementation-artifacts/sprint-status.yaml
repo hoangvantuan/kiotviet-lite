@@ -1,3 +1,4 @@
+# Story 4-3 done 2026-04-30: round 2 verify 7/7 patches fixed, all clean, review → done
 # Story 3-3 done 2026-04-30: APPROVE_WITH_SUGGESTIONS, 8/8 AC PASS, 3 patches applied, 2 deferred; Epic 3 done
 # Story 3-3 created 2026-04-30
 # Story 4-4b created 2026-04-30
@@ -48,7 +49,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-24
-last_updated: 2026-04-30
+last_updated: 2026-04-30 # story 4-3 done
 # Story 4-3b dev xong 2026-04-30: 15/15 tasks, 21 integration test mới pass, full suite 978/979, in-progress → review
 # Story 4-3b created 2026-04-30 (chain + clone + import; 10 ACs, 15 tasks)
 # Story 5-3 created 2026-04-30 + Epic 5 → in-progress
@@ -107,7 +108,7 @@ development_status:
   epic-4: in-progress
   4-1-quan-ly-khach-hang-nhom-khach-hang: done
   4-2-trang-chi-tiet-khach-hang: done
-  4-3-bang-gia-direct-formula: review
+  4-3-bang-gia-direct-formula: done
   4-3b-chain-formula-clone-import-bang-gia: done # 2026-04-30 dev xong 15/15 tasks, 21 test mới pass, full suite 978/979
   4-3c-so-sanh-bang-gia: backlog
   4-4-gia-rieng-khach-hang-gia-theo-so-luong: done
