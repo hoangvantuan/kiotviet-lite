@@ -24,7 +24,9 @@ import {
 } from '@/stores/use-cart-store'
 
 import { DISCOUNT_TYPE } from '../constants'
+import { useRepriceOnQuantity } from '../hooks/use-auto-reprice'
 import { EditUnitPriceDialog } from './EditUnitPriceDialog'
+import { PriceSourceBadge } from './PriceSourceBadge'
 import { StockInfoPopover } from './StockInfoPopover'
 
 interface CartItemProps {
@@ -38,6 +40,7 @@ export function CartItem({ item }: CartItemProps) {
   const updateLineNotes = useCartStore((s) => s.updateLineNotes)
   const permissions = usePermissions()
   const canEditPrice = permissions.has('pos.editPrice')
+  const repriceOnQuantity = useRepriceOnQuantity()
 
   const [expanded, setExpanded] = useState(false)
   const [editPriceOpen, setEditPriceOpen] = useState(false)
@@ -71,6 +74,7 @@ export function CartItem({ item }: CartItemProps) {
     }
     if (parsed === item.quantity) return
     updateQuantity(item.id, parsed)
+    repriceOnQuantity(item.id, parsed)
   }
 
   function handleTypeChange(nextType: DiscountType) {
@@ -162,6 +166,12 @@ export function CartItem({ item }: CartItemProps) {
                     {item.priceOverridePinUsed && <Shield className="h-3 w-3" aria-hidden="true" />}
                   </span>
                 )}
+                {!item.priceOverride && (
+                  <PriceSourceBadge
+                    source={item.priceSource}
+                    sourceDetail={item.priceSourceDetail}
+                  />
+                )}
               </div>
               {item.priceOverride && item.originalPrice !== null && (
                 <p className="mt-0.5 font-mono text-[11px] text-muted-foreground line-through">
@@ -194,7 +204,10 @@ export function CartItem({ item }: CartItemProps) {
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+            onClick={() => {
+              updateQuantity(item.id, item.quantity - 1)
+              if (item.quantity - 1 > 0) repriceOnQuantity(item.id, item.quantity - 1)
+            }}
             className="flex h-9 w-9 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:h-7 sm:w-7"
             aria-label="Giảm số lượng"
           >
@@ -203,7 +216,10 @@ export function CartItem({ item }: CartItemProps) {
           <span className="w-8 text-center font-mono text-sm font-medium">{item.quantity}</span>
           <button
             type="button"
-            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+            onClick={() => {
+              updateQuantity(item.id, item.quantity + 1)
+              repriceOnQuantity(item.id, item.quantity + 1)
+            }}
             className="flex h-9 w-9 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:h-7 sm:w-7"
             aria-label="Tăng số lượng"
           >

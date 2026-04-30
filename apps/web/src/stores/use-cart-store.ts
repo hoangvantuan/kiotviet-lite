@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 
+import type { PriceSource } from '@kiotviet-lite/shared'
+
 import { MAX_CART_TABS } from '@/features/pos/constants'
 
 export type DiscountType = 'percent' | 'amount'
@@ -28,6 +30,8 @@ export interface CartItem {
   priceOverride: boolean
   priceOverrideReason: string | null
   priceOverridePinUsed: boolean
+  priceSource: PriceSource
+  priceSourceDetail: string | null
 }
 
 type CartItemInput = Omit<
@@ -44,6 +48,8 @@ type CartItemInput = Omit<
   | 'priceOverride'
   | 'priceOverrideReason'
   | 'priceOverridePinUsed'
+  | 'priceSource'
+  | 'priceSourceDetail'
 > & {
   discountType?: DiscountType | null
   discountValue?: number
@@ -55,6 +61,8 @@ type CartItemInput = Omit<
   priceOverride?: boolean
   priceOverrideReason?: string | null
   priceOverridePinUsed?: boolean
+  priceSource?: PriceSource
+  priceSourceDetail?: string | null
 }
 
 export interface TabState {
@@ -62,6 +70,10 @@ export interface TabState {
   orderDiscountType: DiscountType | null
   orderDiscountValue: number
   orderDiscountAmount: number
+  customerId: string | null
+  customerName: string | null
+  customerGroupId: string | null
+  customerGroupName: string | null
 }
 
 interface CartState {
@@ -80,6 +92,20 @@ interface CartState {
     opts?: { reason?: string | null; pinUsed?: boolean },
   ) => void
   updateOrderDiscount: (type: DiscountType | null, value: number) => void
+  setCustomer: (
+    customer: {
+      id: string
+      name: string
+      groupId: string | null
+      groupName: string | null
+    } | null,
+  ) => void
+  updateItemPrice: (
+    id: string,
+    price: number,
+    source: PriceSource,
+    sourceDetail: string | null,
+  ) => void
   clearCart: () => void
   setMode: (mode: 'quick' | 'normal') => void
 }
@@ -152,6 +178,10 @@ function createEmptyTab(): TabState {
     orderDiscountType: null,
     orderDiscountValue: 0,
     orderDiscountAmount: 0,
+    customerId: null,
+    customerName: null,
+    customerGroupId: null,
+    customerGroupName: null,
   }
 }
 
@@ -209,6 +239,8 @@ export const useCartStore = create<CartState>((set, get) => ({
             priceOverride: input.priceOverride ?? false,
             priceOverrideReason: input.priceOverrideReason ?? null,
             priceOverridePinUsed: input.priceOverridePinUsed ?? false,
+            priceSource: input.priceSource ?? 'retail_price',
+            priceSourceDetail: input.priceSourceDetail ?? null,
           }
           nextItems = [...tab.items, recomputeLine(baseItem)]
         }
@@ -271,6 +303,8 @@ export const useCartStore = create<CartState>((set, get) => ({
             priceOverride: true,
             priceOverrideReason: opts?.reason ?? null,
             priceOverridePinUsed: opts?.pinUsed ?? false,
+            priceSource: 'manual_override',
+            priceSourceDetail: null,
           })
         })
         return recomputeOrderDiscount({ ...tab, items: nextItems })
@@ -298,6 +332,37 @@ export const useCartStore = create<CartState>((set, get) => ({
           orderDiscountValue: type ? safeValue : 0,
         }),
       ),
+    )
+  },
+
+  setCustomer: (customer) => {
+    set((state) =>
+      updateActiveTab(state, (tab) => ({
+        ...tab,
+        customerId: customer?.id ?? null,
+        customerName: customer?.name ?? null,
+        customerGroupId: customer?.groupId ?? null,
+        customerGroupName: customer?.groupName ?? null,
+      })),
+    )
+  },
+
+  updateItemPrice: (id, price, source, sourceDetail) => {
+    const safePrice = Math.round(price)
+    set((state) =>
+      updateActiveTab(state, (tab) => {
+        const nextItems = tab.items.map((i) =>
+          i.id === id && !i.priceOverride
+            ? recomputeLine({
+                ...i,
+                unitPrice: safePrice,
+                priceSource: source,
+                priceSourceDetail: sourceDetail,
+              })
+            : i,
+        )
+        return recomputeOrderDiscount({ ...tab, items: nextItems })
+      }),
     )
   },
 

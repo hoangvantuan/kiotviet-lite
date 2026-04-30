@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 
-import { createOrderSchema } from '@kiotviet-lite/shared'
+import { createOrderSchema, resolvePricesSchema } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
@@ -9,6 +9,7 @@ import { errorHandler } from '../middleware/error-handler.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import { createOrder, getStockInfo } from '../services/orders.service.js'
+import { resolvePrices } from '../services/pricing.service.js'
 import { searchProductsForPos } from '../services/products.service.js'
 
 export interface PosRoutesDeps {
@@ -32,6 +33,15 @@ export function createPosRoutes({ db }: PosRoutesDeps) {
       search,
       categoryId,
     })
+    return c.json({ data })
+  })
+
+  // Story 4.5 - Resolve prices (6-tier pricing engine)
+  app.post('/resolve-prices', async (c) => {
+    const auth = c.get('auth')
+    const body = await c.req.json()
+    const parsed = resolvePricesSchema.parse(body)
+    const data = await resolvePrices({ db, storeId: auth.storeId, input: parsed })
     return c.json({ data })
   })
 

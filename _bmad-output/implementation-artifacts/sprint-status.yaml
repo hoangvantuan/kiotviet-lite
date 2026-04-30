@@ -1,3 +1,4 @@
+# Story 4-5 created 2026-04-30
 # Story 4-3 done 2026-04-30: round 2 verify 7/7 patches fixed, all clean, review → done
 # Story 3-3 done 2026-04-30: APPROVE_WITH_SUGGESTIONS, 8/8 AC PASS, 3 patches applied, 2 deferred; Epic 3 done
 # Story 3-3 created 2026-04-30
@@ -49,7 +50,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-24
-last_updated: 2026-04-30 # story 4-3 done
+last_updated: 2026-05-01 # story 4-5 dev + review done
 # Story 4-3b dev xong 2026-04-30: 15/15 tasks, 21 integration test mới pass, full suite 978/979, in-progress → review
 # Story 4-3b created 2026-04-30 (chain + clone + import; 10 ACs, 15 tasks)
 # Story 5-3 created 2026-04-30 + Epic 5 → in-progress
@@ -81,7 +82,7 @@ story_location: '{project-root}/_bmad-output/implementation-artifacts'
 
 development_status:
   # Epic 1: Khoi tao du an & Quan tri cua hang
-  epic-1: in-progress
+  epic-1: done
   1-1-khoi-tao-monorepo-database-design-system-co-ban: done
   1-2-dang-ky-cua-hang-dang-nhap: done
   1-3-layout-ung-dung-navigation: done
@@ -90,7 +91,7 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Quan ly Hang hoa
-  epic-2: in-progress
+  epic-2: done
   2-1-quan-ly-danh-muc-san-pham: done
   2-2-crud-san-pham-co-ban: done
   2-3-bien-the-san-pham: done
@@ -113,7 +114,7 @@ development_status:
   4-3c-so-sanh-bang-gia: backlog
   4-4-gia-rieng-khach-hang-gia-theo-so-luong: done
   4-4b-chiet-khau-danh-muc-kiem-soat-sua-gia: done # 2026-04-30 dev xong all 15 tasks, 30/30 tests pass, full suite 882/882
-  4-5-tich-hop-6-tang-gia-vao-pos: backlog
+  4-5-tich-hop-6-tang-gia-vao-pos: done # 2026-05-01 dev 10/11 tasks, review 3C+5W fixed, typecheck+lint+test pass 398/398
   epic-4-retrospective: optional
 
   # Epic 5: Quan ly Cong no

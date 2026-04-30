@@ -15,6 +15,7 @@ import { showError, showSuccess } from '@/lib/toast'
 import { useCartStore } from '@/stores/use-cart-store'
 
 import { MAX_CART_TABS } from '../constants'
+import { useRepriceOnAdd } from '../hooks/use-auto-reprice'
 import { useCheckoutMutation } from '../hooks/use-checkout'
 import { usePosKeyboard } from '../hooks/use-pos-keyboard'
 import { usePosProducts } from '../hooks/use-pos-products'
@@ -62,6 +63,7 @@ export function PosScreen() {
   const searchRef = useRef<HTMLInputElement>(null)
   const { data: products, isLoading } = usePosProducts(selectedCategory)
   const checkoutMutation = useCheckoutMutation()
+  const repriceOnAdd = useRepriceOnAdd()
 
   function handleSelectProduct(product: PosProductItem) {
     if (product.hasVariants) {
@@ -91,6 +93,7 @@ export function PosScreen() {
       unitName: null,
       unitConversionId: null,
     })
+    repriceOnAdd(product.id, null, 1)
     setTimeout(() => searchRef.current?.focus(), 0)
   }
 
@@ -112,7 +115,7 @@ export function PosScreen() {
 
     checkoutMutation.mutate(
       {
-        customerId: null,
+        customerId: tab.customerId ?? null,
         subtotal,
         discountType: tab.orderDiscountType,
         discountValue: tab.orderDiscountValue,

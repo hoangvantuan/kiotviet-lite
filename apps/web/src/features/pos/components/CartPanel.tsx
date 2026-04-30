@@ -15,8 +15,10 @@ import { Button } from '@/components/ui/button'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { useCartStore } from '@/stores/use-cart-store'
 
+import { useAutoReprice } from '../hooks/use-auto-reprice'
 import { CartItem } from './CartItem'
 import { CartTabBar } from './CartTabBar'
+import { CustomerSearchCombobox } from './CustomerSearchCombobox'
 import { OrderDiscountPopover } from './OrderDiscountPopover'
 
 interface CartPanelProps {
@@ -36,6 +38,7 @@ export function CartPanel({ onPayment }: CartPanelProps) {
   )
   const clearCart = useCartStore((s) => s.clearCart)
 
+  useAutoReprice()
   const [confirmOpen, setConfirmOpen] = useState(false)
   const grandTotal = subtotal - orderDiscountAmount
 
@@ -49,6 +52,7 @@ export function CartPanel({ onPayment }: CartPanelProps) {
   return (
     <div className="flex h-full flex-col">
       <CartTabBar />
+      <CustomerSearchCombobox />
 
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
