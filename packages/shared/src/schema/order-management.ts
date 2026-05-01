@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export const orderDiscountTypeSchema = z.enum(['percent', 'amount'])
 
-export const orderPaymentMethodSchema = z.enum(['cash', 'transfer', 'qr', 'combined'])
+export const orderPaymentMethodSchema = z.enum(['cash', 'transfer', 'qr', 'combined', 'debt'])
 
 export const orderPaymentStatusSchema = z.enum(['paid', 'partial', 'unpaid'])
 
@@ -86,6 +86,12 @@ export const createOrderSchema = z
     paymentStatus: orderPaymentStatusSchema.default('paid'),
     cashAmount: z.number().int().min(0).optional(),
     transferAmount: z.number().int().min(0).optional(),
+    debtAmount: z
+      .number()
+      .int('Số tiền ghi nợ phải là số nguyên')
+      .min(0, 'Số tiền ghi nợ phải >= 0')
+      .optional(),
+    debtLimitOverridden: z.boolean().default(false),
     note: z.string().trim().max(1000, 'Ghi chu don toi da 1000 ky tu').nullable().default(null),
     items: z
       .array(createOrderItemSchema)
@@ -115,6 +121,46 @@ export const createOrderSchema = z
     },
     { message: 'Tong tien mat + chuyen khoan phai >= tong thanh toan khi thanh toan ket hop' },
   )
+  .refine(
+    (order) => {
+      // debtAmount > 0 yêu cầu phải có customerId
+      if (order.debtAmount && order.debtAmount > 0) {
+        return order.customerId !== null && order.customerId !== undefined
+      }
+      return true
+    },
+    {
+      message: 'Phải chọn khách hàng khi ghi nợ',
+      path: ['customerId'],
+    },
+  )
+  .refine(
+    (order) => {
+      // debtAmount không được vượt total
+      if (order.debtAmount && order.debtAmount > 0) {
+        return order.debtAmount <= order.total
+      }
+      return true
+    },
+    {
+      message: 'Số tiền ghi nợ không được vượt tổng thanh toán',
+      path: ['debtAmount'],
+    },
+  )
+  .refine(
+    (order) => {
+      // Nếu có debt: paymentStatus phải khớp
+      if (order.debtAmount && order.debtAmount > 0) {
+        if (order.debtAmount === order.total) return order.paymentStatus === 'unpaid'
+        return order.paymentStatus === 'partial'
+      }
+      return true
+    },
+    {
+      message: 'paymentStatus không khớp với số tiền ghi nợ',
+      path: ['paymentStatus'],
+    },
+  )
 
 export type OrderDiscountType = z.infer<typeof orderDiscountTypeSchema>
 export type OrderPaymentMethod = z.infer<typeof orderPaymentMethodSchema>
@@ -122,3 +168,25 @@ export type OrderPaymentStatus = z.infer<typeof orderPaymentStatusSchema>
 export type OrderStatus = z.infer<typeof orderStatusSchema>
 export type CreateOrderItemInput = z.infer<typeof createOrderItemSchema>
 export type CreateOrderInput = z.infer<typeof createOrderSchema>
+
+// --- Story 7-1: List & Detail ---
+
+export const listOrdersQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().optional(),
+  fromDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD')
+    .optional(),
+  toDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD')
+    .optional(),
+  status: z.enum(['completed', 'cancelled']).optional(),
+  customerId: z.string().uuid().optional(),
+  paymentMethod: z.enum(['cash', 'transfer', 'qr', 'combined', 'debt']).optional(),
+  paymentStatus: z.enum(['paid', 'partial', 'unpaid']).optional(),
+})
+
+export type ListOrdersQuery = z.infer<typeof listOrdersQuerySchema>

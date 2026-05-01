@@ -8,7 +8,7 @@ import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
-import { createOrder, getStockInfo } from '../services/orders.service.js'
+import { createOrder, getCustomerDebtInfo, getStockInfo } from '../services/orders.service.js'
 import { resolvePrices } from '../services/pricing.service.js'
 import { searchProductsForPos } from '../services/products.service.js'
 
@@ -62,6 +62,18 @@ export function createPosRoutes({ db }: PosRoutesDeps) {
       meta,
     })
     return c.json({ data }, 201)
+  })
+
+  // Story 5.1 - Customer debt info (literal route, an toàn vì /:id dùng prefix khác)
+  app.get('/customer-debt/:customerId', async (c) => {
+    const auth = c.get('auth')
+    const customerId = z.string().uuid().parse(c.req.param('customerId'))
+    const data = await getCustomerDebtInfo({
+      db,
+      storeId: auth.storeId,
+      customerId,
+    })
+    return c.json({ data })
   })
 
   // Story 3.3 - Stock info (parameterized route AFTER literal routes)

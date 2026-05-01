@@ -41,6 +41,9 @@ export function PosScreen() {
 
   // Story 3.3: payment & completion dialogs
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
+  const [paymentDefaultMethod, setPaymentDefaultMethod] = useState<
+    'cash' | 'transfer' | 'qr' | 'combined' | 'debt'
+  >('cash')
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false)
   const [completionOrder, setCompletionOrder] = useState<OrderDetail | null>(null)
 
@@ -53,6 +56,8 @@ export function PosScreen() {
     const subtotal = tab.items.reduce((sum, i) => sum + i.lineTotal, 0)
     return subtotal - tab.orderDiscountAmount
   })
+  const cartCustomerId = useCartStore((s) => s.tabs[s.activeTab]?.customerId ?? null)
+  const cartCustomerName = useCartStore((s) => s.tabs[s.activeTab]?.customerName ?? null)
   const mode = useCartStore((s) => s.mode)
   const addItem = useCartStore((s) => s.addItem)
   const clearCart = useCartStore((s) => s.clearCart)
@@ -100,18 +105,40 @@ export function PosScreen() {
   // Payment flow
   const handleOpenPayment = useCallback(() => {
     if (cartCount === 0 || cartGrandTotal <= 0) return
+    setPaymentDefaultMethod('cash')
     setPaymentDialogOpen(true)
   }, [cartCount, cartGrandTotal])
+
+  // Story 5.1: F4 mở PaymentDialog với tab Ghi nợ
+  const handleOpenDebtPayment = useCallback(() => {
+    if (cartCount === 0 || cartGrandTotal <= 0) return
+    if (!cartCustomerId) {
+      showError('Vui lòng chọn khách hàng để ghi nợ')
+      return
+    }
+    setPaymentDefaultMethod('debt')
+    setPaymentDialogOpen(true)
+  }, [cartCount, cartGrandTotal, cartCustomerId])
 
   function handlePaymentComplete(payload: {
     paymentMethod: string
     cashAmount?: number
     transferAmount?: number
+    debtAmount?: number
+    debtLimitOverridden?: boolean
   }) {
     const tab = tabs[activeTab]
     if (!tab || tab.items.length === 0) return
 
     const subtotal = tab.items.reduce((sum, i) => sum + i.lineTotal, 0)
+    const total = subtotal - tab.orderDiscountAmount
+    const debtAmount = payload.debtAmount ?? 0
+
+    // Story 5.1: paymentStatus dựa trên debtAmount
+    let paymentStatus: 'paid' | 'partial' | 'unpaid' = 'paid'
+    if (debtAmount > 0) {
+      paymentStatus = debtAmount === total ? 'unpaid' : 'partial'
+    }
 
     checkoutMutation.mutate(
       {
@@ -120,11 +147,13 @@ export function PosScreen() {
         discountType: tab.orderDiscountType,
         discountValue: tab.orderDiscountValue,
         discountAmount: tab.orderDiscountAmount,
-        total: subtotal - tab.orderDiscountAmount,
+        total,
         paymentMethod: payload.paymentMethod,
-        paymentStatus: 'paid',
+        paymentStatus,
         cashAmount: payload.cashAmount,
         transferAmount: payload.transferAmount,
+        debtAmount: debtAmount > 0 ? debtAmount : undefined,
+        debtLimitOverridden: payload.debtLimitOverridden ?? false,
         note: null,
         items: tab.items.map((item) => ({
           productId: item.productId,
@@ -151,13 +180,13 @@ export function PosScreen() {
           setPaymentDialogOpen(false)
           setCompletionOrder(response.data)
           setCompletionDialogOpen(true)
-          showSuccess('Don hang da hoan thanh!')
+          showSuccess('Đơn hàng đã hoàn thành!')
         },
         onError: (err) => {
           const msg =
             err instanceof ApiClientError
               ? err.message
-              : 'Khong the tao don hang. Vui long thu lai.'
+              : 'Không thể tạo đơn hàng. Vui lòng thử lại.'
           showError(msg)
         },
       },
@@ -194,6 +223,7 @@ export function PosScreen() {
     onPayment: handleOpenPayment,
     onNewOrder: handleNewTab,
     onFocusSearch: handleFocusSearch,
+    onDebtPayment: handleOpenDebtPayment,
   })
 
   return (
@@ -289,6 +319,9 @@ export function PosScreen() {
         open={paymentDialogOpen}
         onOpenChange={setPaymentDialogOpen}
         grandTotal={cartGrandTotal}
+        customerId={cartCustomerId}
+        customerName={cartCustomerName}
+        defaultMethod={paymentDefaultMethod}
         onComplete={handlePaymentComplete}
         isLoading={checkoutMutation.isPending}
       />

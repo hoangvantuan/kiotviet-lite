@@ -1,3 +1,8 @@
+# Story 5-1 created 2026-05-01: ghi nợ POS + kiểm tra hạn mức — 8 ACs, 12 tasks
+# Story 4-3c created 2026-05-01: comprehensive context engine — 9 ACs, 12 tasks (5 phase A-E)
+# Story 7-1 dev completed 2026-05-01: 10/10 tasks, typecheck+tests pass (472+409), in-progress → review
+# Story 7-1 dev started 2026-05-01
+# Story 7-1 created 2026-05-01; Epic 7 → in-progress
 # Story 4-5 created 2026-04-30
 # Story 4-3 done 2026-04-30: round 2 verify 7/7 patches fixed, all clean, review → done
 # Story 3-3 done 2026-04-30: APPROVE_WITH_SUGGESTIONS, 8/8 AC PASS, 3 patches applied, 2 deferred; Epic 3 done
@@ -50,7 +55,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-24
-last_updated: 2026-05-01 # story 4-5 dev + review done
+last_updated: 2026-05-01 # story 5-1 dev xong, review (12/12 tasks, 28 tests mới, full suite 1076 pass)
 # Story 4-3b dev xong 2026-04-30: 15/15 tasks, 21 integration test mới pass, full suite 978/979, in-progress → review
 # Story 4-3b created 2026-04-30 (chain + clone + import; 10 ACs, 15 tasks)
 # Story 5-3 created 2026-04-30 + Epic 5 → in-progress
@@ -111,7 +116,7 @@ development_status:
   4-2-trang-chi-tiet-khach-hang: done
   4-3-bang-gia-direct-formula: done
   4-3b-chain-formula-clone-import-bang-gia: done # 2026-04-30 dev xong 15/15 tasks, 21 test mới pass, full suite 978/979
-  4-3c-so-sanh-bang-gia: backlog
+  4-3c-so-sanh-bang-gia: ready-for-dev
   4-4-gia-rieng-khach-hang-gia-theo-so-luong: done
   4-4b-chiet-khau-danh-muc-kiem-soat-sua-gia: done # 2026-04-30 dev xong all 15 tasks, 30/30 tests pass, full suite 882/882
   4-5-tich-hop-6-tang-gia-vao-pos: done # 2026-05-01 dev 10/11 tasks, review 3C+5W fixed, typecheck+lint+test pass 398/398
@@ -119,7 +124,7 @@ development_status:
 
   # Epic 5: Quan ly Cong no
   epic-5: in-progress
-  5-1-ghi-no-trong-pos-kiem-tra-han-muc: backlog
+  5-1-ghi-no-trong-pos-kiem-tra-han-muc: review # 2026-05-01 dev 12/12 tasks, 28 tests mới, full suite 1076 pass
   5-2-phieu-thu-phan-bo-fifo: backlog
   5-3-phieu-chi-tra-no-ncc: done
   5-4-dieu-chinh-no-thu-cong: backlog
@@ -133,8 +138,8 @@ development_status:
   epic-6-retrospective: optional
 
   # Epic 7: Hoa don & In an
-  epic-7: backlog
-  7-1-danh-sach-chi-tiet-hoa-don: backlog
+  epic-7: in-progress
+  7-1-danh-sach-chi-tiet-hoa-don: review
   7-2-tra-hang: backlog
   7-3-in-hoa-don-thermal-a4: backlog
   7-4-cai-dat-mau-in: backlog

@@ -16,10 +16,11 @@ import type { OrderDetail } from '../types'
 const AUTO_CLOSE_MS = 3000
 
 const PAYMENT_LABEL: Record<string, string> = {
-  cash: 'Tien mat',
-  transfer: 'Chuyen khoan',
+  cash: 'Tiền mặt',
+  transfer: 'Chuyển khoản',
   qr: 'QR Code',
-  combined: 'Ket hop',
+  combined: 'Kết hợp',
+  debt: 'Ghi nợ',
 }
 
 interface OrderCompletionDialogProps {
@@ -98,7 +99,10 @@ export function OrderCompletionDialog({
   if (!order) return null
 
   const showChange =
-    (order.paymentMethod === 'cash' || order.paymentMethod === 'combined') && order.change > 0
+    (order.paymentMethod === 'cash' ||
+      order.paymentMethod === 'combined' ||
+      order.paymentMethod === 'debt') &&
+    order.change > 0
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -108,15 +112,15 @@ export function OrderCompletionDialog({
         onKeyDown={handleInteraction}
       >
         <DialogHeader>
-          <DialogTitle className="sr-only">Don hang hoan thanh</DialogTitle>
+          <DialogTitle className="sr-only">Đơn hàng hoàn thành</DialogTitle>
           <DialogDescription className="sr-only">
-            Thong tin tom tat hoa don sau thanh toan
+            Thông tin tóm tắt hoá đơn sau thanh toán
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col items-center gap-2">
           <CheckCircle className="h-12 w-12 text-green-600" />
-          <p className="text-lg font-semibold text-foreground">Don hang hoan thanh!</p>
+          <p className="text-lg font-semibold text-foreground">Đơn hàng hoàn thành!</p>
           <p className="font-mono text-lg font-semibold text-foreground">{order.orderNumber}</p>
         </div>
 
@@ -140,22 +144,36 @@ export function OrderCompletionDialog({
 
         <div className="space-y-1 border-t border-border pt-2">
           <div className="flex justify-between text-sm font-semibold">
-            <span>Tong:</span>
+            <span>Tổng:</span>
             <span className="font-mono">{formatVndWithSuffix(order.total)}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Thanh toan:</span>
+            <span className="text-muted-foreground">Thanh toán:</span>
             <span>{PAYMENT_LABEL[order.paymentMethod] ?? order.paymentMethod}</span>
           </div>
           {order.paymentMethod === 'cash' && order.cashAmount != null && (
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Khach dua:</span>
+              <span className="text-muted-foreground">Khách đưa:</span>
               <span className="font-mono">{formatVndWithSuffix(order.cashAmount)}</span>
+            </div>
+          )}
+          {/* Story 5.1: hiển thị tiền mặt trả trước khi ghi nợ */}
+          {order.paymentMethod === 'debt' && order.cashAmount != null && order.cashAmount > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Tiền mặt trả trước:</span>
+              <span className="font-mono">{formatVndWithSuffix(order.cashAmount)}</span>
+            </div>
+          )}
+          {/* Story 5.1: highlight khoản ghi nợ */}
+          {order.debtAmount > 0 && (
+            <div className="flex justify-between text-sm font-semibold text-orange-600">
+              <span>Ghi nợ:</span>
+              <span className="font-mono">{formatVndWithSuffix(order.debtAmount)}</span>
             </div>
           )}
           {showChange && (
             <div className="flex justify-between text-sm font-semibold text-green-600">
-              <span>Tien thua:</span>
+              <span>Tiền thừa:</span>
               <span className="font-mono">{formatVndWithSuffix(order.change)}</span>
             </div>
           )}
@@ -168,20 +186,20 @@ export function OrderCompletionDialog({
             variant="outline"
             disabled
             className="flex-1"
-            title="In hoa don se kich hoat o Story 7.3"
+            title="In hoá đơn sẽ kích hoạt ở Story 7.3"
           >
             <Printer className="mr-2 h-4 w-4" />
-            In hoa don
+            In hoá đơn
           </Button>
           <Button type="button" onClick={handleNewOrder} className="flex-1">
-            Don hang moi
+            Đơn hàng mới
           </Button>
         </div>
 
         {/* Countdown */}
         {countdown > 0 && !userInteracted.current && (
           <p className="text-center text-xs text-muted-foreground">
-            Tu dong dong sau {countdown} giay...
+            Tự động đóng sau {countdown} giây...
           </p>
         )}
       </DialogContent>

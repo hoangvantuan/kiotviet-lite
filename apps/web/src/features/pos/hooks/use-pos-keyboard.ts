@@ -4,6 +4,7 @@ interface UsePosKeyboardOptions {
   onPayment: () => void
   onNewOrder: () => void
   onFocusSearch: () => void
+  onDebtPayment: () => void
   enabled?: boolean
 }
 
@@ -11,6 +12,7 @@ export function usePosKeyboard({
   onPayment,
   onNewOrder,
   onFocusSearch,
+  onDebtPayment,
   enabled = true,
 }: UsePosKeyboardOptions) {
   useEffect(() => {
@@ -26,7 +28,9 @@ export function usePosKeyboard({
           onPayment()
           break
         case 'F4':
-          e.preventDefault() // Block browser default, disabled feature
+          // Story 5.1: F4 mở payment dialog với tab Ghi nợ
+          e.preventDefault()
+          onDebtPayment()
           break
         case 'F5':
           e.preventDefault() // Block browser refresh!
@@ -46,5 +50,5 @@ export function usePosKeyboard({
 
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [onPayment, onNewOrder, onFocusSearch, enabled])
+  }, [onPayment, onNewOrder, onFocusSearch, onDebtPayment, enabled])
 }

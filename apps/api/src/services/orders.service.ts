@@ -1,14 +1,19 @@
-import { and, eq, isNull, like, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, ilike, isNull, like, lte, type SQL, sql } from 'drizzle-orm'
 
 import {
   type CreateOrderInput,
+  customerGroups,
+  customers,
+  debts,
   inventoryTransactions,
+  type ListOrdersQuery,
   orderItems,
   orders,
   products,
   productUnitConversions,
   productVariants,
   type UserRole,
+  users,
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
@@ -34,6 +39,7 @@ export interface OrdersActor {
 }
 
 export interface OrderDetailItem {
+  id: string
   productId: string
   variantId: string | null
   productName: string
@@ -41,8 +47,12 @@ export interface OrderDetailItem {
   unit: string | null
   unitPrice: number
   quantity: number
+  discountType: string | null
+  discountValue: number
   discountAmount: number
   lineTotal: number
+  originalPrice: number | null
+  priceOverride: boolean
 }
 
 export interface OrderDetail {
@@ -56,6 +66,7 @@ export interface OrderDetail {
   paymentStatus: string
   cashAmount: number | null
   transferAmount: number | null
+  debtAmount: number
   change: number
   note: string | null
   status: string
@@ -140,6 +151,10 @@ export interface CreateOrderDeps {
   meta?: RequestMeta
 }
 
+function formatVnd(value: number): string {
+  return `${value.toLocaleString('vi-VN')}đ`
+}
+
 export async function createOrder({
   db,
   actor,
@@ -149,6 +164,21 @@ export async function createOrder({
   if (input.items.length === 0) {
     throw new ApiError('VALIDATION_ERROR', 'Đơn hàng phải có ít nhất 1 sản phẩm')
   }
+
+  const debtAmount = input.debtAmount ?? 0
+
+  // Calculate change amount before insert
+  let change = 0
+  if (input.paymentMethod === 'cash' && input.cashAmount != null) {
+    change = input.cashAmount - input.total
+  } else if (input.paymentMethod === 'combined') {
+    const cashPart = input.cashAmount ?? 0
+    const transferPart = input.transferAmount ?? 0
+    change = cashPart + transferPart - input.total
+  } else if (input.paymentMethod === 'debt' && input.cashAmount != null) {
+    change = input.cashAmount - (input.total - debtAmount)
+  }
+  change = Math.max(0, change)
 
   const result = await db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
@@ -175,6 +205,9 @@ export async function createOrder({
             total: input.total,
             paymentMethod: input.paymentMethod,
             paymentStatus: input.paymentStatus,
+            cashAmount: input.cashAmount ?? null,
+            transferAmount: input.transferAmount ?? null,
+            change,
             note: input.note ?? null,
             status: 'completed',
           })
@@ -220,25 +253,28 @@ export async function createOrder({
       })
 
       // Insert order_item
-      await tx.insert(orderItems).values({
-        orderId: createdId,
-        productId: item.productId,
-        variantId: item.variantId ?? null,
-        productName: item.productName,
-        variantName: item.variantName ?? null,
-        unit: item.unit ?? null,
-        unitPrice: item.unitPrice,
-        quantity: item.quantity,
-        discountType: item.discountType ?? null,
-        discountValue: item.discountValue,
-        discountAmount: item.discountAmount,
-        lineTotal: item.lineTotal,
-        note: item.note ?? null,
-        originalPrice: item.originalPrice ?? null,
-        priceOverride: item.priceOverride,
-        priceOverrideReason: item.priceOverrideReason ?? null,
-        priceOverridePinUsed: item.priceOverridePinUsed,
-      })
+      const [insertedItem] = await tx
+        .insert(orderItems)
+        .values({
+          orderId: createdId,
+          productId: item.productId,
+          variantId: item.variantId ?? null,
+          productName: item.productName,
+          variantName: item.variantName ?? null,
+          unit: item.unit ?? null,
+          unitPrice: item.unitPrice,
+          quantity: item.quantity,
+          discountType: item.discountType ?? null,
+          discountValue: item.discountValue,
+          discountAmount: item.discountAmount,
+          lineTotal: item.lineTotal,
+          note: item.note ?? null,
+          originalPrice: item.originalPrice ?? null,
+          priceOverride: item.priceOverride,
+          priceOverrideReason: item.priceOverrideReason ?? null,
+          priceOverridePinUsed: item.priceOverridePinUsed,
+        })
+        .returning({ id: orderItems.id })
 
       if (item.priceOverride) {
         await logAction({
@@ -264,6 +300,7 @@ export async function createOrder({
       }
 
       processedItems.push({
+        id: insertedItem!.id,
         productId: item.productId,
         variantId: item.variantId ?? null,
         productName: item.productName,
@@ -271,8 +308,12 @@ export async function createOrder({
         unit: item.unit ?? null,
         unitPrice: item.unitPrice,
         quantity: item.quantity,
+        discountType: item.discountType ?? null,
+        discountValue: item.discountValue,
         discountAmount: item.discountAmount,
         lineTotal: item.lineTotal,
+        originalPrice: item.originalPrice ?? null,
+        priceOverride: item.priceOverride,
       })
 
       // Stock deduction
@@ -352,6 +393,139 @@ export async function createOrder({
       }
     }
 
+    // Story 5.1: Debt creation
+    if (debtAmount > 0) {
+      // Defense in depth: Zod refine đã enforce, vẫn check lại
+      if (!input.customerId) {
+        throw new ApiError('VALIDATION_ERROR', 'Phải chọn khách hàng khi ghi nợ')
+      }
+
+      // Lock customer row để tránh race condition khi update current_debt
+      const customerRows = await tx
+        .select({
+          currentDebt: customers.currentDebt,
+          debtLimit: customers.debtLimit,
+          groupId: customers.groupId,
+          name: customers.name,
+        })
+        .from(customers)
+        .where(
+          and(
+            eq(customers.id, input.customerId),
+            eq(customers.storeId, actor.storeId),
+            isNull(customers.deletedAt),
+          ),
+        )
+        .for('update')
+        .limit(1)
+
+      const customer = customerRows[0]
+      if (!customer) {
+        throw new ApiError('NOT_FOUND', 'Không tìm thấy khách hàng')
+      }
+
+      // Resolve effective debt limit: customer.debtLimit ?? group.debtLimit ?? null
+      let effectiveDebtLimit: number | null = customer.debtLimit
+      if (effectiveDebtLimit === null && customer.groupId) {
+        const groupRows = await tx
+          .select({ debtLimit: customerGroups.debtLimit })
+          .from(customerGroups)
+          .where(eq(customerGroups.id, customer.groupId))
+          .limit(1)
+        effectiveDebtLimit = groupRows[0]?.debtLimit ?? null
+      }
+
+      const debtBefore = customer.currentDebt
+      const debtAfter = debtBefore + debtAmount
+
+      // Check limit: null hoặc 0 = không giới hạn
+      if (effectiveDebtLimit !== null && effectiveDebtLimit > 0 && debtAfter > effectiveDebtLimit) {
+        if (!input.debtLimitOverridden) {
+          const maxAdditional = Math.max(0, effectiveDebtLimit - debtBefore)
+          throw new ApiError(
+            'BUSINESS_RULE_VIOLATION',
+            `Vượt hạn mức công nợ. Nợ hiện tại: ${formatVnd(debtBefore)}. Hạn mức: ${formatVnd(effectiveDebtLimit)}. Nợ thêm tối đa: ${formatVnd(maxAdditional)}`,
+            {
+              currentDebt: debtBefore,
+              debtLimit: effectiveDebtLimit,
+              maxAdditional,
+            },
+          )
+        }
+
+        // Override: ghi audit riêng
+        await logAction({
+          db: txDb,
+          storeId: actor.storeId,
+          actorId: actor.userId,
+          actorRole: actor.role,
+          action: 'debt.limit_overridden',
+          targetType: 'customer',
+          targetId: input.customerId,
+          changes: {
+            customerId: input.customerId,
+            customerName: customer.name,
+            orderId: createdId,
+            amount: debtAmount,
+            debtBefore,
+            debtAfter,
+            debtLimit: effectiveDebtLimit,
+          },
+          ipAddress: meta?.ipAddress,
+          userAgent: meta?.userAgent,
+        })
+      }
+
+      // Insert debt record
+      await tx.insert(debts).values({
+        storeId: actor.storeId,
+        orderId: createdId,
+        customerId: input.customerId,
+        amount: debtAmount,
+        paid: 0,
+        remaining: debtAmount,
+      })
+
+      // Update customer current_debt atomically
+      await tx
+        .update(customers)
+        .set({ currentDebt: sql`${customers.currentDebt} + ${debtAmount}` })
+        .where(eq(customers.id, input.customerId))
+
+      // Audit debt.created
+      await logAction({
+        db: txDb,
+        storeId: actor.storeId,
+        actorId: actor.userId,
+        actorRole: actor.role,
+        action: 'debt.created',
+        targetType: 'order',
+        targetId: createdId,
+        changes: {
+          orderId: createdId,
+          customerId: input.customerId,
+          customerName: customer.name,
+          amount: debtAmount,
+          debtBefore,
+          debtAfter,
+        },
+        ipAddress: meta?.ipAddress,
+        userAgent: meta?.userAgent,
+      })
+
+      logger.info(
+        {
+          storeId: actor.storeId,
+          orderId: createdId,
+          customerId: input.customerId,
+          debtAmount,
+          debtBefore,
+          debtAfter,
+        },
+        'debt.created',
+      )
+    }
+
     // Audit log
     await logAction({
       db: txDb,
@@ -387,16 +561,6 @@ export async function createOrder({
       'order.created',
     )
 
-    // Calculate change amount
-    let change = 0
-    if (input.paymentMethod === 'cash' && input.cashAmount != null) {
-      change = input.cashAmount - input.total
-    } else if (input.paymentMethod === 'combined') {
-      const cashPart = input.cashAmount ?? 0
-      const transferPart = input.transferAmount ?? 0
-      change = cashPart + transferPart - input.total
-    }
-
     return {
       id: createdId,
       orderNumber,
@@ -408,7 +572,8 @@ export async function createOrder({
       paymentStatus: input.paymentStatus,
       cashAmount: input.cashAmount ?? null,
       transferAmount: input.transferAmount ?? null,
-      change: Math.max(0, change),
+      debtAmount,
+      change,
       note: input.note ?? null,
       status: 'completed',
       items: processedItems,
@@ -417,6 +582,74 @@ export async function createOrder({
   })
 
   return result
+}
+
+// ---------------------------------------------------------------------------
+// Story 5.1: getCustomerDebtInfo
+// ---------------------------------------------------------------------------
+
+export interface CustomerDebtInfo {
+  customerId: string
+  customerName: string
+  groupId: string | null
+  groupName: string | null
+  currentDebt: number
+  customerDebtLimit: number | null
+  groupDebtLimit: number | null
+  effectiveDebtLimit: number | null
+}
+
+export interface GetCustomerDebtInfoDeps {
+  db: Db
+  storeId: string
+  customerId: string
+}
+
+export async function getCustomerDebtInfo({
+  db,
+  storeId,
+  customerId,
+}: GetCustomerDebtInfoDeps): Promise<CustomerDebtInfo> {
+  const rows = await db
+    .select({
+      id: customers.id,
+      name: customers.name,
+      currentDebt: customers.currentDebt,
+      customerDebtLimit: customers.debtLimit,
+      groupId: customers.groupId,
+      groupName: customerGroups.name,
+      groupDebtLimit: customerGroups.debtLimit,
+    })
+    .from(customers)
+    .leftJoin(customerGroups, eq(customers.groupId, customerGroups.id))
+    .where(
+      and(
+        eq(customers.id, customerId),
+        eq(customers.storeId, storeId),
+        isNull(customers.deletedAt),
+      ),
+    )
+    .limit(1)
+
+  const row = rows[0]
+  if (!row) {
+    throw new ApiError('NOT_FOUND', 'Không tìm thấy khách hàng')
+  }
+
+  // Effective debt limit: customer ?? group ?? null
+  const effectiveDebtLimit =
+    row.customerDebtLimit !== null ? row.customerDebtLimit : (row.groupDebtLimit ?? null)
+
+  return {
+    customerId: row.id,
+    customerName: row.name,
+    groupId: row.groupId,
+    groupName: row.groupName ?? null,
+    currentDebt: row.currentDebt,
+    customerDebtLimit: row.customerDebtLimit,
+    groupDebtLimit: row.groupDebtLimit ?? null,
+    effectiveDebtLimit,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -482,5 +715,315 @@ export async function getStockInfo({
     trackInventory: product.trackInventory,
     unit: product.unit,
     variants,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Story 7-1: listOrders
+// ---------------------------------------------------------------------------
+
+export interface OrderListItem {
+  id: string
+  orderNumber: string
+  customerId: string | null
+  customerName: string | null
+  customerPhone: string | null
+  createdByName: string | null
+  subtotal: number
+  discountAmount: number
+  total: number
+  paymentMethod: string
+  paymentStatus: string
+  cashAmount: number | null
+  transferAmount: number | null
+  paidAmount: number
+  debtAmount: number
+  status: string
+  note: string | null
+  createdAt: string
+}
+
+export interface ListOrdersDeps {
+  db: Db
+  storeId: string
+  query: ListOrdersQuery
+}
+
+export interface ListOrdersResult {
+  data: OrderListItem[]
+  meta: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}
+
+export async function listOrders({
+  db,
+  storeId,
+  query,
+}: ListOrdersDeps): Promise<ListOrdersResult> {
+  const {
+    page,
+    pageSize,
+    search,
+    fromDate,
+    toDate,
+    status,
+    customerId,
+    paymentMethod,
+    paymentStatus,
+  } = query
+  const conditions: SQL[] = [eq(orders.storeId, storeId)]
+
+  const trimmedSearch = search?.trim()
+  if (trimmedSearch) {
+    const escaped = escapeLikePattern(trimmedSearch)
+    const pattern = `%${escaped}%`
+    conditions.push(ilike(orders.orderNumber, pattern))
+  }
+
+  if (status) {
+    conditions.push(eq(orders.status, status))
+  }
+  if (customerId) {
+    conditions.push(eq(orders.customerId, customerId))
+  }
+  if (paymentMethod) {
+    conditions.push(eq(orders.paymentMethod, paymentMethod))
+  }
+  if (paymentStatus) {
+    conditions.push(eq(orders.paymentStatus, paymentStatus))
+  }
+  if (fromDate) {
+    conditions.push(gte(orders.createdAt, new Date(fromDate)))
+  }
+  if (toDate) {
+    const endOfDay = new Date(toDate)
+    endOfDay.setHours(23, 59, 59, 999)
+    conditions.push(lte(orders.createdAt, endOfDay))
+  }
+
+  const whereClause = and(...conditions)
+  const offset = (page - 1) * pageSize
+
+  const rows = await db
+    .select({
+      id: orders.id,
+      orderNumber: orders.orderNumber,
+      customerId: orders.customerId,
+      customerName: customers.name,
+      customerPhone: customers.phone,
+      createdByName: users.name,
+      subtotal: orders.subtotal,
+      discountAmount: orders.discountAmount,
+      total: orders.total,
+      paymentMethod: orders.paymentMethod,
+      paymentStatus: orders.paymentStatus,
+      cashAmount: orders.cashAmount,
+      transferAmount: orders.transferAmount,
+      status: orders.status,
+      note: orders.note,
+      createdAt: orders.createdAt,
+    })
+    .from(orders)
+    .leftJoin(customers, eq(orders.customerId, customers.id))
+    .leftJoin(users, eq(orders.userId, users.id))
+    .where(whereClause)
+    .orderBy(desc(orders.createdAt))
+    .limit(pageSize)
+    .offset(offset)
+
+  const totalRows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(orders)
+    .leftJoin(customers, eq(orders.customerId, customers.id))
+    .where(whereClause)
+
+  const total = totalRows[0]?.count ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+
+  const data: OrderListItem[] = rows.map((r) => {
+    const totalAmount = Number(r.total)
+    const paidAmount =
+      r.paymentStatus === 'paid'
+        ? totalAmount
+        : Number(r.cashAmount ?? 0) + Number(r.transferAmount ?? 0)
+    const debtAmount = totalAmount - paidAmount
+
+    return {
+      id: r.id,
+      orderNumber: r.orderNumber,
+      customerId: r.customerId,
+      customerName: r.customerName ?? null,
+      customerPhone: r.customerPhone ?? null,
+      createdByName: r.createdByName ?? null,
+      subtotal: Number(r.subtotal),
+      discountAmount: Number(r.discountAmount),
+      total: totalAmount,
+      paymentMethod: r.paymentMethod,
+      paymentStatus: r.paymentStatus,
+      cashAmount: r.cashAmount != null ? Number(r.cashAmount) : null,
+      transferAmount: r.transferAmount != null ? Number(r.transferAmount) : null,
+      paidAmount,
+      debtAmount,
+      status: r.status,
+      note: r.note ?? null,
+      createdAt: r.createdAt.toISOString(),
+    }
+  })
+
+  return { data, meta: { page, pageSize, total, totalPages } }
+}
+
+// ---------------------------------------------------------------------------
+// Story 7-1: getOrderDetail
+// ---------------------------------------------------------------------------
+
+export interface OrderDetailFull {
+  id: string
+  orderNumber: string
+  customerId: string | null
+  customerName: string | null
+  customerPhone: string | null
+  customerGroupName: string | null
+  createdByName: string | null
+  subtotal: number
+  discountType: string | null
+  discountValue: number
+  discountAmount: number
+  total: number
+  paymentMethod: string
+  paymentStatus: string
+  cashAmount: number | null
+  transferAmount: number | null
+  change: number
+  paidAmount: number
+  debtAmount: number
+  note: string | null
+  status: string
+  items: OrderDetailItem[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface GetOrderDetailDeps {
+  db: Db
+  storeId: string
+  orderId: string
+}
+
+export async function getOrderDetail({
+  db,
+  storeId,
+  orderId,
+}: GetOrderDetailDeps): Promise<OrderDetailFull> {
+  const orderRows = await db
+    .select({
+      id: orders.id,
+      orderNumber: orders.orderNumber,
+      customerId: orders.customerId,
+      customerName: customers.name,
+      customerPhone: customers.phone,
+      customerGroupName: customerGroups.name,
+      createdByName: users.name,
+      subtotal: orders.subtotal,
+      discountType: orders.discountType,
+      discountValue: orders.discountValue,
+      discountAmount: orders.discountAmount,
+      total: orders.total,
+      paymentMethod: orders.paymentMethod,
+      paymentStatus: orders.paymentStatus,
+      cashAmount: orders.cashAmount,
+      transferAmount: orders.transferAmount,
+      change: orders.change,
+      note: orders.note,
+      status: orders.status,
+      createdAt: orders.createdAt,
+      updatedAt: orders.updatedAt,
+    })
+    .from(orders)
+    .leftJoin(customers, eq(orders.customerId, customers.id))
+    .leftJoin(customerGroups, eq(customers.groupId, customerGroups.id))
+    .leftJoin(users, eq(orders.userId, users.id))
+    .where(and(eq(orders.id, orderId), eq(orders.storeId, storeId)))
+    .limit(1)
+
+  const row = orderRows[0]
+  if (!row) {
+    throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng')
+  }
+
+  const itemRows = await db
+    .select({
+      id: orderItems.id,
+      productId: orderItems.productId,
+      variantId: orderItems.variantId,
+      productName: orderItems.productName,
+      variantName: orderItems.variantName,
+      unit: orderItems.unit,
+      unitPrice: orderItems.unitPrice,
+      quantity: orderItems.quantity,
+      discountType: orderItems.discountType,
+      discountValue: orderItems.discountValue,
+      discountAmount: orderItems.discountAmount,
+      lineTotal: orderItems.lineTotal,
+      originalPrice: orderItems.originalPrice,
+      priceOverride: orderItems.priceOverride,
+    })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderId))
+    .orderBy(asc(orderItems.createdAt))
+
+  const items: OrderDetailItem[] = itemRows.map((it) => ({
+    id: it.id,
+    productId: it.productId,
+    variantId: it.variantId ?? null,
+    productName: it.productName,
+    variantName: it.variantName ?? null,
+    unit: it.unit ?? null,
+    unitPrice: Number(it.unitPrice),
+    quantity: Number(it.quantity),
+    discountType: it.discountType ?? null,
+    discountValue: Number(it.discountValue),
+    discountAmount: Number(it.discountAmount),
+    lineTotal: Number(it.lineTotal),
+    originalPrice: it.originalPrice != null ? Number(it.originalPrice) : null,
+    priceOverride: it.priceOverride,
+  }))
+
+  const totalAmount = Number(row.total)
+  const paidAmount =
+    row.paymentStatus === 'paid'
+      ? totalAmount
+      : Number(row.cashAmount ?? 0) + Number(row.transferAmount ?? 0)
+  const debtAmount = totalAmount - paidAmount
+
+  return {
+    id: row.id,
+    orderNumber: row.orderNumber,
+    customerId: row.customerId,
+    customerName: row.customerName ?? null,
+    customerPhone: row.customerPhone ?? null,
+    customerGroupName: row.customerGroupName ?? null,
+    createdByName: row.createdByName ?? null,
+    subtotal: Number(row.subtotal),
+    discountType: row.discountType ?? null,
+    discountValue: Number(row.discountValue),
+    discountAmount: Number(row.discountAmount),
+    total: totalAmount,
+    paymentMethod: row.paymentMethod,
+    paymentStatus: row.paymentStatus,
+    cashAmount: row.cashAmount != null ? Number(row.cashAmount) : null,
+    transferAmount: row.transferAmount != null ? Number(row.transferAmount) : null,
+    change: Number(row.change),
+    paidAmount,
+    debtAmount,
+    note: row.note ?? null,
+    status: row.status,
+    items,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   }
 }

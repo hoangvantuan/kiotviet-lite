@@ -155,6 +155,20 @@
       "when": 1777510292966,
       "tag": "0021_safe_abomination",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1777642719335,
+      "tag": "0022_sweet_lord_hawal",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1777645989834,
+      "tag": "0023_melted_expediter",
+      "breakpoints": true
     }
   ]
 }

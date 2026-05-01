@@ -65,6 +65,8 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'category_discount.updated': 'Sửa chiết khấu danh mục',
   'category_discount.deleted': 'Xoá chiết khấu danh mục',
   'order_item.price_overridden': 'Sửa giá trên đơn hàng',
+  'debt.created': 'Tạo khoản nợ',
+  'debt.limit_overridden': 'Vượt hạn mức công nợ (PIN)',
 }
 
 export interface ActionGroup {
@@ -179,6 +181,10 @@ export const ACTION_GROUPS: ActionGroup[] = [
   {
     label: 'Sửa giá POS',
     actions: ['order_item.price_overridden'],
+  },
+  {
+    label: 'Công nợ',
+    actions: ['debt.created', 'debt.limit_overridden'],
   },
 ]
 

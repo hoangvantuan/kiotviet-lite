@@ -56,6 +56,7 @@ export interface OrderDetail {
   paymentStatus: string
   cashAmount: number | null
   transferAmount: number | null
+  debtAmount: number
   change: number
   note: string | null
   status: string
