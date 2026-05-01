@@ -1,0 +1,112 @@
+import { apiClient } from '@/lib/api-client'
+
+interface OrderListItem {
+  id: string
+  orderNumber: string
+  customerId: string | null
+  customerName: string | null
+  customerPhone: string | null
+  createdByName: string | null
+  subtotal: number
+  discountAmount: number
+  total: number
+  paymentMethod: string
+  paymentStatus: string
+  cashAmount: number | null
+  transferAmount: number | null
+  paidAmount: number
+  debtAmount: number
+  status: string
+  note: string | null
+  createdAt: string
+}
+
+interface OrderDetailResponse {
+  id: string
+  orderNumber: string
+  customerId: string | null
+  customerName: string | null
+  customerPhone: string | null
+  customerGroupName: string | null
+  createdByName: string | null
+  subtotal: number
+  discountType: string | null
+  discountValue: number
+  discountAmount: number
+  total: number
+  paymentMethod: string
+  paymentStatus: string
+  cashAmount: number | null
+  transferAmount: number | null
+  change: number
+  paidAmount: number
+  debtAmount: number
+  note: string | null
+  status: string
+  createdAt: string
+  updatedAt: string
+  items: OrderDetailItem[]
+}
+
+interface OrderDetailItem {
+  id: string
+  productId: string
+  variantId: string | null
+  productName: string
+  variantName: string | null
+  unit: string | null
+  unitPrice: number
+  quantity: number
+  discountType: string | null
+  discountValue: number
+  discountAmount: number
+  lineTotal: number
+  originalPrice: number | null
+  priceOverride: boolean
+}
+
+interface ListEnvelope<T> {
+  data: T
+  meta: { page: number; pageSize: number; total: number; totalPages: number }
+}
+
+interface Envelope<T> {
+  data: T
+}
+
+export interface ListOrdersQuery {
+  page?: number
+  pageSize?: number
+  search?: string
+  fromDate?: string
+  toDate?: string
+  status?: string
+  customerId?: string
+  paymentMethod?: string
+  paymentStatus?: string
+}
+
+function buildQuery(q: ListOrdersQuery): string {
+  const params = new URLSearchParams()
+  if (q.page) params.set('page', String(q.page))
+  if (q.pageSize) params.set('pageSize', String(q.pageSize))
+  if (q.search) params.set('search', q.search)
+  if (q.fromDate) params.set('fromDate', q.fromDate)
+  if (q.toDate) params.set('toDate', q.toDate)
+  if (q.status) params.set('status', q.status)
+  if (q.customerId) params.set('customerId', q.customerId)
+  if (q.paymentMethod) params.set('paymentMethod', q.paymentMethod)
+  if (q.paymentStatus) params.set('paymentStatus', q.paymentStatus)
+  const s = params.toString()
+  return s ? `?${s}` : ''
+}
+
+export function listOrdersApi(query: ListOrdersQuery) {
+  return apiClient.get<ListEnvelope<OrderListItem[]>>(`/api/v1/orders${buildQuery(query)}`)
+}
+
+export function getOrderApi(id: string) {
+  return apiClient.get<Envelope<OrderDetailResponse>>(`/api/v1/orders/${id}`)
+}
+
+export type { OrderDetailItem, OrderDetailResponse, OrderListItem }

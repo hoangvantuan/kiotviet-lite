@@ -6,6 +6,7 @@ import {
   FolderTree,
   LayoutDashboard,
   Package,
+  Receipt,
   Settings,
   ShoppingCart,
   Tags,
@@ -38,6 +39,7 @@ export function findActivePath(currentPath: string, paths: string[]): string | n
 export const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Tổng quan', icon: LayoutDashboard },
   { path: '/pos', label: 'Bán hàng', icon: ShoppingCart, requiredPermission: 'pos.sell' },
+  { path: '/orders', label: 'Hóa đơn', icon: Receipt, requiredPermission: 'pos.sell' },
   { path: '/products', label: 'Hàng hóa', icon: Package, requiredPermission: 'products.manage' },
   {
     path: '/products/categories',

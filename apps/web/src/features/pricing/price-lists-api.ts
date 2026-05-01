@@ -1,5 +1,6 @@
 import type {
   ClonePriceListInput,
+  ComparePriceListsResponse,
   CreatePriceListInput,
   CreatePriceListItemInput,
   ImportPriceListInput,
@@ -127,5 +128,12 @@ export function importPriceListApi(id: string, input: ImportPriceListInput) {
   return apiClient.post<Envelope<{ summary: ImportPriceListSummary; priceList: PriceListDetail }>>(
     `/api/v1/price-lists/${id}/import`,
     input,
+  )
+}
+
+export function comparePriceListsApi(listAId: string, listBId: string) {
+  const params = new URLSearchParams({ listAId, listBId })
+  return apiClient.get<Envelope<ComparePriceListsResponse>>(
+    `/api/v1/price-lists/compare?${params.toString()}`,
   )
 }

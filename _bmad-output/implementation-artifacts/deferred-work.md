@@ -1,5 +1,9 @@
 # Deferred Work
 
+## Deferred from: code review of 4-3c-so-sanh-bang-gia (2026-05-01)
+
+- Banner reason 'Đã bị xoá' trong `buildIneffectiveReason` là dead path vì `getPriceList` throw 404 khi `deletedAt !== null` trước khi banner render. Defensive code, giữ lại an toàn. [apps/web/src/features/pricing/components/ComparePriceListsView.tsx:45]
+
 ## Deferred from: code review of 2-1-quan-ly-danh-muc-san-pham (2026-04-25)
 
 - Race condition khi 2 concurrent updates đổi parent của 2 categories khác → 2 row cùng sortOrder (không có unique constraint trên (parent, sortOrder)). [apps/api/src/services/categories.service.ts:309-316]
@@ -140,3 +144,8 @@
 - F4: Form Create/Edit CategoryDiscount dùng manual validation thay vì zodResolver. Duplicate logic với schema Zod (XOR target, percent ≤ 100, dates). Defer vì server vẫn enforce qua Zod, không ảnh hưởng correctness. [apps/web/src/features/pricing/components/CreateCategoryDiscountDialog.tsx, EditCategoryDiscountDialog.tsx]
 - F7: order-management.ts validation messages bị chuyển sang KHÔNG DẤU (regression i18n). Defer vì thuộc story 3-3 review, không thuộc scope 4-4b. [packages/shared/src/schema/order-management.ts]
 - F9: pos.routes.ts mở rộng không spec trong 4-4b. Thuộc story 3-3. [apps/api/src/routes/pos.routes.ts]
+
+## Deferred from: code review of 7-1-danh-sach-chi-tiet-hoa-don (2026-05-01)
+
+- F13: Permission `pos.sell` dùng chung cho xem danh sách hóa đơn + bán hàng tại POS. Nên tách `orders.view` khi cần least privilege. Thiết kế permission pre-existing. [orders.routes.ts, router.tsx]
+- F14: StatusBadge/PaymentStatusBadge duplicate giữa order-list.tsx và order-detail-view.tsx. Cần extract shared component khi thêm trạng thái mới. [apps/web/src/features/orders/]

@@ -18,6 +18,7 @@ import { createCustomerGroupsRoutes } from './routes/customer-groups.routes.js'
 import { createCustomerPricesRoutes } from './routes/customer-prices.routes.js'
 import { createCustomersRoutes } from './routes/customers.routes.js'
 import { createNotificationRoutes } from './routes/notifications.routes.js'
+import { createOrdersRoutes } from './routes/orders.routes.js'
 import { createPosRoutes } from './routes/pos.routes.js'
 import { createPriceListsRoutes } from './routes/price-lists.routes.js'
 import { createProductHistoryRoutes } from './routes/product-history.routes.js'
@@ -79,6 +80,7 @@ app.route('/api/v1/category-discounts', createCategoryDiscountsRoutes({ db }))
 app.route('/api/v1/store', createStoreRoutes({ db }))
 app.route('/api/v1/audit-logs', createAuditRoutes({ db }))
 app.route('/api/v1/notifications', createNotificationRoutes({ db }))
+app.route('/api/v1/orders', createOrdersRoutes({ db }))
 
 app.get('/api/v1/me', requireAuth, async (c) => {
   const auth = c.get('auth')

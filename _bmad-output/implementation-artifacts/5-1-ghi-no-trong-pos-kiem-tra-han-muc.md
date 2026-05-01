@@ -764,3 +764,42 @@ claude-opus-4-7 (1M context) - dev-agent trong team story-5-1-debt
 ## Change Log
 
 - 2026-05-01: Story 5-1 implementation hoàn tất (12 tasks, 8 ACs). Tests: 28 mới (12 schema + 16 integration), full suite 1076 pass. Status ready-for-dev → review.
+- 2026-05-01: Code review adversarial (3 layer) hoàn tất. Findings: 4 MUST-FIX, 5 SHOULD-FIX, 4 NICE-TO-HAVE, 1 DEFER. Xem section "Review Findings" bên dưới.
+
+### Review Findings
+
+#### MUST-FIX (chặn merge, ảnh hưởng tính đúng đắn)
+
+- [ ] [Review][Patch] **CRIT-1: Backend không enforce invariant `cashAmount + debtAmount = total` cho paymentMethod='debt'** — `packages/shared/src/schema/order-management.ts:124-163`. Zod chỉ check `debtAmount <= total` và `paymentStatus` khớp, không check `(cashAmount ?? 0) + debtAmount === total` khi method='debt'. Attacker gọi API trực tiếp với `cash=80k, debt=100k, total=100k` sẽ pass validation, gây over-collect/inconsistent. Frontend luôn ép invariant nhưng backend là defense layer. **Fix**: thêm refine `paymentMethod === 'debt' → (cashAmount ?? 0) + (debtAmount ?? 0) >= total`.
+
+- [ ] [Review][Patch] **CRIT-2: paymentMethod='debt' với debtAmount=0 hoặc undefined vẫn được chấp nhận** — `packages/shared/src/schema/order-management.ts` không có refine ràng buộc `paymentMethod === 'debt' → debtAmount > 0`. Frontend `PaymentDialog.tsx:191-197` vẫn gửi paymentMethod='debt' khi user trả đủ cash trong tab Ghi nợ → backend tạo order với method='debt' nhưng KHÔNG có debt record (orders.service.ts:397 skip debt logic). Data inconsistency: order method='debt' nhưng không có row trong `debts` table. Báo cáo công nợ và filter `paymentMethod=debt` (đã có trong listOrdersQuerySchema) sẽ trả kết quả sai. **Fix**: Zod refine `paymentMethod==='debt' → debtAmount > 0`, hoặc frontend tự chuyển method thành 'cash' khi debtAmount=0.
+
+- [ ] [Review][Patch] **CRIT-3: OrderListItem.debtAmount tính sai khi paymentMethod='debt' với cashAmount > 0** — `apps/api/src/services/orders.service.ts:847-853` và `:996-1001`. Công thức `paidAmount = cashAmount + transferAmount` rồi `debtAmount = total - paidAmount`. Với debt order có `cash=40k, debt=60k, total=100k`: paidAmount=40k, computed debtAmount=60k. Đúng case này. NHƯNG nếu order debt có `cash=0, debt=100k, total=100k`: paidAmount=0, debtAmount=100k. Đúng. Vấn đề: code này **không đọc từ `debts` table thực tế**, chỉ derive từ cashAmount/transferAmount. Nếu Story 5.2 thu nợ 1 phần, computed value lệch với debts.remaining. **Fix**: nên LEFT JOIN `debts` hoặc đọc trực tiếp khi method='debt' để tránh dérive sai. Tối thiểu, document rõ rằng đây là "debtAmount tại thời điểm tạo order" không phải "debt còn lại".
+
+- [ ] [Review][Patch] **CRIT-4: PinDialog state không cleanup khi PaymentDialog đóng** — `apps/web/src/features/pos/components/PaymentDialog.tsx:92-106`. useEffect chỉ reset state khi `open=true`. Nếu user mở PaymentDialog → click "Nhập PIN" mở PinDialog → đóng PaymentDialog (X hoặc esc) trong khi PinDialog vẫn mở → PinDialog overlay glitch (parent đóng, child PinDialog vẫn mở). Cần useEffect riêng `if (!open) setPinDialogOpen(false)` hoặc force reset trong onOpenChange. Bài học M11/M12 stories trước.
+
+#### SHOULD-FIX (nên sửa trước khi đóng story)
+
+- [ ] [Review][Patch] **SF-1: Backend không re-verify PIN khi nhận `debtLimitOverridden=true`** — `apps/api/src/services/orders.service.ts:443-477`. Backend tin tưởng cờ `debtLimitOverridden` từ frontend mà không verify PIN actor. Attacker gửi `debtLimitOverridden: true` qua API trực tiếp → bypass hạn mức tín dụng. Đây là **rủi ro tài chính** (không như priceOverride chỉ ảnh hưởng giá đơn lẻ, debt limit override có thể cho phép ghi nợ hàng triệu mà không kiểm soát). Pattern `priceOverridePinUsed` Story 4.4b cũng có vấn đề tương tự (system-wide). **Fix gợi ý**: thêm field `debtLimitOverridePin` vào payload, backend gọi `verifyPin()` trước khi accept override; HOẶC issue short-lived "override token" sau verify-pin để gắn vào order request.
+
+- [ ] [Review][Patch] **SF-2: Effective debt limit có race với group.debtLimit thay đổi đồng thời** — `apps/api/src/services/orders.service.ts:429-436`. SELECT customer FOR UPDATE lock row customer, nhưng khi customer.debtLimit IS NULL và đọc group.debtLimit, KHÔNG lock group row. Nếu admin update `customer_groups.debtLimit` đúng lúc → có thể đọc giá trị stale. Tác động thấp (group ít thay đổi) nhưng nên enforce snapshot bằng cách đọc cả 2 trong 1 LEFT JOIN với FOR UPDATE OF customers, hoặc chấp nhận "snapshot at order creation time".
+
+- [ ] [Review][Patch] **SF-3: Audit log `debt.limit_overridden` không lưu PIN actor identity** — `apps/api/src/services/orders.service.ts:457-476`. Audit log dùng `actor.userId` (người tạo order). Nếu nhân viên tạo order còn chủ cửa hàng nhập PIN, log chỉ ghi nhân viên. Compliance/audit yêu cầu "ai approved override". **Fix**: nếu giải quyết SF-1, audit log thêm `overrideBy: pinActorUserId`.
+
+- [ ] [Review][Patch] **SF-4: `debtInfoSchema.customerDebtLimit` thiếu `.min(0)` so với column constraint** — `packages/shared/src/schema/debt-management.ts:10-11`. Schema để `z.number().int().nullable()` không có min, nhưng business logic 0 = unlimited và âm không hợp lệ. Thêm `.min(0)` cho consistency với input validation phía customers (tham khảo customer-management).
+
+- [ ] [Review][Patch] **SF-5: Test integration thiếu kịch bản concurrent (race condition thực sự)** — `apps/api/src/__tests__/pos-debt.integration.test.ts`. Spec Task 11.2 yêu cầu "Race condition: SELECT FOR UPDATE customer". Test hiện kiểm sequential update OK, nhưng không có Promise.all 2 createOrder cùng customer để chứng minh FOR UPDATE thực sự serialize. Thêm test concurrent để có evidence.
+
+#### NICE-TO-HAVE
+
+- [ ] [Review][Patch] **NTH-1: TypeScript narrowing không clean ở `effectiveDebtLimit as number`** — `apps/web/src/features/pos/components/PaymentDialog.tsx:147-148, 439`. Cast `as number` 3 chỗ. Dùng pattern `const limit = effectiveDebtLimit; if (limit !== null && limit > 0) { ... }` để narrowing đúng kiểu.
+
+- [ ] [Review][Patch] **NTH-2: PaymentMethod type duplicate** — `apps/web/src/features/pos/components/PosScreen.tsx:44-46` định nghĩa lại type literal `'cash' | 'transfer' | 'qr' | 'combined' | 'debt'`. Đã có `PaymentMethod` export từ `PaymentDialog.tsx:30`. Reuse để DRY.
+
+- [ ] [Review][Patch] **NTH-3: useCustomerDebtQuery không prefetch khi mở PaymentDialog với defaultMethod='debt'** — `apps/web/src/features/pos/components/PaymentDialog.tsx:88`. Query enable lazy `method === 'debt' ? customerId : null`. F4 mở dialog với method='debt' ngay → query chạy ngay, OK. Nhưng nếu user click tab Ghi nợ từ method='cash' → có flash loading. Cân nhắc prefetch sớm khi customerId có sẵn (giống Story 4.5 prefetch prices).
+
+- [ ] [Review][Patch] **NTH-4: `change` calculation cho method='debt' khó hiểu** — `apps/api/src/services/orders.service.ts:178-180`. `change = cashAmount - (total - debtAmount)`. Đại số đúng nhưng không trực quan. Comment giải thích: "tiền thừa = cash đã trả - phần phải thu bằng cash (= total - debt ghi nợ)". Hoặc viết lại `change = cashAmount + debtAmount - total` (cùng kết quả khi invariant hold).
+
+#### DEFER
+
+- [x] [Review][Defer] **DEF-1: Pattern `priceOverridePinUsed` Story 4.4b cũng không re-verify backend PIN** — system-wide concern, không phải bug riêng Story 5-1. Đã raise SF-1 với severity SHOULD-FIX cho debt context (rủi ro lớn hơn priceOverride). Nếu quyết định fix, nên fix toàn cục cùng pattern. Defer cho discussion architecture-level.

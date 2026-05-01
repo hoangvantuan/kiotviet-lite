@@ -18,6 +18,9 @@ import {
   applyFormula,
   applyRounding,
   type ClonePriceListInput,
+  type ComparePriceListsResponse,
+  computeCompareRow,
+  computeCompareSummary,
   type CreatePriceListInput,
   customerGroups,
   type FormulaType,
@@ -1166,6 +1169,101 @@ export async function recalculatePriceList({
 
     return { updatedCount, addedCount, removedCount, preservedOverrideCount }
   })
+}
+
+export interface ComparePriceListsDeps {
+  db: Db
+  storeId: string
+  listAId: string
+  listBId: string
+}
+
+export async function comparePriceLists({
+  db,
+  storeId,
+  listAId,
+  listBId,
+}: ComparePriceListsDeps): Promise<ComparePriceListsResponse> {
+  if (listAId === listBId) {
+    throw new ApiError('VALIDATION_ERROR', 'Hai bảng giá so sánh phải khác nhau', {
+      field: 'listBId',
+    })
+  }
+
+  const [listA, listB] = await Promise.all([
+    getPriceList({ db, storeId, targetId: listAId }),
+    getPriceList({ db, storeId, targetId: listBId }),
+  ])
+
+  const [itemsA, itemsB] = await Promise.all([
+    db
+      .select({ productId: priceListItems.productId, price: priceListItems.price })
+      .from(priceListItems)
+      .where(eq(priceListItems.priceListId, listAId)),
+    db
+      .select({ productId: priceListItems.productId, price: priceListItems.price })
+      .from(priceListItems)
+      .where(eq(priceListItems.priceListId, listBId)),
+  ])
+
+  const mapA = new Map<string, number>(itemsA.map((it) => [it.productId, Number(it.price)]))
+  const mapB = new Map<string, number>(itemsB.map((it) => [it.productId, Number(it.price)]))
+
+  const productIds = Array.from(new Set([...mapA.keys(), ...mapB.keys()]))
+
+  if (productIds.length === 0) {
+    return {
+      listA,
+      listB,
+      rows: [],
+      summary: {
+        totalProducts: 0,
+        bothCount: 0,
+        onlyACount: 0,
+        onlyBCount: 0,
+        diffOver10Count: 0,
+        belowCostBCount: 0,
+        belowCostACount: 0,
+      },
+    }
+  }
+
+  const productRows = await db
+    .select({
+      id: products.id,
+      name: products.name,
+      sku: products.sku,
+      imageUrl: products.imageUrl,
+      sellingPrice: products.sellingPrice,
+      costPrice: products.costPrice,
+    })
+    .from(products)
+    .where(
+      and(
+        inArray(products.id, productIds),
+        eq(products.storeId, storeId),
+        isNull(products.deletedAt),
+      ),
+    )
+
+  const rows = productRows.map((p) =>
+    computeCompareRow({
+      productId: p.id,
+      productName: p.name,
+      productSku: p.sku,
+      productImageUrl: p.imageUrl ?? null,
+      productSellingPrice: Number(p.sellingPrice),
+      productCostPrice: p.costPrice === null ? null : Number(p.costPrice),
+      priceA: mapA.has(p.id) ? (mapA.get(p.id) as number) : null,
+      priceB: mapB.has(p.id) ? (mapB.get(p.id) as number) : null,
+    }),
+  )
+
+  rows.sort((a, b) => a.productName.localeCompare(b.productName, 'vi'))
+
+  const summary = computeCompareSummary(rows)
+
+  return { listA, listB, rows, summary }
 }
 
 export interface ClonePriceListDeps {

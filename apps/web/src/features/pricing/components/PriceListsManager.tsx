@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Plus, SearchX, Tags, Trash2 } from 'lucide-react'
+import { ArrowLeftRight, Plus, SearchX, Tags, Trash2 } from 'lucide-react'
 
 import type { ListPriceListsQuery, PriceListListItem } from '@kiotviet-lite/shared'
 
@@ -10,7 +10,8 @@ import { Button } from '@/components/ui/button'
 import { useDebounced } from '@/hooks/use-debounced'
 import { useMediaQuery } from '@/hooks/use-media-query'
 
-import { usePriceListQuery, usePriceListsQuery } from '../use-price-lists'
+import { useAllPriceListsQuery, usePriceListQuery, usePriceListsQuery } from '../use-price-lists'
+import { ComparePriceListsDialog } from './ComparePriceListsDialog'
 import { CreatePriceListDialog } from './CreatePriceListDialog'
 import { DeletePriceListDialog } from './DeletePriceListDialog'
 import { EditPriceListDialog } from './EditPriceListDialog'
@@ -36,6 +37,7 @@ export function PriceListsManager() {
   const [editTargetId, setEditTargetId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<PriceListListItem | null>(null)
   const [trashedOpen, setTrashedOpen] = useState(false)
+  const [compareOpen, setCompareOpen] = useState(false)
 
   const debouncedSearch = useDebounced(filters.search, 300)
 
@@ -49,6 +51,7 @@ export function PriceListsManager() {
   }, [page, debouncedSearch, filters.method, filters.status])
 
   const listQuery = usePriceListsQuery(apiQuery)
+  const allListsQuery = useAllPriceListsQuery()
   const editQuery = usePriceListQuery(editTargetId ?? undefined)
 
   const handleFilterChange = (partial: Partial<PriceListFiltersValue>) => {
@@ -71,6 +74,18 @@ export function PriceListsManager() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2 self-start md:self-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCompareOpen(true)}
+            disabled={(allListsQuery.data?.meta?.total ?? 0) < 2}
+            title={
+              (allListsQuery.data?.meta?.total ?? 0) < 2 ? 'Cần ít nhất 2 bảng giá' : undefined
+            }
+          >
+            <ArrowLeftRight className="h-4 w-4" />
+            <span>So sánh bảng giá</span>
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setTrashedOpen(true)}>
             <Trash2 className="h-4 w-4" />
             <span>Bảng giá đã xoá</span>
@@ -145,6 +160,7 @@ export function PriceListsManager() {
         priceList={deleteTarget}
       />
       <TrashedPriceListsSheet open={trashedOpen} onOpenChange={setTrashedOpen} />
+      <ComparePriceListsDialog open={compareOpen} onOpenChange={setCompareOpen} />
     </div>
   )
 }

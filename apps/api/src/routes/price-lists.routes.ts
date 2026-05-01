@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 import {
   clonePriceListSchema,
+  comparePriceListsQuerySchema,
   createPriceListItemSchema,
   createPriceListSchema,
   importPriceListSchema,
@@ -27,6 +28,7 @@ import {
 } from '../services/price-list-items.service.js'
 import {
   clonePriceList,
+  comparePriceLists,
   createPriceList,
   deletePriceList,
   getPriceList,
@@ -78,6 +80,18 @@ export function createPriceListsRoutes({ db }: PriceListsRoutesDeps) {
         totalPages: result.totalPages,
       },
     })
+  })
+
+  app.get('/compare', async (c) => {
+    const auth = c.get('auth')
+    const query = comparePriceListsQuerySchema.parse(c.req.query())
+    const data = await comparePriceLists({
+      db,
+      storeId: auth.storeId,
+      listAId: query.listAId,
+      listBId: query.listBId,
+    })
+    return c.json({ data })
   })
 
   app.get('/:id', async (c) => {

@@ -20,6 +20,8 @@ import { CustomersGroupsPage } from '@/pages/customers-groups-page'
 import { CustomersPage } from '@/pages/customers-page'
 import { HomePage } from '@/pages/home-page'
 import { LoginPage } from '@/pages/login-page'
+import { OrderDetailPage } from '@/pages/order-detail-page'
+import { OrdersPage } from '@/pages/orders-page'
 import { PosPage } from '@/pages/pos-page'
 import { PricingDetailPage } from '@/pages/pricing-detail-page'
 import { PricingPage } from '@/pages/pricing-page'
@@ -296,6 +298,37 @@ const settingsAuditRoute = createRoute({
   component: SettingsAuditPage,
 })
 
+const ordersSearchSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1).catch(1),
+  search: z.string().optional().catch(undefined),
+  datePreset: z
+    .enum(['today', '7days', '30days', 'all', 'custom'])
+    .default('today')
+    .catch('today' as const),
+  fromDate: z.string().optional().catch(undefined),
+  toDate: z.string().optional().catch(undefined),
+  status: z.string().optional().catch(undefined),
+  paymentMethod: z.string().optional().catch(undefined),
+  paymentStatus: z.string().optional().catch(undefined),
+  customerId: z.string().optional().catch(undefined),
+  customerName: z.string().optional().catch(undefined),
+})
+
+const ordersRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/orders',
+  validateSearch: ordersSearchSchema,
+  beforeLoad: requirePermissionGuard('pos.sell'),
+  component: OrdersPage,
+})
+
+const orderDetailRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/orders/$orderId',
+  beforeLoad: requirePermissionGuard('pos.sell'),
+  component: OrderDetailPage,
+})
+
 const posRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: '/pos',
@@ -328,6 +361,8 @@ const routeTree = rootRoute.addChildren([
       inventoryStockCheckCreateRoute,
       inventoryStockCheckDetailRoute,
       inventoryStockCheckEditRoute,
+      ordersRoute,
+      orderDetailRoute,
       reportsRoute,
       settingsRoute.addChildren([
         settingsIndexRoute,

@@ -14,6 +14,7 @@ import type {
 
 import {
   clonePriceListApi,
+  comparePriceListsApi,
   createPriceListApi,
   createPriceListItemApi,
   deletePriceListApi,
@@ -202,5 +203,18 @@ export function useImportPriceListMutation() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: PRICE_LISTS_KEY })
     },
+  })
+}
+
+export function useComparePriceListsQuery(
+  listAId: string | null,
+  listBId: string | null,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: [...PRICE_LISTS_KEY, 'compare', listAId, listBId],
+    queryFn: async () => (await comparePriceListsApi(listAId as string, listBId as string)).data,
+    enabled: Boolean(listAId && listBId && listAId !== listBId && options?.enabled !== false),
+    staleTime: 60_000,
   })
 }

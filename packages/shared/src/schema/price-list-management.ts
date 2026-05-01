@@ -223,6 +223,57 @@ export const importPriceListSummarySchema = z.object({
   errors: z.array(importPriceListErrorSchema),
 })
 
+export const comparePriceListsQuerySchema = z
+  .object({
+    listAId: z.string().uuid('ID bảng giá A không hợp lệ'),
+    listBId: z.string().uuid('ID bảng giá B không hợp lệ'),
+  })
+  .superRefine((data, ctx) => {
+    if (data.listAId === data.listBId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['listBId'],
+        message: 'Hai bảng giá so sánh phải khác nhau',
+      })
+    }
+  })
+
+export const compareRowSchema = z.object({
+  productId: z.string().uuid(),
+  productName: z.string(),
+  productSku: z.string(),
+  productImageUrl: z.string().nullable(),
+  productSellingPrice: z.number().int().min(0),
+  productCostPrice: z.number().int().min(0).nullable(),
+  priceA: z.number().int().min(0).nullable(),
+  priceB: z.number().int().min(0).nullable(),
+  diffAmount: z.number().int().nullable(),
+  diffPercent: z.number().nullable(),
+  marginA: z.number().nullable(),
+  marginB: z.number().nullable(),
+  isBelowCostA: z.boolean(),
+  isBelowCostB: z.boolean(),
+  isMissingA: z.boolean(),
+  isMissingB: z.boolean(),
+})
+
+export const compareSummarySchema = z.object({
+  totalProducts: z.number().int().min(0),
+  bothCount: z.number().int().min(0),
+  onlyACount: z.number().int().min(0),
+  onlyBCount: z.number().int().min(0),
+  diffOver10Count: z.number().int().min(0),
+  belowCostBCount: z.number().int().min(0),
+  belowCostACount: z.number().int().min(0),
+})
+
+export const comparePriceListsResponseSchema = z.object({
+  listA: priceListDetailSchema,
+  listB: priceListDetailSchema,
+  rows: z.array(compareRowSchema),
+  summary: compareSummarySchema,
+})
+
 export type PriceListMethod = z.infer<typeof priceListMethodSchema>
 export type FormulaType = z.infer<typeof formulaTypeSchema>
 export type RoundingRule = z.infer<typeof roundingRuleSchema>
@@ -241,3 +292,7 @@ export type ClonePriceListInput = z.infer<typeof clonePriceListSchema>
 export type ImportPriceListInput = z.infer<typeof importPriceListSchema>
 export type ImportPriceListError = z.infer<typeof importPriceListErrorSchema>
 export type ImportPriceListSummary = z.infer<typeof importPriceListSummarySchema>
+export type ComparePriceListsQuery = z.infer<typeof comparePriceListsQuerySchema>
+export type CompareRow = z.infer<typeof compareRowSchema>
+export type CompareSummary = z.infer<typeof compareSummarySchema>
+export type ComparePriceListsResponse = z.infer<typeof comparePriceListsResponseSchema>
