@@ -19,6 +19,7 @@ interface CheckoutPayload {
   transferAmount?: number
   debtAmount?: number
   debtLimitOverridden?: boolean
+  debtLimitOverridePin?: string
   note?: string | null
   items: {
     productId: string

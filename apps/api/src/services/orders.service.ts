@@ -22,6 +22,7 @@ import { logger } from '../lib/logger.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
+import { verifyPin } from './pin.service.js'
 import {
   aggregateVariantStock,
   loadProductForUpdate,
@@ -163,6 +164,18 @@ export async function createOrder({
 }: CreateOrderDeps): Promise<OrderDetail> {
   if (input.items.length === 0) {
     throw new ApiError('VALIDATION_ERROR', 'Đơn hàng phải có ít nhất 1 sản phẩm')
+  }
+
+  // SF-1: Khi debtLimitOverridden=true, verify PIN server-side trước khi vào transaction.
+  // Zod refine đã đảm bảo có debtLimitOverridePin khi debtLimitOverridden=true.
+  if (input.debtLimitOverridden && input.debtLimitOverridePin) {
+    await verifyPin({
+      db,
+      userId: actor.userId,
+      storeId: actor.storeId,
+      pin: input.debtLimitOverridePin,
+      meta,
+    })
   }
 
   const debtAmount = input.debtAmount ?? 0
@@ -400,15 +413,18 @@ export async function createOrder({
         throw new ApiError('VALIDATION_ERROR', 'Phải chọn khách hàng khi ghi nợ')
       }
 
-      // Lock customer row để tránh race condition khi update current_debt
+      // SF-2: LEFT JOIN customer_groups trong cùng query lock customer
+      // FOR UPDATE OF customers chỉ lock customer row, đọc group debtLimit cùng snapshot
       const customerRows = await tx
         .select({
           currentDebt: customers.currentDebt,
           debtLimit: customers.debtLimit,
           groupId: customers.groupId,
           name: customers.name,
+          groupDebtLimit: customerGroups.debtLimit,
         })
         .from(customers)
+        .leftJoin(customerGroups, eq(customers.groupId, customerGroups.id))
         .where(
           and(
             eq(customers.id, input.customerId),
@@ -416,7 +432,7 @@ export async function createOrder({
             isNull(customers.deletedAt),
           ),
         )
-        .for('update')
+        .for('update', { of: [customers] })
         .limit(1)
 
       const customer = customerRows[0]
@@ -425,15 +441,8 @@ export async function createOrder({
       }
 
       // Resolve effective debt limit: customer.debtLimit ?? group.debtLimit ?? null
-      let effectiveDebtLimit: number | null = customer.debtLimit
-      if (effectiveDebtLimit === null && customer.groupId) {
-        const groupRows = await tx
-          .select({ debtLimit: customerGroups.debtLimit })
-          .from(customerGroups)
-          .where(eq(customerGroups.id, customer.groupId))
-          .limit(1)
-        effectiveDebtLimit = groupRows[0]?.debtLimit ?? null
-      }
+      const effectiveDebtLimit: number | null =
+        customer.debtLimit !== null ? customer.debtLimit : (customer.groupDebtLimit ?? null)
 
       const debtBefore = customer.currentDebt
       const debtAfter = debtBefore + debtAmount
@@ -454,6 +463,7 @@ export async function createOrder({
         }
 
         // Override: ghi audit riêng
+        // SF-3: lưu PIN actor (user đã nhập PIN để override)
         await logAction({
           db: txDb,
           storeId: actor.storeId,
@@ -470,6 +480,9 @@ export async function createOrder({
             debtBefore,
             debtAfter,
             debtLimit: effectiveDebtLimit,
+            overrideBy: actor.userId,
+            overrideByRole: actor.role,
+            pinVerified: true,
           },
           ipAddress: meta?.ipAddress,
           userAgent: meta?.userAgent,
@@ -826,10 +839,12 @@ export async function listOrders({
       status: orders.status,
       note: orders.note,
       createdAt: orders.createdAt,
+      debtRemaining: debts.remaining,
     })
     .from(orders)
     .leftJoin(customers, eq(orders.customerId, customers.id))
     .leftJoin(users, eq(orders.userId, users.id))
+    .leftJoin(debts, eq(debts.orderId, orders.id))
     .where(whereClause)
     .orderBy(desc(orders.createdAt))
     .limit(pageSize)
@@ -846,11 +861,9 @@ export async function listOrders({
 
   const data: OrderListItem[] = rows.map((r) => {
     const totalAmount = Number(r.total)
-    const paidAmount =
-      r.paymentStatus === 'paid'
-        ? totalAmount
-        : Number(r.cashAmount ?? 0) + Number(r.transferAmount ?? 0)
-    const debtAmount = totalAmount - paidAmount
+    // CRIT-3: Lấy debtAmount từ debts.remaining (source of truth)
+    const debtAmount = r.debtRemaining != null ? Number(r.debtRemaining) : 0
+    const paidAmount = totalAmount - debtAmount
 
     return {
       id: r.id,
@@ -942,11 +955,13 @@ export async function getOrderDetail({
       status: orders.status,
       createdAt: orders.createdAt,
       updatedAt: orders.updatedAt,
+      debtRemaining: debts.remaining,
     })
     .from(orders)
     .leftJoin(customers, eq(orders.customerId, customers.id))
     .leftJoin(customerGroups, eq(customers.groupId, customerGroups.id))
     .leftJoin(users, eq(orders.userId, users.id))
+    .leftJoin(debts, eq(debts.orderId, orders.id))
     .where(and(eq(orders.id, orderId), eq(orders.storeId, storeId)))
     .limit(1)
 
@@ -994,11 +1009,9 @@ export async function getOrderDetail({
   }))
 
   const totalAmount = Number(row.total)
-  const paidAmount =
-    row.paymentStatus === 'paid'
-      ? totalAmount
-      : Number(row.cashAmount ?? 0) + Number(row.transferAmount ?? 0)
-  const debtAmount = totalAmount - paidAmount
+  // CRIT-3: Lấy debtAmount từ debts.remaining (source of truth)
+  const debtAmount = row.debtRemaining != null ? Number(row.debtRemaining) : 0
+  const paidAmount = totalAmount - debtAmount
 
   return {
     id: row.id,

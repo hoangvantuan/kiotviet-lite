@@ -126,6 +126,7 @@ export function PosScreen() {
     transferAmount?: number
     debtAmount?: number
     debtLimitOverridden?: boolean
+    debtLimitOverridePin?: string
   }) {
     const tab = tabs[activeTab]
     if (!tab || tab.items.length === 0) return
@@ -154,6 +155,7 @@ export function PosScreen() {
         transferAmount: payload.transferAmount,
         debtAmount: debtAmount > 0 ? debtAmount : undefined,
         debtLimitOverridden: payload.debtLimitOverridden ?? false,
+        debtLimitOverridePin: payload.debtLimitOverridePin,
         note: null,
         items: tab.items.map((item) => ({
           productId: item.productId,

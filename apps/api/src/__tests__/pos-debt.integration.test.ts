@@ -357,6 +357,7 @@ describe('POST /orders với debt', () => {
         total: 200_000,
         debtAmount: 200_000,
         debtLimitOverridden: true,
+        debtLimitOverridePin: '111111',
         items: [
           {
             productId: env.productId,
@@ -588,5 +589,87 @@ describe('POST /orders với debt', () => {
     const debtLog = logs.find((l) => l.action === 'debt.created')
     expect(orderLog).toBeDefined()
     expect(debtLog).toBeDefined()
+  })
+
+  // SF-5: Race condition test - SELECT FOR UPDATE serialize 2 createOrder đồng thời
+  it('concurrent debt creation serialized by FOR UPDATE', async () => {
+    // KH Không Giới Hạn currentDebt = 0, không hạn mức → cả 2 đơn đều phải tạo debt thành công
+    const customerId = env.customerNoLimitId
+
+    const payload1 = makeOrderPayload(env, {
+      customerId,
+      subtotal: 400_000,
+      total: 400_000,
+      debtAmount: 400_000,
+      paymentStatus: 'unpaid',
+      items: [
+        {
+          productId: env.productId,
+          variantId: null,
+          productName: 'Sản phẩm test',
+          variantName: null,
+          unit: 'cái',
+          unitPrice: 400_000,
+          quantity: 1,
+          discountType: null,
+          discountValue: 0,
+          discountAmount: 0,
+          lineTotal: 400_000,
+          note: null,
+          unitConversionId: null,
+          originalPrice: null,
+          priceOverride: false,
+          priceOverrideReason: null,
+          priceOverridePinUsed: false,
+        },
+      ],
+    })
+    const payload2 = makeOrderPayload(env, {
+      customerId,
+      subtotal: 400_000,
+      total: 400_000,
+      debtAmount: 400_000,
+      paymentStatus: 'unpaid',
+      items: [
+        {
+          productId: env.productId,
+          variantId: null,
+          productName: 'Sản phẩm test',
+          variantName: null,
+          unit: 'cái',
+          unitPrice: 400_000,
+          quantity: 1,
+          discountType: null,
+          discountValue: 0,
+          discountAmount: 0,
+          lineTotal: 400_000,
+          note: null,
+          unitConversionId: null,
+          originalPrice: null,
+          priceOverride: false,
+          priceOverrideReason: null,
+          priceOverridePinUsed: false,
+        },
+      ],
+    })
+
+    const [r1, r2] = await Promise.all([
+      jsonReq<OrderResp>(env, 'POST', '/orders', payload1, env.base.owner.authHeader),
+      jsonReq<OrderResp>(env, 'POST', '/orders', payload2, env.base.owner.authHeader),
+    ])
+    expect(r1.status).toBe(201)
+    expect(r2.status).toBe(201)
+
+    // Sau cùng: tổng currentDebt = 800.000 (chứng minh không bị lost update)
+    const cust = await env.base.db.query.customers.findFirst({
+      where: eq(customers.id, customerId),
+    })
+    expect(cust?.currentDebt).toBe(800_000)
+
+    // Cả 2 debt records tồn tại
+    const debtRows = await env.base.db.select().from(debts).where(eq(debts.customerId, customerId))
+    expect(debtRows).toHaveLength(2)
+    const totalDebt = debtRows.reduce((s, d) => s + d.remaining, 0)
+    expect(totalDebt).toBe(800_000)
   })
 })

@@ -92,6 +92,7 @@ export const createOrderSchema = z
       .min(0, 'Số tiền ghi nợ phải >= 0')
       .optional(),
     debtLimitOverridden: z.boolean().default(false),
+    debtLimitOverridePin: z.string().trim().min(1).max(32).optional(),
     note: z.string().trim().max(1000, 'Ghi chu don toi da 1000 ky tu').nullable().default(null),
     items: z
       .array(createOrderItemSchema)
@@ -159,6 +160,49 @@ export const createOrderSchema = z
     {
       message: 'paymentStatus không khớp với số tiền ghi nợ',
       path: ['paymentStatus'],
+    },
+  )
+  .refine(
+    (order) => {
+      // CRIT-2: paymentMethod='debt' yêu cầu debtAmount > 0
+      if (order.paymentMethod === 'debt') {
+        return order.debtAmount != null && order.debtAmount > 0
+      }
+      return true
+    },
+    {
+      message: 'Phương thức ghi nợ yêu cầu số tiền ghi nợ lớn hơn 0',
+      path: ['debtAmount'],
+    },
+  )
+  .refine(
+    (order) => {
+      // CRIT-1: paymentMethod='debt' yêu cầu cashAmount + debtAmount >= total
+      if (order.paymentMethod === 'debt') {
+        const cash = order.cashAmount ?? 0
+        const debt = order.debtAmount ?? 0
+        return cash + debt >= order.total
+      }
+      return true
+    },
+    {
+      message: 'Tổng tiền mặt và ghi nợ phải bằng tổng đơn hàng',
+      path: ['debtAmount'],
+    },
+  )
+  .refine(
+    (order) => {
+      // SF-1: debtLimitOverridden=true yêu cầu phải có PIN
+      if (order.debtLimitOverridden === true) {
+        return (
+          typeof order.debtLimitOverridePin === 'string' && order.debtLimitOverridePin.length > 0
+        )
+      }
+      return true
+    },
+    {
+      message: 'Vượt hạn mức công nợ yêu cầu mã PIN',
+      path: ['debtLimitOverridePin'],
     },
   )
 

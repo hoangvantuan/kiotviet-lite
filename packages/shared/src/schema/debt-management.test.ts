@@ -81,13 +81,23 @@ describe('createOrderSchema - debt logic', () => {
     }
   })
 
-  it('valid: debtLimitOverridden = true', () => {
+  it('valid: debtLimitOverridden = true với PIN', () => {
+    const r = createOrderSchema.safeParse({
+      ...baseOrder,
+      debtAmount: 100_000,
+      debtLimitOverridden: true,
+      debtLimitOverridePin: '111111',
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('reject: debtLimitOverridden = true thiếu PIN', () => {
     const r = createOrderSchema.safeParse({
       ...baseOrder,
       debtAmount: 100_000,
       debtLimitOverridden: true,
     })
-    expect(r.success).toBe(true)
+    expect(r.success).toBe(false)
   })
 
   it('reject: debtAmount > 0 nhưng customerId null', () => {

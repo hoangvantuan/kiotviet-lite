@@ -7,9 +7,9 @@ export const debtInfoSchema = z.object({
   groupId: z.string().uuid().nullable(),
   groupName: z.string().nullable(),
   currentDebt: z.number().int().min(0),
-  customerDebtLimit: z.number().int().nullable(),
-  groupDebtLimit: z.number().int().nullable(),
-  effectiveDebtLimit: z.number().int().nullable(),
+  customerDebtLimit: z.number().int().min(0).nullable(),
+  groupDebtLimit: z.number().int().min(0).nullable(),
+  effectiveDebtLimit: z.number().int().min(0).nullable(),
 })
 
 // Response item cho debt record

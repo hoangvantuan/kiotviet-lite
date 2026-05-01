@@ -42,6 +42,7 @@ interface PaymentDialogProps {
     transferAmount?: number
     debtAmount?: number
     debtLimitOverridden?: boolean
+    debtLimitOverridePin?: string
   }) => void
   isLoading?: boolean
 }
@@ -78,6 +79,7 @@ export function PaymentDialog({
   // Story 5.1: debt state
   const [debtCashPrepaid, setDebtCashPrepaid] = useState<number | null>(null)
   const [debtLimitOverridden, setDebtLimitOverridden] = useState(false)
+  const [overridePin, setOverridePin] = useState<string | null>(null)
   const [pinDialogOpen, setPinDialogOpen] = useState(false)
   const cashInputRef = useRef<HTMLInputElement>(null)
 
@@ -99,16 +101,22 @@ export function PaymentDialog({
       setComboTransfer(null)
       setDebtCashPrepaid(null)
       setDebtLimitOverridden(false)
+      setOverridePin(null)
       setPinDialogOpen(false)
       const timer = setTimeout(() => cashInputRef.current?.focus(), 100)
       return () => clearTimeout(timer)
     }
+    // CRIT-4: cleanup khi dialog đóng để tránh PinDialog bị stuck open
+    setPinDialogOpen(false)
+    setDebtLimitOverridden(false)
+    setOverridePin(null)
   }, [open, defaultMethod, customerId])
 
   // Reset override khi đổi method khác debt
   useEffect(() => {
     if (method !== 'debt') {
       setDebtLimitOverridden(false)
+      setOverridePin(null)
     }
   }, [method])
 
@@ -193,6 +201,7 @@ export function PaymentDialog({
           cashAmount: debtCashVal,
           debtAmount,
           debtLimitOverridden,
+          debtLimitOverridePin: debtLimitOverridden ? (overridePin ?? undefined) : undefined,
         })
         break
     }
@@ -202,8 +211,9 @@ export function PaymentDialog({
     setPinDialogOpen(true)
   }
 
-  function handlePinVerified() {
+  function handlePinVerified(pin?: string) {
     setDebtLimitOverridden(true)
+    setOverridePin(pin ?? null)
     setPinDialogOpen(false)
   }
 

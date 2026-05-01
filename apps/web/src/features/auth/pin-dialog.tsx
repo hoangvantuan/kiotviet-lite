@@ -16,7 +16,7 @@ import { ApiClientError } from '@/lib/api-client'
 interface PinDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onVerified: () => void
+  onVerified: (pin?: string) => void
   title?: string
   description?: string
 }
@@ -59,7 +59,7 @@ export function PinDialog({
     if (value.length !== 6 || isLocked) return
     try {
       await verify.mutateAsync({ pin: value })
-      onVerified()
+      onVerified(value)
       onOpenChange(false)
     } catch (err) {
       if (err instanceof ApiClientError) {
