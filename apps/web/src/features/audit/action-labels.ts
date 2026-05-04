@@ -70,6 +70,7 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'receipt.created': 'Tạo phiếu thu nợ KH',
   'receipt.printed': 'In phiếu thu',
   'debt_adjustment.created': 'Điều chỉnh nợ khách hàng',
+  'order.returned': 'Trả hàng',
 }
 
 export interface ActionGroup {
@@ -171,7 +172,7 @@ export const ACTION_GROUPS: ActionGroup[] = [
   },
   {
     label: 'Đơn hàng',
-    actions: ['order.created'],
+    actions: ['order.created', 'order.returned'],
   },
   {
     label: 'Chiết khấu danh mục',

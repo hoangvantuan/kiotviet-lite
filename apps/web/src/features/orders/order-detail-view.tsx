@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, Printer } from 'lucide-react'
+import { ChevronLeft, Printer, RotateCcw } from 'lucide-react'
+
+import { RETURN_REASON_LABELS } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,8 +16,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
+import { useAuthStore } from '@/stores/use-auth-store'
 
-import { useOrderQuery } from './use-orders'
+import { ReturnDialog } from './return-dialog'
+import { useOrderQuery, useOrderReturnsQuery } from './use-orders'
 
 interface OrderDetailViewProps {
   orderId: string
@@ -23,6 +28,8 @@ interface OrderDetailViewProps {
 const STATUS_LABELS: Record<string, string> = {
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
+  partial_return: 'Đã trả 1 phần',
+  full_return: 'Đã trả toàn bộ',
 }
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
@@ -50,6 +57,20 @@ function StatusBadge({ status }: { status: string }) {
   if (status === 'cancelled') {
     return (
       <Badge className="bg-red-100 text-red-700 border-red-200" variant="outline">
+        {STATUS_LABELS[status] ?? status}
+      </Badge>
+    )
+  }
+  if (status === 'partial_return') {
+    return (
+      <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200" variant="outline">
+        {STATUS_LABELS[status] ?? status}
+      </Badge>
+    )
+  }
+  if (status === 'full_return') {
+    return (
+      <Badge className="bg-gray-100 text-gray-600 border-gray-200" variant="outline">
         {STATUS_LABELS[status] ?? status}
       </Badge>
     )
@@ -97,6 +118,10 @@ function formatDateTime(iso: string): string {
 export function OrderDetailView({ orderId }: OrderDetailViewProps) {
   const navigate = useNavigate()
   const query = useOrderQuery(orderId)
+  const returnsQuery = useOrderReturnsQuery(orderId)
+  const [returnOpen, setReturnOpen] = useState(false)
+  const user = useAuthStore((s) => s.user)
+  const canReturn = user?.role === 'owner' || user?.role === 'manager'
 
   if (query.isLoading) {
     return (
@@ -120,6 +145,9 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
   }
 
   const order = query.data
+  const returns = returnsQuery.data ?? []
+  const showReturnButton =
+    canReturn && (order.status === 'completed' || order.status === 'partial_return')
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -142,9 +170,16 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
             {order.createdByName ? ` bởi ${order.createdByName}` : ''}
           </p>
         </div>
-        <Button variant="outline" size="sm" disabled>
-          <Printer className="size-4 mr-1" /> In lại
-        </Button>
+        <div className="flex gap-2">
+          {showReturnButton && (
+            <Button variant="outline" size="sm" onClick={() => setReturnOpen(true)}>
+              <RotateCcw className="size-4 mr-1" /> Trả hàng
+            </Button>
+          )}
+          <Button variant="outline" size="sm" disabled>
+            <Printer className="size-4 mr-1" /> In lại
+          </Button>
+        </div>
       </header>
 
       {/* Customer info + Payment method */}
@@ -303,6 +338,69 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
           <p className="text-sm whitespace-pre-wrap">{order.note}</p>
         </section>
       )}
+
+      {/* Return History */}
+      {returns.length > 0 && (
+        <section className="rounded-md border">
+          <div className="p-3 border-b">
+            <h2 className="text-sm font-semibold">Lịch sử trả hàng</h2>
+          </div>
+          <div className="divide-y">
+            {returns.map((ret) => (
+              <div key={ret.id} className="p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-mono text-sm font-medium">{ret.returnNumber}</span>
+                    <span className="text-xs text-muted-foreground ml-2">
+                      {formatDateTime(ret.createdAt)}
+                    </span>
+                  </div>
+                  <span className="text-sm font-medium">
+                    {formatVndWithSuffix(ret.totalAmount)}
+                  </span>
+                </div>
+                {ret.createdByName && (
+                  <p className="text-xs text-muted-foreground">
+                    Người xử lý: {ret.createdByName}
+                  </p>
+                )}
+                <div className="space-y-1">
+                  {ret.items.map((item) => (
+                    <div key={item.id} className="flex items-center gap-2 text-xs">
+                      <span className="text-muted-foreground">
+                        {item.productName}
+                        {item.variantName ? ` (${item.variantName})` : ''}
+                      </span>
+                      <span>x{item.quantity}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {RETURN_REASON_LABELS[item.reason] ?? item.reason}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+                {ret.refundAmount > 0 && (
+                  <p className="text-xs text-blue-600">
+                    Hoàn tiền: {formatVndWithSuffix(ret.refundAmount)}
+                  </p>
+                )}
+                {ret.debtReductionAmount > 0 && (
+                  <p className="text-xs text-green-600">
+                    Giảm nợ: {formatVndWithSuffix(ret.debtReductionAmount)}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Return Dialog */}
+      <ReturnDialog
+        open={returnOpen}
+        onOpenChange={setReturnOpen}
+        orderId={orderId}
+        orderNumber={order.orderNumber}
+      />
     </div>
   )
 }

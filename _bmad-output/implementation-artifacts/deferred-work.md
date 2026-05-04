@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of 7-2-tra-hang (2026-05-04)
+
+- N+1 query trong `getOrderReturns`: mỗi return record query items riêng. Nên optimize bằng single JOIN khi số lượng return lớn. [apps/api/src/services/returns.service.ts:574]
+- Unit conversion không reverse khi trả hàng: `unitConversionId` không được lưu trong `order_items`, nên khi trả hàng không thể tính lại base quantity. Pre-existing design gap.
+
 ## Deferred from: code review of 4-3c-so-sanh-bang-gia (2026-05-01)
 
 - Banner reason 'Đã bị xoá' trong `buildIneffectiveReason` là dead path vì `getPriceList` throw 404 khi `deletedAt !== null` trước khi banner render. Defensive code, giữ lại an toàn. [apps/web/src/features/pricing/components/ComparePriceListsView.tsx:45]

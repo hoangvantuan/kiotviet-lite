@@ -37,6 +37,8 @@ type DatePreset = 'today' | '7days' | '30days' | 'all' | 'custom'
 const STATUS_LABELS: Record<string, string> = {
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
+  partial_return: 'Đã trả 1 phần',
+  full_return: 'Đã trả toàn bộ',
 }
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
@@ -56,6 +58,20 @@ function StatusBadge({ status }: { status: string }) {
   if (status === 'cancelled') {
     return (
       <Badge className="bg-red-100 text-red-700 border-red-200" variant="outline">
+        {STATUS_LABELS[status] ?? status}
+      </Badge>
+    )
+  }
+  if (status === 'partial_return') {
+    return (
+      <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200" variant="outline">
+        {STATUS_LABELS[status] ?? status}
+      </Badge>
+    )
+  }
+  if (status === 'full_return') {
+    return (
+      <Badge className="bg-gray-100 text-gray-600 border-gray-200" variant="outline">
         {STATUS_LABELS[status] ?? status}
       </Badge>
     )
@@ -355,6 +371,8 @@ export function OrderList() {
             <SelectItem value="all">Tất cả trạng thái</SelectItem>
             <SelectItem value="completed">Hoàn thành</SelectItem>
             <SelectItem value="cancelled">Đã hủy</SelectItem>
+            <SelectItem value="partial_return">Đã trả 1 phần</SelectItem>
+            <SelectItem value="full_return">Đã trả toàn bộ</SelectItem>
           </SelectContent>
         </Select>
         <Select

@@ -21,6 +21,7 @@ const MATRIX: Record<Permission, Record<UserRole, boolean>> = {
   'inventory.manage': { owner: true, manager: true, staff: false },
   'pos.editPrice': { owner: true, manager: true, staff: false },
   'pos.editPriceBelowCost': { owner: true, manager: false, staff: false },
+  'orders.return': { owner: true, manager: true, staff: false },
 }
 
 describe('PERMISSIONS map', () => {
@@ -34,6 +35,7 @@ describe('PERMISSIONS map', () => {
         'customers.manage',
         'customers.view',
         'inventory.manage',
+        'orders.return',
         'pos.editPrice',
         'pos.editPriceBelowCost',
         'pos.sell',

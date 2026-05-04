@@ -1,3 +1,4 @@
+# Story 7-2 created 2026-05-04: trả hàng — 8 ACs, 10 tasks
 # Story 5-4 created 2026-05-04: điều chỉnh nợ thủ công — 11 ACs, 10 tasks
 # Story 5-2 created 2026-05-02: phiếu thu + phân bổ FIFO — 17 ACs, 11 tasks
 # Story 5-1 created 2026-05-01: ghi nợ POS + kiểm tra hạn mức — 8 ACs, 12 tasks
@@ -58,7 +59,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-24
-last_updated: 2026-05-04 # story 5-4 done: code review 1 patch applied, 4 defer, 17 dismiss; 34 tests new; typecheck 4/4; full suite 1192 pass
+last_updated: 2026-05-04 # story 7-2 done: code review 1 patch (status filter), 2 defer; 12 tests; typecheck 4/4 pass: code review 1 patch applied, 4 defer, 17 dismiss; 34 tests new; typecheck 4/4; full suite 1192 pass
 # Story 4-3b dev xong 2026-04-30: 15/15 tasks, 21 integration test mới pass, full suite 978/979, in-progress → review
 # Story 4-3b created 2026-04-30 (chain + clone + import; 10 ACs, 15 tasks)
 # Story 5-3 created 2026-04-30 + Epic 5 → in-progress
@@ -143,7 +144,7 @@ development_status:
   # Epic 7: Hoa don & In an
   epic-7: in-progress
   7-1-danh-sach-chi-tiet-hoa-don: done
-  7-2-tra-hang: backlog
+  7-2-tra-hang: done
   7-3-in-hoa-don-thermal-a4: backlog
   7-4-cai-dat-mau-in: backlog
   epic-7-retrospective: optional

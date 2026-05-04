@@ -109,4 +109,65 @@ export function getOrderApi(id: string) {
   return apiClient.get<Envelope<OrderDetailResponse>>(`/api/v1/orders/${id}`)
 }
 
+// --- Returns API ---
+
+export interface ReturnableItem {
+  orderItemId: string
+  productId: string
+  variantId: string | null
+  productName: string
+  variantName: string | null
+  unit: string | null
+  unitPrice: number
+  purchasedQuantity: number
+  returnedQuantity: number
+  remainingQuantity: number
+}
+
+export interface OrderReturnItemDetail {
+  id: string
+  orderItemId: string
+  productName: string
+  variantName: string | null
+  unit: string | null
+  unitPrice: number
+  quantity: number
+  lineTotal: number
+  reason: string
+}
+
+export interface OrderReturnListItem {
+  id: string
+  returnNumber: string
+  totalAmount: number
+  refundAmount: number
+  debtReductionAmount: number
+  createdByName: string | null
+  createdAt: string
+  items: OrderReturnItemDetail[]
+}
+
+export interface CreateOrderReturnInput {
+  items: Array<{ orderItemId: string; quantity: number; reason: string }>
+  note?: string | null
+}
+
+export interface OrderReturnDetail extends OrderReturnListItem {
+  orderId: string
+  note: string | null
+  createdBy: string
+}
+
+export function getReturnableItemsApi(orderId: string) {
+  return apiClient.get<Envelope<ReturnableItem[]>>(`/api/v1/orders/${orderId}/returnable-items`)
+}
+
+export function getOrderReturnsApi(orderId: string) {
+  return apiClient.get<Envelope<OrderReturnListItem[]>>(`/api/v1/orders/${orderId}/returns`)
+}
+
+export function createReturnApi(orderId: string, input: CreateOrderReturnInput) {
+  return apiClient.post<Envelope<OrderReturnDetail>>(`/api/v1/orders/${orderId}/returns`, input)
+}
+
 export type { OrderDetailItem, OrderDetailResponse, OrderListItem }

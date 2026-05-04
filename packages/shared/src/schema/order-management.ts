@@ -6,7 +6,7 @@ export const orderPaymentMethodSchema = z.enum(['cash', 'transfer', 'qr', 'combi
 
 export const orderPaymentStatusSchema = z.enum(['paid', 'partial', 'unpaid'])
 
-export const orderStatusSchema = z.enum(['completed', 'cancelled'])
+export const orderStatusSchema = z.enum(['completed', 'cancelled', 'partial_return', 'full_return'])
 
 export const createOrderItemSchema = z
   .object({
@@ -227,7 +227,7 @@ export const listOrdersQuerySchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD')
     .optional(),
-  status: z.enum(['completed', 'cancelled']).optional(),
+  status: z.enum(['completed', 'cancelled', 'partial_return', 'full_return']).optional(),
   customerId: z.string().uuid().optional(),
   paymentMethod: z.enum(['cash', 'transfer', 'qr', 'combined', 'debt']).optional(),
   paymentStatus: z.enum(['paid', 'partial', 'unpaid']).optional(),
