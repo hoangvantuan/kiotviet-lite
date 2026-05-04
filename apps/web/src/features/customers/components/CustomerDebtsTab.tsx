@@ -1,7 +1,9 @@
-import { AlertTriangle, CheckCircle2, Wallet } from 'lucide-react'
+import { useState } from 'react'
+import { AlertTriangle, CheckCircle2, PenLine, Wallet } from 'lucide-react'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   Table,
   TableBody,
@@ -12,11 +14,15 @@ import {
 } from '@/components/ui/table'
 import { formatVnd } from '@/lib/currency'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/use-auth-store'
 
 import { useCustomerDebts } from '../hooks/use-customer-detail'
+import { DebtAdjustmentDialog } from './DebtAdjustmentDialog'
+import { DebtAdjustmentHistory } from './DebtAdjustmentHistory'
 
 interface CustomerDebtsTabProps {
   customerId: string
+  customerName?: string
 }
 
 function formatDate(iso: string): string {
@@ -51,8 +57,11 @@ function DebtProgressBar({
   )
 }
 
-export function CustomerDebtsTab({ customerId }: CustomerDebtsTabProps) {
+export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabProps) {
   const debtsQuery = useCustomerDebts(customerId)
+  const user = useAuthStore((s) => s.user)
+  const isOwner = user?.role === 'owner'
+  const [adjustDialogOpen, setAdjustDialogOpen] = useState(false)
 
   if (debtsQuery.isLoading) {
     return <p className="text-sm text-muted-foreground">Đang tải công nợ…</p>
@@ -72,9 +81,21 @@ export function CustomerDebtsTab({ customerId }: CustomerDebtsTabProps) {
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs text-muted-foreground">Tổng công nợ hiện tại</p>
-            <p className="mt-1 text-2xl font-semibold text-foreground">
-              {formatVnd(currentDebt)} ₫
-            </p>
+            <div className="mt-1 flex items-center gap-3">
+              <p className="text-2xl font-semibold text-foreground">
+                {formatVnd(currentDebt)} ₫
+              </p>
+              {isOwner && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAdjustDialogOpen(true)}
+                >
+                  <PenLine className="mr-1 size-4" />
+                  Điều chỉnh nợ
+                </Button>
+              )}
+            </div>
           </div>
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Hạn mức nợ hiệu lực</p>
@@ -164,6 +185,23 @@ export function CustomerDebtsTab({ customerId }: CustomerDebtsTabProps) {
           </div>
         )}
       </div>
+
+      {/* Lịch sử điều chỉnh nợ */}
+      <div>
+        <h3 className="mb-3 text-sm font-medium text-foreground">Lịch sử điều chỉnh nợ</h3>
+        <DebtAdjustmentHistory customerId={customerId} />
+      </div>
+
+      {/* Dialog điều chỉnh nợ */}
+      {isOwner && (
+        <DebtAdjustmentDialog
+          open={adjustDialogOpen}
+          onOpenChange={setAdjustDialogOpen}
+          customerId={customerId}
+          customerName={customerName ?? ''}
+          currentDebt={currentDebt}
+        />
+      )}
     </div>
   )
 }

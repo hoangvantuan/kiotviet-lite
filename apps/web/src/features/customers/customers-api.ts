@@ -1,12 +1,15 @@
 import type {
   CreateCustomerGroupInput,
   CreateCustomerInput,
+  CreateDebtAdjustmentInput,
   CustomerDebtsResponse,
   CustomerDetail,
   CustomerGroupItem,
   CustomerListItem,
   CustomerOrderItem,
   CustomerStats,
+  DebtAdjustmentDetail,
+  DebtAdjustmentListItem,
   ListCustomerOrdersQuery,
   ListCustomersQuery,
   QuickCreateCustomerInput,
@@ -115,4 +118,23 @@ export function getCustomerDebtsApi(id: string) {
 
 export function getCustomerStatsApi(id: string) {
   return apiClient.get<Envelope<CustomerStats>>(`/api/v1/customers/${id}/stats`)
+}
+
+// ========== Debt Adjustments ==========
+
+export function listDebtAdjustmentsApi(
+  customerId: string,
+  query?: { page?: number; pageSize?: number },
+) {
+  const params = new URLSearchParams()
+  params.set('customerId', customerId)
+  if (query?.page) params.set('page', String(query.page))
+  if (query?.pageSize) params.set('pageSize', String(query.pageSize))
+  return apiClient.get<ListEnvelope<DebtAdjustmentListItem[]>>(
+    `/api/v1/debt-adjustments?${params.toString()}`,
+  )
+}
+
+export function createDebtAdjustmentApi(input: CreateDebtAdjustmentInput) {
+  return apiClient.post<Envelope<DebtAdjustmentDetail>>('/api/v1/debt-adjustments', input)
 }

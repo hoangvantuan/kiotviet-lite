@@ -71,6 +71,7 @@ export const auditActionSchema = z.enum([
   'debt.limit_overridden',
   'receipt.created',
   'receipt.printed',
+  'debt_adjustment.created',
 ])
 
 export const auditLogItemSchema = z.object({

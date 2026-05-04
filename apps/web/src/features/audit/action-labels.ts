@@ -69,6 +69,7 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'debt.limit_overridden': 'Vượt hạn mức công nợ (PIN)',
   'receipt.created': 'Tạo phiếu thu nợ KH',
   'receipt.printed': 'In phiếu thu',
+  'debt_adjustment.created': 'Điều chỉnh nợ khách hàng',
 }
 
 export interface ActionGroup {
@@ -186,7 +187,7 @@ export const ACTION_GROUPS: ActionGroup[] = [
   },
   {
     label: 'Công nợ',
-    actions: ['debt.created', 'debt.limit_overridden'],
+    actions: ['debt.created', 'debt.limit_overridden', 'debt_adjustment.created'],
   },
   {
     label: 'Phiếu thu',

@@ -17,6 +17,7 @@ import { createCategoryDiscountsRoutes } from './routes/category-discounts.route
 import { createCustomerGroupsRoutes } from './routes/customer-groups.routes.js'
 import { createCustomerPricesRoutes } from './routes/customer-prices.routes.js'
 import { createCustomersRoutes } from './routes/customers.routes.js'
+import { createDebtAdjustmentsRoutes } from './routes/debt-adjustments.routes.js'
 import { createNotificationRoutes } from './routes/notifications.routes.js'
 import { createOrdersRoutes } from './routes/orders.routes.js'
 import { createPosRoutes } from './routes/pos.routes.js'
@@ -70,6 +71,7 @@ app.route('/api/v1/products', createProductHistoryRoutes({ db }))
 app.route('/api/v1/pos', createPosRoutes({ db }))
 app.route('/api/v1/customer-groups', createCustomerGroupsRoutes({ db }))
 app.route('/api/v1/customers', createCustomersRoutes({ db }))
+app.route('/api/v1/debt-adjustments', createDebtAdjustmentsRoutes({ db }))
 app.route('/api/v1/suppliers', createSuppliersRoutes({ db }))
 app.route('/api/v1/purchase-orders', createPurchaseOrdersRoutes({ db }))
 app.route('/api/v1/receipts', createReceiptsRoutes({ db }))

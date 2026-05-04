@@ -61,7 +61,7 @@ export function CustomerDetailPage() {
           <CustomerOrdersTab customerId={customer.id} />
         </TabsContent>
         <TabsContent value="debts" className="mt-4">
-          <CustomerDebtsTab customerId={customer.id} />
+          <CustomerDebtsTab customerId={customer.id} customerName={customer.name} />
         </TabsContent>
         <TabsContent value="stats" className="mt-4">
           <CustomerStatsTab customerId={customer.id} />

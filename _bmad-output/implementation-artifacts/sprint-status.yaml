@@ -1,3 +1,4 @@
+# Story 5-4 created 2026-05-04: điều chỉnh nợ thủ công — 11 ACs, 10 tasks
 # Story 5-2 created 2026-05-02: phiếu thu + phân bổ FIFO — 17 ACs, 11 tasks
 # Story 5-1 created 2026-05-01: ghi nợ POS + kiểm tra hạn mức — 8 ACs, 12 tasks
 # Story 4-3c created 2026-05-01: comprehensive context engine — 9 ACs, 12 tasks (5 phase A-E)
@@ -57,7 +58,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-24
-last_updated: 2026-05-02 # story 5-2 dev + code review hoàn thành: 0 CRIT, 1 MAJOR (test coverage), 5 MINOR; 3 patch applied; 80 tests new pass; verdict APPROVE_WITH_SUGGESTIONS
+last_updated: 2026-05-04 # story 5-4 done: code review 1 patch applied, 4 defer, 17 dismiss; 34 tests new; typecheck 4/4; full suite 1192 pass
 # Story 4-3b dev xong 2026-04-30: 15/15 tasks, 21 integration test mới pass, full suite 978/979, in-progress → review
 # Story 4-3b created 2026-04-30 (chain + clone + import; 10 ACs, 15 tasks)
 # Story 5-3 created 2026-04-30 + Epic 5 → in-progress
@@ -129,7 +130,7 @@ development_status:
   5-1-ghi-no-trong-pos-kiem-tra-han-muc: done # 2026-05-01 dev 12/12 tasks, 28 tests mới, full suite 1076 pass
   5-2-phieu-thu-phan-bo-fifo: done # 2026-05-02 review: 0 CRIT, 1 MAJOR (service unit tests chỉ cover helpers, business logic dùng integration), 5 MINOR (3 đã patch: clamp manual amount input, conditional render print template trên 2 dialogs); typecheck/lint/80 tests new pass; integration 30 cases cover happy + multi-tenant + cross-customer attack + race; verdict APPROVE_WITH_SUGGESTIONS
   5-3-phieu-chi-tra-no-ncc: done
-  5-4-dieu-chinh-no-thu-cong: backlog
+  5-4-dieu-chinh-no-thu-cong: done # 2026-05-04 code review: 1 patch (empty page), 4 defer, 17 dismiss; 34 tests, typecheck 4/4 pass
   5-5-canh-bao-no-bao-cao-cong-no: backlog
   epic-5-retrospective: optional
 

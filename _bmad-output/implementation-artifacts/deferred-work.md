@@ -149,3 +149,10 @@
 
 - F13: Permission `pos.sell` dùng chung cho xem danh sách hóa đơn + bán hàng tại POS. Nên tách `orders.view` khi cần least privilege. Thiết kế permission pre-existing. [orders.routes.ts, router.tsx]
 - F14: StatusBadge/PaymentStatusBadge duplicate giữa order-list.tsx và order-detail-view.tsx. Cần extract shared component khi thêm trạng thái mới. [apps/web/src/features/orders/]
+
+## Deferred from: code review of 5-4-dieu-chinh-no-thu-cong (2026-05-04)
+
+- F2: Query invalidation dùng `['customers', 'detail']` (broad) thay vì scope theo customerId cụ thể. Gây re-fetch dư thừa nhưng functional correct. [use-customer-detail.ts]
+- F3: Race condition test chỉ verify sequential (2 await tuần tự), không test concurrent FOR UPDATE thực sự. Service code đúng nhưng test coverage gap. [debt-adjustments.integration.test.ts]
+- F4: Nút "Huỷ" trong dialog điều chỉnh nợ không disable khi mutation đang pending. Không gây data corruption nhưng UX minor. [DebtAdjustmentDialog.tsx:168]
+- F5: currentDebt prop trong dialog có thể stale nếu user mở lại trước khi TanStack Query refetch xong. Server validate 422 nếu sai. [DebtAdjustmentDialog.tsx]

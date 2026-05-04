@@ -1,12 +1,14 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import type { ListCustomerOrdersQuery } from '@kiotviet-lite/shared'
+import type { CreateDebtAdjustmentInput, ListCustomerOrdersQuery } from '@kiotviet-lite/shared'
 
 import {
+  createDebtAdjustmentApi,
   getCustomerApi,
   getCustomerDebtsApi,
   getCustomerOrdersApi,
   getCustomerStatsApi,
+  listDebtAdjustmentsApi,
 } from '../customers-api'
 
 const CUSTOMER_DETAIL_KEY = ['customers', 'detail'] as const
@@ -41,5 +43,27 @@ export function useCustomerStats(id: string | undefined) {
     queryKey: [...CUSTOMER_DETAIL_KEY, id, 'stats'],
     queryFn: async () => (await getCustomerStatsApi(id as string)).data,
     enabled: Boolean(id),
+  })
+}
+
+// ========== Debt Adjustments ==========
+
+export function useDebtAdjustments(customerId: string | undefined, page = 1) {
+  return useQuery({
+    queryKey: ['debt-adjustments', customerId, { page }],
+    queryFn: async () => listDebtAdjustmentsApi(customerId as string, { page }),
+    enabled: Boolean(customerId),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useCreateDebtAdjustmentMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CreateDebtAdjustmentInput) => createDebtAdjustmentApi(input),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['customers', 'detail'] })
+      queryClient.invalidateQueries({ queryKey: ['debt-adjustments', variables.customerId] })
+    },
   })
 }
