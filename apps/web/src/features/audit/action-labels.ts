@@ -71,6 +71,7 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'receipt.printed': 'In phiếu thu',
   'debt_adjustment.created': 'Điều chỉnh nợ khách hàng',
   'order.returned': 'Trả hàng',
+  'print_settings.updated': 'Cập nhật mẫu in',
 }
 
 export interface ActionGroup {

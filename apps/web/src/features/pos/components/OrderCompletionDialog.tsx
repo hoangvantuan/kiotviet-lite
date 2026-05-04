@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CheckCircle } from 'lucide-react'
 
+import { usePrintSettingsQuery } from '@/features/settings/use-print-settings'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -65,6 +66,7 @@ export function OrderCompletionDialog({
 
   const { printOrder } = usePrintOrder()
   const user = useAuthStore((s) => s.user)
+  const printSettingsQuery = usePrintSettingsQuery()
 
   // Ref to always hold the latest onNewOrder callback (avoids stale closure)
   const onNewOrderRef = useRef(onNewOrder)
@@ -133,6 +135,7 @@ export function OrderCompletionDialog({
       }),
       store: storeInfo,
       format,
+      printSettings: printSettingsQuery.data,
     })
   }
 
@@ -242,9 +245,9 @@ export function OrderCompletionDialog({
     {/* Print templates (hidden, only visible during window.print) */}
     {order && (
       <>
-        <OrderInvoiceThermal order={orderForTemplate} />
-        <OrderInvoiceA4 order={orderForTemplate} />
-        <OrderInvoiceA5 order={orderForTemplate} />
+        <OrderInvoiceThermal order={orderForTemplate} printSettings={printSettingsQuery.data} />
+        <OrderInvoiceA4 order={orderForTemplate} printSettings={printSettingsQuery.data} />
+        <OrderInvoiceA5 order={orderForTemplate} printSettings={printSettingsQuery.data} />
       </>
     )}
   </>

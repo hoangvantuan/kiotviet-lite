@@ -1,6 +1,9 @@
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
+import type { PrintSettingsResponse } from '@kiotviet-lite/shared'
+
+import { DEFAULT_PRINT_SETTINGS } from '@/features/settings/use-print-settings'
 import * as serial from '@/lib/serial-port'
 import {
   buildOrderReceipt,
@@ -16,12 +19,17 @@ export type PrintStatus = 'idle' | 'connecting' | 'printing' | 'success' | 'erro
 
 const STORAGE_FORMAT_KEY = 'kv_print_default_format'
 
-const DEFAULT_PRINT_OPTIONS: Omit<PrintOptions, 'paperWidth'> = {
-  isReprint: false,
-  showOldDebt: false,
-  showNewDebt: true,
-  showDiscount: true,
-  footerText: 'Cảm ơn quý khách!',
+function settingsToOptions(
+  settings: PrintSettingsResponse | undefined,
+): Omit<PrintOptions, 'paperWidth'> {
+  const s = settings ?? DEFAULT_PRINT_SETTINGS
+  return {
+    isReprint: false,
+    showOldDebt: s.showOldDebt,
+    showNewDebt: s.showNewDebt,
+    showDiscount: s.showDiscount,
+    footerText: s.footerText,
+  }
 }
 
 export function getDefaultFormat(): PrintFormat {
@@ -44,6 +52,17 @@ export function saveDefaultFormat(format: PrintFormat): void {
   }
 }
 
+function formatFromSettings(settings?: PrintSettingsResponse): PrintFormat {
+  if (settings?.defaultPaperSize) {
+    const ps = settings.defaultPaperSize
+    if (ps === '58mm') return 'thermal-58'
+    if (ps === '80mm') return 'thermal-80'
+    if (ps === 'a4') return 'a4'
+    if (ps === 'a5') return 'a5'
+  }
+  return getDefaultFormat()
+}
+
 function paperWidthFromFormat(format: PrintFormat): PaperWidth {
   return format === 'thermal-80' ? '80mm' : '58mm'
 }
@@ -59,6 +78,7 @@ export interface PrintOrderParams {
   store: ThermalStoreInfo
   format?: PrintFormat
   isReprint?: boolean
+  printSettings?: PrintSettingsResponse
 }
 
 /**
@@ -123,7 +143,7 @@ export function usePrintOrder() {
   const setActivePrintFormat = usePrintStore((s) => s.setActivePrintFormat)
 
   const printThermal = useCallback(async (params: PrintOrderParams) => {
-    const { order, store, format = 'thermal-58', isReprint = false } = params
+    const { order, store, format = 'thermal-58', isReprint = false, printSettings } = params
 
     if (!serial.isSerialSupported()) {
       toast.info('Trình duyệt không hỗ trợ in trực tiếp, đang in qua trình duyệt')
@@ -150,7 +170,7 @@ export function usePrintOrder() {
       setStatus('printing')
 
       const options: PrintOptions = {
-        ...DEFAULT_PRINT_OPTIONS,
+        ...settingsToOptions(printSettings),
         paperWidth: paperWidthFromFormat(format),
         isReprint,
       }
@@ -197,7 +217,7 @@ export function usePrintOrder() {
     printingRef.current = true
 
     try {
-      const format = params.format ?? getDefaultFormat()
+      const format = params.format ?? formatFromSettings(params.printSettings)
       const isThermal = format === 'thermal-58' || format === 'thermal-80'
 
       if (isThermal) {

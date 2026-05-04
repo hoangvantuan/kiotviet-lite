@@ -4,6 +4,8 @@ import { phoneSchema } from './auth.js'
 
 const LOGO_DATA_URL_REGEX = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/
 
+const DEBT_OVERDUE_DAYS_REGEX = /^\d{1,3}(,\d{1,3}){0,4}$/
+
 export const updateStoreSchema = z
   .object({
     name: z
@@ -20,13 +22,25 @@ export const updateStoreSchema = z
       .regex(LOGO_DATA_URL_REGEX, 'Logo phải là PNG hoặc JPEG (data URL)')
       .optional()
       .nullable(),
+    debtWarningPercent: z
+      .number()
+      .int('Ngưỡng cảnh báo phải là số nguyên')
+      .min(1, 'Ngưỡng cảnh báo tối thiểu 1%')
+      .max(100, 'Ngưỡng cảnh báo tối đa 100%')
+      .optional(),
+    debtOverdueDays: z
+      .string()
+      .regex(DEBT_OVERDUE_DAYS_REGEX, 'Sai định dạng mốc quá hạn (VD: 30,60,90)')
+      .optional(),
   })
   .refine(
     (data) =>
       data.name !== undefined ||
       data.address !== undefined ||
       data.phone !== undefined ||
-      data.logoUrl !== undefined,
+      data.logoUrl !== undefined ||
+      data.debtWarningPercent !== undefined ||
+      data.debtOverdueDays !== undefined,
     { message: 'Cần ít nhất một trường để cập nhật' },
   )
 
@@ -36,6 +50,8 @@ export const storeSettingsSchema = z.object({
   address: z.string().nullable(),
   phone: z.string().nullable(),
   logoUrl: z.string().nullable(),
+  debtWarningPercent: z.number().int(),
+  debtOverdueDays: z.string(),
   updatedAt: z.string(),
 })
 

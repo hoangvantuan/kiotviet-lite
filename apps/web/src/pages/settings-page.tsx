@@ -12,6 +12,8 @@ interface SettingsTab {
 
 const SETTINGS_TABS: SettingsTab[] = [
   { value: 'store', label: 'Cửa hàng', path: '/settings/store', permission: 'store.manage' },
+  { value: 'print', label: 'Mẫu in', path: '/settings/print', permission: 'store.manage' },
+  { value: 'debt', label: 'Công nợ', path: '/settings/debt', permission: 'store.manage' },
   { value: 'staff', label: 'Nhân viên', path: '/settings/staff', permission: 'users.manage' },
   {
     value: 'audit',

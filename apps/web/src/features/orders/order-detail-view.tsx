@@ -4,6 +4,8 @@ import { ChevronLeft, RotateCcw } from 'lucide-react'
 
 import { RETURN_REASON_LABELS } from '@kiotviet-lite/shared'
 
+import { usePrintSettingsQuery } from '@/features/settings/use-print-settings'
+
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -120,17 +122,18 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
   const user = useAuthStore((s) => s.user)
   const canReturn = user?.role === 'owner' || user?.role === 'manager'
   const { printOrder } = usePrintOrder()
+  const printSettingsQuery = usePrintSettingsQuery()
 
   function handlePrint(format: PrintFormat) {
     const order = query.data
     if (!order) return
-    // H5: Đọc store name từ auth user nếu có, fallback "Cửa hàng"
     const storeInfo = { name: user?.name ?? 'Cửa hàng' }
     printOrder({
       order: toThermalOrder(order),
       store: storeInfo,
       format,
       isReprint: true,
+      printSettings: printSettingsQuery.data,
     })
   }
 
@@ -412,9 +415,9 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
       />
 
       {/* Print templates (hidden, only visible during window.print) */}
-      <OrderInvoiceThermal order={order} isReprint />
-      <OrderInvoiceA4 order={order} isReprint />
-      <OrderInvoiceA5 order={order} isReprint />
+      <OrderInvoiceThermal order={order} isReprint printSettings={printSettingsQuery.data} />
+      <OrderInvoiceA4 order={order} isReprint printSettings={printSettingsQuery.data} />
+      <OrderInvoiceA5 order={order} isReprint printSettings={printSettingsQuery.data} />
     </div>
   )
 }

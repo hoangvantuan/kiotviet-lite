@@ -34,7 +34,9 @@ import { ReceiptsPage } from '@/pages/receipts-page'
 import { RegisterPage } from '@/pages/register-page'
 import { ReportsPage } from '@/pages/reports-page'
 import { SettingsAuditPage } from '@/pages/settings-audit-page'
+import { SettingsDebtPage } from '@/pages/settings-debt-page'
 import { SettingsPage } from '@/pages/settings-page'
+import { SettingsPrintPage } from '@/pages/settings-print-page'
 import { SettingsStaffPage } from '@/pages/settings-staff-page'
 import { SettingsStorePage } from '@/pages/settings-store-page'
 import { StockCheckCreatePage } from '@/pages/stock-check-create-page'
@@ -292,6 +294,20 @@ const settingsStoreRoute = createRoute({
   component: SettingsStorePage,
 })
 
+const settingsPrintRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: 'print',
+  beforeLoad: requirePermissionGuard('store.manage'),
+  component: SettingsPrintPage,
+})
+
+const settingsDebtRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: 'debt',
+  beforeLoad: requirePermissionGuard('store.manage'),
+  component: SettingsDebtPage,
+})
+
 const settingsStaffRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: 'staff',
@@ -376,6 +392,8 @@ const routeTree = rootRoute.addChildren([
       settingsRoute.addChildren([
         settingsIndexRoute,
         settingsStoreRoute,
+        settingsPrintRoute,
+        settingsDebtRoute,
         settingsStaffRoute,
         settingsAuditRoute,
       ]),

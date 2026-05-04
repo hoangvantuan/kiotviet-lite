@@ -16,6 +16,8 @@ function toStoreSettings(row: typeof stores.$inferSelect): StoreSettings {
     address: row.address,
     phone: row.phone,
     logoUrl: row.logoUrl,
+    debtWarningPercent: row.debtWarningPercent,
+    debtOverdueDays: row.debtOverdueDays,
     updatedAt: row.updatedAt.toISOString(),
   }
 }
@@ -75,6 +77,8 @@ export async function updateStore({
   if (input.address !== undefined) updates.address = input.address
   if (input.phone !== undefined) updates.phone = input.phone
   if (input.logoUrl !== undefined) updates.logoUrl = input.logoUrl
+  if (input.debtWarningPercent !== undefined) updates.debtWarningPercent = input.debtWarningPercent
+  if (input.debtOverdueDays !== undefined) updates.debtOverdueDays = input.debtOverdueDays
 
   return db.transaction(async (tx) => {
     const [updated] = await tx
@@ -92,12 +96,16 @@ export async function updateStore({
       address: before.address,
       phone: before.phone,
       logoUrl: before.logoUrl ? '<base64>' : null,
+      debtWarningPercent: before.debtWarningPercent,
+      debtOverdueDays: before.debtOverdueDays,
     }
     const afterFields = {
       name: updated.name,
       address: updated.address,
       phone: updated.phone,
       logoUrl: updated.logoUrl ? '<base64>' : null,
+      debtWarningPercent: updated.debtWarningPercent,
+      debtOverdueDays: updated.debtOverdueDays,
     }
     const fieldDiff = diffObjects(beforeFields, afterFields)
 

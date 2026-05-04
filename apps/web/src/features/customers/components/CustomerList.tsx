@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Archive, Pencil, Plus, RotateCcw, SearchX, Trash2, Users } from 'lucide-react'
+import { AlertTriangle, Archive, Pencil, Plus, RotateCcw, SearchX, Trash2, Users } from 'lucide-react'
 
 import type { CustomerListItem, ListCustomersQuery } from '@kiotviet-lite/shared'
 
@@ -41,6 +41,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useStoreQuery } from '@/features/settings/use-store-settings'
 import { useDebounced } from '@/hooks/use-debounced'
 import { ApiClientError } from '@/lib/api-client'
 import { showError, showSuccess } from '@/lib/toast'
@@ -63,9 +64,11 @@ const VND_FORMATTER = new Intl.NumberFormat('vi-VN')
 function DebtBadge({
   currentDebt,
   effectiveDebtLimit,
+  warningPercent,
 }: {
   currentDebt: number
   effectiveDebtLimit: number | null
+  warningPercent: number
 }) {
   if (currentDebt === 0) {
     return (
@@ -83,10 +86,23 @@ function DebtBadge({
     )
   }
   const ratio = currentDebt / effectiveDebtLimit
-  if (ratio >= 0.8) {
-    const pct = Math.round(ratio * 100)
+  const pct = Math.round(ratio * 100)
+  if (ratio >= 1) {
     return (
-      <Badge variant="destructive" className="text-xs" title={`Đã sử dụng ${pct}% hạn mức`}>
+      <Badge variant="destructive" className="text-xs" title={`Đã vượt hạn mức công nợ (${pct}%)`}>
+        <AlertTriangle className="mr-1 size-3" />
+        {formatted}
+      </Badge>
+    )
+  }
+  if (pct >= warningPercent) {
+    return (
+      <Badge
+        variant="outline"
+        className="border-yellow-300 bg-yellow-50 text-yellow-700 text-xs"
+        title={`Nợ sắp đạt hạn mức (${pct}%)`}
+      >
+        <AlertTriangle className="mr-1 size-3" />
         {formatted}
       </Badge>
     )
@@ -124,6 +140,8 @@ export function CustomerList() {
   }, [page, debouncedSearch, groupFilter, debtFilter])
 
   const customersQuery = useCustomersQuery(apiQuery)
+  const storeQuery = useStoreQuery()
+  const warningPercent = storeQuery.data?.debtWarningPercent ?? 80
   const editCustomerQuery = useCustomerQuery(editTargetId ?? undefined)
 
   const items = customersQuery.data?.data ?? []
@@ -265,6 +283,7 @@ export function CustomerList() {
                     <DebtBadge
                       currentDebt={customer.currentDebt}
                       effectiveDebtLimit={customer.effectiveDebtLimit}
+                      warningPercent={warningPercent}
                     />
                   </TableCell>
                   <TableCell className="text-right">

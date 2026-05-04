@@ -1,3 +1,5 @@
+import type { PrintSettingsResponse } from '@kiotviet-lite/shared'
+
 import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
 import { PAYMENT_METHOD_LABELS } from '@/lib/constants'
 import { numberToVietnameseWords } from '@/lib/number-to-words'
@@ -19,6 +21,7 @@ interface InvoiceProps {
   order: OrderDetailResponse
   store?: InvoiceStoreInfo
   isReprint?: boolean
+  printSettings?: PrintSettingsResponse
 }
 
 function formatDateTime(iso: string): string {
@@ -44,8 +47,12 @@ function isThermalFormat(f: PrintFormat | null): boolean {
   return f === 'thermal-58' || f === 'thermal-80'
 }
 
-export function OrderInvoiceThermal({ order, store, isReprint }: InvoiceProps) {
+export function OrderInvoiceThermal({ order, store, isReprint, printSettings }: InvoiceProps) {
   const activePrintFormat = usePrintStore((s) => s.activePrintFormat)
+  const showCustomerName = printSettings?.showCustomerName ?? true
+  const showCustomerPhone = printSettings?.showCustomerPhone ?? true
+  const showDiscount = printSettings?.showDiscount ?? true
+  const showNotes = printSettings?.showNotes ?? true
 
   // C1: Chỉ hiện template khi format đang in là thermal
   if (!isThermalFormat(activePrintFormat)) return null
@@ -94,8 +101,8 @@ export function OrderInvoiceThermal({ order, store, isReprint }: InvoiceProps) {
         <span>HĐ: {order.orderNumber}</span>
         <span>{formatDateTime(order.createdAt)}</span>
       </div>
-      {order.customerName && <p>KH: {order.customerName}</p>}
-      {order.customerPhone && <p>SĐT: {order.customerPhone}</p>}
+      {showCustomerName && order.customerName && <p>KH: {order.customerName}</p>}
+      {showCustomerPhone && order.customerPhone && <p>SĐT: {order.customerPhone}</p>}
 
       <ThermalSeparator />
 
@@ -111,7 +118,7 @@ export function OrderInvoiceThermal({ order, store, isReprint }: InvoiceProps) {
       {/* Totals */}
       <div className="space-y-0.5">
         <ThermalRow label="Tạm tính" value={formatVnd(order.subtotal)} />
-        {order.discountAmount > 0 && (
+        {showDiscount && order.discountAmount > 0 && (
           <ThermalRow label="Chiết khấu" value={`-${formatVnd(order.discountAmount)}`} />
         )}
         <ThermalRow label="TỔNG" value={formatVnd(order.total)} bold />
@@ -135,7 +142,7 @@ export function OrderInvoiceThermal({ order, store, isReprint }: InvoiceProps) {
 
       <ThermalSeparator />
 
-      <p className="text-center mt-1">Cảm ơn quý khách!</p>
+      <p className="text-center mt-1">{printSettings?.footerText ?? 'Cảm ơn quý khách!'}</p>
     </div>
   )
 }
@@ -175,7 +182,7 @@ function ThermalItemRow({ item }: { item: OrderDetailItem }) {
 // A4 TEMPLATE
 // ================================================================
 
-export function OrderInvoiceA4({ order, store, isReprint }: InvoiceProps) {
+export function OrderInvoiceA4({ order, store, isReprint, printSettings }: InvoiceProps) {
   const activePrintFormat = usePrintStore((s) => s.activePrintFormat)
 
   // C1: Chỉ hiện template khi format đang in là a4
@@ -339,7 +346,7 @@ function A4Totals({ order }: { order: OrderDetailResponse }) {
 // A5 TEMPLATE (compact version of A4)
 // ================================================================
 
-export function OrderInvoiceA5({ order, store, isReprint }: InvoiceProps) {
+export function OrderInvoiceA5({ order, store, isReprint, printSettings }: InvoiceProps) {
   const activePrintFormat = usePrintStore((s) => s.activePrintFormat)
 
   // C1: Chỉ hiện template khi format đang in là a5

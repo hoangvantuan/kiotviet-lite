@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, CheckCircle2, PenLine, Wallet } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, PenLine, Wallet } from 'lucide-react'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useStoreQuery } from '@/features/settings/use-store-settings'
 import { formatVnd } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/use-auth-store'
@@ -37,6 +38,40 @@ function formatDate(iso: string): string {
   }
 }
 
+function parseOverdueDays(raw: string): number[] {
+  return raw
+    .split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => !Number.isNaN(n) && n > 0)
+    .sort((a, b) => a - b)
+}
+
+function getDebtStatusBadge(dateIso: string, remaining: number, overdueDays: number[]) {
+  if (remaining === 0) {
+    return { label: 'Đã tất toán', className: 'border-gray-200 bg-gray-50 text-gray-600' }
+  }
+  const daysSince = Math.floor((Date.now() - new Date(dateIso).getTime()) / 86400000)
+  if (daysSince <= (overdueDays[0] ?? 30)) {
+    return { label: 'Trong hạn', className: 'border-green-200 bg-green-50 text-green-700' }
+  }
+  if (daysSince <= (overdueDays[1] ?? 60)) {
+    return {
+      label: `Quá hạn ${daysSince} ngày`,
+      className: 'border-yellow-200 bg-yellow-50 text-yellow-700',
+    }
+  }
+  if (daysSince <= (overdueDays[2] ?? 90)) {
+    return {
+      label: `Quá hạn ${daysSince} ngày`,
+      className: 'border-orange-200 bg-orange-50 text-orange-700',
+    }
+  }
+  return {
+    label: `Quá hạn ${daysSince} ngày`,
+    className: 'border-red-200 bg-red-50 text-red-700',
+  }
+}
+
 function DebtProgressBar({
   percent,
   variant,
@@ -59,9 +94,11 @@ function DebtProgressBar({
 
 export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabProps) {
   const debtsQuery = useCustomerDebts(customerId)
+  const storeQuery = useStoreQuery()
   const user = useAuthStore((s) => s.user)
   const isOwner = user?.role === 'owner'
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false)
+  const overdueDays = parseOverdueDays(storeQuery.data?.debtOverdueDays ?? '30,60,90')
 
   if (debtsQuery.isLoading) {
     return <p className="text-sm text-muted-foreground">Đang tải công nợ…</p>
@@ -162,6 +199,7 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
                   <TableHead className="text-right">Nợ ban đầu</TableHead>
                   <TableHead className="text-right">Đã trả</TableHead>
                   <TableHead className="text-right">Còn lại</TableHead>
+                  <TableHead>Tình trạng</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -177,6 +215,19 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
                     </TableCell>
                     <TableCell className="text-right font-medium text-red-700">
                       {formatVnd(debt.remainingAmount)} ₫
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const status = getDebtStatusBadge(debt.date, debt.remainingAmount, overdueDays)
+                        return (
+                          <Badge variant="outline" className={status.className}>
+                            {debt.remainingAmount > 0 && status.label !== 'Trong hạn' && status.label !== 'Đã tất toán' && (
+                              <Clock className="mr-1 size-3" />
+                            )}
+                            {status.label}
+                          </Badge>
+                        )
+                      })()}
                     </TableCell>
                   </TableRow>
                 ))}
