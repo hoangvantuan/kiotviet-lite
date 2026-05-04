@@ -24,6 +24,7 @@ import { createPriceListsRoutes } from './routes/price-lists.routes.js'
 import { createProductHistoryRoutes } from './routes/product-history.routes.js'
 import { createProductsRoutes } from './routes/products.routes.js'
 import { createPurchaseOrdersRoutes } from './routes/purchase-orders.routes.js'
+import { createReceiptsRoutes } from './routes/receipts.routes.js'
 import { createStockChecksRoutes } from './routes/stock-checks.routes.js'
 import { createStoreRoutes } from './routes/store.routes.js'
 import { createSupplierPaymentsRoutes } from './routes/supplier-payments.routes.js'
@@ -71,6 +72,7 @@ app.route('/api/v1/customer-groups', createCustomerGroupsRoutes({ db }))
 app.route('/api/v1/customers', createCustomersRoutes({ db }))
 app.route('/api/v1/suppliers', createSuppliersRoutes({ db }))
 app.route('/api/v1/purchase-orders', createPurchaseOrdersRoutes({ db }))
+app.route('/api/v1/receipts', createReceiptsRoutes({ db }))
 app.route('/api/v1/supplier-payments', createSupplierPaymentsRoutes({ db }))
 app.route('/api/v1/stock-checks', createStockChecksRoutes({ db }))
 app.route('/api/v1/price-lists', createPriceListsRoutes({ db }))

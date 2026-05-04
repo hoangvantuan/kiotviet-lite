@@ -30,6 +30,7 @@ import { ProductsPage } from '@/pages/products-page'
 import { PurchaseOrderCreatePage } from '@/pages/purchase-order-create-page'
 import { PurchaseOrderDetailPage } from '@/pages/purchase-order-detail-page'
 import { PurchaseOrdersPage } from '@/pages/purchase-orders-page'
+import { ReceiptsPage } from '@/pages/receipts-page'
 import { RegisterPage } from '@/pages/register-page'
 import { ReportsPage } from '@/pages/reports-page'
 import { SettingsAuditPage } from '@/pages/settings-audit-page'
@@ -148,6 +149,13 @@ const customerDetailRoute = createRoute({
   path: '/customers/$customerId',
   beforeLoad: requirePermissionGuard('customers.manage'),
   component: CustomerDetailPage,
+})
+
+const receiptsRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/receipts',
+  beforeLoad: requirePermissionGuard('customers.manage'),
+  component: ReceiptsPage,
 })
 
 const pricingRoute = createRoute({
@@ -347,6 +355,7 @@ const routeTree = rootRoute.addChildren([
       customersRoute,
       customersGroupsRoute,
       customerDetailRoute,
+      receiptsRoute,
       pricingRoute,
       customerPricesRoute,
       volumePricesRoute,
