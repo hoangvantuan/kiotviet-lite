@@ -1,10 +1,22 @@
 import { Hono } from 'hono'
 
-import { debtAgingQuerySchema, debtSummaryQuerySchema } from '@kiotviet-lite/shared'
+import {
+  dashboardQuerySchema,
+  dashboardResponseSchema,
+  debtAgingQuerySchema,
+  debtSummaryQuerySchema,
+} from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
+import {
+  getDashboardMetrics,
+  getLowStockAlerts,
+  getOverdueDebts,
+  getRevenueChart,
+  getTopProducts,
+} from '../services/dashboard.service.js'
 import {
   buildAgingCsv,
   buildSummaryCsv,
@@ -16,6 +28,30 @@ export function createReportsRoutes({ db }: { db: Db }) {
   const app = new Hono()
 
   app.use('*', requireAuth, requirePermission('reports.view'))
+
+  app.get('/dashboard', async (c) => {
+    const auth = c.get('auth')
+    const raw = { period: c.req.query('period') }
+    const query = dashboardQuerySchema.parse({
+      period: raw.period || undefined,
+    })
+    const [metrics, revenueChart, topProducts, lowStockAlerts, overdueDebts] = await Promise.all([
+      getDashboardMetrics(db, auth.storeId, query.period),
+      getRevenueChart(db, auth.storeId),
+      getTopProducts(db, auth.storeId, query.period),
+      getLowStockAlerts(db, auth.storeId),
+      getOverdueDebts(db, auth.storeId),
+    ])
+    const data = {
+      metrics,
+      revenueChart,
+      topProducts,
+      lowStockAlerts,
+      overdueDebts,
+    }
+    dashboardResponseSchema.parse(data)
+    return c.json({ data })
+  })
 
   app.get('/debt-aging', async (c) => {
     const auth = c.get('auth')

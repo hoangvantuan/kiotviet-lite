@@ -18,6 +18,7 @@ import { CustomerDetailPage } from '@/pages/customer-detail-page'
 import { CustomerPricesPage } from '@/pages/customer-prices-page'
 import { CustomersGroupsPage } from '@/pages/customers-groups-page'
 import { CustomersPage } from '@/pages/customers-page'
+import { DashboardPage } from '@/pages/dashboard-page'
 import { HomePage } from '@/pages/home-page'
 import { LoginPage } from '@/pages/login-page'
 import { OrderDetailPage } from '@/pages/order-detail-page'
@@ -265,6 +266,13 @@ const reportsRoute = createRoute({
   component: ReportsPage,
 })
 
+const reportsDashboardRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/reports/dashboard',
+  beforeLoad: requirePermissionGuard('reports.view'),
+  component: DashboardPage,
+})
+
 const settingsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/settings',
@@ -388,6 +396,7 @@ const routeTree = rootRoute.addChildren([
       inventoryStockCheckEditRoute,
       ordersRoute,
       orderDetailRoute,
+      reportsDashboardRoute,
       reportsRoute,
       settingsRoute.addChildren([
         settingsIndexRoute,

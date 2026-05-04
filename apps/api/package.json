@@ -18,6 +18,7 @@
     "@kiotviet-lite/notifications": "workspace:*",
     "@kiotviet-lite/shared": "workspace:*",
     "bcryptjs": "^3.0.3",
+    "date-fns": "^4.1.0",
     "dotenv": "^16.5.0",
     "drizzle-orm": "^0.45.0",
     "hono": "^4.12.0",

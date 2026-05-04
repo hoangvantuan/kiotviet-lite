@@ -1,4 +1,9 @@
-import type { DebtAgingReport, DebtSummaryReport } from '@kiotviet-lite/shared'
+import type {
+  DashboardPeriod,
+  DashboardResponse,
+  DebtAgingReport,
+  DebtSummaryReport,
+} from '@kiotviet-lite/shared'
 
 import { apiClient } from '@/lib/api-client'
 import { useAuthStore } from '@/stores/use-auth-store'
@@ -20,10 +25,16 @@ function buildQs(query: ReportDateQuery): string {
   return qs ? `?${qs}` : ''
 }
 
-export async function getDebtAgingReportApi(query: ReportDateQuery) {
-  return apiClient.get<ApiEnvelope<DebtAgingReport>>(
-    `/api/v1/reports/debt-aging${buildQs(query)}`,
+export async function getDashboardApi(period: DashboardPeriod) {
+  const params = new URLSearchParams()
+  params.set('period', period)
+  return apiClient.get<ApiEnvelope<DashboardResponse>>(
+    `/api/v1/reports/dashboard?${params.toString()}`,
   )
+}
+
+export async function getDebtAgingReportApi(query: ReportDateQuery) {
+  return apiClient.get<ApiEnvelope<DebtAgingReport>>(`/api/v1/reports/debt-aging${buildQs(query)}`)
 }
 
 export async function getDebtSummaryReportApi(query: ReportDateQuery) {

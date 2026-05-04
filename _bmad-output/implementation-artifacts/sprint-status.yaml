@@ -1,3 +1,6 @@
+# Story 8-1 code review 2026-05-05: 0 CRIT, 3 MAJOR (1 PM-confirm permission, 1 MVP-accept profit, 1 CTA-fix), 7 MINOR (3 patched), 5 SUGGESTION defer; 3 patches applied; typecheck 3/3 pass; 1249/1250 tests (1 pre-existing timeout); verdict APPROVE_WITH_SUGGESTIONS; review → done
+# Story 8-1 dev completed 2026-05-05: 7/7 tasks, 10 integration tests, typecheck 4/4 pass, full suite 1250/1250 pass; in-progress → review
+# Story 8-1 created 2026-05-05: dashboard tổng quan — 10 ACs, 7 tasks; Epic 8 → in-progress
 # Story 7-4 code review 2026-05-04: APPROVE_WITH_SUGGESTIONS, 3 patches applied (F1 undefined filter, F2 paperSize fallback, F3 OK as-is), 5 defer, 3 dismiss; typecheck clean
 # Story 7-4 dev completed 2026-05-04: 7/7 tasks, typecheck shared+web+notifications pass, 1235/1235 tests pass (5 pre-existing fail in reports)
 # Story 5-5 created 2026-05-04: cảnh báo nợ & báo cáo công nợ — 13 ACs, 13 tasks
@@ -64,7 +67,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-24
-last_updated: 2026-05-04 # story 7-2 done: code review 1 patch (status filter), 2 defer; 12 tests; typecheck 4/4 pass: code review 1 patch applied, 4 defer, 17 dismiss; 34 tests new; typecheck 4/4; full suite 1192 pass
+last_updated: 2026-05-05 # story 8-1 done: code review 3 patches applied, APPROVE_WITH_SUGGESTIONS
 # Story 4-3b dev xong 2026-04-30: 15/15 tasks, 21 integration test mới pass, full suite 978/979, in-progress → review
 # Story 4-3b created 2026-04-30 (chain + clone + import; 10 ACs, 15 tasks)
 # Story 5-3 created 2026-04-30 + Epic 5 → in-progress
@@ -155,8 +158,8 @@ development_status:
   epic-7-retrospective: optional
 
   # Epic 8: Bao cao & Dashboard
-  epic-8: backlog
-  8-1-dashboard-tong-quan: backlog
+  epic-8: in-progress
+  8-1-dashboard-tong-quan: done
   8-2-bao-cao-chi-tiet-export: backlog
   epic-8-retrospective: optional
 
