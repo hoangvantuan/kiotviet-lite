@@ -1,3 +1,4 @@
+# Story 7-3 created 2026-05-04: in hóa đơn thermal & A4 — 4 ACs, 7 tasks (6 phases)
 # Story 7-2 created 2026-05-04: trả hàng — 8 ACs, 10 tasks
 # Story 5-4 created 2026-05-04: điều chỉnh nợ thủ công — 11 ACs, 10 tasks
 # Story 5-2 created 2026-05-02: phiếu thu + phân bổ FIFO — 17 ACs, 11 tasks
@@ -145,7 +146,7 @@ development_status:
   epic-7: in-progress
   7-1-danh-sach-chi-tiet-hoa-don: done
   7-2-tra-hang: done
-  7-3-in-hoa-don-thermal-a4: backlog
+  7-3-in-hoa-don-thermal-a4: done
   7-4-cai-dat-mau-in: backlog
   epic-7-retrospective: optional
 

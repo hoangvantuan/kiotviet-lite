@@ -31,3 +31,47 @@
   --radius-sm: 0.25rem;
   --radius-lg: 0.75rem;
 }
+
+/* Print styles: hide app chrome, show only print templates */
+@media print {
+  /*
+   * Ẩn tất cả nội dung bằng visibility: hidden (giữ layout không ảnh hưởng)
+   * rồi hiện lại chỉ print template containers.
+   * Dùng visibility thay vì display vì templates nằm sâu trong #root.
+   */
+  body * {
+    visibility: hidden !important;
+  }
+
+  .print-template-container,
+  .print-template-container * {
+    visibility: visible !important;
+  }
+
+  .print-template-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* Ẩn hoàn toàn các phần tử không cần chiếm space khi in */
+  nav,
+  aside,
+  header,
+  main,
+  [data-sonner-toaster],
+  [data-radix-popper-content-wrapper],
+  [data-radix-dialog-overlay],
+  .no-print {
+    display: none !important;
+  }
+
+  /* Reset page background */
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

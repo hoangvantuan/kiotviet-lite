@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, Printer, RotateCcw } from 'lucide-react'
+import { ChevronLeft, RotateCcw } from 'lucide-react'
 
 import { RETURN_REASON_LABELS } from '@kiotviet-lite/shared'
 
@@ -15,10 +15,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { PAYMENT_METHOD_LABELS } from '@/lib/constants'
 import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
 import { useAuthStore } from '@/stores/use-auth-store'
 
+import { OrderInvoiceA4, OrderInvoiceA5, OrderInvoiceThermal } from './order-invoice-template'
+import { PrintButton } from './print-button'
 import { ReturnDialog } from './return-dialog'
+import { type PrintFormat, toThermalOrder, usePrintOrder } from './use-print-order'
 import { useOrderQuery, useOrderReturnsQuery } from './use-orders'
 
 interface OrderDetailViewProps {
@@ -38,13 +42,6 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
   unpaid: 'Chưa thanh toán',
 }
 
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: 'Tiền mặt',
-  transfer: 'Chuyển khoản',
-  qr: 'QR',
-  combined: 'Kết hợp',
-  debt: 'Ghi nợ',
-}
 
 function StatusBadge({ status }: { status: string }) {
   if (status === 'completed') {
@@ -122,6 +119,20 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
   const [returnOpen, setReturnOpen] = useState(false)
   const user = useAuthStore((s) => s.user)
   const canReturn = user?.role === 'owner' || user?.role === 'manager'
+  const { printOrder } = usePrintOrder()
+
+  function handlePrint(format: PrintFormat) {
+    const order = query.data
+    if (!order) return
+    // H5: Đọc store name từ auth user nếu có, fallback "Cửa hàng"
+    const storeInfo = { name: user?.name ?? 'Cửa hàng' }
+    printOrder({
+      order: toThermalOrder(order),
+      store: storeInfo,
+      format,
+      isReprint: true,
+    })
+  }
 
   if (query.isLoading) {
     return (
@@ -176,9 +187,7 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
               <RotateCcw className="size-4 mr-1" /> Trả hàng
             </Button>
           )}
-          <Button variant="outline" size="sm" disabled>
-            <Printer className="size-4 mr-1" /> In lại
-          </Button>
+          <PrintButton onPrint={handlePrint} label="In lại" size="sm" />
         </div>
       </header>
 
@@ -401,6 +410,11 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
         orderId={orderId}
         orderNumber={order.orderNumber}
       />
+
+      {/* Print templates (hidden, only visible during window.print) */}
+      <OrderInvoiceThermal order={order} isReprint />
+      <OrderInvoiceA4 order={order} isReprint />
+      <OrderInvoiceA5 order={order} isReprint />
     </div>
   )
 }

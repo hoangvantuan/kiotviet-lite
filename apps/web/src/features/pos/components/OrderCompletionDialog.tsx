@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CheckCircle, Printer } from 'lucide-react'
+import { CheckCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -9,19 +9,41 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { PAYMENT_METHOD_LABELS } from '@/lib/constants'
 import { formatVndWithSuffix } from '@/lib/currency'
+import { useAuthStore } from '@/stores/use-auth-store'
 
+import { OrderInvoiceA4, OrderInvoiceA5, OrderInvoiceThermal } from '../../orders/order-invoice-template'
+import type { OrderDetailResponse } from '../../orders/orders-api'
+import { PrintButton } from '../../orders/print-button'
+import { type PrintFormat, toThermalOrder, usePrintOrder } from '../../orders/use-print-order'
 import type { OrderDetail } from '../types'
 
 const AUTO_CLOSE_MS = 3000
 
-const PAYMENT_LABEL: Record<string, string> = {
-  cash: 'Tiền mặt',
-  transfer: 'Chuyển khoản',
-  qr: 'QR Code',
-  combined: 'Kết hợp',
-  debt: 'Ghi nợ',
+/** Adapt POS OrderDetail to OrderDetailResponse for print templates */
+function toOrderDetailResponse(order: OrderDetail): OrderDetailResponse {
+  return {
+    ...order,
+    customerName: null,
+    customerPhone: null,
+    customerGroupName: null,
+    createdByName: null,
+    discountType: null,
+    discountValue: 0,
+    paidAmount: order.total - order.debtAmount,
+    updatedAt: order.createdAt,
+    items: order.items.map((item, idx) => ({
+      id: `item-${idx}`,
+      ...item,
+      discountType: null,
+      discountValue: 0,
+      originalPrice: null,
+      priceOverride: false,
+    })),
+  }
 }
+
 
 interface OrderCompletionDialogProps {
   open: boolean
@@ -40,6 +62,9 @@ export function OrderCompletionDialog({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const autoCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const userInteracted = useRef(false)
+
+  const { printOrder } = usePrintOrder()
+  const user = useAuthStore((s) => s.user)
 
   // Ref to always hold the latest onNewOrder callback (avoids stale closure)
   const onNewOrderRef = useRef(onNewOrder)
@@ -96,7 +121,24 @@ export function OrderCompletionDialog({
     onNewOrder()
   }
 
+  function handlePrint(format: PrintFormat) {
+    handleInteraction()
+    if (!order) return
+    // H5: Đọc store name từ auth user nếu có, fallback "Cửa hàng"
+    const storeInfo = { name: user?.name ?? 'Cửa hàng' }
+    printOrder({
+      order: toThermalOrder({
+        ...order,
+        paidAmount: order.total - order.debtAmount,
+      }),
+      store: storeInfo,
+      format,
+    })
+  }
+
   if (!order) return null
+
+  const orderForTemplate = toOrderDetailResponse(order)
 
   const showChange =
     (order.paymentMethod === 'cash' ||
@@ -105,6 +147,7 @@ export function OrderCompletionDialog({
     order.change > 0
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="sm:max-w-md"
@@ -149,7 +192,7 @@ export function OrderCompletionDialog({
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Thanh toán:</span>
-            <span>{PAYMENT_LABEL[order.paymentMethod] ?? order.paymentMethod}</span>
+            <span>{PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}</span>
           </div>
           {order.paymentMethod === 'cash' && order.cashAmount != null && (
             <div className="flex justify-between text-sm">
@@ -181,16 +224,7 @@ export function OrderCompletionDialog({
 
         {/* Actions */}
         <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled
-            className="flex-1"
-            title="In hoá đơn sẽ kích hoạt ở Story 7.3"
-          >
-            <Printer className="mr-2 h-4 w-4" />
-            In hoá đơn
-          </Button>
+          <PrintButton onPrint={handlePrint} label="In hoá đơn" />
           <Button type="button" onClick={handleNewOrder} className="flex-1">
             Đơn hàng mới
           </Button>
@@ -204,5 +238,15 @@ export function OrderCompletionDialog({
         )}
       </DialogContent>
     </Dialog>
+
+    {/* Print templates (hidden, only visible during window.print) */}
+    {order && (
+      <>
+        <OrderInvoiceThermal order={orderForTemplate} />
+        <OrderInvoiceA4 order={orderForTemplate} />
+        <OrderInvoiceA5 order={orderForTemplate} />
+      </>
+    )}
+  </>
   )
 }
