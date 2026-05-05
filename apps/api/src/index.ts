@@ -21,8 +21,8 @@ import { createDebtAdjustmentsRoutes } from './routes/debt-adjustments.routes.js
 import { createNotificationRoutes } from './routes/notifications.routes.js'
 import { createOrdersRoutes } from './routes/orders.routes.js'
 import { createPosRoutes } from './routes/pos.routes.js'
-import { createPrintSettingsRoutes } from './routes/print-settings.routes.js'
 import { createPriceListsRoutes } from './routes/price-lists.routes.js'
+import { createPrintSettingsRoutes } from './routes/print-settings.routes.js'
 import { createProductHistoryRoutes } from './routes/product-history.routes.js'
 import { createProductsRoutes } from './routes/products.routes.js'
 import { createPurchaseOrdersRoutes } from './routes/purchase-orders.routes.js'
@@ -32,6 +32,7 @@ import { createStockChecksRoutes } from './routes/stock-checks.routes.js'
 import { createStoreRoutes } from './routes/store.routes.js'
 import { createSupplierPaymentsRoutes } from './routes/supplier-payments.routes.js'
 import { createSuppliersRoutes } from './routes/suppliers.routes.js'
+import { createSyncRoutes } from './routes/sync.routes.js'
 import { createUsersRoutes } from './routes/users.routes.js'
 import { createVolumePricesRoutes } from './routes/volume-prices.routes.js'
 
@@ -89,6 +90,7 @@ app.route('/api/v1/print-settings', createPrintSettingsRoutes({ db }))
 app.route('/api/v1/audit-logs', createAuditRoutes({ db }))
 app.route('/api/v1/notifications', createNotificationRoutes({ db }))
 app.route('/api/v1/orders', createOrdersRoutes({ db }))
+app.route('/api/v1/sync', createSyncRoutes({ db }))
 
 app.get('/api/v1/me', requireAuth, async (c) => {
   const auth = c.get('auth')

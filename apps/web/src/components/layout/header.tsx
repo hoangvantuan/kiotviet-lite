@@ -3,6 +3,7 @@ import { LogOut, Menu } from 'lucide-react'
 
 import { hasPermission } from '@kiotviet-lite/shared'
 
+import { OfflineIndicator } from '@/components/shared/OfflineIndicator'
 import { Button } from '@/components/ui/button'
 import { useLogout } from '@/features/auth/use-logout'
 import { LowStockBell } from '@/features/products/low-stock-bell'
@@ -37,6 +38,7 @@ export function Header() {
         </h1>
       </div>
       <div className="flex items-center gap-2">
+        <OfflineIndicator />
         {user?.role && hasPermission(user.role, 'products.manage') && <LowStockBell />}
         <Button
           variant="outline"
