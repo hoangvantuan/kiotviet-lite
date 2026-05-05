@@ -44,4 +44,7 @@ export const env = {
   get notificationConfigKey(): string {
     return optional('NOTIFICATION_CONFIG_KEY', '')
   },
+  get highValueOrderThreshold(): number {
+    return Number.parseInt(optional('HIGH_VALUE_ORDER_THRESHOLD', '5000000'), 10)
+  },
 } as const

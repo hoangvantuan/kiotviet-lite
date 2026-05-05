@@ -15,7 +15,11 @@ import type { Db } from '../db/index.js'
 import { env } from '../lib/env.js'
 import { ApiError } from '../lib/errors.js'
 import { hashToken, signAccessToken, signRefreshToken, verifyRefreshToken } from '../lib/jwt.js'
+import { logger } from '../lib/logger.js'
 import { hashPassword, verifyPassword } from '../lib/password.js'
+import { isLoginSuspicious, recordLogin } from './login-history.service.js'
+import { emitEvent } from './notification-emitter.js'
+import { seedDefaultRules } from './notification-seed.service.js'
 
 export interface IssuedTokens extends AuthResponse {
   refreshToken: string
@@ -59,6 +63,9 @@ export async function registerStoreOwner({ db, input }: RegisterDeps): Promise<I
       throw new ApiError('INTERNAL_ERROR', 'Không tạo được tài khoản')
     }
 
+    // Seed default notification rules for new store
+    await seedDefaultRules(tx as unknown as Db, store.id)
+
     const refresh = signRefreshToken(user.id)
     await tx.insert(refreshTokens).values({
       userId: user.id,
@@ -87,11 +94,13 @@ export async function registerStoreOwner({ db, input }: RegisterDeps): Promise<I
 interface LoginDeps {
   db: Db
   input: LoginInput
+  ip?: string
+  userAgent?: string
 }
 
 const DUMMY_HASH = '$2a$12$x/Y5Y5Y5Y5Y5Y5Y5Y5Y5Y.x/Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y'
 
-export async function loginUser({ db, input }: LoginDeps): Promise<IssuedTokens> {
+export async function loginUser({ db, input, ip, userAgent }: LoginDeps): Promise<IssuedTokens> {
   const user = await db.query.users.findFirst({
     where: eq(users.phone, input.phone),
   })
@@ -118,6 +127,35 @@ export async function loginUser({ db, input }: LoginDeps): Promise<IssuedTokens>
     storeId: authUser.storeId,
     role: authUser.role,
   })
+
+  // Suspicious login detection (fire-and-forget)
+  void (async () => {
+    try {
+      const suspicious = await isLoginSuspicious(db, {
+        userId: user.id,
+        ip,
+        userAgent,
+      })
+      if (suspicious) {
+        emitEvent(db, {
+          storeId: authUser.storeId,
+          type: 'auth.login.suspicious',
+          severity: 'warn',
+          title: 'Đăng nhập bất thường',
+          body: `Phát hiện đăng nhập từ thiết bị/IP lạ cho tài khoản ${authUser.name}`,
+          context: { userId: user.id, ip, userAgent },
+        })
+      }
+      await recordLogin(db, {
+        userId: user.id,
+        storeId: authUser.storeId,
+        ip,
+        userAgent,
+      })
+    } catch (err) {
+      logger.error({ err, userId: user.id }, 'login history check failed')
+    }
+  })()
 
   return {
     user: authUser,

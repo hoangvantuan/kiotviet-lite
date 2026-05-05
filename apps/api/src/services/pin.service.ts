@@ -6,6 +6,7 @@ import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { verifyPassword } from '../lib/password.js'
 import { logAction, type RequestMeta } from './audit.service.js'
+import { emitEvent } from './notification-emitter.js'
 
 export const MAX_PIN_ATTEMPTS = 5
 export const PIN_LOCK_DURATION_MS = 15 * 60 * 1000
@@ -92,6 +93,15 @@ export async function verifyPin({
           changes: { lockedUntil: lockedUntil.toISOString() },
           ipAddress: meta?.ipAddress,
           userAgent: meta?.userAgent,
+        })
+
+        emitEvent(db, {
+          storeId,
+          type: 'auth.pin.locked',
+          severity: 'warn',
+          title: 'PIN bị khoá',
+          body: `Tài khoản nhập sai PIN ${MAX_PIN_ATTEMPTS} lần. Khoá đến ${formatLockTime(lockedUntil)}`,
+          context: { userId, lockedUntil: lockedUntil.toISOString() },
         })
 
         return {

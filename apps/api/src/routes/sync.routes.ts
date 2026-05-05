@@ -1,7 +1,5 @@
-import { notify } from '@kiotviet-lite/notifications'
 import { and, eq, gt, inArray, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { uuidv7 } from 'uuidv7'
 
 import {
   PGLITE_SCHEMA_VERSION,
@@ -34,6 +32,7 @@ import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta, logAction } from '../services/audit.service.js'
+import { emitEvent } from '../services/notification-emitter.js'
 import {
   aggregateVariantStock,
   loadProductForUpdate,
@@ -47,6 +46,9 @@ async function getStorePriceListIds(db: Db, storeId: string) {
     .where(eq(priceLists.storeId, storeId))
   return lists.map((l) => l.id)
 }
+
+// Track consecutive sync push failures per store
+const syncFailureCounters = new Map<string, { count: number; lastError: string }>()
 
 export function createSyncRoutes({ db }: { db: Db }) {
   const app = new Hono()
@@ -231,6 +233,36 @@ export function createSyncRoutes({ db }: { db: Db }) {
           error: { code: 'INTERNAL_ERROR', message },
         })
       }
+    }
+
+    // Track consecutive sync failures per store
+    const errorCount = results.filter((r) => r.status === 'error').length
+    if (errorCount > 0) {
+      const key = storeId
+      const current = syncFailureCounters.get(key) ?? { count: 0, lastError: '' }
+      current.count += errorCount
+      current.lastError =
+        results.find((r) => r.status === 'error')?.error?.message ?? 'Unknown error'
+      syncFailureCounters.set(key, current)
+
+      if (current.count >= 3) {
+        emitEvent(db, {
+          storeId,
+          type: 'sync.failed_repeatedly',
+          severity: 'error',
+          title: 'Đồng bộ thất bại liên tiếp',
+          body: `Đồng bộ đơn offline thất bại ${current.count} lần liên tiếp. Lỗi gần nhất: ${current.lastError}`,
+          context: {
+            failCount: current.count,
+            lastError: current.lastError,
+            pendingCount: input.orders.length,
+          },
+        })
+        syncFailureCounters.delete(key)
+      }
+    } else {
+      // Reset counter on success
+      syncFailureCounters.delete(storeId)
     }
 
     return c.json({
@@ -515,16 +547,17 @@ async function processSyncOrder({
           `stock negative after offline sync: ${nsp.productName} = ${nsp.stock}`,
         )
 
-        notify(db, {
-          id: uuidv7(),
+        emitEvent(db, {
           storeId,
           type: 'stock.negative',
           severity: 'error',
           title: `Tồn kho âm: ${nsp.productName}`,
           body: `Tồn kho ${nsp.productName} bị âm (${nsp.stock}) sau đồng bộ đơn offline. Cần nhập thêm hoặc kiểm kho.`,
-          occurredAt: new Date().toISOString(),
-        }).catch((err) => {
-          logger.error({ err, productId: nsp.productId }, 'notify stock.negative failed')
+          context: {
+            productId: nsp.productId,
+            productName: nsp.productName,
+            currentStock: nsp.stock,
+          },
         })
       }
     }

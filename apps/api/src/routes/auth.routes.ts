@@ -44,7 +44,9 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
 
   app.post('/login', async (c) => {
     const input = await parseJson(c, loginSchema)
-    const result = await loginUser({ db, input })
+    const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip')
+    const userAgent = c.req.header('user-agent')
+    const result = await loginUser({ db, input, ip, userAgent })
     setRefreshCookie(c, result.refreshToken)
     const body: { data: AuthResponse } = {
       data: {

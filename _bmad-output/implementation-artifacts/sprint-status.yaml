@@ -1,3 +1,7 @@
+# Story 10-5 code review 2026-05-05: 1 MAJOR (F4 wrong API URL /api/notifications → /api/v1/notifications), 2 MINOR (F1 epoch sentinel, F3 unused import), 1 MAJOR (F2 blocking delay in loop); all 4 patched; typecheck pass; 8/8 tests pass; verdict APPROVE after patches
+# Story 10-5 dev completed 2026-05-05: 8/8 tasks, typecheck shared+web pass, 8 new tests pass, 481 shared tests pass; ready-for-dev → review
+# Story 10-5 created 2026-05-05: frontend outbox cho notification — 6 ACs, 8 tasks; PGlite outbox + sync worker
+# Story 10-4 created 2026-05-05: kết nối 7 event nghiệp vụ — 9 ACs, 12 tasks; Epic 10 in-progress
 # Story 9-2 code review 2026-05-05: 0 CRIT, 2 MAJOR (F1 dedup LIKE fix, F2 requirePermission added), 3 MINOR (F3-F5 defer); 2 patches applied; typecheck 3/3 pass; 612/613 tests (1 pre-existing timeout); verdict APPROVE after patches
 # Story 9-2 dev completed 2026-05-05: 10/10 tasks, typecheck 3/3 pass, 614/614 tests; in-progress → review
 # Story 9-2 created 2026-05-05: đồng bộ đơn offline — 6 ACs, 10 tasks; batch push, conflict resolution, retry logic
@@ -76,7 +80,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-24
-last_updated: 2026-05-05 # story 9-2 created: đồng bộ đơn offline — 6 ACs, 10 tasks
+last_updated: 2026-05-05 # story 10-4 done, all 10 epics completed — MVP done
 # Story 4-3b dev xong 2026-04-30: 15/15 tasks, 21 integration test mới pass, full suite 978/979, in-progress → review
 # Story 4-3b created 2026-04-30 (chain + clone + import; 10 ACs, 15 tasks)
 # Story 5-3 created 2026-04-30 + Epic 5 → in-progress
@@ -159,7 +163,7 @@ development_status:
   epic-6-retrospective: optional
 
   # Epic 7: Hoa don & In an
-  epic-7: in-progress
+  epic-7: done
   7-1-danh-sach-chi-tiet-hoa-don: done
   7-2-tra-hang: done
   7-3-in-hoa-don-thermal-a4: done
@@ -167,22 +171,22 @@ development_status:
   epic-7-retrospective: optional
 
   # Epic 8: Bao cao & Dashboard
-  epic-8: in-progress
+  epic-8: done
   8-1-dashboard-tong-quan: done
   8-2-bao-cao-chi-tiet-export: done
   epic-8-retrospective: optional
 
   # Epic 9: Offline & PWA
-  epic-9: in-progress
+  epic-9: done
   9-1-app-hoat-dong-day-du-khi-mat-mang: done
   9-2-don-hang-offline-tu-dong-dong-bo-khi-co-mang: done
   epic-9-retrospective: optional
 
   # Epic 10: Canh bao & Giam sat cua hang
-  epic-10: in-progress
+  epic-10: done
   10-1-structured-logging-cho-backend: done
   10-2-notification-service-core: done
   10-3-webhook-telegram-transport-bao-mat: done
-  10-4-ket-noi-7-event-nghiep-vu-mvp: backlog
-  10-5-frontend-outbox-cho-notification: backlog
+  10-4-ket-noi-7-event-nghiep-vu-mvp: done
+  10-5-frontend-outbox-cho-notification: done
   epic-10-retrospective: optional

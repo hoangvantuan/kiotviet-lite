@@ -17,11 +17,13 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { env } from '../lib/env.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
+import { emitEvent } from './notification-emitter.js'
 import { verifyPin } from './pin.service.js'
 import {
   aggregateVariantStock,
@@ -310,6 +312,25 @@ export async function createOrder({
           ipAddress: meta?.ipAddress,
           userAgent: meta?.userAgent,
         })
+
+        // audit.price_override: warn when selling below cost
+        if (product.costPrice != null && item.unitPrice < product.costPrice) {
+          emitEvent(db, {
+            storeId: actor.storeId,
+            type: 'audit.price_override',
+            severity: 'warn',
+            title: `Bán dưới giá vốn: ${item.productName}`,
+            body: `Sản phẩm ${item.productName} được bán ${item.unitPrice.toLocaleString('vi-VN')}đ, thấp hơn giá vốn ${product.costPrice.toLocaleString('vi-VN')}đ`,
+            context: {
+              orderId: createdId,
+              productName: item.productName,
+              originalPrice: item.originalPrice ?? null,
+              newPrice: item.unitPrice,
+              costPrice: product.costPrice,
+              userId: actor.userId,
+            },
+          })
+        }
       }
 
       processedItems.push({
@@ -403,6 +424,23 @@ export async function createOrder({
           note: orderNumber,
           createdBy: actor.userId,
         })
+
+        // stock.negative: emit when stock goes below 0
+        if (newStock < 0) {
+          emitEvent(db, {
+            storeId: actor.storeId,
+            type: 'stock.negative',
+            severity: 'error',
+            title: `Tồn kho âm: ${item.productName}`,
+            body: `Tồn kho ${item.productName} bị âm (${newStock}) sau bán hàng. Cần nhập thêm hoặc kiểm kho.`,
+            context: {
+              productId: item.productId,
+              productName: item.productName,
+              currentStock: newStock,
+              previousStock: newStock + deductQty,
+            },
+          })
+        }
       }
     }
 
@@ -573,6 +611,22 @@ export async function createOrder({
       },
       'order.created',
     )
+
+    // order.high_value: notify when total exceeds threshold
+    if (input.total > env.highValueOrderThreshold) {
+      emitEvent(db, {
+        storeId: actor.storeId,
+        type: 'order.high_value',
+        severity: 'info',
+        title: `Đơn hàng giá trị cao: ${orderNumber}`,
+        body: `Đơn hàng ${orderNumber} có tổng ${input.total.toLocaleString('vi-VN')}đ vượt ngưỡng ${env.highValueOrderThreshold.toLocaleString('vi-VN')}đ`,
+        context: {
+          orderId: createdId,
+          total: input.total,
+          customerId: input.customerId ?? null,
+        },
+      })
+    }
 
     return {
       id: createdId,
