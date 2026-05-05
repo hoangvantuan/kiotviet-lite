@@ -1,4 +1,4 @@
-import { and, asc, eq, like, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, like, sql } from 'drizzle-orm'
 
 import {
   type CreateOrderReturnInput,
@@ -6,14 +6,14 @@ import {
   debts,
   inventoryTransactions,
   orderItems,
-  orderReturnItems,
-  orderReturns,
-  orders,
   type OrderReturnDetail,
   type OrderReturnItemDetail,
+  orderReturnItems,
   type OrderReturnListItem,
-  productVariants,
+  orderReturns,
+  orders,
   products,
+  productVariants,
   type ReturnableItem,
   type UserRole,
   users,
@@ -50,13 +50,7 @@ function formatDateForCode(date: Date): string {
   return DATE_FORMATTER.format(date).replace(/-/g, '')
 }
 
-async function generateReturnNumber({
-  tx,
-  storeId,
-}: {
-  tx: Db
-  storeId: string
-}): Promise<string> {
+async function generateReturnNumber({ tx, storeId }: { tx: Db; storeId: string }): Promise<string> {
   const dateStr = formatDateForCode(new Date())
   const prefix = `TH-${dateStr.slice(2)}-`
   const escapedPrefix = escapeLikePattern(prefix)
@@ -64,15 +58,14 @@ async function generateReturnNumber({
   const rows = await tx
     .select({ code: sql<string>`MAX(${orderReturns.returnNumber})` })
     .from(orderReturns)
-    .where(and(eq(orderReturns.storeId, storeId), like(orderReturns.returnNumber, `${escapedPrefix}%`)))
+    .where(
+      and(eq(orderReturns.storeId, storeId), like(orderReturns.returnNumber, `${escapedPrefix}%`)),
+    )
 
   const maxCode = rows[0]?.code ?? null
   const nextSeq = maxCode ? parseInt(maxCode.slice(-4), 10) + 1 : 1
   if (nextSeq > MAX_DAILY_RETURN_SEQUENCE) {
-    throw new ApiError(
-      'BUSINESS_RULE_VIOLATION',
-      'Đã vượt quá 9999 phiếu trả trong ngày',
-    )
+    throw new ApiError('BUSINESS_RULE_VIOLATION', 'Đã vượt quá 9999 phiếu trả trong ngày')
   }
   return `${prefix}${String(nextSeq).padStart(4, '0')}`
 }
@@ -154,6 +147,7 @@ export async function getReturnableItems({
 
 // ---------------------------------------------------------------------------
 // createReturn
+// TODO(Phase 2): order_items does not store unitConversionId — returns cannot determine original unit conversion. Add column in Phase 2.
 // ---------------------------------------------------------------------------
 
 export interface CreateReturnDeps {
@@ -447,10 +441,7 @@ export async function createReturn({
       // Check if debt is fully paid after reduction
       const newRemaining = Number(debt.remaining) - debtReductionAmount
       if (newRemaining <= 0) {
-        await tx
-          .update(orders)
-          .set({ paymentStatus: 'paid' })
-          .where(eq(orders.id, orderId))
+        await tx.update(orders).set({ paymentStatus: 'paid' }).where(eq(orders.id, orderId))
       }
     }
 
@@ -569,45 +560,52 @@ export async function getOrderReturns({
     .where(eq(orderReturns.orderId, orderId))
     .orderBy(asc(orderReturns.createdAt))
 
-  const results: OrderReturnListItem[] = []
+  const returnIds = returnRows.map((r) => r.id)
 
-  for (const ret of returnRows) {
-    const itemRows = await db
-      .select({
-        id: orderReturnItems.id,
-        orderItemId: orderReturnItems.orderItemId,
-        productName: orderReturnItems.productName,
-        variantName: orderReturnItems.variantName,
-        unit: orderReturnItems.unit,
-        unitPrice: orderReturnItems.unitPrice,
-        quantity: orderReturnItems.quantity,
-        lineTotal: orderReturnItems.lineTotal,
-        reason: orderReturnItems.reason,
-      })
-      .from(orderReturnItems)
-      .where(eq(orderReturnItems.returnId, ret.id))
+  const allItems =
+    returnIds.length > 0
+      ? await db
+          .select({
+            returnId: orderReturnItems.returnId,
+            id: orderReturnItems.id,
+            orderItemId: orderReturnItems.orderItemId,
+            productName: orderReturnItems.productName,
+            variantName: orderReturnItems.variantName,
+            unit: orderReturnItems.unit,
+            unitPrice: orderReturnItems.unitPrice,
+            quantity: orderReturnItems.quantity,
+            lineTotal: orderReturnItems.lineTotal,
+            reason: orderReturnItems.reason,
+          })
+          .from(orderReturnItems)
+          .where(inArray(orderReturnItems.returnId, returnIds))
+      : []
 
-    results.push({
-      id: ret.id,
-      returnNumber: ret.returnNumber,
-      totalAmount: Number(ret.totalAmount),
-      refundAmount: Number(ret.refundAmount),
-      debtReductionAmount: Number(ret.debtReductionAmount),
-      createdByName: ret.createdByName ?? null,
-      createdAt: ret.createdAt.toISOString(),
-      items: itemRows.map((it) => ({
-        id: it.id,
-        orderItemId: it.orderItemId,
-        productName: it.productName,
-        variantName: it.variantName ?? null,
-        unit: it.unit ?? null,
-        unitPrice: Number(it.unitPrice),
-        quantity: Number(it.quantity),
-        lineTotal: Number(it.lineTotal),
-        reason: it.reason,
-      })),
-    })
+  const itemsByReturnId = new Map<string, typeof allItems>()
+  for (const it of allItems) {
+    const list = itemsByReturnId.get(it.returnId) ?? []
+    list.push(it)
+    itemsByReturnId.set(it.returnId, list)
   }
 
-  return results
+  return returnRows.map((ret) => ({
+    id: ret.id,
+    returnNumber: ret.returnNumber,
+    totalAmount: Number(ret.totalAmount),
+    refundAmount: Number(ret.refundAmount),
+    debtReductionAmount: Number(ret.debtReductionAmount),
+    createdByName: ret.createdByName ?? null,
+    createdAt: ret.createdAt.toISOString(),
+    items: (itemsByReturnId.get(ret.id) ?? []).map((it) => ({
+      id: it.id,
+      orderItemId: it.orderItemId,
+      productName: it.productName,
+      variantName: it.variantName ?? null,
+      unit: it.unit ?? null,
+      unitPrice: Number(it.unitPrice),
+      quantity: Number(it.quantity),
+      lineTotal: Number(it.lineTotal),
+      reason: it.reason,
+    })),
+  }))
 }

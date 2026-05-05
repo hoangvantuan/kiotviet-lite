@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { index, integer, pgTable, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core'
+import { integer, pgTable, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
 import { stores } from './stores.js'
@@ -23,7 +23,11 @@ export const categories = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    index('idx_categories_store_parent_sort').on(table.storeId, table.parentId, table.sortOrder),
+    uniqueIndex('uniq_categories_store_parent_sort').on(
+      table.storeId,
+      table.parentId,
+      table.sortOrder,
+    ),
     uniqueIndex('uniq_categories_store_parent_name').on(
       table.storeId,
       table.parentId,

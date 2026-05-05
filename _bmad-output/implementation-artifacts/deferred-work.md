@@ -161,3 +161,7 @@
 - F3: Race condition test chỉ verify sequential (2 await tuần tự), không test concurrent FOR UPDATE thực sự. Service code đúng nhưng test coverage gap. [debt-adjustments.integration.test.ts]
 - F4: Nút "Huỷ" trong dialog điều chỉnh nợ không disable khi mutation đang pending. Không gây data corruption nhưng UX minor. [DebtAdjustmentDialog.tsx:168]
 - F5: currentDebt prop trong dialog có thể stale nếu user mở lại trước khi TanStack Query refetch xong. Server validate 422 nếu sai. [DebtAdjustmentDialog.tsx]
+
+## Deferred from: Story 11-3 Performance & Quality Polish (2026-05-05)
+
+- Phase 2: order_items table does not store unitConversionId. Returns service cannot determine which unit conversion was used at time of sale. Add `unit_conversion_id` column to order_items and populate during createOrder. [apps/api/src/services/returns.service.ts, packages/shared/src/schema/orders.ts]

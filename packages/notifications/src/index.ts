@@ -62,8 +62,8 @@ export async function notify(
           attempts: 0,
           retriable: null,
         })
-      } catch {
-        /* delivery log failure is non-fatal */
+      } catch (err) {
+        console.error('[notifications] delivery log insert failed', err)
       }
       results.push({ ok: true, attempts: 0 })
       continue
@@ -82,8 +82,8 @@ export async function notify(
           retriable: false,
           error: `Unknown transport: ${rule.transport}`,
         })
-      } catch {
-        /* delivery log failure is non-fatal */
+      } catch (err) {
+        console.error('[notifications] delivery log insert failed', err)
       }
       results.push({
         ok: false,
@@ -108,8 +108,8 @@ export async function notify(
             retriable: false,
             error: 'Config key required but not provided',
           })
-        } catch {
-          /* delivery log failure is non-fatal */
+        } catch (err) {
+          console.error('[notifications] delivery log insert failed', err)
         }
         results.push({
           ok: false,
@@ -121,7 +121,8 @@ export async function notify(
       }
       try {
         config = decrypt(rule.configEncrypted, options.configKey)
-      } catch {
+      } catch (err) {
+        console.error('[notifications] config decrypt failed', { channelId: rule.channelId, err })
         try {
           await db.insert(notificationDeliveries).values({
             eventId: validated.id,
@@ -133,8 +134,8 @@ export async function notify(
             retriable: false,
             error: 'Failed to decrypt channel config',
           })
-        } catch {
-          /* delivery log failure is non-fatal */
+        } catch (err2) {
+          console.error('[notifications] delivery log insert failed', err2)
         }
         results.push({
           ok: false,
@@ -159,8 +160,8 @@ export async function notify(
         retriable: result.ok ? null : result.retriable,
         error: result.ok ? null : result.error,
       })
-    } catch {
-      /* delivery log failure is non-fatal */
+    } catch (err) {
+      console.error('[notifications] delivery log insert failed', err)
     }
 
     results.push(result)
@@ -171,5 +172,6 @@ export async function notify(
 
 export type { NotificationDb, SendResult, Transport }
 export { notificationEventSchema }
+export { purgeOldDeliveries } from './purge.js'
 export { verifyWebhookSignature } from './transports/webhook.js'
 export type { NotificationEvent } from '@kiotviet-lite/shared'

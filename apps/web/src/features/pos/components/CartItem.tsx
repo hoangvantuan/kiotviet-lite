@@ -208,7 +208,7 @@ export function CartItem({ item }: CartItemProps) {
               updateQuantity(item.id, item.quantity - 1)
               if (item.quantity - 1 > 0) repriceOnQuantity(item.id, item.quantity - 1)
             }}
-            className="flex h-9 w-9 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:h-7 sm:w-7"
+            className="flex h-11 w-11 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:h-7 sm:w-7"
             aria-label="Giảm số lượng"
           >
             <Minus className="h-3.5 w-3.5" />
@@ -220,7 +220,7 @@ export function CartItem({ item }: CartItemProps) {
               updateQuantity(item.id, item.quantity + 1)
               repriceOnQuantity(item.id, item.quantity + 1)
             }}
-            className="flex h-9 w-9 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:h-7 sm:w-7"
+            className="flex h-11 w-11 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:h-7 sm:w-7"
             aria-label="Tăng số lượng"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -236,7 +236,7 @@ export function CartItem({ item }: CartItemProps) {
             <button
               type="button"
               onClick={() => removeItem(item.id)}
-              className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive sm:h-7 sm:w-7"
+              className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive sm:h-7 sm:w-7"
               aria-label="Xoá sản phẩm"
             >
               <Trash2 className="h-3.5 w-3.5" />

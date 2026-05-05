@@ -1,3 +1,6 @@
+# Story 11-3 code review 2026-05-05: 1 BUG (selectDistinctOn missing ORDER BY, fixed); typecheck 4/4 pass (9 pre-existing in Reports); 61+484 tests pass; verdict APPROVE after fix
+# Story 11-3 dev completed 2026-05-05: 13/13 tasks, typecheck api+shared+notifications pass, 545 tests pass; ready-for-dev → review
+# Story 11-3 created 2026-05-05: performance & quality polish — 13 ACs, 13 tasks; N+1 fix, POS search optimize, touch targets, ARIA, badge extract, zodResolver, purge cron
 # Story 11-1 code review 2026-05-05: 2 BUG (F1 rate-limit IP fallback, F2 focus return), 3 RISK (R3 shutdown error, R5 trap timing, R1/R2 defer); 4 patched; typecheck pass; verdict APPROVE after patches
 # Story 11-1 dev completed 2026-05-05: 7/7 tasks, typecheck api+shared pass, 0 new errors; ready-for-dev → review
 # Story 11-1 created 2026-05-05: production-ready critical fixes — 7 ACs, 7 tasks; rate limiting, graceful shutdown, security headers, CI/CD, mobile a11y
@@ -84,7 +87,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-24
-last_updated: 2026-05-05 # Story 11-1 created: production-ready critical fixes
+last_updated: 2026-05-05 # Story 11-3 created: performance & quality polish
 # Story 4-3b dev xong 2026-04-30: 15/15 tasks, 21 integration test mới pass, full suite 978/979, in-progress → review
 # Story 4-3b created 2026-04-30 (chain + clone + import; 10 ACs, 15 tasks)
 # Story 5-3 created 2026-04-30 + Epic 5 → in-progress
@@ -199,5 +202,5 @@ development_status:
   epic-11: in-progress
   11-1-production-ready-critical-fixes: done
   11-2-security-hardening: done
-  11-3-performance-quality-polish: backlog
+  11-3-performance-quality-polish: done
   epic-11-retrospective: optional

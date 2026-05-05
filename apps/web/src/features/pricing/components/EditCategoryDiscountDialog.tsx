@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 
 import type { CategoryDiscountListItem, UpdateCategoryDiscountInput } from '@kiotviet-lite/shared'
 
@@ -29,15 +31,36 @@ import { showError, showSuccess } from '@/lib/toast'
 
 import { useUpdateCategoryDiscountMutation } from '../use-category-discounts'
 
-interface FormShape {
-  discountType: 'percent' | 'amount'
-  discountValue: number | null
-  minQty: number
-  effectiveFrom: string
-  effectiveTo: string
-  isActive: boolean
-  note: string
-}
+const editCategoryDiscountSchema = z
+  .object({
+    discountType: z.enum(['percent', 'amount']),
+    discountValue: z
+      .number({ invalid_type_error: 'Vui lòng nhập mức giảm hợp lệ' })
+      .min(0, 'Vui lòng nhập mức giảm hợp lệ')
+      .nullable()
+      .refine((v) => v !== null, { message: 'Vui lòng nhập mức giảm hợp lệ' }),
+    minQty: z.number().int().min(1, 'Số lượng tối thiểu ≥ 1'),
+    effectiveFrom: z.string(),
+    effectiveTo: z.string(),
+    isActive: z.boolean(),
+    note: z.string(),
+  })
+  .refine(
+    (d) => {
+      if (d.discountType === 'percent' && d.discountValue > 100) return false
+      return true
+    },
+    { message: 'Phần trăm giảm phải ≤ 100', path: ['discountValue'] },
+  )
+  .refine(
+    (d) => {
+      if (d.effectiveFrom && d.effectiveTo && d.effectiveTo < d.effectiveFrom) return false
+      return true
+    },
+    { message: 'Ngày kết thúc phải ≥ ngày bắt đầu', path: ['effectiveTo'] },
+  )
+
+type FormShape = z.input<typeof editCategoryDiscountSchema>
 
 interface Props {
   open: boolean
@@ -50,9 +73,10 @@ export function EditCategoryDiscountDialog({ open, onOpenChange, categoryDiscoun
 
   const form = useForm<FormShape>({
     mode: 'onTouched',
+    resolver: zodResolver(editCategoryDiscountSchema),
     defaultValues: {
       discountType: 'percent',
-      discountValue: null,
+      discountValue: null as unknown as number,
       minQty: 1,
       effectiveFrom: '',
       effectiveTo: '',
@@ -80,29 +104,13 @@ export function EditCategoryDiscountDialog({ open, onOpenChange, categoryDiscoun
 
   const submit = form.handleSubmit(async (values) => {
     if (!categoryDiscount) return
-    if (values.discountValue === null || values.discountValue < 0) {
-      form.setError('discountValue', { message: 'Vui lòng nhập mức giảm hợp lệ' })
-      return
-    }
-    if (values.discountType === 'percent' && values.discountValue > 100) {
-      form.setError('discountValue', { message: 'Phần trăm giảm phải ≤ 100' })
-      return
-    }
-    if (values.minQty < 1) {
-      form.setError('minQty', { message: 'Số lượng tối thiểu ≥ 1' })
-      return
-    }
-    if (values.effectiveFrom && values.effectiveTo && values.effectiveTo < values.effectiveFrom) {
-      form.setError('effectiveTo', { message: 'Ngày kết thúc phải ≥ ngày bắt đầu' })
-      return
-    }
 
     const payload: UpdateCategoryDiscountInput = {}
     if (values.discountType !== categoryDiscount.discountType) {
       payload.discountType = values.discountType
     }
     if (values.discountValue !== categoryDiscount.discountValue) {
-      payload.discountValue = values.discountValue
+      payload.discountValue = values.discountValue!
     }
     if (values.minQty !== categoryDiscount.minQty) {
       payload.minQty = values.minQty

@@ -124,6 +124,13 @@ export function PosSearchBar({ searchRef, onOpenScanner, onSelectProduct }: PosS
               (searchRef as React.MutableRefObject<HTMLInputElement | null>).current = el
           }}
           type="text"
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-controls="pos-search-listbox"
+          aria-autocomplete="list"
+          aria-activedescendant={
+            highlightIndex >= 0 ? `pos-search-option-${highlightIndex}` : undefined
+          }
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -151,11 +158,20 @@ export function PosSearchBar({ searchRef, onOpenScanner, onSelectProduct }: PosS
       </div>
 
       {isOpen && results && results.length > 0 && (
-        <ul className="absolute z-50 mt-1 max-h-80 w-full overflow-y-auto rounded-lg border border-border bg-popover shadow-lg">
+        <ul
+          id="pos-search-listbox"
+          role="listbox"
+          className="absolute z-50 mt-1 max-h-80 w-full overflow-y-auto rounded-lg border border-border bg-popover shadow-lg"
+        >
           {results.map((product, index) => {
             const isOutOfStock = product.trackInventory && product.stockQuantity <= 0
             return (
-              <li key={product.id}>
+              <li
+                key={product.id}
+                id={`pos-search-option-${index}`}
+                role="option"
+                aria-selected={index === highlightIndex}
+              >
                 <button
                   type="button"
                   disabled={isOutOfStock}

@@ -1855,6 +1855,22 @@ export interface PosVariantItem {
   attributes: Record<string, string>
 }
 
+function mapVariantToPosItem(v: typeof productVariants.$inferSelect): PosVariantItem {
+  const attrs: Record<string, string> = {}
+  if (v.attribute1Name) attrs[v.attribute1Name] = v.attribute1Value
+  if (v.attribute2Name && v.attribute2Value) attrs[v.attribute2Name] = v.attribute2Value
+  return {
+    id: v.id,
+    name: [v.attribute1Value, v.attribute2Value].filter(Boolean).join(' - '),
+    sku: v.sku,
+    barcode: v.barcode,
+    price: Number(v.sellingPrice),
+    costPrice: v.costPrice === null ? null : Number(v.costPrice),
+    stockQuantity: v.stockQuantity,
+    attributes: attrs,
+  }
+}
+
 export interface SearchProductsForPosDeps {
   db: Db
   storeId: string
@@ -1930,39 +1946,36 @@ export async function searchProductsForPos({
       .orderBy(asc(productVariants.createdAt))
 
     for (const v of variantRows) {
-      const attrs: Record<string, string> = {}
-      if (v.attribute1Name) attrs[v.attribute1Name] = v.attribute1Value
-      if (v.attribute2Name && v.attribute2Value) attrs[v.attribute2Name] = v.attribute2Value
-
-      const item: PosVariantItem = {
-        id: v.id,
-        name: [v.attribute1Value, v.attribute2Value].filter(Boolean).join(' - '),
-        sku: v.sku,
-        barcode: v.barcode,
-        price: Number(v.sellingPrice),
-        costPrice: v.costPrice === null ? null : Number(v.costPrice),
-        stockQuantity: v.stockQuantity,
-        attributes: attrs,
-      }
-
       const list = variantsMap.get(v.productId) ?? []
-      list.push(item)
+      list.push(mapVariantToPosItem(v))
       variantsMap.set(v.productId, list)
     }
   }
 
-  // Also search in variant barcodes/SKUs if search term provided
+  // Search in variant barcodes/SKUs — single query for extra products + their variants
   if (search && search.trim().length > 0) {
     const searchTerm = search.trim()
     const escapedLower = escapeLikePattern(searchTerm.toLowerCase())
     const likeTerm = `%${escapedLower}%`
+    const existingIds = rows.map((r) => r.id)
 
-    const variantMatchRows = await db
-      .select({
-        productId: productVariants.productId,
+    const extraRows = await db
+      .selectDistinctOn([products.id], {
+        id: products.id,
+        name: products.name,
+        sku: products.sku,
+        barcode: products.barcode,
+        unit: products.unit,
+        sellingPrice: products.sellingPrice,
+        costPrice: products.costPrice,
+        imageUrl: products.imageUrl,
+        trackInventory: products.trackInventory,
+        currentStock: products.currentStock,
+        hasVariants: products.hasVariants,
+        categoryId: products.categoryId,
       })
-      .from(productVariants)
-      .innerJoin(products, eq(productVariants.productId, products.id))
+      .from(products)
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
       .where(
         and(
           eq(products.storeId, storeId),
@@ -1973,35 +1986,20 @@ export async function searchProductsForPos({
             sql`LOWER(${productVariants.sku}) LIKE ${likeTerm}`,
             eq(productVariants.barcode, searchTerm),
           ),
+          existingIds.length > 0
+            ? sql`${products.id} NOT IN (${sql.join(
+                existingIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`
+            : undefined,
         ),
       )
+      .orderBy(products.id)
 
-    const extraProductIds = [...new Set(variantMatchRows.map((r) => r.productId))].filter(
-      (id) => !rows.some((r) => r.id === id),
-    )
-
-    if (extraProductIds.length > 0) {
-      const extraRows = await db
-        .select({
-          id: products.id,
-          name: products.name,
-          sku: products.sku,
-          barcode: products.barcode,
-          unit: products.unit,
-          sellingPrice: products.sellingPrice,
-          costPrice: products.costPrice,
-          imageUrl: products.imageUrl,
-          trackInventory: products.trackInventory,
-          currentStock: products.currentStock,
-          hasVariants: products.hasVariants,
-          categoryId: products.categoryId,
-        })
-        .from(products)
-        .where(inArray(products.id, extraProductIds))
-
+    if (extraRows.length > 0) {
       rows.push(...extraRows)
+      const extraProductIds = extraRows.map((r) => r.id)
 
-      // Load variants for extra products
       const extraVariantRows = await db
         .select()
         .from(productVariants)
@@ -2015,23 +2013,8 @@ export async function searchProductsForPos({
         .orderBy(asc(productVariants.createdAt))
 
       for (const v of extraVariantRows) {
-        const attrs: Record<string, string> = {}
-        if (v.attribute1Name) attrs[v.attribute1Name] = v.attribute1Value
-        if (v.attribute2Name && v.attribute2Value) attrs[v.attribute2Name] = v.attribute2Value
-
-        const item: PosVariantItem = {
-          id: v.id,
-          name: [v.attribute1Value, v.attribute2Value].filter(Boolean).join(' - '),
-          sku: v.sku,
-          barcode: v.barcode,
-          price: Number(v.sellingPrice),
-          costPrice: v.costPrice === null ? null : Number(v.costPrice),
-          stockQuantity: v.stockQuantity,
-          attributes: attrs,
-        }
-
         const list = variantsMap.get(v.productId) ?? []
-        list.push(item)
+        list.push(mapVariantToPosItem(v))
         variantsMap.set(v.productId, list)
       }
     }

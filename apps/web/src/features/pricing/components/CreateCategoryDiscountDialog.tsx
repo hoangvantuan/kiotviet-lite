@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 
 import type { CreateCategoryDiscountInput } from '@kiotviet-lite/shared'
 
@@ -31,21 +33,54 @@ import { showError, showSuccess } from '@/lib/toast'
 
 import { useCreateCategoryDiscountMutation } from '../use-category-discounts'
 
-type TargetType = 'customer' | 'group'
+const categoryDiscountSchema = z
+  .object({
+    categoryId: z.string().min(1, 'Vui lòng chọn danh mục'),
+    targetType: z.enum(['customer', 'group']),
+    customerId: z.string(),
+    customerGroupId: z.string(),
+    discountType: z.enum(['percent', 'amount']),
+    discountValue: z
+      .number({ invalid_type_error: 'Vui lòng nhập mức giảm hợp lệ' })
+      .min(0, 'Vui lòng nhập mức giảm hợp lệ')
+      .nullable()
+      .refine((v) => v !== null, { message: 'Vui lòng nhập mức giảm hợp lệ' }),
+    minQty: z.number().int().min(1, 'Số lượng tối thiểu ≥ 1'),
+    effectiveFrom: z.string(),
+    effectiveTo: z.string(),
+    isActive: z.boolean(),
+    note: z.string(),
+  })
+  .refine(
+    (d) => {
+      if (d.targetType === 'customer' && !d.customerId) return false
+      return true
+    },
+    { message: 'Vui lòng chọn khách hàng', path: ['customerId'] },
+  )
+  .refine(
+    (d) => {
+      if (d.targetType === 'group' && !d.customerGroupId) return false
+      return true
+    },
+    { message: 'Vui lòng chọn nhóm khách hàng', path: ['customerGroupId'] },
+  )
+  .refine(
+    (d) => {
+      if (d.discountType === 'percent' && d.discountValue > 100) return false
+      return true
+    },
+    { message: 'Phần trăm giảm phải ≤ 100', path: ['discountValue'] },
+  )
+  .refine(
+    (d) => {
+      if (d.effectiveFrom && d.effectiveTo && d.effectiveTo < d.effectiveFrom) return false
+      return true
+    },
+    { message: 'Ngày kết thúc phải ≥ ngày bắt đầu', path: ['effectiveTo'] },
+  )
 
-interface FormShape {
-  categoryId: string
-  targetType: TargetType
-  customerId: string
-  customerGroupId: string
-  discountType: 'percent' | 'amount'
-  discountValue: number | null
-  minQty: number
-  effectiveFrom: string
-  effectiveTo: string
-  isActive: boolean
-  note: string
-}
+type FormShape = z.input<typeof categoryDiscountSchema>
 
 const DEFAULT_VALUES: FormShape = {
   categoryId: '',
@@ -77,6 +112,7 @@ export function CreateCategoryDiscountDialog({ open, onOpenChange }: Props) {
 
   const form = useForm<FormShape>({
     mode: 'onTouched',
+    resolver: zodResolver(categoryDiscountSchema),
     defaultValues: DEFAULT_VALUES,
   })
 
@@ -91,41 +127,12 @@ export function CreateCategoryDiscountDialog({ open, onOpenChange }: Props) {
   const isActive = form.watch('isActive')
 
   const submit = form.handleSubmit(async (values) => {
-    if (!values.categoryId) {
-      form.setError('categoryId', { message: 'Vui lòng chọn danh mục' })
-      return
-    }
-    if (values.targetType === 'customer' && !values.customerId) {
-      form.setError('customerId', { message: 'Vui lòng chọn khách hàng' })
-      return
-    }
-    if (values.targetType === 'group' && !values.customerGroupId) {
-      form.setError('customerGroupId', { message: 'Vui lòng chọn nhóm khách hàng' })
-      return
-    }
-    if (values.discountValue === null || values.discountValue < 0) {
-      form.setError('discountValue', { message: 'Vui lòng nhập mức giảm hợp lệ' })
-      return
-    }
-    if (values.discountType === 'percent' && values.discountValue > 100) {
-      form.setError('discountValue', { message: 'Phần trăm giảm phải ≤ 100' })
-      return
-    }
-    if (values.minQty < 1) {
-      form.setError('minQty', { message: 'Số lượng tối thiểu ≥ 1' })
-      return
-    }
-    if (values.effectiveFrom && values.effectiveTo && values.effectiveTo < values.effectiveFrom) {
-      form.setError('effectiveTo', { message: 'Ngày kết thúc phải ≥ ngày bắt đầu' })
-      return
-    }
-
     const payload: CreateCategoryDiscountInput = {
       categoryId: values.categoryId,
       customerId: values.targetType === 'customer' ? values.customerId : null,
       customerGroupId: values.targetType === 'group' ? values.customerGroupId : null,
       discountType: values.discountType,
-      discountValue: values.discountValue,
+      discountValue: values.discountValue!,
       minQty: values.minQty,
       effectiveFrom: values.effectiveFrom || null,
       effectiveTo: values.effectiveTo || null,

@@ -143,7 +143,7 @@ async function ensureNameUnique({
   name: string
   excludeId?: string
 }): Promise<void> {
-  const lower = name.toLowerCase()
+  const normalized = name.replace(/\s+/g, ' ').trim().toLowerCase()
   const baseConds =
     parentId === null
       ? and(eq(categories.storeId, storeId), isNull(categories.parentId))
@@ -154,7 +154,7 @@ async function ensureNameUnique({
     .where(baseConds)
   for (const row of rows) {
     if (excludeId && row.id === excludeId) continue
-    if (row.name.toLowerCase() === lower) {
+    if (row.name.replace(/\s+/g, ' ').trim().toLowerCase() === normalized) {
       throw new ApiError('CONFLICT', 'Tên danh mục đã tồn tại trong cùng cấp', { field: 'name' })
     }
   }
@@ -195,6 +195,7 @@ export async function createCategory({
   meta,
 }: CreateCategoryDeps): Promise<CategoryItem> {
   const parentId = input.parentId ?? null
+  const normalizedName = input.name.replace(/\s+/g, ' ').trim()
 
   if (parentId !== null) {
     await ensureParentValid({ db, storeId: actor.storeId, parentId })
@@ -204,7 +205,7 @@ export async function createCategory({
     db,
     storeId: actor.storeId,
     parentId,
-    name: input.name,
+    name: normalizedName,
   })
 
   return db.transaction(async (tx) => {
@@ -220,7 +221,7 @@ export async function createCategory({
         .insert(categories)
         .values({
           storeId: actor.storeId,
-          name: input.name,
+          name: normalizedName,
           parentId,
           sortOrder,
         })
@@ -307,8 +308,11 @@ export async function updateCategory({
     }
   }
 
-  if (input.name !== undefined && input.name !== target.name) {
-    updates.name = input.name
+  if (input.name !== undefined) {
+    const normalizedName = input.name.replace(/\s+/g, ' ').trim()
+    if (normalizedName !== target.name) {
+      updates.name = normalizedName
+    }
   }
 
   // Nếu name đổi hoặc parent đổi → kiểm tra trùng tên trong (store, parent) mới
@@ -421,6 +425,14 @@ export async function reorderCategories({
   }
 
   return db.transaction(async (tx) => {
+    const offset = 1_000_000
+    for (let i = 0; i < orderedIds.length; i++) {
+      const id = orderedIds[i]!
+      await tx
+        .update(categories)
+        .set({ sortOrder: offset + i })
+        .where(eq(categories.id, id))
+    }
     for (let i = 0; i < orderedIds.length; i++) {
       const id = orderedIds[i]!
       await tx.update(categories).set({ sortOrder: i }).where(eq(categories.id, id))
