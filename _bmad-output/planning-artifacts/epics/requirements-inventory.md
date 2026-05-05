@@ -165,7 +165,7 @@
 - AR24: Infrastructure: Vercel/CF Pages (SPA), Railway/Fly.io (API container), Neon PostgreSQL (serverless), Cloudflare R2 (images), GitHub Actions CI/CD, Sentry monitoring
 - AR25: Pricing engine (6-tier) và debt allocator (FIFO) là pure functions trong `packages/shared/src/utils/` — chạy được cả client và server
 - AR26: Feature-based code organization (by feature, not by type), co-located tests
-- AR27: Naming conventions: DB snake_case số nhiều, API kebab-case, JSON camelCase, components PascalCase, hooks use-*.ts, constants UPPER_SNAKE_CASE
+- AR27: Naming conventions: DB snake_case số nhiều, API kebab-case, JSON camelCase, components PascalCase, hooks use-\*.ts, constants UPPER_SNAKE_CASE
 - AR28: Currency lưu integer (VNĐ, không thập phân), tính toán integer arithmetic, format `Intl.NumberFormat('vi-VN')`
 - AR29: Date: `timestamptz` (UTC) trong DB, ISO 8601 API, `date-fns` cho UI format locale vi-VN
 
@@ -289,3 +289,46 @@
 - AR38: Epic 10 (Story 10.3) — Encryption channel config (AES-256-GCM)
 - AR39: Epic 10 (Story 10.3) — Webhook HMAC + rate-limit
 - NF13: Epic 10 (Story 10.1) — DB backup tự động hàng ngày
+
+## Technical Debt Requirements
+
+**Nguồn:** MVP Retro 2026-05-05 + Deferred Work document (~60 items lọc thành 30 actionable)
+
+### Đợt 1: Critical (blocking production deploy)
+
+- TD1: Rate limit auth endpoints (5 req/min/IP login, 3/hour register)
+- TD2: Graceful shutdown (pino.final + connection pool drain khi SIGTERM/SIGINT)
+- TD3: CORS + security headers (cho web port 5173 gọi API port 3000)
+- TD4: Vietnamese text có dấu (toàn bộ JSX, ~60+ files, pre-existing từ Story 3.1)
+- TD5: CI/CD pipeline (deferred story 1.5)
+- TD17: Mobile drawer focus trap (WCAG AA: focus in khi mở, trả về trigger khi đóng)
+- TD18: Bottom tab bar overflow ≤375px (7 mục, giới hạn 4-5 tab hoặc gom sub-items)
+
+### Đợt 2: Security Hardening
+
+- TD6: HMAC replay protection (timestamp + nonce cho webhook outbound)
+- TD7: Refresh token reuse detection (revoke toàn bộ family khi phát hiện reuse)
+- TD8: CSRF protection (SameSite=Strict hoặc CSRF token)
+- TD9: Env validation (JWT secret ≥32 chars, TTL parse validation)
+- TD10: Audit log login/logout events
+- TD19: Webhook SSRF protection (URL whitelist, block private IP ranges)
+- TD20: parseKey hex validation (Buffer.from silent skip invalid chars → explicit error)
+- TD21: Backoff delay max cap (4^n explosion nếu tăng maxAttempts)
+- TD22: Permission granularity: tách `orders.view` từ `pos.sell`
+- TD23: context field z.record(z.unknown()) DoS giới hạn (thêm .refine() limit depth/size)
+
+### Đợt 3: Performance & Quality
+
+- TD11: N+1 query fix (returns getOrderReturns, pos search variant barcode 5 round-trips, customer-prices)
+- TD12: Category sortOrder race condition (unique constraint hoặc UPDATE CASE WHEN bulk)
+- TD13: notification_deliveries retention policy (purge cron)
+- TD14: Touch targets ≥ 44px (CartItem buttons 28px, CategoryFilter chips 32px, scanner button 36px)
+- TD15: ARIA combobox roles (PosSearchBar: role="combobox", role="listbox", aria-expanded)
+- TD16: cashAmount/transferAmount persist vào DB (thêm 2 cột orders table)
+- TD24: StatusBadge/PaymentStatusBadge duplicate → extract shared component
+- TD25: Form validation consistency: manual → zodResolver (CreateCategoryDiscountDialog, EditCategoryDiscountDialog)
+- TD26: Duplicate variant mapping logic trong searchProductsForPos → extract helper
+- TD27: N+1 variant barcode search (5 round-trips → single query merge)
+- TD28: Unit conversion không reverse khi trả hàng (unitConversionId không lưu trong order_items)
+- TD29: Category schema whitespace normalization (collapse multiple internal whitespace)
+- TD30: Catch blocks swallow exceptions (6 chỗ trong notification service, mất audit trail)

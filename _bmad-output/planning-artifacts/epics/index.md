@@ -72,3 +72,7 @@
     - [Story 10.3: Webhook & Telegram Transport + Bảo mật](./epic-10-canh-bao-giam-sat-cua-hang.md#story-103-webhook--telegram-transport--bo-mt)
     - [Story 10.4: Kết nối 7 Event nghiệp vụ MVP](./epic-10-canh-bao-giam-sat-cua-hang.md#story-104-kt-ni-7-event-nghip-v-mvp)
     - [Story 10.5: Frontend Outbox cho Notification](./epic-10-canh-bao-giam-sat-cua-hang.md#story-105-frontend-outbox-cho-notification)
+  - [Epic 11: Technical Debt Resolution](./epic-11-technical-debt-resolution.md)
+    - [Story 11.1: Production-Ready Critical Fixes](./epic-11-technical-debt-resolution.md#story-111-production-ready-critical-fixes)
+    - [Story 11.2: Security Hardening](./epic-11-technical-debt-resolution.md#story-112-security-hardening)
+    - [Story 11.3: Performance & Quality Polish](./epic-11-technical-debt-resolution.md#story-113-performance--quality-polish)
