@@ -198,6 +198,6 @@ development_status:
   # Epic 11: Technical Debt Resolution (Preparation Sprint)
   epic-11: in-progress
   11-1-production-ready-critical-fixes: done
-  11-2-security-hardening: backlog
+  11-2-security-hardening: done
   11-3-performance-quality-polish: backlog
   epic-11-retrospective: optional

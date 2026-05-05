@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto'
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 
 import type { NotificationEvent } from '@kiotviet-lite/shared'
 
@@ -6,6 +6,12 @@ import type { SendResult, Transport } from './base.js'
 
 function isPrivateHost(hostname: string): boolean {
   if (hostname === 'localhost' || hostname === '::1' || hostname === '[::1]') return true
+
+  // IPv6 private ranges
+  const bare = hostname.startsWith('[') ? hostname.slice(1, -1) : hostname
+  if (bare === '::1' || bare.startsWith('fe80:') || bare.startsWith('fc') || bare.startsWith('fd'))
+    return true
+
   const parts = hostname.split('.')
   if (parts.length !== 4 || parts.some((p) => !/^\d+$/.test(p))) return false
   const a = Number(parts[0])
@@ -35,8 +41,8 @@ export class WebhookTransport implements Transport {
       return { ok: false, error: 'Invalid webhook URL', attempts: 1, retriable: false }
     }
 
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-      return { ok: false, error: 'Webhook URL must use HTTP(S)', attempts: 1, retriable: false }
+    if (parsed.protocol !== 'https:') {
+      return { ok: false, error: 'Webhook URL must use HTTPS', attempts: 1, retriable: false }
     }
 
     if (isPrivateHost(parsed.hostname)) {
@@ -49,14 +55,19 @@ export class WebhookTransport implements Transport {
     }
 
     const body = JSON.stringify(event)
+    const timestamp = new Date().toISOString()
+    const nonce = randomUUID()
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'X-KVL-Timestamp': timestamp,
+      'X-KVL-Nonce': nonce,
     }
 
     if (hmacSecret) {
+      const signPayload = `${timestamp}.${nonce}.${body}`
       headers['X-KVL-Signature'] = createHmac('sha256', hmacSecret)
-        .update(body, 'utf8')
+        .update(signPayload, 'utf8')
         .digest('hex')
     }
 
@@ -91,4 +102,36 @@ export class WebhookTransport implements Transport {
       return { ok: false, error: String(err), attempts: 1, retriable: false }
     }
   }
+}
+
+export function verifyWebhookSignature(params: {
+  signature: string
+  timestamp: string
+  nonce: string
+  body: string
+  secret: string
+  maxAgeMs?: number
+}): { valid: boolean; error?: string } {
+  const { signature, timestamp, nonce, body, secret, maxAgeMs = 300_000 } = params
+
+  const age = Date.now() - new Date(timestamp).getTime()
+  if (isNaN(age) || Math.abs(age) > maxAgeMs) {
+    return { valid: false, error: 'Timestamp expired or invalid' }
+  }
+
+  const expected = createHmac('sha256', secret)
+    .update(`${timestamp}.${nonce}.${body}`, 'utf8')
+    .digest('hex')
+
+  if (!/^[0-9a-fA-F]+$/.test(signature) || signature.length !== expected.length) {
+    return { valid: false, error: 'Invalid signature' }
+  }
+
+  const a = Buffer.from(signature, 'hex')
+  const b = Buffer.from(expected, 'hex')
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    return { valid: false, error: 'Invalid signature' }
+  }
+
+  return { valid: true }
 }

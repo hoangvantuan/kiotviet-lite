@@ -8,8 +8,8 @@ import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
-import { getOrderDetail, listOrders } from '../services/orders.service.js'
 import { getRequestMeta } from '../services/audit.service.js'
+import { getOrderDetail, listOrders } from '../services/orders.service.js'
 import { createReturn, getOrderReturns, getReturnableItems } from '../services/returns.service.js'
 
 const uuidParam = z.string().uuid('ID không hợp lệ')
@@ -22,7 +22,7 @@ export function createOrdersRoutes({ db }: OrdersRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
   app.use('*', requireAuth)
-  app.use('*', requirePermission('pos.sell'))
+  app.use('*', requirePermission('orders.view'))
 
   // GET / - List orders (paginated, filtered)
   app.get('/', async (c) => {

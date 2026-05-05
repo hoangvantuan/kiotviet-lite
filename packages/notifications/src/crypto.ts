@@ -5,11 +5,10 @@ const IV_LENGTH = 12
 const AUTH_TAG_LENGTH = 16
 
 function parseKey(key: string): Buffer {
-  const buf = Buffer.from(key, 'hex')
-  if (buf.length !== 32) {
-    throw new Error(`Encryption key must be 32 bytes (64 hex chars), got ${buf.length} bytes`)
+  if (!/^[0-9a-fA-F]{64}$/.test(key)) {
+    throw new Error('Invalid hex in encryption key: must be exactly 64 hex characters (32 bytes)')
   }
-  return buf
+  return Buffer.from(key, 'hex')
 }
 
 export function encrypt(plaintext: string, key: string): string {

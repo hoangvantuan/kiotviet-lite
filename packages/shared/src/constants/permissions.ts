@@ -9,6 +9,7 @@ export const PERMISSIONS = {
   'reports.view': ['owner', 'manager'],
   'products.manage': ['owner', 'manager'],
   'pos.sell': ['owner', 'manager', 'staff'],
+  'orders.view': ['owner', 'manager', 'staff'],
   'customers.view': ['owner', 'manager', 'staff'],
   'customers.manage': ['owner', 'manager'],
   'pricing.view': ['owner', 'manager', 'staff'],

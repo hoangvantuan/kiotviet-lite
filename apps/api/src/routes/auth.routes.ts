@@ -74,7 +74,17 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
 
   app.post('/logout', async (c) => {
     const token = getRefreshCookie(c)
-    await logoutUser({ db, token })
+    const auth = c.get('auth') as { userId: string; storeId: string } | undefined
+    const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip')
+    const userAgent = c.req.header('user-agent')
+    await logoutUser({
+      db,
+      token,
+      userId: auth?.userId,
+      storeId: auth?.storeId,
+      ip,
+      userAgent,
+    })
     clearRefreshCookie(c)
     return c.body(null, 204)
   })

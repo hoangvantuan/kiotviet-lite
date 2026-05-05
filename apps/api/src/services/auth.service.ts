@@ -1,6 +1,7 @@
-import { and, eq, gt, isNull } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 
 import {
+  auditLogs,
   type AuthResponse,
   type AuthUser,
   type LoginInput,
@@ -128,6 +129,18 @@ export async function loginUser({ db, input, ip, userAgent }: LoginDeps): Promis
     role: authUser.role,
   })
 
+  // Audit log for login
+  await db.insert(auditLogs).values({
+    storeId: user.storeId,
+    actorId: user.id,
+    actorRole: user.role,
+    action: 'login',
+    targetType: 'user',
+    targetId: user.id,
+    ipAddress: ip,
+    userAgent,
+  })
+
   // Suspicious login detection (fire-and-forget)
   void (async () => {
     try {
@@ -177,14 +190,24 @@ export async function rotateRefreshToken({
   const payload = verifyRefreshToken(token)
   const tokenHash = hashToken(token)
 
-  const stored = await db.query.refreshTokens.findFirst({
-    where: and(
-      eq(refreshTokens.tokenHash, tokenHash),
-      eq(refreshTokens.userId, payload.sub),
-      isNull(refreshTokens.revokedAt),
-      gt(refreshTokens.expiresAt, new Date()),
-    ),
+  // Token reuse detection: check if token was already used (revoked)
+  const existing = await db.query.refreshTokens.findFirst({
+    where: and(eq(refreshTokens.tokenHash, tokenHash), eq(refreshTokens.userId, payload.sub)),
   })
+  if (existing && existing.revokedAt) {
+    // Reuse attack detected — revoke entire token family
+    await db
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(refreshTokens.userId, payload.sub), isNull(refreshTokens.revokedAt)))
+    logger.error({ userId: payload.sub }, 'Refresh token reuse detected, all sessions revoked')
+    throw new ApiError('UNAUTHORIZED', 'Token reuse detected, all sessions revoked', {
+      reason: 'reuse',
+    })
+  }
+
+  const stored =
+    existing && !existing.revokedAt && existing.expiresAt > new Date() ? existing : null
   if (!stored) {
     throw new ApiError('UNAUTHORIZED', 'Phiên đăng nhập đã hết hạn', { reason: 'invalid' })
   }
@@ -223,13 +246,25 @@ export async function rotateRefreshToken({
 interface LogoutDeps {
   db: Db
   token: string | null | undefined
+  userId?: string
+  storeId?: string
+  ip?: string
+  userAgent?: string
 }
 
-export async function logoutUser({ db, token }: LogoutDeps): Promise<void> {
+export async function logoutUser({
+  db,
+  token,
+  userId,
+  storeId,
+  ip,
+  userAgent,
+}: LogoutDeps): Promise<void> {
   if (!token) return
+  let payload: { sub: string }
   let tokenHash: string
   try {
-    verifyRefreshToken(token)
+    payload = verifyRefreshToken(token)
     tokenHash = hashToken(token)
   } catch {
     return
@@ -238,6 +273,24 @@ export async function logoutUser({ db, token }: LogoutDeps): Promise<void> {
     .update(refreshTokens)
     .set({ revokedAt: new Date() })
     .where(and(eq(refreshTokens.tokenHash, tokenHash), isNull(refreshTokens.revokedAt)))
+
+  const actorId = userId ?? payload.sub
+  let resolvedStoreId = storeId
+  if (!resolvedStoreId) {
+    const user = await db.query.users.findFirst({ where: eq(users.id, actorId) })
+    resolvedStoreId = user?.storeId
+  }
+  if (actorId && resolvedStoreId) {
+    await db.insert(auditLogs).values({
+      storeId: resolvedStoreId,
+      actorId,
+      action: 'logout',
+      targetType: 'user',
+      targetId: actorId,
+      ipAddress: ip,
+      userAgent,
+    })
+  }
 }
 
 function toAuthUser(user: typeof users.$inferSelect): AuthUser {

@@ -22,13 +22,35 @@ const emitRateLimiter = rateLimiter({
   standardHeaders: 'draft-7',
 })
 
+const MAX_CONTEXT_SIZE = 10_240
+const MAX_CONTEXT_DEPTH = 3
+
+function getMaxDepth(obj: unknown, current = 0, visited = new WeakSet<object>()): number {
+  if (current > MAX_CONTEXT_DEPTH) return current
+  if (typeof obj !== 'object' || obj === null) return current
+  if (visited.has(obj)) return current
+  visited.add(obj)
+  return Math.max(current, ...Object.values(obj).map((v) => getMaxDepth(v, current + 1, visited)))
+}
+
 const emitInputSchema = z
   .object({
     type: z.enum(notificationTypeValues),
     severity: z.enum(notificationSeverityValues),
     title: z.string().min(1).max(200),
     body: z.string().min(1).max(2000),
-    context: z.record(z.unknown()).optional(),
+    context: z
+      .record(z.unknown())
+      .optional()
+      .refine(
+        (ctx) => {
+          if (!ctx) return true
+          if (JSON.stringify(ctx).length > MAX_CONTEXT_SIZE) return false
+          if (getMaxDepth(ctx) > MAX_CONTEXT_DEPTH) return false
+          return true
+        },
+        { message: 'context too large or too deeply nested (max 10KB, max 3 levels)' },
+      ),
   })
   .strict()
 

@@ -171,4 +171,5 @@ export async function notify(
 
 export type { NotificationDb, SendResult, Transport }
 export { notificationEventSchema }
+export { verifyWebhookSignature } from './transports/webhook.js'
 export type { NotificationEvent } from '@kiotviet-lite/shared'

@@ -13,6 +13,30 @@ function optional(name: string, fallback: string): string {
   return value && value.length > 0 ? value : fallback
 }
 
+function validateSecrets(): void {
+  const accessSecret = process.env.JWT_ACCESS_SECRET
+  const refreshSecret = process.env.JWT_REFRESH_SECRET
+
+  if (!accessSecret || accessSecret.length < 32) {
+    throw new Error('JWT_ACCESS_SECRET must be at least 32 characters')
+  }
+  if (!refreshSecret || refreshSecret.length < 32) {
+    throw new Error('JWT_REFRESH_SECRET must be at least 32 characters')
+  }
+
+  const ttl = process.env.ACCESS_TOKEN_TTL_SECONDS
+  if (ttl && isNaN(Number(ttl))) {
+    throw new Error('ACCESS_TOKEN_TTL_SECONDS must be a valid number')
+  }
+
+  const refreshTtl = process.env.REFRESH_TOKEN_TTL_SECONDS
+  if (refreshTtl && isNaN(Number(refreshTtl))) {
+    throw new Error('REFRESH_TOKEN_TTL_SECONDS must be a valid number')
+  }
+}
+
+validateSecrets()
+
 export const env = {
   get jwtAccessSecret(): string {
     return required('JWT_ACCESS_SECRET')

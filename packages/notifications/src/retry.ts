@@ -23,7 +23,7 @@ export async function withRetry(
       return { ok: false, error: result.error, attempts: attempt, retriable: result.retriable }
     }
 
-    const backoffMs = Math.pow(4, attempt - 1) * 1000
+    const backoffMs = Math.min(Math.pow(4, attempt - 1) * 1000, 60_000)
     await delay(backoffMs)
   }
 

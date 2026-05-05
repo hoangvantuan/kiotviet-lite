@@ -14,6 +14,7 @@ const MATRIX: Record<Permission, Record<UserRole, boolean>> = {
   'reports.view': { owner: true, manager: true, staff: false },
   'products.manage': { owner: true, manager: true, staff: false },
   'pos.sell': { owner: true, manager: true, staff: true },
+  'orders.view': { owner: true, manager: true, staff: true },
   'customers.view': { owner: true, manager: true, staff: true },
   'customers.manage': { owner: true, manager: true, staff: false },
   'pricing.view': { owner: true, manager: true, staff: true },
@@ -36,6 +37,7 @@ describe('PERMISSIONS map', () => {
         'customers.view',
         'inventory.manage',
         'orders.return',
+        'orders.view',
         'pos.editPrice',
         'pos.editPriceBelowCost',
         'pos.sell',
@@ -93,7 +95,7 @@ describe('hasPermission - các kết hợp đặc trưng', () => {
     expect(hasPermission('manager', 'inventory.manage')).toBe(true)
   })
 
-  it('Staff: chỉ có audit.viewOwn, pos.sell, customers.view, pricing.view', () => {
+  it('Staff: chỉ có audit.viewOwn, pos.sell, orders.view, customers.view, pricing.view', () => {
     expect(hasPermission('staff', 'users.manage')).toBe(false)
     expect(hasPermission('staff', 'store.manage')).toBe(false)
     expect(hasPermission('staff', 'audit.viewAll')).toBe(false)
