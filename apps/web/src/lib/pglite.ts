@@ -49,6 +49,10 @@ export function getPGliteRaw(): PGlite {
   return instance.pglite
 }
 
+export function getPGliteClient(): PGlite | null {
+  return instance?.pglite ?? null
+}
+
 export async function closePGlite(): Promise<void> {
   if (instance) {
     await instance.pglite.close()

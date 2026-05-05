@@ -12,13 +12,21 @@ export default defineConfig({
       manifest: {
         name: 'KiotViet Lite',
         short_name: 'KVLite',
+        description: 'Phần mềm quản lý bán hàng POS offline-first',
         start_url: '/',
         display: 'standalone',
         theme_color: '#2563EB',
         background_color: '#ffffff',
+        categories: ['business', 'productivity'],
         icons: [
           { src: '/icons/icon-192x192.svg', sizes: '192x192', type: 'image/svg+xml' },
           { src: '/icons/icon-512x512.svg', sizes: '512x512', type: 'image/svg+xml' },
+          {
+            src: '/icons/icon-512x512.svg',
+            sizes: '512x512',
+            type: 'image/svg+xml',
+            purpose: 'maskable',
+          },
         ],
       },
       workbox: {

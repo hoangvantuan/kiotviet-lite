@@ -1,3 +1,6 @@
+# Story 9-2 code review 2026-05-05: 0 CRIT, 2 MAJOR (F1 dedup LIKE fix, F2 requirePermission added), 3 MINOR (F3-F5 defer); 2 patches applied; typecheck 3/3 pass; 612/613 tests (1 pre-existing timeout); verdict APPROVE after patches
+# Story 9-2 dev completed 2026-05-05: 10/10 tasks, typecheck 3/3 pass, 614/614 tests; in-progress → review
+# Story 9-2 created 2026-05-05: đồng bộ đơn offline — 6 ACs, 10 tasks; batch push, conflict resolution, retry logic
 # Story 9-1 code review 2026-05-05: 0 CRIT, 2 MAJOR (F1 SQL injection fixed via TABLE_MAP whitelist, F2 empty incremental sync implemented), 3 MINOR (F3-F5 patched); typecheck 3/3 pass; verdict APPROVE after patches
 # Story 9-1 dev completed 2026-05-05: 9/9 tasks, typecheck 3/3 pass, 603/604 tests (1 pre-existing timeout); ready-for-dev → review
 # Story 9-1 created 2026-05-05: offline PWA — 6 ACs, 9 tasks; Epic 9 → in-progress
@@ -73,7 +76,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-24
-last_updated: 2026-05-05 # story 9-1 created: offline PWA — 6 ACs, 9 tasks; Epic 9 → in-progress
+last_updated: 2026-05-05 # story 9-2 created: đồng bộ đơn offline — 6 ACs, 10 tasks
 # Story 4-3b dev xong 2026-04-30: 15/15 tasks, 21 integration test mới pass, full suite 978/979, in-progress → review
 # Story 4-3b created 2026-04-30 (chain + clone + import; 10 ACs, 15 tasks)
 # Story 5-3 created 2026-04-30 + Epic 5 → in-progress
@@ -172,7 +175,7 @@ development_status:
   # Epic 9: Offline & PWA
   epic-9: in-progress
   9-1-app-hoat-dong-day-du-khi-mat-mang: done
-  9-2-don-hang-offline-tu-dong-dong-bo-khi-co-mang: backlog
+  9-2-don-hang-offline-tu-dong-dong-bo-khi-co-mang: done
   epic-9-retrospective: optional
 
   # Epic 10: Canh bao & Giam sat cua hang

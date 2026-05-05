@@ -1,8 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 
-import type { DebtInfo } from '@kiotviet-lite/shared'
+import type { CreateOrderInput, DebtInfo } from '@kiotviet-lite/shared'
 
 import { apiClient } from '@/lib/api-client'
+import { saveOfflineOrder } from '@/lib/offline-orders'
+import { getPGliteClient } from '@/lib/pglite'
+import { useAuthStore } from '@/stores/use-auth-store'
+import { useOfflineStore } from '@/stores/use-offline-store'
 
 import type { OrderDetail, StockInfo } from '../types'
 
@@ -54,15 +59,27 @@ export function useCheckoutMutation() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: (payload: CheckoutPayload) =>
-      apiClient.post<CheckoutResponse>('/api/v1/pos/orders', payload),
+    mutationFn: async (payload: CheckoutPayload) => {
+      const isOffline = useOfflineStore.getState().status === 'offline' || !navigator.onLine
+
+      if (isOffline) {
+        const pglite = getPGliteClient()
+        if (!pglite) throw new Error('PGlite chưa khởi tạo')
+
+        const storeId = useAuthStore.getState().user?.storeId
+        if (!storeId) throw new Error('Chưa đăng nhập')
+
+        const clientId = await saveOfflineOrder(pglite, storeId, payload as CreateOrderInput)
+        toast.success('Đơn hàng đã lưu (chờ đồng bộ)')
+        return { data: { id: clientId, offline: true } } as unknown as CheckoutResponse
+      }
+
+      return apiClient.post<CheckoutResponse>('/api/v1/pos/orders', payload)
+    },
     onSuccess: (_data, variables) => {
-      // Invalidate POS products to update stock badges / "Het hang" status
       qc.invalidateQueries({ queryKey: ['pos-products'] })
-      // Invalidate low-stock count to update bell badge
       qc.invalidateQueries({ queryKey: ['low-stock-count'] })
       qc.invalidateQueries({ queryKey: ['low-stock-list'] })
-      // Story 5.1: invalidate debt info nếu có customer
       if (variables.customerId) {
         qc.invalidateQueries({ queryKey: ['customer-debt', variables.customerId] })
       }
