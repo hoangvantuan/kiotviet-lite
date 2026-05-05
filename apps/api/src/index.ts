@@ -5,11 +5,13 @@ import { cors } from 'hono/cors'
 
 import { users } from '@kiotviet-lite/shared'
 
-import { db } from './db/index.js'
-import { initLogger } from './lib/logger.js'
+import { closeDbPool, db } from './db/index.js'
+import { setupGracefulShutdown } from './lib/graceful-shutdown.js'
+import { initLogger, logger } from './lib/logger.js'
 import { requireAuth } from './middleware/auth.middleware.js'
 import { errorHandler } from './middleware/error-handler.js'
 import { requestLoggerMiddleware } from './middleware/request-logger.middleware.js'
+import { securityHeaders } from './middleware/security-headers.middleware.js'
 import { createAuditRoutes } from './routes/audit.routes.js'
 import { createAuthRoutes } from './routes/auth.routes.js'
 import { createCategoriesRoutes } from './routes/categories.routes.js'
@@ -54,6 +56,7 @@ app.use(
   }),
 )
 
+app.use('*', securityHeaders)
 app.use('/api/*', requestLoggerMiddleware)
 
 app.onError(errorHandler)
@@ -119,8 +122,16 @@ if (process.env.NODE_ENV !== 'test') {
       console.error('Failed to initialize logger, using fallback:', err)
     })
     .then(() => {
-      serve({ fetch: app.fetch, port }, (info) => {
+      const server = serve({ fetch: app.fetch, port }, (info) => {
         console.log(`API server running at http://localhost:${info.port}`)
+      })
+
+      setupGracefulShutdown({
+        server,
+        logger,
+        cleanup: async () => {
+          await closeDbPool()
+        },
       })
     })
 }

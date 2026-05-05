@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
 
@@ -94,11 +94,25 @@ export function MobileDrawer() {
   const closeMobile = useSidebarStore((s) => s.closeMobile)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const navItems = useFilteredNavItems()
+  const drawerRef = useRef<HTMLElement>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
   const activePath = findActivePath(
     pathname,
     navItems.map((i) => i.path),
   )
 
+  // Capture trigger button ref on open, restore focus on close
+  useEffect(() => {
+    if (isMobileOpen) {
+      // Remember the hamburger button that opened this drawer
+      triggerRef.current = document.querySelector<HTMLButtonElement>('button[aria-label="Mở menu"]')
+    } else {
+      // Restore focus to trigger when drawer closes
+      triggerRef.current?.focus()
+    }
+  }, [isMobileOpen])
+
+  // Escape key close
   useEffect(() => {
     if (!isMobileOpen) return
     const handler = (e: KeyboardEvent) => {
@@ -108,12 +122,53 @@ export function MobileDrawer() {
     return () => document.removeEventListener('keydown', handler)
   }, [isMobileOpen, closeMobile])
 
+  // Focus trap: keep focus within drawer while open
+  useEffect(() => {
+    if (!isMobileOpen || !drawerRef.current) return
+
+    const drawer = drawerRef.current
+    const focusableSelector =
+      'a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])'
+
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+
+      const focusables = Array.from(drawer.querySelectorAll<HTMLElement>(focusableSelector))
+      if (focusables.length === 0) return
+
+      const first = focusables[0] as HTMLElement | undefined
+      const last = focusables[focusables.length - 1] as HTMLElement | undefined
+      if (!first || !last) return
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+
+    // Attach listener BEFORE focusing to prevent focus escape during the focus() call
+    document.addEventListener('keydown', handleTab)
+
+    // Focus the close button on open
+    const firstFocusable = drawer.querySelector<HTMLElement>(focusableSelector)
+    firstFocusable?.focus()
+
+    return () => document.removeEventListener('keydown', handleTab)
+  }, [isMobileOpen])
+
   if (!isMobileOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 md:hidden">
+    <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
       <div className="fixed inset-0 bg-black/50" onClick={closeMobile} aria-hidden="true" />
-      <aside className="fixed left-0 top-0 h-full w-[240px] bg-background shadow-lg">
+      <aside
+        ref={drawerRef}
+        className="fixed left-0 top-0 h-full w-[240px] bg-background shadow-lg"
+        aria-label="Menu điều hướng"
+      >
         <div className="flex h-14 items-center justify-between border-b border-border px-3">
           <span className="text-sm font-semibold text-foreground">KiotViet Lite</span>
           <button

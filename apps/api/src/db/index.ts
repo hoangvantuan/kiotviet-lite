@@ -17,4 +17,6 @@ export const db = drizzle(client, {
   casing: 'snake_case',
 })
 
+export const closeDbPool = () => client.end()
+
 export type Db = typeof db

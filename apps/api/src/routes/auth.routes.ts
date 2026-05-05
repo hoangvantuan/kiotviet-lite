@@ -12,6 +12,7 @@ import { clearRefreshCookie, getRefreshCookie, setRefreshCookie } from '../lib/c
 import { ApiError } from '../lib/errors.js'
 import { parseJson } from '../lib/http.js'
 import { errorHandler } from '../middleware/error-handler.js'
+import { authRateLimit, registerRateLimit } from '../middleware/rate-limit.middleware.js'
 import {
   loginUser,
   logoutUser,
@@ -28,7 +29,7 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
 
-  app.post('/register', async (c) => {
+  app.post('/register', registerRateLimit, async (c) => {
     const input = await parseJson(c, registerSchema)
     const result = await registerStoreOwner({ db, input })
     setRefreshCookie(c, result.refreshToken)
@@ -42,7 +43,7 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
     return c.json(body, 201)
   })
 
-  app.post('/login', async (c) => {
+  app.post('/login', authRateLimit, async (c) => {
     const input = await parseJson(c, loginSchema)
     const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip')
     const userAgent = c.req.header('user-agent')
