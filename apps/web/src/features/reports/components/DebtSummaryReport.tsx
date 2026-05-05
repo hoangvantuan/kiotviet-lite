@@ -5,8 +5,8 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatVnd } from '@/lib/currency'
-import { cn } from '@/lib/utils'
 import { showError } from '@/lib/toast'
+import { cn } from '@/lib/utils'
 
 import { useDebtSummaryReport } from '../hooks/use-reports'
 import { downloadCsv, type ReportDateQuery } from '../reports-api'
@@ -15,7 +15,15 @@ interface DebtSummaryReportProps {
   query: ReportDateQuery
 }
 
-function StatRow({ label, value, className }: { label: string; value: string; className?: string }) {
+function StatRow({
+  label,
+  value,
+  className,
+}: {
+  label: string
+  value: string
+  className?: string
+}) {
   return (
     <div className="flex items-center justify-between">
       <span className="text-sm text-muted-foreground">{label}</span>

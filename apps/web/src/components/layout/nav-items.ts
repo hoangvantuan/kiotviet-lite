@@ -4,17 +4,21 @@ import {
   BarChart3,
   ClipboardCheck,
   ClipboardList,
+  DollarSign,
   FolderTree,
   HandCoins,
   LayoutDashboard,
   Package,
+  PieChart,
   Receipt,
   Settings,
   ShoppingCart,
   Tags,
+  TrendingUp,
   Truck,
   Users,
   Wallet,
+  Warehouse,
 } from 'lucide-react'
 
 import type { Permission } from '@kiotviet-lite/shared'
@@ -87,6 +91,30 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Activity,
     requiredPermission: 'reports.view',
   },
-  { path: '/reports', label: 'Báo cáo', icon: BarChart3, requiredPermission: 'reports.view' },
+  {
+    path: '/reports/revenue',
+    label: 'Doanh thu',
+    icon: TrendingUp,
+    requiredPermission: 'reports.view',
+  },
+  {
+    path: '/reports/profit',
+    label: 'Lợi nhuận',
+    icon: DollarSign,
+    requiredPermission: 'reports.view',
+  },
+  {
+    path: '/reports/inventory',
+    label: 'Tồn kho',
+    icon: Warehouse,
+    requiredPermission: 'reports.view',
+  },
+  {
+    path: '/reports/pricing',
+    label: 'Giá',
+    icon: PieChart,
+    requiredPermission: 'reports.view',
+  },
+  { path: '/reports', label: 'Công nợ', icon: BarChart3, requiredPermission: 'reports.view' },
   { path: '/settings', label: 'Cài đặt', icon: Settings, requiredPermission: 'audit.viewOwn' },
 ]

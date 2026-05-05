@@ -20,20 +20,24 @@ import { CustomersGroupsPage } from '@/pages/customers-groups-page'
 import { CustomersPage } from '@/pages/customers-page'
 import { DashboardPage } from '@/pages/dashboard-page'
 import { HomePage } from '@/pages/home-page'
+import { InventoryReportPage } from '@/pages/inventory-report-page'
 import { LoginPage } from '@/pages/login-page'
 import { OrderDetailPage } from '@/pages/order-detail-page'
 import { OrdersPage } from '@/pages/orders-page'
 import { PosPage } from '@/pages/pos-page'
 import { PricingDetailPage } from '@/pages/pricing-detail-page'
 import { PricingPage } from '@/pages/pricing-page'
+import { PricingReportPage } from '@/pages/pricing-report-page'
 import { ProductsCategoriesPage } from '@/pages/products-categories-page'
 import { ProductsPage } from '@/pages/products-page'
+import { ProfitReportPage } from '@/pages/profit-report-page'
 import { PurchaseOrderCreatePage } from '@/pages/purchase-order-create-page'
 import { PurchaseOrderDetailPage } from '@/pages/purchase-order-detail-page'
 import { PurchaseOrdersPage } from '@/pages/purchase-orders-page'
 import { ReceiptsPage } from '@/pages/receipts-page'
 import { RegisterPage } from '@/pages/register-page'
 import { ReportsPage } from '@/pages/reports-page'
+import { RevenueReportPage } from '@/pages/revenue-report-page'
 import { SettingsAuditPage } from '@/pages/settings-audit-page'
 import { SettingsDebtPage } from '@/pages/settings-debt-page'
 import { SettingsPage } from '@/pages/settings-page'
@@ -273,6 +277,34 @@ const reportsDashboardRoute = createRoute({
   component: DashboardPage,
 })
 
+const reportsRevenueRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/reports/revenue',
+  beforeLoad: requirePermissionGuard('reports.view'),
+  component: RevenueReportPage,
+})
+
+const reportsProfitRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/reports/profit',
+  beforeLoad: requirePermissionGuard('reports.view'),
+  component: ProfitReportPage,
+})
+
+const reportsInventoryRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/reports/inventory',
+  beforeLoad: requirePermissionGuard('reports.view'),
+  component: InventoryReportPage,
+})
+
+const reportsPricingRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/reports/pricing',
+  beforeLoad: requirePermissionGuard('reports.view'),
+  component: PricingReportPage,
+})
+
 const settingsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/settings',
@@ -397,6 +429,10 @@ const routeTree = rootRoute.addChildren([
       ordersRoute,
       orderDetailRoute,
       reportsDashboardRoute,
+      reportsRevenueRoute,
+      reportsProfitRoute,
+      reportsInventoryRoute,
+      reportsPricingRoute,
       reportsRoute,
       settingsRoute.addChildren([
         settingsIndexRoute,

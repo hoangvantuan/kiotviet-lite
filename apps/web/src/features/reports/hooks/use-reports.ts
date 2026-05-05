@@ -1,12 +1,18 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
-import type { DashboardPeriod } from '@kiotviet-lite/shared'
+import type { DashboardPeriod, InventoryReportTab } from '@kiotviet-lite/shared'
 
 import {
   getDashboardApi,
   getDebtAgingReportApi,
   getDebtSummaryReportApi,
+  getInventoryReportApi,
+  getPricingReportApi,
+  getProfitReportApi,
+  getRevenueReportApi,
+  type PricingReportQueryParams,
   type ReportDateQuery,
+  type RevenueReportQueryParams,
 } from '../reports-api'
 
 export function useDashboard(period: DashboardPeriod) {
@@ -34,5 +40,33 @@ export function useDebtSummaryReport(query: ReportDateQuery) {
   return useQuery({
     queryKey: ['reports', 'debt-summary', query],
     queryFn: async () => (await getDebtSummaryReportApi(query)).data,
+  })
+}
+
+export function useRevenueReport(query: RevenueReportQueryParams) {
+  return useQuery({
+    queryKey: ['reports', 'revenue', query],
+    queryFn: async () => (await getRevenueReportApi(query)).data,
+  })
+}
+
+export function useProfitReport(query: ReportDateQuery) {
+  return useQuery({
+    queryKey: ['reports', 'profit', query],
+    queryFn: async () => (await getProfitReportApi(query)).data,
+  })
+}
+
+export function useInventoryReport(tab: InventoryReportTab) {
+  return useQuery({
+    queryKey: ['reports', 'inventory', tab],
+    queryFn: async () => (await getInventoryReportApi(tab)).data,
+  })
+}
+
+export function usePricingReport(query: PricingReportQueryParams) {
+  return useQuery({
+    queryKey: ['reports', 'pricing', query],
+    queryFn: async () => (await getPricingReportApi(query)).data,
   })
 }

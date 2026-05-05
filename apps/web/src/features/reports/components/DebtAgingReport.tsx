@@ -5,7 +5,6 @@ import { AlertTriangle, Download, FileSpreadsheet } from 'lucide-react'
 import { EmptyState } from '@/components/shared/empty-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useStoreQuery } from '@/features/settings/use-store-settings'
 import {
   Table,
   TableBody,
@@ -15,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useStoreQuery } from '@/features/settings/use-store-settings'
 import { formatVnd } from '@/lib/currency'
 import { showError } from '@/lib/toast'
 
@@ -102,7 +102,10 @@ export function DebtAgingReport({ query }: DebtAgingReportProps) {
                       type="button"
                       className="text-left text-sm font-medium text-primary hover:underline"
                       onClick={() =>
-                        navigate({ to: '/customers/$customerId', params: { customerId: row.customerId } })
+                        navigate({
+                          to: '/customers/$customerId',
+                          params: { customerId: row.customerId },
+                        })
                       }
                     >
                       {row.customerName}
