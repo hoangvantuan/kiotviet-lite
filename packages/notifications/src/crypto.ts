@@ -1,5 +1,9 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 
+import { z } from 'zod'
+
+const transportConfigSchema = z.record(z.string(), z.unknown())
+
 const ALGORITHM = 'aes-256-gcm'
 const IV_LENGTH = 12
 const AUTH_TAG_LENGTH = 16
@@ -37,8 +41,5 @@ export function decrypt(ciphertext: string, key: string): Record<string, unknown
 
   const decrypted = decipher.update(data, undefined, 'utf8') + decipher.final('utf8')
   const parsed: unknown = JSON.parse(decrypted)
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error('Decrypted config must be a JSON object')
-  }
-  return parsed as Record<string, unknown>
+  return transportConfigSchema.parse(parsed)
 }

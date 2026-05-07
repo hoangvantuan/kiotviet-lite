@@ -23,6 +23,7 @@ export const errorHandler: ErrorHandler = (err, c) => {
     )
   }
   if (err instanceof ZodError) {
+    reqLogger.warn({ zodIssues: formatZodIssues(err) }, 'validation error')
     return c.json(
       {
         error: {

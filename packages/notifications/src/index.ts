@@ -1,3 +1,5 @@
+import { ZodError } from 'zod'
+
 import {
   notificationDeliveries,
   type NotificationEvent,
@@ -6,7 +8,7 @@ import {
 
 import { decrypt } from './crypto.js'
 import { withRetry } from './retry.js'
-import { findMatchingRules } from './router.js'
+import { findMatchingRules, type MatchedRule } from './router.js'
 import { isThrottled } from './throttle.js'
 import type { SendResult, Transport } from './transports/base.js'
 import { ConsoleTransport } from './transports/console.js'
@@ -31,7 +33,16 @@ export async function notify(
   event: NotificationEvent,
   options: NotifyOptions = {},
 ): Promise<SendResult[]> {
-  const validated = notificationEventSchema.parse(event)
+  let validated: NotificationEvent
+  try {
+    validated = notificationEventSchema.parse(event)
+  } catch (err) {
+    const message =
+      err instanceof ZodError
+        ? `Invalid notification event: ${err.issues.map((i) => i.path.join('.')).join(', ')}`
+        : 'Invalid notification event'
+    return [{ ok: false, error: message, attempts: 0, retriable: false }]
+  }
 
   const matchedRules = await findMatchingRules(
     db,
@@ -40,9 +51,7 @@ export async function notify(
     validated.severity,
   )
 
-  const results: SendResult[] = []
-
-  for (const rule of matchedRules) {
+  async function deliverRule(rule: MatchedRule): Promise<SendResult> {
     const throttled = await isThrottled(
       db,
       validated.storeId,
@@ -65,8 +74,7 @@ export async function notify(
       } catch (err) {
         console.error('[notifications] delivery log insert failed', err)
       }
-      results.push({ ok: true, attempts: 0 })
-      continue
+      return { ok: true, attempts: 0 }
     }
 
     const transport = transports[rule.transport]
@@ -85,13 +93,12 @@ export async function notify(
       } catch (err) {
         console.error('[notifications] delivery log insert failed', err)
       }
-      results.push({
+      return {
         ok: false,
         error: `Unknown transport: ${rule.transport}`,
         attempts: 0,
         retriable: false,
-      })
-      continue
+      }
     }
 
     let config: Record<string, unknown> = {}
@@ -111,13 +118,12 @@ export async function notify(
         } catch (err) {
           console.error('[notifications] delivery log insert failed', err)
         }
-        results.push({
+        return {
           ok: false,
           error: 'Config key required but not provided',
           attempts: 0,
           retriable: false,
-        })
-        continue
+        }
       }
       try {
         config = decrypt(rule.configEncrypted, options.configKey)
@@ -137,13 +143,12 @@ export async function notify(
         } catch (err2) {
           console.error('[notifications] delivery log insert failed', err2)
         }
-        results.push({
+        return {
           ok: false,
           error: 'Failed to decrypt channel config',
           attempts: 1,
           retriable: false,
-        })
-        continue
+        }
       }
     }
 
@@ -164,10 +169,16 @@ export async function notify(
       console.error('[notifications] delivery log insert failed', err)
     }
 
-    results.push(result)
+    return result
   }
 
-  return results
+  const settled = await Promise.allSettled(matchedRules.map(deliverRule))
+
+  return settled.map((outcome) =>
+    outcome.status === 'fulfilled'
+      ? outcome.value
+      : { ok: false, error: outcome.reason instanceof Error ? outcome.reason.message : 'Delivery failed', attempts: 0, retriable: true },
+  )
 }
 
 export type { NotificationDb, SendResult, Transport }

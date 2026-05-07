@@ -17,7 +17,10 @@ const SEVERITY_ORDER: Record<string, number> = {
 }
 
 export function isSeverityGte(eventSeverity: string, minSeverity: string): boolean {
-  return (SEVERITY_ORDER[eventSeverity] ?? 0) >= (SEVERITY_ORDER[minSeverity] ?? 0)
+  const eventLevel = SEVERITY_ORDER[eventSeverity]
+  const minLevel = SEVERITY_ORDER[minSeverity]
+  if (eventLevel === undefined || minLevel === undefined) return false
+  return eventLevel >= minLevel
 }
 
 export interface MatchedRule {

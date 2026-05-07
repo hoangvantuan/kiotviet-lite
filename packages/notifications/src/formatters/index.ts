@@ -24,10 +24,11 @@ function escapeHtml(text: string): string {
 
 export function formatTelegramMessage(event: NotificationEvent): string {
   const badge = SEVERITY_BADGE[event.severity] ?? `[${event.severity.toUpperCase()}]`
-  const rawBody =
-    event.body.length > MAX_BODY_LENGTH ? event.body.slice(0, MAX_BODY_LENGTH) + '...' : event.body
+  const escapedBody = escapeHtml(event.body)
+  const body =
+    escapedBody.length > MAX_BODY_LENGTH ? escapedBody.slice(0, MAX_BODY_LENGTH) + '...' : escapedBody
   const time = new Date(event.occurredAt).toLocaleString('vi-VN', {
     timeZone: 'Asia/Ho_Chi_Minh',
   })
-  return `<b>${badge} ${escapeHtml(event.title)}</b>\n${escapeHtml(rawBody)}\n\n<i>${time}</i>`
+  return `<b>${badge} ${escapeHtml(event.title)}</b>\n${body}\n\n<i>${time}</i>`
 }
