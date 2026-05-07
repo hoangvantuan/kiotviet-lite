@@ -116,7 +116,7 @@ function toPriceListDetail(row: PriceListJoinRow): PriceListDetail {
 
 const baseAlias = aliasedTable(priceLists, 'base')
 
-function buildSelectColumns() {
+function buildBaseSelectColumns() {
   return {
     id: priceLists.id,
     storeId: priceLists.storeId,
@@ -134,11 +134,30 @@ function buildSelectColumns() {
     deletedAt: priceLists.deletedAt,
     createdAt: priceLists.createdAt,
     updatedAt: priceLists.updatedAt,
+  }
+}
+
+function buildSelectColumns() {
+  return {
+    ...buildBaseSelectColumns(),
     itemCount: sql<number>`(
       SELECT COUNT(*)::int FROM ${priceListItems}
       WHERE ${priceListItems.priceListId} = ${priceLists.id}
     )`,
   }
+}
+
+async function batchLoadItemCounts(db: Db, priceListIds: string[]): Promise<Map<string, number>> {
+  if (priceListIds.length === 0) return new Map()
+  const rows = await db
+    .select({
+      priceListId: priceListItems.priceListId,
+      count: sql<number>`COUNT(*)::int`,
+    })
+    .from(priceListItems)
+    .where(inArray(priceListItems.priceListId, priceListIds))
+    .groupBy(priceListItems.priceListId)
+  return new Map(rows.map((r) => [r.priceListId, r.count]))
 }
 
 async function ensureNameUnique({
@@ -227,25 +246,33 @@ export async function listPriceLists({
 
   const offset = (page - 1) * pageSize
 
-  const rows = await db
-    .select(buildSelectColumns())
-    .from(priceLists)
-    .leftJoin(baseAlias, eq(priceLists.basePriceListId, baseAlias.id))
-    .where(whereClause)
-    .orderBy(desc(priceLists.createdAt), asc(priceLists.name))
-    .limit(pageSize)
-    .offset(offset)
-
-  const totalRows = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(priceLists)
-    .where(whereClause)
+  const [rows, totalRows] = await Promise.all([
+    db
+      .select(buildBaseSelectColumns())
+      .from(priceLists)
+      .leftJoin(baseAlias, eq(priceLists.basePriceListId, baseAlias.id))
+      .where(whereClause)
+      .orderBy(desc(priceLists.createdAt), asc(priceLists.name))
+      .limit(pageSize)
+      .offset(offset),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(priceLists)
+      .where(whereClause),
+  ])
 
   const total = totalRows[0]?.count ?? 0
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
+  const countMap = await batchLoadItemCounts(
+    db,
+    rows.map((r) => r.id),
+  )
+
   return {
-    items: rows.map((row) => toPriceListListItem(row as PriceListJoinRow)),
+    items: rows.map((row) =>
+      toPriceListListItem({ ...row, itemCount: countMap.get(row.id) ?? 0 } as PriceListJoinRow),
+    ),
     total,
     page,
     pageSize,
@@ -270,25 +297,33 @@ export async function listTrashedPriceLists({
 
   const offset = (page - 1) * pageSize
 
-  const rows = await db
-    .select(buildSelectColumns())
-    .from(priceLists)
-    .leftJoin(baseAlias, eq(priceLists.basePriceListId, baseAlias.id))
-    .where(whereClause)
-    .orderBy(desc(priceLists.deletedAt))
-    .limit(pageSize)
-    .offset(offset)
-
-  const totalRows = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(priceLists)
-    .where(whereClause)
+  const [rows, totalRows] = await Promise.all([
+    db
+      .select(buildBaseSelectColumns())
+      .from(priceLists)
+      .leftJoin(baseAlias, eq(priceLists.basePriceListId, baseAlias.id))
+      .where(whereClause)
+      .orderBy(desc(priceLists.deletedAt))
+      .limit(pageSize)
+      .offset(offset),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(priceLists)
+      .where(whereClause),
+  ])
 
   const total = totalRows[0]?.count ?? 0
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
+  const countMap = await batchLoadItemCounts(
+    db,
+    rows.map((r) => r.id),
+  )
+
   return {
-    items: rows.map((row) => toPriceListListItem(row as PriceListJoinRow)),
+    items: rows.map((row) =>
+      toPriceListListItem({ ...row, itemCount: countMap.get(row.id) ?? 0 } as PriceListJoinRow),
+    ),
     total,
     page,
     pageSize,

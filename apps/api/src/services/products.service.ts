@@ -5,6 +5,9 @@ import {
   type CreateProductInput,
   inventoryTransactions,
   type ListProductsQuery,
+  type PosProductItem,
+  type PosUnitConversion,
+  type PosVariantItem,
   type ProductDetail,
   type ProductListItem,
   products,
@@ -667,11 +670,18 @@ async function insertVariantsBatch({
         reserved: reservedSkus,
       })
     }
+    const attr1Val = v.attribute1Value.trim()
+    if (!attr1Val) {
+      throw new ApiError('VALIDATION_ERROR', 'Giá trị thuộc tính 1 không được để trống', {
+        field: 'attribute1Value',
+        variantIndex: i,
+      })
+    }
     finalRows.push({
       sku,
       barcode: v.barcode ?? null,
-      attribute1Value: v.attribute1Value,
-      attribute2Value: v.attribute2Value ?? null,
+      attribute1Value: attr1Val,
+      attribute2Value: v.attribute2Value?.trim() || null,
       sellingPrice: v.sellingPrice,
       costPrice: v.costPrice ?? null,
       stockQuantity: v.stockQuantity ?? 0,
@@ -1455,11 +1465,18 @@ async function applyVariantDiff({
           reserved: reservedSkus,
         })
       }
+      const attr1Val = item.v.attribute1Value.trim()
+      if (!attr1Val) {
+        throw new ApiError('VALIDATION_ERROR', 'Giá trị thuộc tính 1 không được để trống', {
+          field: 'attribute1Value',
+          variantIndex: item.index,
+        })
+      }
       insertRows.push({
         sku,
         barcode: item.v.barcode ?? null,
-        attribute1Value: item.v.attribute1Value,
-        attribute2Value: item.v.attribute2Value ?? null,
+        attribute1Value: attr1Val,
+        attribute2Value: item.v.attribute2Value?.trim() || null,
         sellingPrice: item.v.sellingPrice,
         costPrice: item.v.costPrice ?? null,
         stockQuantity: item.v.stockQuantity ?? 0,
@@ -1820,40 +1837,7 @@ export async function restoreProduct({
 
 // ========== Story 3.1: POS product search ==========
 
-export interface PosUnitConversion {
-  id: string
-  unit: string
-  conversionFactor: number
-  sellingPrice: number
-}
-
-export interface PosProductItem {
-  id: string
-  name: string
-  sku: string
-  barcode: string | null
-  unit: string
-  basePrice: number
-  costPrice: number | null
-  imageUrl: string | null
-  trackInventory: boolean
-  stockQuantity: number
-  hasVariants: boolean
-  categoryId: string | null
-  variants: PosVariantItem[]
-  unitConversions: PosUnitConversion[]
-}
-
-export interface PosVariantItem {
-  id: string
-  name: string
-  sku: string
-  barcode: string | null
-  price: number
-  costPrice: number | null
-  stockQuantity: number
-  attributes: Record<string, string>
-}
+export type { PosProductItem, PosVariantItem, PosUnitConversion }
 
 function mapVariantToPosItem(v: typeof productVariants.$inferSelect): PosVariantItem {
   const attrs: Record<string, string> = {}
@@ -1908,7 +1892,7 @@ export async function searchProductsForPos({
 
   const whereClause = and(...conds)!
 
-  const rows = await db
+  let rows = await db
     .select({
       id: products.id,
       name: products.name,
@@ -1997,7 +1981,7 @@ export async function searchProductsForPos({
       .orderBy(products.id)
 
     if (extraRows.length > 0) {
-      rows.push(...extraRows)
+      rows = [...rows, ...extraRows]
       const extraProductIds = extraRows.map((r) => r.id)
 
       const extraVariantRows = await db

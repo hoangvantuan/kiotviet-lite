@@ -1,17 +1,34 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
 
 import { meApi, refreshApi } from './features/auth/auth-api'
+import { showError } from './lib/toast'
 import { router } from './router'
 import { useAuthStore } from './stores/use-auth-store'
 
 import './globals.css'
 
 const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error, query) => {
+      if (query.meta?.skipGlobalError) return
+      showError(error.message || 'Đã xảy ra lỗi khi tải dữ liệu')
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error, _variables, _context, mutation) => {
+      if (mutation.meta?.skipGlobalError) return
+      showError(error.message || 'Đã xảy ra lỗi')
+    },
+  }),
   defaultOptions: {
-    queries: { retry: 1, refetchOnWindowFocus: false },
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    },
   },
 })
 

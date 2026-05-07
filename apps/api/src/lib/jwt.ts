@@ -19,6 +19,9 @@ export interface SignedRefreshToken {
   expiresAt: Date
 }
 
+const JWT_ISSUER = 'kiotviet-lite'
+const JWT_AUDIENCE = 'kiotviet-lite-web'
+
 export function signAccessToken(input: { userId: string; storeId: string; role: UserRole }): string {
   const payload: AccessTokenPayload = {
     sub: input.userId,
@@ -28,6 +31,8 @@ export function signAccessToken(input: { userId: string; storeId: string; role: 
   }
   return jwt.sign(payload, env.jwtAccessSecret, {
     expiresIn: env.accessTokenTtlSeconds,
+    issuer: JWT_ISSUER,
+    audience: JWT_AUDIENCE,
   })
 }
 
@@ -36,6 +41,8 @@ export function signRefreshToken(userId: string): SignedRefreshToken {
   const payload: RefreshTokenPayload = { sub: userId, jti, type: 'refresh' }
   const token = jwt.sign(payload, env.jwtRefreshSecret, {
     expiresIn: env.refreshTokenTtlSeconds,
+    issuer: JWT_ISSUER,
+    audience: JWT_AUDIENCE,
   })
   return {
     token,
@@ -46,20 +53,34 @@ export function signRefreshToken(userId: string): SignedRefreshToken {
 }
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
-  return verify(token, env.jwtAccessSecret, accessTokenPayloadSchema.parse)
+  return verify(token, env.jwtAccessSecret, accessTokenPayloadSchema.parse, {
+    issuer: JWT_ISSUER,
+    audience: JWT_AUDIENCE,
+  })
 }
 
 export function verifyRefreshToken(token: string): RefreshTokenPayload {
-  return verify(token, env.jwtRefreshSecret, refreshTokenPayloadSchema.parse)
+  return verify(token, env.jwtRefreshSecret, refreshTokenPayloadSchema.parse, {
+    issuer: JWT_ISSUER,
+    audience: JWT_AUDIENCE,
+  })
 }
 
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
 
-function verify<T>(token: string, secret: string, parse: (raw: unknown) => T): T {
+function verify<T>(
+  token: string,
+  secret: string,
+  parse: (raw: unknown) => T,
+  options?: { issuer?: string; audience?: string },
+): T {
   try {
-    const decoded = jwt.verify(token, secret) as JwtPayload | string
+    const decoded = jwt.verify(token, secret, {
+      issuer: options?.issuer,
+      audience: options?.audience,
+    }) as JwtPayload | string
     return parse(decoded)
   } catch (err) {
     if (err instanceof jwt.TokenExpiredError) {

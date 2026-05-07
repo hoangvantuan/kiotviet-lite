@@ -126,7 +126,10 @@ export async function listCustomerPrices({
   const offset = (page - 1) * pageSize
 
   const rows = await db
-    .select(buildSelectColumns())
+    .select({
+      ...buildSelectColumns(),
+      _totalCount: sql<number>`COUNT(*) OVER()`,
+    })
     .from(customerPrices)
     .innerJoin(customers, eq(customerPrices.customerId, customers.id))
     .innerJoin(products, eq(customerPrices.productId, products.id))
@@ -135,14 +138,7 @@ export async function listCustomerPrices({
     .limit(pageSize)
     .offset(offset)
 
-  const totalRows = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(customerPrices)
-    .innerJoin(customers, eq(customerPrices.customerId, customers.id))
-    .innerJoin(products, eq(customerPrices.productId, products.id))
-    .where(whereClause)
-
-  const total = totalRows[0]?.count ?? 0
+  const total = rows.length > 0 ? Number(rows[0]!._totalCount) : 0
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   return {

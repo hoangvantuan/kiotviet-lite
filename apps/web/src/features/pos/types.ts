@@ -1,37 +1,7 @@
-export interface PosUnitConversion {
-  id: string
-  unit: string
-  conversionFactor: number
-  sellingPrice: number | null
-}
+import type { PosVariantItem } from '@kiotviet-lite/shared'
 
-export interface PosProductVariant {
-  id: string
-  name: string
-  sku: string
-  barcode: string | null
-  price: number
-  costPrice: number | null
-  stockQuantity: number
-  attributes: Record<string, string>
-}
-
-export interface PosProductItem {
-  id: string
-  name: string
-  sku: string
-  barcode: string | null
-  basePrice: number
-  costPrice: number | null
-  imageUrl: string | null
-  trackInventory: boolean
-  stockQuantity: number
-  hasVariants: boolean
-  categoryId: string | null
-  unit: string
-  variants: PosProductVariant[]
-  unitConversions: PosUnitConversion[]
-}
+export type { PosProductItem, PosUnitConversion, PosVariantItem } from '@kiotviet-lite/shared'
+export type PosProductVariant = PosVariantItem
 
 export interface OrderDetailItem {
   productId: string
