@@ -246,33 +246,25 @@ export async function listPriceLists({
 
   const offset = (page - 1) * pageSize
 
-  const [rows, totalRows] = await Promise.all([
-    db
-      .select(buildBaseSelectColumns())
-      .from(priceLists)
-      .leftJoin(baseAlias, eq(priceLists.basePriceListId, baseAlias.id))
-      .where(whereClause)
-      .orderBy(desc(priceLists.createdAt), asc(priceLists.name))
-      .limit(pageSize)
-      .offset(offset),
-    db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(priceLists)
-      .where(whereClause),
-  ])
+  const rows = await db
+    .select(buildSelectColumns())
+    .from(priceLists)
+    .leftJoin(baseAlias, eq(priceLists.basePriceListId, baseAlias.id))
+    .where(whereClause)
+    .orderBy(desc(priceLists.createdAt), asc(priceLists.name))
+    .limit(pageSize)
+    .offset(offset)
+
+  const totalRows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(priceLists)
+    .where(whereClause)
 
   const total = totalRows[0]?.count ?? 0
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
-  const countMap = await batchLoadItemCounts(
-    db,
-    rows.map((r) => r.id),
-  )
-
   return {
-    items: rows.map((row) =>
-      toPriceListListItem({ ...row, itemCount: countMap.get(row.id) ?? 0 } as PriceListJoinRow),
-    ),
+    items: rows.map((row) => toPriceListListItem(row as PriceListJoinRow)),
     total,
     page,
     pageSize,
@@ -297,33 +289,25 @@ export async function listTrashedPriceLists({
 
   const offset = (page - 1) * pageSize
 
-  const [rows, totalRows] = await Promise.all([
-    db
-      .select(buildBaseSelectColumns())
-      .from(priceLists)
-      .leftJoin(baseAlias, eq(priceLists.basePriceListId, baseAlias.id))
-      .where(whereClause)
-      .orderBy(desc(priceLists.deletedAt))
-      .limit(pageSize)
-      .offset(offset),
-    db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(priceLists)
-      .where(whereClause),
-  ])
+  const rows = await db
+    .select(buildSelectColumns())
+    .from(priceLists)
+    .leftJoin(baseAlias, eq(priceLists.basePriceListId, baseAlias.id))
+    .where(whereClause)
+    .orderBy(desc(priceLists.deletedAt))
+    .limit(pageSize)
+    .offset(offset)
+
+  const totalRows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(priceLists)
+    .where(whereClause)
 
   const total = totalRows[0]?.count ?? 0
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
-  const countMap = await batchLoadItemCounts(
-    db,
-    rows.map((r) => r.id),
-  )
-
   return {
-    items: rows.map((row) =>
-      toPriceListListItem({ ...row, itemCount: countMap.get(row.id) ?? 0 } as PriceListJoinRow),
-    ),
+    items: rows.map((row) => toPriceListListItem(row as PriceListJoinRow)),
     total,
     page,
     pageSize,

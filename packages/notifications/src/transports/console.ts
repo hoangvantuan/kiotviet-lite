@@ -12,7 +12,7 @@ export class ConsoleTransport implements Transport {
     try {
       process.stdout.write(text + '\n')
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : 'stdout write failed', attempts: 1 }
+      return { ok: false, error: err instanceof Error ? err.message : 'stdout write failed', attempts: 1, retriable: false }
     }
     return { ok: true, attempts: 1 }
   }
