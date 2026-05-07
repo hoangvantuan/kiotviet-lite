@@ -20,7 +20,7 @@ export function HomePage() {
 
   return (
     <div>
-      <h2 className="mb-4 text-xl font-semibold text-foreground">Xin chào, {user?.name ?? ''}</h2>
+      <h2 className="mb-4 text-xl font-semibold text-foreground">Xin chào, {user?.name || 'bạn'}</h2>
       <EmptyState
         icon={LayoutDashboard}
         title="Chào mừng đến KiotViet Lite"

@@ -14,6 +14,7 @@ import {
 import { CurrencyInput } from '@/components/shared/currency-input'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { usePermissions } from '@/features/auth/use-permissions'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { cn } from '@/lib/utils'
@@ -150,15 +151,22 @@ export function CartItem({ item }: CartItemProps) {
                     <Pencil className="h-3 w-3" aria-hidden="true" />
                   </span>
                 ) : (
-                  <p
-                    className={cn(
-                      'font-mono text-xs',
-                      item.priceOverride ? 'text-orange-500' : 'text-muted-foreground',
-                    )}
-                  >
-                    {formatVndWithSuffix(item.unitPrice)}
-                    {item.unitName && <span className="font-sans"> / {item.unitName}</span>}
-                  </p>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <p
+                          className={cn(
+                            'font-mono text-xs cursor-default',
+                            item.priceOverride ? 'text-orange-500' : 'text-muted-foreground',
+                          )}
+                        >
+                          {formatVndWithSuffix(item.unitPrice)}
+                          {item.unitName && <span className="font-sans"> / {item.unitName}</span>}
+                        </p>
+                      </TooltipTrigger>
+                      <TooltipContent>Bạn không có quyền sửa giá</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
                 {item.priceOverride && (
                   <span className="inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300">

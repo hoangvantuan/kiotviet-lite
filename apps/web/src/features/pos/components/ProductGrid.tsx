@@ -84,6 +84,7 @@ export function ProductGrid({ products, isLoading, onSelectProduct }: ProductGri
             type="button"
             disabled={isOutOfStock}
             onClick={() => handleClick(product)}
+            aria-label={`${product.name}, ${formatVndWithSuffix(product.basePrice)}${isOutOfStock ? ', hết hàng' : ''}`}
             className={`group relative flex flex-col overflow-hidden rounded-lg border border-border bg-card text-left transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
               isOutOfStock ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
             }`}

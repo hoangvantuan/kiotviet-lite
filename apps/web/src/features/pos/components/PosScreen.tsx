@@ -32,7 +32,7 @@ import { ProductGrid } from './ProductGrid'
 import { VariantSelectionDialog } from './VariantSelectionDialog'
 
 export function PosScreen() {
-  const isDesktop = useMediaQuery('(min-width: 768px)')
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
   const [selectedCategory, setSelectedCategory] = useState<string | undefined>()
   const [scannerOpen, setScannerOpen] = useState(false)
   const [cartSheetOpen, setCartSheetOpen] = useState(false)
@@ -243,7 +243,7 @@ export function PosScreen() {
             />
             <CategoryFilter selectedId={selectedCategory} onSelect={setSelectedCategory} />
           </div>
-          <div className="flex-1 overflow-y-auto p-3 pb-24 md:pb-3">
+          <div className="flex-1 overflow-y-auto p-3 pb-24 lg:pb-3">
             <ProductGrid
               products={products}
               isLoading={isLoading}
@@ -254,7 +254,7 @@ export function PosScreen() {
 
         {/* Cart area: sidebar on desktop, bottom sheet on mobile */}
         {isDesktop ? (
-          <div className="w-80 shrink-0 border-l border-border bg-background lg:w-96">
+          <div className="w-80 shrink-0 border-l border-border bg-background lg:w-[380px]">
             <CartPanel onPayment={handleOpenPayment} />
           </div>
         ) : (
