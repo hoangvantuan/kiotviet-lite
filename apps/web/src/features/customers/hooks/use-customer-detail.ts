@@ -62,7 +62,9 @@ export function useCreateDebtAdjustmentMutation() {
   return useMutation({
     mutationFn: (input: CreateDebtAdjustmentInput) => createDebtAdjustmentApi(input),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['customers', 'detail'] })
+      queryClient.invalidateQueries({
+        queryKey: [...CUSTOMER_DETAIL_KEY, variables.customerId],
+      })
       queryClient.invalidateQueries({ queryKey: ['debt-adjustments', variables.customerId] })
     },
   })

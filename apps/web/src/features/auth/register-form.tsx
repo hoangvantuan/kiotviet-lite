@@ -22,6 +22,12 @@ export function RegisterForm() {
     defaultValues: { storeName: '', ownerName: '', phone: '', password: '' },
   })
 
+  const passwordValue = form.watch('password')
+  const hasPasswordSpaces =
+    passwordValue !== undefined &&
+    passwordValue.length > 0 &&
+    (passwordValue.startsWith(' ') || passwordValue.endsWith(' '))
+
   const onSubmit = form.handleSubmit(async (values) => {
     try {
       await register.mutateAsync(values)
@@ -76,6 +82,11 @@ export function RegisterForm() {
         {form.formState.errors.password ? (
           <p className="text-sm text-destructive">{form.formState.errors.password.message}</p>
         ) : null}
+        {hasPasswordSpaces && !form.formState.errors.password && (
+          <p className="text-sm text-yellow-600">
+            Mật khẩu có chứa khoảng trắng ở đầu hoặc cuối
+          </p>
+        )}
       </div>
 
       <Button

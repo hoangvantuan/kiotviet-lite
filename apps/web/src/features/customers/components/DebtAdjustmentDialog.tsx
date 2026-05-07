@@ -165,7 +165,7 @@ export function DebtAdjustmentDialog({
           )}
 
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={isPending}>
               Huỷ
             </Button>
             <Button

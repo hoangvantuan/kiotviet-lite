@@ -23,6 +23,8 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { useDebounced } from '@/hooks/use-debounced'
 import { ApiClientError } from '@/lib/api-client'
 import { showError, showSuccess } from '@/lib/toast'
@@ -32,6 +34,7 @@ import {
   usePriceListItemsQuery,
   usePriceListQuery,
   useRecalculatePriceListMutation,
+  useUpdatePriceListMutation,
 } from '../use-price-lists'
 import { AddPriceListItemDialog } from './AddPriceListItemDialog'
 import { EditPriceListDialog } from './EditPriceListDialog'
@@ -67,6 +70,7 @@ export function PriceListDetail({ priceListId }: Props) {
 
   const deleteItemMutation = useDeletePriceListItemMutation()
   const recalcMutation = useRecalculatePriceListMutation()
+  const updatePriceListMutation = useUpdatePriceListMutation()
 
   const items = itemsQuery.data?.data ?? []
   const meta = itemsQuery.data?.meta
@@ -143,6 +147,29 @@ export function PriceListDetail({ priceListId }: Props) {
               {priceList.method === 'direct' ? 'Trực tiếp' : 'Công thức'}
             </Badge>
             <PriceListStatusBadge priceList={priceList} />
+            <div className="flex items-center gap-2">
+              <Switch
+                id="price-list-active"
+                checked={priceList.isActive}
+                disabled={updatePriceListMutation.isPending}
+                onCheckedChange={(checked) => {
+                  updatePriceListMutation.mutate(
+                    { id: priceList.id, input: { isActive: checked } },
+                    {
+                      onSuccess: () =>
+                        showSuccess(checked ? 'Đã kích hoạt bảng giá' : 'Đã tắt bảng giá'),
+                      onError: (err) => {
+                        if (err instanceof ApiClientError) showError(err.message)
+                        else showError('Đã xảy ra lỗi không xác định')
+                      },
+                    },
+                  )
+                }}
+              />
+              <Label htmlFor="price-list-active" className="text-sm cursor-pointer">
+                {priceList.isActive ? 'Đang hoạt động' : 'Ngưng hoạt động'}
+              </Label>
+            </div>
           </div>
           {priceList.description && (
             <p className="text-sm text-muted-foreground">{priceList.description}</p>
@@ -280,7 +307,10 @@ export function PriceListDetail({ priceListId }: Props) {
             <AlertDialogCancel disabled={deleteItemMutation.isPending}>Hủy</AlertDialogCancel>
             <AlertDialogAction
               onClick={onConfirmDeleteItem}
-              disabled={deleteItemMutation.isPending}
+              disabled={
+                deleteItemMutation.isPending ||
+                (priceList.method === 'formula' && deleteItem !== null && !deleteItem.isOverridden)
+              }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteItemMutation.isPending ? 'Đang xoá…' : 'Xoá'}

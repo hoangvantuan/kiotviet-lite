@@ -10,78 +10,78 @@ export const orderStatusSchema = z.enum(['completed', 'cancelled', 'partial_retu
 
 export const createOrderItemSchema = z
   .object({
-    productId: z.string().uuid('San pham khong hop le'),
-    variantId: z.string().uuid('Bien the khong hop le').nullable().default(null),
+    productId: z.string().uuid('Sản phẩm không hợp lệ'),
+    variantId: z.string().uuid('Biến thể không hợp lệ').nullable().default(null),
     productName: z
       .string()
       .trim()
-      .min(1, 'Ten san pham bat buoc')
-      .max(255, 'Ten san pham toi da 255 ky tu'),
+      .min(1, 'Tên sản phẩm bắt buộc')
+      .max(255, 'Tên sản phẩm tối đa 255 ký tự'),
     variantName: z
       .string()
       .trim()
-      .max(255, 'Ten bien the toi da 255 ky tu')
+      .max(255, 'Tên biến thể tối đa 255 ký tự')
       .nullable()
       .default(null),
-    unit: z.string().trim().max(50, 'Don vi toi da 50 ky tu').nullable().default(null),
-    unitPrice: z.number().int('Don gia phai la so nguyen').min(0, 'Don gia >= 0'),
+    unit: z.string().trim().max(50, 'Đơn vị tối đa 50 ký tự').nullable().default(null),
+    unitPrice: z.number().int('Đơn giá phải là số nguyên').min(0, 'Đơn giá >= 0'),
     quantity: z
       .number()
-      .int('So luong phai la so nguyen')
-      .min(1, 'So luong >= 1')
-      .max(1_000_000, 'So luong vuot gioi han'),
+      .int('Số lượng phải là số nguyên')
+      .min(1, 'Số lượng >= 1')
+      .max(1_000_000, 'Số lượng vượt giới hạn'),
     discountType: orderDiscountTypeSchema.nullable().default(null),
     discountValue: z
       .number()
-      .int('Gia tri chiet khau phai la so nguyen')
-      .min(0, 'Gia tri chiet khau >= 0')
+      .int('Giá trị chiết khấu phải là số nguyên')
+      .min(0, 'Giá trị chiết khấu >= 0')
       .default(0),
     discountAmount: z
       .number()
-      .int('So tien chiet khau phai la so nguyen')
-      .min(0, 'So tien chiet khau >= 0')
+      .int('Số tiền chiết khấu phải là số nguyên')
+      .min(0, 'Số tiền chiết khấu >= 0')
       .default(0),
-    lineTotal: z.number().int('Thanh tien phai la so nguyen').min(0, 'Thanh tien >= 0'),
-    note: z.string().trim().max(500, 'Ghi chu dong toi da 500 ky tu').nullable().default(null),
+    lineTotal: z.number().int('Thành tiền phải là số nguyên').min(0, 'Thành tiền >= 0'),
+    note: z.string().trim().max(500, 'Ghi chú dòng tối đa 500 ký tự').nullable().default(null),
     unitConversionId: z.string().uuid().nullable().default(null),
     originalPrice: z
       .number()
-      .int('Gia goc phai la so nguyen')
-      .min(0, 'Gia goc >= 0')
+      .int('Giá gốc phải là số nguyên')
+      .min(0, 'Giá gốc >= 0')
       .nullable()
       .default(null),
     priceOverride: z.boolean().default(false),
     priceOverrideReason: z
       .string()
       .trim()
-      .max(255, 'Ly do sua gia toi da 255 ky tu')
+      .max(255, 'Lý do sửa giá tối đa 255 ký tự')
       .nullable()
       .default(null),
     priceOverridePinUsed: z.boolean().default(false),
   })
   .refine((item) => item.lineTotal === item.unitPrice * item.quantity - item.discountAmount, {
-    message: 'lineTotal khong khop voi unitPrice * quantity - discountAmount',
+    message: 'lineTotal không khớp với unitPrice * quantity - discountAmount',
   })
   .refine((item) => !item.priceOverride || item.originalPrice !== null, {
-    message: 'priceOverride yeu cau originalPrice',
+    message: 'priceOverride yêu cầu originalPrice',
   })
 
 export const createOrderSchema = z
   .object({
-    customerId: z.string().uuid('Khach hang khong hop le').nullable().default(null),
-    subtotal: z.number().int('Tong tien hang phai la so nguyen').min(0, 'Tong tien hang >= 0'),
+    customerId: z.string().uuid('Khách hàng không hợp lệ').nullable().default(null),
+    subtotal: z.number().int('Tổng tiền hàng phải là số nguyên').min(0, 'Tổng tiền hàng >= 0'),
     discountType: orderDiscountTypeSchema.nullable().default(null),
     discountValue: z
       .number()
-      .int('Gia tri chiet khau don phai la so nguyen')
-      .min(0, 'Gia tri chiet khau don >= 0')
+      .int('Giá trị chiết khấu đơn phải là số nguyên')
+      .min(0, 'Giá trị chiết khấu đơn >= 0')
       .default(0),
     discountAmount: z
       .number()
-      .int('So tien chiet khau don phai la so nguyen')
-      .min(0, 'So tien chiet khau don >= 0')
+      .int('Số tiền chiết khấu đơn phải là số nguyên')
+      .min(0, 'Số tiền chiết khấu đơn >= 0')
       .default(0),
-    total: z.number().int('Tong thanh toan phai la so nguyen').min(0, 'Tong thanh toan >= 0'),
+    total: z.number().int('Tổng thanh toán phải là số nguyên').min(0, 'Tổng thanh toán >= 0'),
     paymentMethod: orderPaymentMethodSchema,
     paymentStatus: orderPaymentStatusSchema.default('paid'),
     cashAmount: z.number().int().min(0).optional(),
@@ -93,14 +93,14 @@ export const createOrderSchema = z
       .optional(),
     debtLimitOverridden: z.boolean().default(false),
     debtLimitOverridePin: z.string().trim().min(1).max(32).optional(),
-    note: z.string().trim().max(1000, 'Ghi chu don toi da 1000 ky tu').nullable().default(null),
+    note: z.string().trim().max(1000, 'Ghi chú đơn tối đa 1000 ký tự').nullable().default(null),
     items: z
       .array(createOrderItemSchema)
-      .min(1, 'Don hang phai co it nhat 1 san pham')
-      .max(200, 'Toi da 200 dong san pham trong mot don'),
+      .min(1, 'Đơn hàng phải có ít nhất 1 sản phẩm')
+      .max(200, 'Tối đa 200 dòng sản phẩm trong một đơn'),
   })
   .refine((order) => order.total === order.subtotal - order.discountAmount, {
-    message: 'total khong khop voi subtotal - discountAmount',
+    message: 'total không khớp với subtotal - discountAmount',
   })
   .refine(
     (order) => {
@@ -109,7 +109,7 @@ export const createOrderSchema = z
       }
       return true
     },
-    { message: 'Tien mat phai >= tong thanh toan khi thanh toan bang tien mat' },
+    { message: 'Tiền mặt phải >= tổng thanh toán khi thanh toán bằng tiền mặt' },
   )
   .refine(
     (order) => {
@@ -120,7 +120,7 @@ export const createOrderSchema = z
       }
       return true
     },
-    { message: 'Tong tien mat + chuyen khoan phai >= tong thanh toan khi thanh toan ket hop' },
+    { message: 'Tổng tiền mặt + chuyển khoản phải >= tổng thanh toán khi thanh toán kết hợp' },
   )
   .refine(
     (order) => {

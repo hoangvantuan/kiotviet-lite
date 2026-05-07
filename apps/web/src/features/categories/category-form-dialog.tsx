@@ -272,11 +272,7 @@ interface FormSetError {
 }
 
 function asFormSetError(form: { setError: (...args: never[]) => void }): FormSetError {
-  return {
-    setError: (name, error) => {
-      ;(form.setError as unknown as (n: string, e: { message: string }) => void)(name, error)
-    },
-  }
+  return form as unknown as FormSetError
 }
 
 function handleApiError(err: unknown, form: FormSetError, knownFields: string[]) {
