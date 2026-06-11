@@ -21,9 +21,7 @@ COPY apps/web/ apps/web/
 ARG VITE_API_URL=""
 ENV VITE_API_URL=$VITE_API_URL
 
-# Gọi thẳng vite build, bỏ bước tsc -b: typecheck thuộc về CI,
-# main hiện có lỗi type sẵn trong vài component report
-RUN pnpm --filter @kiotviet-lite/web exec vite build
+RUN pnpm --filter @kiotviet-lite/web run build
 
 FROM nginx:1.27-alpine
 

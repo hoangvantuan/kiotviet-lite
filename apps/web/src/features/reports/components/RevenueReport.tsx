@@ -110,7 +110,7 @@ export function RevenueReport() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.rows.map((r: RevenueByTimeRow) => (
+                {(data.rows as RevenueByTimeRow[]).map((r) => (
                   <TableRow key={r.date}>
                     <TableCell>{r.date}</TableCell>
                     <TableCell className="text-right font-mono">{r.orderCount}</TableCell>
@@ -131,7 +131,7 @@ export function RevenueReport() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.rows.map((r: RevenueByProductRow) => (
+                {(data.rows as RevenueByProductRow[]).map((r) => (
                   <TableRow key={r.productId}>
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.sku}</TableCell>
@@ -154,7 +154,7 @@ export function RevenueReport() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.rows.map((r: RevenueByCustomerRow, i: number) => (
+                {(data.rows as RevenueByCustomerRow[]).map((r, i) => (
                   <TableRow key={r.customerId ?? i}>
                     <TableCell>{r.customerName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.phone ?? '-'}</TableCell>
@@ -178,7 +178,7 @@ export function RevenueReport() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.rows.map((r: RevenueByEmployeeRow) => (
+                {(data.rows as RevenueByEmployeeRow[]).map((r) => (
                   <TableRow key={r.userId}>
                     <TableCell>{r.userName}</TableCell>
                     <TableCell className="text-right font-mono">{r.orderCount}</TableCell>

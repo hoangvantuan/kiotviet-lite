@@ -87,7 +87,7 @@ export function PricingReport() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.rows.map((r: PriceOverrideRow, i: number) => (
+                {(data.rows as PriceOverrideRow[]).map((r, i) => (
                   <TableRow key={i}>
                     <TableCell className="font-mono">{r.orderNumber}</TableCell>
                     <TableCell>{r.orderDate?.slice(0, 10)}</TableCell>
@@ -130,19 +130,20 @@ export function PricingReport() {
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.sku}</TableCell>
                     <TableCell className="text-right font-mono">{formatVND(r.costPrice)}</TableCell>
-                    {r.prices.map((price: number | null, i: number) => (
-                      <TableCell
-                        key={i}
-                        className={`text-right font-mono ${r.margins[i] !== null && r.margins[i] < 0 ? 'text-red-600 font-bold' : ''}`}
-                      >
-                        {price !== null ? formatVND(price) : '-'}
-                        {r.margins[i] !== null && (
-                          <span className="ml-1 text-xs text-muted-foreground">
-                            ({r.margins[i]}%)
-                          </span>
-                        )}
-                      </TableCell>
-                    ))}
+                    {r.prices.map((price: number | null, i: number) => {
+                      const margin = r.margins[i] ?? null
+                      return (
+                        <TableCell
+                          key={i}
+                          className={`text-right font-mono ${margin !== null && margin < 0 ? 'text-red-600 font-bold' : ''}`}
+                        >
+                          {price !== null ? formatVND(price) : '-'}
+                          {margin !== null && (
+                            <span className="ml-1 text-xs text-muted-foreground">({margin}%)</span>
+                          )}
+                        </TableCell>
+                      )
+                    })}
                   </TableRow>
                 ))}
               </TableBody>
@@ -159,7 +160,7 @@ export function PricingReport() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.rows.map((r: PriceHistoryRow, i: number) => (
+                {(data.rows as PriceHistoryRow[]).map((r, i) => (
                   <TableRow key={i}>
                     <TableCell>{r.productName}</TableCell>
                     <TableCell>{r.purchaseDate}</TableCell>

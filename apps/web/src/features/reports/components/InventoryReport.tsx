@@ -116,7 +116,7 @@ export function InventoryReport() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.rows.map((r: InventoryReorderRow) => (
+                {(data.rows as InventoryReorderRow[]).map((r) => (
                   <TableRow key={r.productId}>
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.sku}</TableCell>
@@ -141,7 +141,7 @@ export function InventoryReport() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.rows.map((r: InventorySlowRow) => (
+                {(data.rows as InventorySlowRow[]).map((r) => (
                   <TableRow key={r.productId}>
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.sku}</TableCell>
