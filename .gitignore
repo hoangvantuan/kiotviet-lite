@@ -11,3 +11,4 @@ logs/
 coverage
 *.tsbuildinfo
 .gitnexus
+data

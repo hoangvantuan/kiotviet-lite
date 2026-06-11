@@ -31,6 +31,9 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}'],
+        // PGlite wasm ~9MB và bundle chính ~3MB vượt trần mặc định 2MiB;
+        // app offline-first nên vẫn phải precache các file này
+        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
         runtimeCaching: [
           {
             urlPattern: /^https?:\/\/.*\/api\/.*/i,

@@ -10,5 +10,5 @@ declare module 'pino-roll' {
     mkdir?: boolean
   }
 
-  export function createRollStream(options: RollStreamOptions): Promise<Writable>
+  export default function pinoRoll(options: RollStreamOptions): Promise<Writable>
 }

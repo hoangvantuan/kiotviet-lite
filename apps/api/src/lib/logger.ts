@@ -41,9 +41,9 @@ async function createLogger(): Promise<pino.Logger> {
     return pino(pinoConfig, pino.transport({ target: 'pino-pretty' }))
   }
 
-  const { createRollStream } = await import('pino-roll')
+  const { default: pinoRoll } = await import('pino-roll')
 
-  const fileStream = await createRollStream({
+  const fileStream = await pinoRoll({
     file: join(env.logDir, 'app'),
     frequency: 'daily',
     extension: '.log',
