@@ -1,11 +1,28 @@
+import type { NotificationEvent, SendResult } from '@kiotviet-lite/notifications'
 import { eq } from 'drizzle-orm'
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { notificationChannels, notificationRules } from '@kiotviet-lite/shared'
 
 import { isLoginSuspicious, recordLogin } from '../services/login-history.service.js'
 import { seedDefaultRules } from '../services/notification-seed.service.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
+
+/**
+ * emitEvent gọi notify() theo kiểu fire-and-forget: nó không trả promise nên
+ * test không thể chờ. Nếu để notify() chạy thật, query của nó còn dở khi
+ * afterEach đóng PGlite, promise không bao giờ settle và worker vitest treo
+ * vĩnh viễn. Mock notify để phần cần kiểm tra (emitEvent dựng đúng event và
+ * không ném lỗi) trở nên xác định.
+ */
+const notifyMock = vi.hoisted(() =>
+  vi.fn<(db: unknown, event: NotificationEvent) => Promise<SendResult[]>>(async () => []),
+)
+
+vi.mock('@kiotviet-lite/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@kiotviet-lite/notifications')>()),
+  notify: notifyMock,
+}))
 
 beforeAll(() => {
   process.env.JWT_ACCESS_SECRET = 'test-access-secret-min-32-chars-please-change'
@@ -17,6 +34,7 @@ describe('notification-emitter', () => {
   let env: TestEnv
 
   beforeEach(async () => {
+    notifyMock.mockClear()
     env = await createTestEnv()
   })
 
@@ -36,6 +54,17 @@ describe('notification-emitter', () => {
         body: 'Test body',
       })
     }).not.toThrow()
+
+    expect(notifyMock).toHaveBeenCalledTimes(1)
+    const [, event] = notifyMock.mock.calls[0]!
+    expect(event).toMatchObject({
+      storeId: env.storeId,
+      type: 'stock.negative',
+      severity: 'error',
+    })
+    // emitEvent tự điền id và occurredAt
+    expect(event.id).toBeTruthy()
+    expect(event.occurredAt).toBeTruthy()
   })
 })
 

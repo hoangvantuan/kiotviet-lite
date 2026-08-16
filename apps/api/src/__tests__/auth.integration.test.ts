@@ -42,6 +42,29 @@ const validRegister = {
   password: 'matkhau123',
 }
 
+/**
+ * Rate limiter (3 register/giờ/IP, 5 login/phút/IP) giữ state ở module scope,
+ * không reset giữa các test. Request trong test không có header IP nên tất cả
+ * dùng chung key 'unknown' và test sau bị 429. Cấp cho mỗi request một IP riêng
+ * để rate limit không nhiễu vào thứ đang được kiểm tra.
+ */
+let ipCounter = 0
+
+async function request(
+  app: TestEnv['app'],
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  ipCounter += 1
+  return app.request(path, {
+    ...init,
+    headers: {
+      ...((init.headers as Record<string, string> | undefined) ?? {}),
+      'x-forwarded-for': `10.0.0.${ipCounter}`,
+    },
+  })
+}
+
 describe('POST /register', () => {
   let env: TestEnv
 
@@ -54,13 +77,15 @@ describe('POST /register', () => {
   })
 
   it('tạo store + user và trả access token + cookie refresh', async () => {
-    const res = await env.app.request('/register', {
+    const res = await request(env.app, '/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(validRegister),
     })
     expect(res.status).toBe(201)
-    const body = (await res.json()) as { data: { user: { phone: string; role: string }; accessToken: string } }
+    const body = (await res.json()) as {
+      data: { user: { phone: string; role: string }; accessToken: string }
+    }
     expect(body.data.user.phone).toBe('0901234567')
     expect(body.data.user.role).toBe('owner')
     expect(body.data.accessToken).toBeTruthy()
@@ -70,12 +95,12 @@ describe('POST /register', () => {
   })
 
   it('phone trùng trả CONFLICT với field=phone', async () => {
-    await env.app.request('/register', {
+    await request(env.app, '/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(validRegister),
     })
-    const res = await env.app.request('/register', {
+    const res = await request(env.app, '/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(validRegister),
@@ -87,7 +112,7 @@ describe('POST /register', () => {
   })
 
   it('phone sai format trả VALIDATION_ERROR', async () => {
-    const res = await env.app.request('/register', {
+    const res = await request(env.app, '/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...validRegister, phone: 'abc' }),
@@ -103,7 +128,7 @@ describe('POST /login', () => {
 
   beforeEach(async () => {
     env = await setup()
-    await env.app.request('/register', {
+    await request(env.app, '/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(validRegister),
@@ -115,7 +140,7 @@ describe('POST /login', () => {
   })
 
   it('mật khẩu đúng trả 200 + access token', async () => {
-    const res = await env.app.request('/login', {
+    const res = await request(env.app, '/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone: validRegister.phone, password: validRegister.password }),
@@ -126,7 +151,7 @@ describe('POST /login', () => {
   })
 
   it('mật khẩu sai trả 401', async () => {
-    const res = await env.app.request('/login', {
+    const res = await request(env.app, '/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone: validRegister.phone, password: 'saimk123' }),
@@ -137,7 +162,7 @@ describe('POST /login', () => {
   })
 
   it('phone không tồn tại trả 401 (không leak)', async () => {
-    const res = await env.app.request('/login', {
+    const res = await request(env.app, '/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone: '0907777777', password: 'matkhau123' }),
@@ -158,7 +183,7 @@ describe('POST /refresh + /logout', () => {
   })
 
   it('refresh rotate token: token cũ bị thu hồi, token mới hoạt động', async () => {
-    const reg = await env.app.request('/register', {
+    const reg = await request(env.app, '/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(validRegister),
@@ -166,7 +191,7 @@ describe('POST /refresh + /logout', () => {
     const oldCookie = extractRefreshCookie(reg.headers.get('set-cookie'))
     expect(oldCookie).toBeTruthy()
 
-    const r1 = await env.app.request('/refresh', {
+    const r1 = await request(env.app, '/refresh', {
       method: 'POST',
       headers: { Cookie: `kvl_refresh=${oldCookie}` },
     })
@@ -175,38 +200,50 @@ describe('POST /refresh + /logout', () => {
     expect(newCookie).toBeTruthy()
     expect(newCookie).not.toBe(oldCookie)
 
-    const r2 = await env.app.request('/refresh', {
-      method: 'POST',
-      headers: { Cookie: `kvl_refresh=${oldCookie}` },
-    })
-    expect(r2.status).toBe(401)
-
-    const r3 = await env.app.request('/refresh', {
+    // Token mới hoạt động. Phải kiểm tra TRƯỚC khi dùng lại token cũ, vì
+    // rotateRefreshToken có reuse detection: phát hiện token đã thu hồi được
+    // dùng lại thì thu hồi toàn bộ token family của user.
+    const r2 = await request(env.app, '/refresh', {
       method: 'POST',
       headers: { Cookie: `kvl_refresh=${newCookie}` },
     })
-    expect(r3.status).toBe(200)
+    expect(r2.status).toBe(200)
+
+    // Token cũ đã bị thu hồi → 401, đồng thời kích hoạt reuse detection.
+    const r3 = await request(env.app, '/refresh', {
+      method: 'POST',
+      headers: { Cookie: `kvl_refresh=${oldCookie}` },
+    })
+    expect(r3.status).toBe(401)
+
+    // Sau reuse detection, token của lần rotate cuối cũng mất hiệu lực.
+    const latestCookie = extractRefreshCookie(r2.headers.get('set-cookie'))
+    const r4 = await request(env.app, '/refresh', {
+      method: 'POST',
+      headers: { Cookie: `kvl_refresh=${latestCookie}` },
+    })
+    expect(r4.status).toBe(401)
   })
 
   it('refresh không có cookie trả 401', async () => {
-    const res = await env.app.request('/refresh', { method: 'POST' })
+    const res = await request(env.app, '/refresh', { method: 'POST' })
     expect(res.status).toBe(401)
   })
 
   it('logout xoá cookie và làm refresh token mất hiệu lực', async () => {
-    const reg = await env.app.request('/register', {
+    const reg = await request(env.app, '/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(validRegister),
     })
     const cookie = extractRefreshCookie(reg.headers.get('set-cookie'))
-    const out = await env.app.request('/logout', {
+    const out = await request(env.app, '/logout', {
       method: 'POST',
       headers: { Cookie: `kvl_refresh=${cookie}` },
     })
     expect(out.status).toBe(204)
 
-    const after = await env.app.request('/refresh', {
+    const after = await request(env.app, '/refresh', {
       method: 'POST',
       headers: { Cookie: `kvl_refresh=${cookie}` },
     })
