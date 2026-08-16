@@ -3,16 +3,13 @@ import { Hono } from 'hono'
 import { createDebtAdjustmentSchema, listDebtAdjustmentsQuerySchema } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
-import { parseJson } from '../lib/http.js'
 import { ApiError } from '../lib/errors.js'
+import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
-import {
-  createDebtAdjustment,
-  listDebtAdjustments,
-} from '../services/debt-adjustments.service.js'
+import { createDebtAdjustment, listDebtAdjustments } from '../services/debt-adjustments.service.js'
 
 export interface DebtAdjustmentsRoutesDeps {
   db: Db

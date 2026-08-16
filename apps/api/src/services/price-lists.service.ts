@@ -147,19 +147,6 @@ function buildSelectColumns() {
   }
 }
 
-async function batchLoadItemCounts(db: Db, priceListIds: string[]): Promise<Map<string, number>> {
-  if (priceListIds.length === 0) return new Map()
-  const rows = await db
-    .select({
-      priceListId: priceListItems.priceListId,
-      count: sql<number>`COUNT(*)::int`,
-    })
-    .from(priceListItems)
-    .where(inArray(priceListItems.priceListId, priceListIds))
-    .groupBy(priceListItems.priceListId)
-  return new Map(rows.map((r) => [r.priceListId, r.count]))
-}
-
 async function ensureNameUnique({
   db,
   storeId,

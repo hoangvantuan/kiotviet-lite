@@ -88,7 +88,6 @@ export interface PrintOptions {
   footerText?: string | null
 }
 
-
 // ---- Buffer builder ----
 
 class BufferBuilder {
@@ -131,11 +130,6 @@ class BufferBuilder {
 function padRight(text: string, width: number): string {
   if (text.length >= width) return text.slice(0, width)
   return text + ' '.repeat(width - text.length)
-}
-
-function padLeft(text: string, width: number): string {
-  if (text.length >= width) return text.slice(0, width)
-  return ' '.repeat(width - text.length) + text
 }
 
 function twoColumns(left: string, right: string, totalWidth: number): string {
@@ -290,15 +284,9 @@ export function buildOrderReceipt(
 
 // ---- Item formatters ----
 
-function buildItems58mm(
-  buf: BufferBuilder,
-  items: ThermalOrderItem[],
-  w: number,
-): void {
+function buildItems58mm(buf: BufferBuilder, items: ThermalOrderItem[], w: number): void {
   for (const item of items) {
-    const name = item.variantName
-      ? `${item.productName} (${item.variantName})`
-      : item.productName
+    const name = item.variantName ? `${item.productName} (${item.variantName})` : item.productName
     // Line 1: product name (truncate if needed)
     buf.pushLine(name.length > w ? name.slice(0, w) : name)
     // Line 2: qty x price = total
@@ -315,9 +303,7 @@ function buildItems80mm(
   showDiscount: boolean,
 ): void {
   for (const item of items) {
-    const name = item.variantName
-      ? `${item.productName} (${item.variantName})`
-      : item.productName
+    const name = item.variantName ? `${item.productName} (${item.variantName})` : item.productName
 
     if (showDiscount && item.discountAmount > 0) {
       // Name might be long, put on its own line if needed

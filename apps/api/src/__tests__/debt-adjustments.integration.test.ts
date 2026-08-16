@@ -1,11 +1,11 @@
 import { eq } from 'drizzle-orm'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { auditLogs, customers, debtAdjustments, stores, users } from '@kiotviet-lite/shared'
+import { auditLogs, customers, stores, users } from '@kiotviet-lite/shared'
 
-import { createDebtAdjustmentsRoutes } from '../routes/debt-adjustments.routes.js'
-import { hashPassword } from '../lib/password.js'
 import { signAccessToken } from '../lib/jwt.js'
+import { hashPassword } from '../lib/password.js'
+import { createDebtAdjustmentsRoutes } from '../routes/debt-adjustments.routes.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 beforeAll(() => {

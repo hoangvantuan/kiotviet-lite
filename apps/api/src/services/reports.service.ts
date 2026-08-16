@@ -2,9 +2,9 @@ import { and, eq, gte, isNull, lte, sql } from 'drizzle-orm'
 
 import {
   customers,
-  debts,
   type DebtAgingReport,
   type DebtAgingRow,
+  debts,
   type DebtSummaryReport,
   receipts,
   stores,
@@ -40,7 +40,6 @@ function buildBucketLabels(days: number[]): string[] {
 export async function getDebtAgingReport({
   db,
   storeId,
-  query,
 }: {
   db: Db
   storeId: string
@@ -64,11 +63,7 @@ export async function getDebtAgingReport({
     .from(debts)
     .innerJoin(customers, eq(debts.customerId, customers.id))
     .where(
-      and(
-        eq(debts.storeId, storeId),
-        sql`${debts.remaining} > 0`,
-        isNull(customers.deletedAt),
-      ),
+      and(eq(debts.storeId, storeId), sql`${debts.remaining} > 0`, isNull(customers.deletedAt)),
     )
 
   const grouped = new Map<

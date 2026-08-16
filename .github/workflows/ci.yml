@@ -22,13 +22,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: pnpm -r lint
+        run: pnpm lint
 
       - name: Type Check
         run: pnpm -r typecheck
 
       - name: Test
-        run: pnpm -r test --run
+        run: pnpm test
 
       - name: Build
         run: pnpm -r build

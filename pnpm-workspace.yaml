@@ -1,3 +1,13 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+
+# @hookform/resolvers không khai báo zod là dependency/peerDependency, nên pnpm
+# không link zod vào thư mục của nó và bundler không resolve được `zod/v4/core`.
+packageExtensions:
+  '@hookform/resolvers':
+    peerDependencies:
+      zod: '*'
+    peerDependenciesMeta:
+      zod:
+        optional: true

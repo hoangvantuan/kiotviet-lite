@@ -3,9 +3,9 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import {
   type CreateDebtAdjustmentInput,
   customers,
-  debtAdjustments,
   type DebtAdjustmentDetail,
   type DebtAdjustmentListItem,
+  debtAdjustments,
   type ListDebtAdjustmentsQuery,
   type UserRole,
   users,

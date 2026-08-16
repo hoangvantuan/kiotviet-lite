@@ -1,7 +1,7 @@
 import type { PrintSettingsResponse } from '@kiotviet-lite/shared'
 
-import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
 import { PAYMENT_METHOD_LABELS } from '@/lib/constants'
+import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
 import { numberToVietnameseWords } from '@/lib/number-to-words'
 import { usePrintStore } from '@/stores/use-print-store'
 
@@ -52,7 +52,6 @@ export function OrderInvoiceThermal({ order, store, isReprint, printSettings }: 
   const showCustomerName = printSettings?.showCustomerName ?? true
   const showCustomerPhone = printSettings?.showCustomerPhone ?? true
   const showDiscount = printSettings?.showDiscount ?? true
-  const showNotes = printSettings?.showNotes ?? true
 
   // C1: Chỉ hiện template khi format đang in là thermal
   if (!isThermalFormat(activePrintFormat)) return null
@@ -76,23 +75,13 @@ export function OrderInvoiceThermal({ order, store, isReprint, printSettings }: 
 
       {/* Store header */}
       <header className="text-center">
-        {store?.name && (
-          <h1 className="text-sm font-bold">{store.name}</h1>
-        )}
-        {store?.slogan && (
-          <p className="text-[10px]">{store.slogan}</p>
-        )}
-        {store?.address && (
-          <p className="text-[10px]">{store.address}</p>
-        )}
-        {store?.phone && (
-          <p className="text-[10px]">SĐT: {store.phone}</p>
-        )}
+        {store?.name && <h1 className="text-sm font-bold">{store.name}</h1>}
+        {store?.slogan && <p className="text-[10px]">{store.slogan}</p>}
+        {store?.address && <p className="text-[10px]">{store.address}</p>}
+        {store?.phone && <p className="text-[10px]">SĐT: {store.phone}</p>}
       </header>
 
-      {isReprint && (
-        <p className="text-center font-bold text-xs mt-1">*** BẢN IN LẠI ***</p>
-      )}
+      {isReprint && <p className="text-center font-bold text-xs mt-1">*** BẢN IN LẠI ***</p>}
 
       <ThermalSeparator />
 
@@ -132,12 +121,8 @@ export function OrderInvoiceThermal({ order, store, isReprint, printSettings }: 
         {order.transferAmount != null && order.transferAmount > 0 && (
           <ThermalRow label="Chuyển khoản" value={formatVnd(order.transferAmount)} />
         )}
-        {order.change > 0 && (
-          <ThermalRow label="Tiền thừa" value={formatVnd(order.change)} />
-        )}
-        {order.debtAmount > 0 && (
-          <ThermalRow label="Còn nợ" value={formatVnd(order.debtAmount)} />
-        )}
+        {order.change > 0 && <ThermalRow label="Tiền thừa" value={formatVnd(order.change)} />}
+        {order.debtAmount > 0 && <ThermalRow label="Còn nợ" value={formatVnd(order.debtAmount)} />}
       </div>
 
       <ThermalSeparator />
@@ -161,9 +146,7 @@ function ThermalRow({ label, value, bold }: { label: string; value: string; bold
 }
 
 function ThermalItemRow({ item }: { item: OrderDetailItem }) {
-  const name = item.variantName
-    ? `${item.productName} (${item.variantName})`
-    : item.productName
+  const name = item.variantName ? `${item.productName} (${item.variantName})` : item.productName
 
   return (
     <div>
@@ -182,7 +165,7 @@ function ThermalItemRow({ item }: { item: OrderDetailItem }) {
 // A4 TEMPLATE
 // ================================================================
 
-export function OrderInvoiceA4({ order, store, isReprint, printSettings }: InvoiceProps) {
+export function OrderInvoiceA4({ order, store, isReprint }: InvoiceProps) {
   const activePrintFormat = usePrintStore((s) => s.activePrintFormat)
 
   // C1: Chỉ hiện template khi format đang in là a4
@@ -208,20 +191,12 @@ export function OrderInvoiceA4({ order, store, isReprint, printSettings }: Invoi
       {/* Header */}
       <header className="flex justify-between items-start mb-4">
         <div className="flex-1">
-          {store?.name && (
-            <h2 className="text-base font-bold">{store.name}</h2>
-          )}
-          {store?.address && (
-            <p className="text-xs">{store.address}</p>
-          )}
-          {store?.phone && (
-            <p className="text-xs">SĐT: {store.phone}</p>
-          )}
+          {store?.name && <h2 className="text-base font-bold">{store.name}</h2>}
+          {store?.address && <p className="text-xs">{store.address}</p>}
+          {store?.phone && <p className="text-xs">SĐT: {store.phone}</p>}
         </div>
         {isReprint && (
-          <span className="text-xs font-bold border border-black px-2 py-0.5">
-            BẢN IN LẠI
-          </span>
+          <span className="text-xs font-bold border border-black px-2 py-0.5">BẢN IN LẠI</span>
         )}
       </header>
 
@@ -230,9 +205,13 @@ export function OrderInvoiceA4({ order, store, isReprint, printSettings }: Invoi
 
       {/* Order meta */}
       <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm mb-4">
-        <p>Mã HĐ: <span className="font-mono font-medium">{order.orderNumber}</span></p>
+        <p>
+          Mã HĐ: <span className="font-mono font-medium">{order.orderNumber}</span>
+        </p>
         <p>Ngày: {formatDateTime(order.createdAt)}</p>
-        <p>Khách hàng: <span className="font-medium">{order.customerName ?? 'Khách lẻ'}</span></p>
+        <p>
+          Khách hàng: <span className="font-medium">{order.customerName ?? 'Khách lẻ'}</span>
+        </p>
         {order.customerPhone && <p>SĐT: {order.customerPhone}</p>}
         {order.customerGroupName && <p>Nhóm KH: {order.customerGroupName}</p>}
       </div>
@@ -276,15 +255,11 @@ export function OrderInvoiceA4({ order, store, isReprint, printSettings }: Invoi
       <A4Totals order={order} />
 
       {/* Amount in words */}
-      <p className="text-sm italic mt-2 mb-4">
-        Bằng chữ: {numberToVietnameseWords(order.total)}
-      </p>
+      <p className="text-sm italic mt-2 mb-4">Bằng chữ: {numberToVietnameseWords(order.total)}</p>
 
       {/* Payment info */}
       <div className="text-sm space-y-1 mb-6">
-        <p>
-          Thanh toán: {PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}
-        </p>
+        <p>Thanh toán: {PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}</p>
         <p>Đã trả: {formatVndWithSuffix(order.paidAmount)}</p>
         {order.debtAmount > 0 && (
           <p className="font-medium">Còn nợ: {formatVndWithSuffix(order.debtAmount)}</p>
@@ -292,9 +267,7 @@ export function OrderInvoiceA4({ order, store, isReprint, printSettings }: Invoi
       </div>
 
       {/* Note */}
-      {order.note && (
-        <p className="text-sm mb-4">Ghi chú: {order.note}</p>
-      )}
+      {order.note && <p className="text-sm mb-4">Ghi chú: {order.note}</p>}
 
       {/* Signatures */}
       <div className="flex justify-around mt-8 text-sm text-center">
@@ -346,7 +319,7 @@ function A4Totals({ order }: { order: OrderDetailResponse }) {
 // A5 TEMPLATE (compact version of A4)
 // ================================================================
 
-export function OrderInvoiceA5({ order, store, isReprint, printSettings }: InvoiceProps) {
+export function OrderInvoiceA5({ order, store, isReprint }: InvoiceProps) {
   const activePrintFormat = usePrintStore((s) => s.activePrintFormat)
 
   // C1: Chỉ hiện template khi format đang in là a5
@@ -373,20 +346,12 @@ export function OrderInvoiceA5({ order, store, isReprint, printSettings }: Invoi
       {/* Header */}
       <header className="flex justify-between items-start mb-2">
         <div className="flex-1">
-          {store?.name && (
-            <h2 className="text-sm font-bold">{store.name}</h2>
-          )}
-          {store?.address && (
-            <p className="text-[10px]">{store.address}</p>
-          )}
-          {store?.phone && (
-            <p className="text-[10px]">SĐT: {store.phone}</p>
-          )}
+          {store?.name && <h2 className="text-sm font-bold">{store.name}</h2>}
+          {store?.address && <p className="text-[10px]">{store.address}</p>}
+          {store?.phone && <p className="text-[10px]">SĐT: {store.phone}</p>}
         </div>
         {isReprint && (
-          <span className="text-[10px] font-bold border border-black px-1 py-0.5">
-            BẢN IN LẠI
-          </span>
+          <span className="text-[10px] font-bold border border-black px-1 py-0.5">BẢN IN LẠI</span>
         )}
       </header>
 
@@ -395,7 +360,9 @@ export function OrderInvoiceA5({ order, store, isReprint, printSettings }: Invoi
 
       {/* Order meta */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px] mb-2">
-        <p>Mã HĐ: <span className="font-mono">{order.orderNumber}</span></p>
+        <p>
+          Mã HĐ: <span className="font-mono">{order.orderNumber}</span>
+        </p>
         <p>Ngày: {formatDateTime(order.createdAt)}</p>
         <p>KH: {order.customerName ?? 'Khách lẻ'}</p>
         {order.customerPhone && <p>SĐT: {order.customerPhone}</p>}
@@ -451,13 +418,14 @@ export function OrderInvoiceA5({ order, store, isReprint, printSettings }: Invoi
       </div>
 
       {/* Amount in words */}
-      <p className="text-[10px] italic mb-2">
-        Bằng chữ: {numberToVietnameseWords(order.total)}
-      </p>
+      <p className="text-[10px] italic mb-2">Bằng chữ: {numberToVietnameseWords(order.total)}</p>
 
       {/* Payment */}
       <div className="text-[11px] space-y-0.5 mb-3">
-        <p>TT: {PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod} | Đã trả: {formatVndWithSuffix(order.paidAmount)}</p>
+        <p>
+          TT: {PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod} | Đã trả:{' '}
+          {formatVndWithSuffix(order.paidAmount)}
+        </p>
         {order.debtAmount > 0 && (
           <p className="font-medium">Còn nợ: {formatVndWithSuffix(order.debtAmount)}</p>
         )}

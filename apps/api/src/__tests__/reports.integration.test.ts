@@ -1,12 +1,23 @@
 import { Hono } from 'hono'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { customers, debts, orders, receipts, stores, supplierPayments, suppliers, users } from '@kiotviet-lite/shared'
+import {
+  customers,
+  type DebtAgingReport,
+  debts,
+  type DebtSummaryReport,
+  orders,
+  receipts,
+  stores,
+  supplierPayments,
+  suppliers,
+  users,
+} from '@kiotviet-lite/shared'
 
-import { createReportsRoutes } from '../routes/reports.routes.js'
-import { errorHandler } from '../middleware/error-handler.js'
 import { signAccessToken } from '../lib/jwt.js'
 import { hashPassword } from '../lib/password.js'
+import { errorHandler } from '../middleware/error-handler.js'
+import { createReportsRoutes } from '../routes/reports.routes.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 beforeAll(() => {
@@ -202,7 +213,7 @@ describe('GET /api/v1/reports/debt-aging', () => {
       headers: env.base.owner.authHeader,
     })
     expect(res.status).toBe(200)
-    const body: any = await res.json()
+    const body = (await res.json()) as { data: DebtAgingReport }
     expect(body.data.rows).toHaveLength(2)
     expect(body.data.bucketLabels).toHaveLength(4)
     expect(body.data.totals.totalDebt).toBe(600_000)
@@ -212,9 +223,9 @@ describe('GET /api/v1/reports/debt-aging', () => {
     const res = await env.app.request('/api/v1/reports/debt-aging', {
       headers: env.base.owner.authHeader,
     })
-    const body: any = await res.json()
-    expect(body.data.rows[0].customerName).toBe('KH Nợ Nhiều')
-    expect(body.data.rows[0].totalDebt).toBe(500_000)
+    const body = (await res.json()) as { data: DebtAgingReport }
+    expect(body.data.rows[0]!.customerName).toBe('KH Nợ Nhiều')
+    expect(body.data.rows[0]!.totalDebt).toBe(500_000)
   })
 
   it('multi-tenant: store B sees empty report', async () => {
@@ -222,7 +233,7 @@ describe('GET /api/v1/reports/debt-aging', () => {
       headers: env.storeBOwnerAuth,
     })
     expect(res.status).toBe(200)
-    const body: any = await res.json()
+    const body = (await res.json()) as { data: DebtAgingReport }
     expect(body.data.rows).toHaveLength(0)
     expect(body.data.totals.totalDebt).toBe(0)
   })
@@ -261,7 +272,7 @@ describe('GET /api/v1/reports/debt-summary', () => {
       headers: env.base.owner.authHeader,
     })
     expect(res.status).toBe(200)
-    const body: any = await res.json()
+    const body = (await res.json()) as { data: DebtSummaryReport }
     expect(body.data.receivable.totalDebt).toBe(600_000)
     expect(body.data.receivable.customerCount).toBe(2)
     expect(body.data.payable.totalDebt).toBe(300_000)
@@ -276,7 +287,7 @@ describe('GET /api/v1/reports/debt-summary', () => {
       headers: env.storeBOwnerAuth,
     })
     expect(res.status).toBe(200)
-    const body: any = await res.json()
+    const body = (await res.json()) as { data: DebtSummaryReport }
     expect(body.data.receivable.totalDebt).toBe(0)
     expect(body.data.payable.totalDebt).toBe(0)
   })
@@ -284,12 +295,11 @@ describe('GET /api/v1/reports/debt-summary', () => {
   it('filters by date range', async () => {
     const future = new Date(Date.now() + 86400000).toISOString()
     const past = new Date(Date.now() - 86400000).toISOString()
-    const res = await env.app.request(
-      `/api/v1/reports/debt-summary?from=${past}&to=${future}`,
-      { headers: env.base.owner.authHeader },
-    )
+    const res = await env.app.request(`/api/v1/reports/debt-summary?from=${past}&to=${future}`, {
+      headers: env.base.owner.authHeader,
+    })
     expect(res.status).toBe(200)
-    const body: any = await res.json()
+    const body = (await res.json()) as { data: DebtSummaryReport }
     expect(body.data.cashFlow.totalIn).toBe(150_000)
   })
 
@@ -331,7 +341,9 @@ describe('PATCH /api/v1/store (debt settings)', () => {
       body: JSON.stringify({ debtWarningPercent: 90 }),
     })
     expect(res.status).toBe(200)
-    const body: any = await res.json()
+    const body = (await res.json()) as {
+      data: { debtWarningPercent: number; debtOverdueDays: string }
+    }
     expect(body.data.debtWarningPercent).toBe(90)
   })
 
@@ -350,7 +362,9 @@ describe('PATCH /api/v1/store (debt settings)', () => {
       body: JSON.stringify({ debtOverdueDays: '15,45,90' }),
     })
     expect(res.status).toBe(200)
-    const body: any = await res.json()
+    const body = (await res.json()) as {
+      data: { debtWarningPercent: number; debtOverdueDays: string }
+    }
     expect(body.data.debtOverdueDays).toBe('15,45,90')
   })
 

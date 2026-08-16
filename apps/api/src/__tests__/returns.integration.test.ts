@@ -4,19 +4,16 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   customers,
   debts,
-  inventoryTransactions,
   orderItems,
-  orderReturnItems,
-  orderReturns,
   orders,
   products,
   stores,
   users,
 } from '@kiotviet-lite/shared'
 
-import { createOrdersRoutes } from '../routes/orders.routes.js'
-import { hashPassword } from '../lib/password.js'
 import { signAccessToken } from '../lib/jwt.js'
+import { hashPassword } from '../lib/password.js'
+import { createOrdersRoutes } from '../routes/orders.routes.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 beforeAll(() => {
@@ -170,10 +167,7 @@ async function setup(): Promise<Env> {
     remaining: 100000,
   })
 
-  await base.db
-    .update(customers)
-    .set({ currentDebt: 100000 })
-    .where(eq(customers.id, customer!.id))
+  await base.db.update(customers).set({ currentDebt: 100000 }).where(eq(customers.id, customer!.id))
 
   // Store B for multi-tenant test
   const [storeB] = await base.db.insert(stores).values({ name: 'Store B' }).returning()
@@ -239,7 +233,14 @@ describe('Returns API', () => {
   it('trả hàng 1 SP → tồn kho tăng, refundAmount > 0', async () => {
     const itemsRes = await getReturnableItems(env.paidOrderId, env.base.owner.authHeader)
     expect(itemsRes.status).toBe(200)
-    const { data: items } = (await itemsRes.json()) as { data: Array<{ orderItemId: string; remainingQuantity: number; unitPrice: number; productName: string }> }
+    const { data: items } = (await itemsRes.json()) as {
+      data: Array<{
+        orderItemId: string
+        remainingQuantity: number
+        unitPrice: number
+        productName: string
+      }>
+    }
     const itemA = items.find((i) => i.productName === 'SP A')!
 
     const stockBefore = await env.base.db
@@ -252,7 +253,9 @@ describe('Returns API', () => {
       items: [{ orderItemId: itemA.orderItemId, quantity: 1, reason: 'defective' }],
     })
     expect(res.status).toBe(201)
-    const { data } = (await res.json()) as { data: { refundAmount: number; debtReductionAmount: number; returnNumber: string } }
+    const { data } = (await res.json()) as {
+      data: { refundAmount: number; debtReductionAmount: number; returnNumber: string }
+    }
     expect(data.refundAmount).toBe(100000)
     expect(data.debtReductionAmount).toBe(0)
     expect(data.returnNumber).toMatch(/^TH-\d{6}-\d{4}$/)
@@ -267,12 +270,22 @@ describe('Returns API', () => {
   // ------- Test: trả hàng nhiều SP, verify tổng tiền -------
   it('trả nhiều SP cùng lúc → totalAmount = Σ lineTotal', async () => {
     const itemsRes = await getReturnableItems(env.paidOrderId, env.base.owner.authHeader)
-    const { data: items } = (await itemsRes.json()) as { data: Array<{ orderItemId: string; productName: string }> }
+    const { data: items } = (await itemsRes.json()) as {
+      data: Array<{ orderItemId: string; productName: string }>
+    }
 
     const res = await createReturn(env.paidOrderId, {
       items: [
-        { orderItemId: items.find((i) => i.productName === 'SP A')!.orderItemId, quantity: 1, reason: 'wrong_product' },
-        { orderItemId: items.find((i) => i.productName === 'SP B')!.orderItemId, quantity: 1, reason: 'customer_changed_mind' },
+        {
+          orderItemId: items.find((i) => i.productName === 'SP A')!.orderItemId,
+          quantity: 1,
+          reason: 'wrong_product',
+        },
+        {
+          orderItemId: items.find((i) => i.productName === 'SP B')!.orderItemId,
+          quantity: 1,
+          reason: 'customer_changed_mind',
+        },
       ],
     })
     expect(res.status).toBe(201)
@@ -283,7 +296,9 @@ describe('Returns API', () => {
   // ------- Test: trả hàng partial, trả lần 2 verify SL max -------
   it('partial return → lần 2 SL max giảm', async () => {
     const itemsRes = await getReturnableItems(env.paidOrderId, env.base.owner.authHeader)
-    const { data: items } = (await itemsRes.json()) as { data: Array<{ orderItemId: string; productName: string; remainingQuantity: number }> }
+    const { data: items } = (await itemsRes.json()) as {
+      data: Array<{ orderItemId: string; productName: string; remainingQuantity: number }>
+    }
     const itemA = items.find((i) => i.productName === 'SP A')!
     expect(itemA.remainingQuantity).toBe(2)
 
@@ -294,7 +309,14 @@ describe('Returns API', () => {
 
     // Check remaining after return 1
     const itemsRes2 = await getReturnableItems(env.paidOrderId, env.base.owner.authHeader)
-    const { data: items2 } = (await itemsRes2.json()) as { data: Array<{ orderItemId: string; productName: string; remainingQuantity: number; returnedQuantity: number }> }
+    const { data: items2 } = (await itemsRes2.json()) as {
+      data: Array<{
+        orderItemId: string
+        productName: string
+        remainingQuantity: number
+        returnedQuantity: number
+      }>
+    }
     const itemA2 = items2.find((i) => i.productName === 'SP A')!
     expect(itemA2.remainingQuantity).toBe(1)
     expect(itemA2.returnedQuantity).toBe(1)
@@ -309,7 +331,9 @@ describe('Returns API', () => {
       items: [{ orderItemId: items[0]!.orderItemId, quantity: 1, reason: 'defective' }],
     })
     expect(res.status).toBe(201)
-    const { data } = (await res.json()) as { data: { debtReductionAmount: number; refundAmount: number } }
+    const { data } = (await res.json()) as {
+      data: { debtReductionAmount: number; refundAmount: number }
+    }
     expect(data.debtReductionAmount).toBe(100000)
     expect(data.refundAmount).toBe(0)
 
@@ -331,10 +355,18 @@ describe('Returns API', () => {
   // ------- Test: trả hàng HĐ đã trả đủ → refund amount -------
   it('trả hàng HĐ paid → refundAmount = totalAmount', async () => {
     const itemsRes = await getReturnableItems(env.paidOrderId, env.base.owner.authHeader)
-    const { data: items } = (await itemsRes.json()) as { data: Array<{ orderItemId: string; productName: string }> }
+    const { data: items } = (await itemsRes.json()) as {
+      data: Array<{ orderItemId: string; productName: string }>
+    }
 
     const res = await createReturn(env.paidOrderId, {
-      items: [{ orderItemId: items.find((i) => i.productName === 'SP A')!.orderItemId, quantity: 1, reason: 'defective' }],
+      items: [
+        {
+          orderItemId: items.find((i) => i.productName === 'SP A')!.orderItemId,
+          quantity: 1,
+          reason: 'defective',
+        },
+      ],
     })
     const { data } = (await res.json()) as { data: { refundAmount: number; totalAmount: number } }
     expect(data.refundAmount).toBe(data.totalAmount)
@@ -343,7 +375,9 @@ describe('Returns API', () => {
   // ------- Test: SL trả > SL còn lại → 400 -------
   it('SL trả vượt SL còn lại → 400', async () => {
     const itemsRes = await getReturnableItems(env.paidOrderId, env.base.owner.authHeader)
-    const { data: items } = (await itemsRes.json()) as { data: Array<{ orderItemId: string; productName: string }> }
+    const { data: items } = (await itemsRes.json()) as {
+      data: Array<{ orderItemId: string; productName: string }>
+    }
     const itemA = items.find((i) => i.productName === 'SP A')!
 
     const res = await createReturn(env.paidOrderId, {
@@ -384,10 +418,16 @@ describe('Returns API', () => {
   // ------- Test: trả hết toàn bộ → status = full_return -------
   it('trả hết tất cả SP → order status = full_return', async () => {
     const itemsRes = await getReturnableItems(env.paidOrderId, env.base.owner.authHeader)
-    const { data: items } = (await itemsRes.json()) as { data: Array<{ orderItemId: string; remainingQuantity: number }> }
+    const { data: items } = (await itemsRes.json()) as {
+      data: Array<{ orderItemId: string; remainingQuantity: number }>
+    }
 
     const res = await createReturn(env.paidOrderId, {
-      items: items.map((i) => ({ orderItemId: i.orderItemId, quantity: i.remainingQuantity, reason: 'other' })),
+      items: items.map((i) => ({
+        orderItemId: i.orderItemId,
+        quantity: i.remainingQuantity,
+        reason: 'other',
+      })),
     })
     expect(res.status).toBe(201)
 
@@ -412,7 +452,9 @@ describe('Returns API', () => {
       headers: env.base.owner.authHeader,
     })
     expect(historyRes.status).toBe(200)
-    const { data: returnList } = (await historyRes.json()) as { data: Array<{ returnNumber: string; items: Array<unknown> }> }
+    const { data: returnList } = (await historyRes.json()) as {
+      data: Array<{ returnNumber: string; items: Array<unknown> }>
+    }
     expect(returnList).toHaveLength(1)
     expect(returnList[0]!.items).toHaveLength(1)
   })

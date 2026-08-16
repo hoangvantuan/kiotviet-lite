@@ -1837,7 +1837,7 @@ export async function restoreProduct({
 
 // ========== Story 3.1: POS product search ==========
 
-export type { PosProductItem, PosVariantItem, PosUnitConversion }
+export type { PosProductItem, PosUnitConversion, PosVariantItem }
 
 function mapVariantToPosItem(v: typeof productVariants.$inferSelect): PosVariantItem {
   const attrs: Record<string, string> = {}
