@@ -138,12 +138,15 @@ export async function updateUser({
     throw new ApiError('NOT_FOUND', 'Không tìm thấy nhân viên')
   }
 
-  if (
-    input.role !== undefined &&
-    actor.userId === targetId &&
-    target.role === 'owner' &&
-    input.role !== 'owner'
-  ) {
+  // CRIT C4: không owner nào được chỉnh sửa tài khoản owner khác (đổi role/khoá =
+  // chiếm quyền cửa hàng). Owner chỉ được tự sửa chính mình.
+  if (target.role === 'owner' && actor.userId !== targetId) {
+    throw new ApiError('FORBIDDEN', 'Không thể chỉnh sửa tài khoản chủ cửa hàng khác')
+  }
+
+  // input.role chỉ còn 'manager' | 'staff' (schema chặn 'owner'), nên owner tự đặt
+  // role bất kỳ đều là tự hạ cấp → chặn.
+  if (input.role !== undefined && actor.userId === targetId && target.role === 'owner') {
     throw new ApiError('BUSINESS_RULE_VIOLATION', 'Owner không thể tự hạ vai trò')
   }
 
@@ -242,6 +245,11 @@ export async function lockUser({ db, actor, targetId, meta }: LockUserDeps): Pro
   const target = await db.query.users.findFirst({ where: eq(users.id, targetId) })
   if (!target || target.storeId !== actor.storeId) {
     throw new ApiError('NOT_FOUND', 'Không tìm thấy nhân viên')
+  }
+
+  // CRIT C4: không được khoá tài khoản chủ cửa hàng (khoá owner = chiếm quyền).
+  if (target.role === 'owner') {
+    throw new ApiError('FORBIDDEN', 'Không thể khoá tài khoản chủ cửa hàng')
   }
 
   return db.transaction(async (tx) => {

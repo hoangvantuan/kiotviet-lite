@@ -39,6 +39,10 @@ export const orders = pgTable(
     transferAmount: bigint({ mode: 'number' }),
     change: bigint({ mode: 'number' }).notNull().default(0),
     note: text(),
+    // CRIT C1: id do client sinh cho đơn offline. Unique (storeId, clientId) chống
+    // tạo đơn đôi khi sync retry/race. NULL cho đơn POS online (Postgres bỏ qua
+    // NULL trong unique index nên không xung đột).
+    clientId: uuid(),
     status: varchar({ length: 16 }).notNull().default('completed'),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })
@@ -48,6 +52,7 @@ export const orders = pgTable(
   },
   (table) => [
     uniqueIndex('uniq_orders_store_number').on(table.storeId, table.orderNumber),
+    uniqueIndex('uniq_orders_store_client').on(table.storeId, table.clientId),
     index('idx_orders_store_date').on(table.storeId, table.createdAt),
     index('idx_orders_store_status').on(table.storeId, table.status),
     index('idx_orders_store_customer').on(table.storeId, table.customerId),

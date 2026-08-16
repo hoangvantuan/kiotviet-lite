@@ -14,17 +14,24 @@ export const nameSchema = z
   .min(2, 'Tên tối thiểu 2 ký tự')
   .max(100, 'Tên tối đa 100 ký tự')
 
+// Owner KHÔNG được gán qua API quản lý nhân viên — chủ cửa hàng chỉ sinh ra lúc
+// đăng ký cửa hàng. Loại trừ 'owner' ở đây chặn leo thang đặc quyền (tạo owner
+// thứ 2 rồi chiếm quyền). userRoleSchema gốc vẫn giữ 'owner' cho login/hiển thị.
+export const assignableRoleSchema = z.enum(['manager', 'staff'], {
+  errorMap: () => ({ message: 'Vai trò chỉ có thể là quản lý hoặc nhân viên' }),
+})
+
 export const createUserSchema = z.object({
   name: nameSchema,
   phone: phoneSchema,
-  role: userRoleSchema,
+  role: assignableRoleSchema,
   pin: pinSchema,
 })
 
 export const updateUserSchema = z
   .object({
     name: nameSchema.optional(),
-    role: userRoleSchema.optional(),
+    role: assignableRoleSchema.optional(),
     isActive: z.boolean().optional(),
     pin: pinSchema.optional(),
   })
@@ -50,6 +57,7 @@ export const userListItemSchema = z.object({
   createdAt: z.string(),
 })
 
+export type AssignableRole = z.infer<typeof assignableRoleSchema>
 export type CreateUserInput = z.infer<typeof createUserSchema>
 export type UpdateUserInput = z.infer<typeof updateUserSchema>
 export type VerifyPinInput = z.infer<typeof verifyPinSchema>

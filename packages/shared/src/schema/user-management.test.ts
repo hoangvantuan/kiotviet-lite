@@ -14,10 +14,13 @@ describe('createUserSchema', () => {
     expect(createUserSchema.safeParse(valid).success).toBe(true)
   })
 
-  it('chấp nhận tất cả 3 role: owner/manager/staff', () => {
-    expect(createUserSchema.safeParse({ ...valid, role: 'owner' }).success).toBe(true)
+  it('chấp nhận role manager/staff', () => {
     expect(createUserSchema.safeParse({ ...valid, role: 'manager' }).success).toBe(true)
     expect(createUserSchema.safeParse({ ...valid, role: 'staff' }).success).toBe(true)
+  })
+
+  it('CRIT C4: từ chối tạo user với role owner (chống chiếm quyền cửa hàng)', () => {
+    expect(createUserSchema.safeParse({ ...valid, role: 'owner' }).success).toBe(false)
   })
 
   it('từ chối tên quá ngắn (<2 ký tự)', () => {

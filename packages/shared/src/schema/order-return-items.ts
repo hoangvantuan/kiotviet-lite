@@ -1,4 +1,4 @@
-import { bigint, index, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { bigint, index, pgTable, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
 import { orderItems } from './order-items.js'
@@ -34,5 +34,8 @@ export const orderReturnItems = pgTable(
   (table) => [
     index('idx_return_items_return').on(table.returnId),
     index('idx_return_items_order_item').on(table.orderItemId),
+    // CRIT C3: mỗi orderItem chỉ xuất hiện 1 lần trong 1 phiếu trả (phòng vệ sâu
+    // tầng DB chống hoàn tiền gấp N lần do dòng trùng).
+    uniqueIndex('uniq_return_items_return_order_item').on(table.returnId, table.orderItemId),
   ],
 )

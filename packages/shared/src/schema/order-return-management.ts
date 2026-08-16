@@ -24,12 +24,23 @@ export const createOrderReturnItemSchema = z.object({
   reason: orderReturnReasonSchema,
 })
 
-export const createOrderReturnSchema = z.object({
-  items: z
-    .array(createOrderReturnItemSchema)
-    .min(1, 'Phải có ít nhất 1 sản phẩm trả'),
-  note: z.string().trim().max(1000, 'Ghi chú tối đa 1000 ký tự').nullable().default(null),
-})
+export const createOrderReturnSchema = z
+  .object({
+    items: z.array(createOrderReturnItemSchema).min(1, 'Phải có ít nhất 1 sản phẩm trả'),
+    note: z.string().trim().max(1000, 'Ghi chú tối đa 1000 ký tự').nullable().default(null),
+  })
+  // CRIT C3: chặn trùng orderItemId trong cùng phiếu. Nếu cho trùng, mỗi dòng đều
+  // thấy "remaining" từ snapshot ban đầu → trả vượt số đã mua, hoàn tiền gấp N lần.
+  .refine(
+    (input) => {
+      const ids = input.items.map((it) => it.orderItemId)
+      return new Set(ids).size === ids.length
+    },
+    {
+      message: 'Mỗi dòng hàng chỉ được trả một lần trong cùng phiếu',
+      path: ['items'],
+    },
+  )
 
 export type OrderReturnReason = z.infer<typeof orderReturnReasonSchema>
 export type CreateOrderReturnItemInput = z.infer<typeof createOrderReturnItemSchema>

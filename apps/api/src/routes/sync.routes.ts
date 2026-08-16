@@ -28,6 +28,7 @@ import {
 import type { Db } from '../db/index.js'
 import { parseJson } from '../lib/http.js'
 import { logger } from '../lib/logger.js'
+import { isUniqueViolation } from '../lib/pg-errors.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
@@ -329,13 +330,12 @@ async function processSyncOrder({
 }: ProcessSyncOrderDeps): Promise<SyncPushResult> {
   const { clientId, orderData } = offlineOrder
 
-  // Dedup: check existing order with same clientId (note contains 'offline:<clientId>')
+  // Dedup nhanh theo cột clientId (có unique index). Xử lý phần lớn retry tuần tự;
+  // race song song được bắt cứng bằng unique violation sau khi insert (xem cuối hàm).
   const existing = await db
     .select({ id: orders.id })
     .from(orders)
-    .where(
-      and(eq(orders.storeId, storeId), sql`${orders.note} LIKE ${'%offline:' + clientId + '%'}`),
-    )
+    .where(and(eq(orders.storeId, storeId), eq(orders.clientId, clientId)))
     .limit(1)
 
   if (existing.length > 0) {
@@ -356,7 +356,7 @@ async function processSyncOrder({
   }
   change = Math.max(0, change)
 
-  const serverId = await db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
     const orderNumber = await generateSyncOrderNumber({ tx: txDb, storeId })
 
@@ -381,6 +381,7 @@ async function processSyncOrder({
         cashAmount: orderData.cashAmount ?? null,
         transferAmount: orderData.transferAmount ?? null,
         change,
+        clientId,
         note: noteWithClientId,
         status: 'completed',
       })
@@ -577,7 +578,23 @@ async function processSyncOrder({
     )
 
     return orderId
-  })
+  }).then(
+    (orderId): SyncPushResult => ({ clientId, serverId: orderId, status: 'synced' }),
+    async (err): Promise<SyncPushResult> => {
+      // CRIT C1: hai request song song cùng clientId (client retry khi request đầu
+      // chưa commit) — unique (storeId, clientId) chặn tạo đôi, transaction đã
+      // rollback nên KHÔNG trừ kho/ghi nợ lần 2. Trả về đơn đã tồn tại.
+      if (isUniqueViolation(err, 'uniq_orders_store_client')) {
+        const [dup] = await db
+          .select({ id: orders.id })
+          .from(orders)
+          .where(and(eq(orders.storeId, storeId), eq(orders.clientId, clientId)))
+          .limit(1)
+        if (dup) return { clientId, serverId: dup.id, status: 'duplicate' }
+      }
+      throw err
+    },
+  )
 
-  return { clientId, serverId, status: 'synced' }
+  return result
 }

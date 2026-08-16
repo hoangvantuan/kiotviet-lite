@@ -3,12 +3,12 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 
 import {
+  type AssignableRole,
   type CreateUserInput,
   createUserSchema,
   type UpdateUserInput,
   updateUserSchema,
   type UserListItem,
-  type UserRole,
 } from '@kiotviet-lite/shared'
 
 import { Button } from '@/components/ui/button'
@@ -152,13 +152,14 @@ function CreateStaffDialog({
             <Label htmlFor="role">Vai trò</Label>
             <Select
               value={form.watch('role')}
-              onValueChange={(v) => form.setValue('role', v as UserRole, { shouldValidate: true })}
+              onValueChange={(v) =>
+                form.setValue('role', v as AssignableRole, { shouldValidate: true })
+              }
             >
               <SelectTrigger id="role">
                 <SelectValue placeholder="Chọn vai trò" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="owner">Chủ cửa hàng</SelectItem>
                 <SelectItem value="manager">Quản lý</SelectItem>
                 <SelectItem value="staff">Nhân viên</SelectItem>
               </SelectContent>
@@ -218,11 +219,11 @@ function EditStaffDialog({
   const form = useForm<EditFormValues>({
     resolver: zodResolver(updateUserSchema),
     mode: 'onTouched',
-    defaultValues: { name: user.name, role: user.role, pin: '' },
+    defaultValues: { name: user.name, role: user.role === 'owner' ? undefined : user.role, pin: '' },
   })
 
   useEffect(() => {
-    if (open) form.reset({ name: user.name, role: user.role, pin: '' })
+    if (open) form.reset({ name: user.name, role: user.role === 'owner' ? undefined : user.role, pin: '' })
   }, [open, user, form])
 
   const submit = form.handleSubmit(async (values) => {
@@ -262,13 +263,14 @@ function EditStaffDialog({
             <Label htmlFor="edit-role">Vai trò</Label>
             <Select
               value={form.watch('role')}
-              onValueChange={(v) => form.setValue('role', v as UserRole, { shouldValidate: true })}
+              onValueChange={(v) =>
+                form.setValue('role', v as AssignableRole, { shouldValidate: true })
+              }
             >
               <SelectTrigger id="edit-role">
                 <SelectValue placeholder="Chọn vai trò" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="owner">Chủ cửa hàng</SelectItem>
                 <SelectItem value="manager">Quản lý</SelectItem>
                 <SelectItem value="staff">Nhân viên</SelectItem>
               </SelectContent>

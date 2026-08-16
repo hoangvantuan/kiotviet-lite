@@ -221,6 +221,10 @@ export async function createReturn({
       )
 
     const itemMap = new Map(existingItems.map((it) => [it.orderItemId, it]))
+    // CRIT C3: trừ dồn số đã trả trong chính phiếu này. itemMap là snapshot đầu
+    // transaction nên không tự cập nhật; nếu thiếu, các dòng trùng orderItemId đều
+    // thấy cùng remaining và cho trả vượt. Phòng vệ sâu kể cả khi schema bị bypass.
+    const consumedInThisReturn = new Map<string, number>()
 
     // 3. Validate return items + calculate total
     let totalAmount = 0
@@ -243,13 +247,16 @@ export async function createReturn({
         throw new ApiError('VALIDATION_ERROR', `Sản phẩm không thuộc đơn hàng này`)
       }
 
-      const remaining = Number(existing.purchasedQuantity) - Number(existing.returnedQuantity)
+      const alreadyConsumed = consumedInThisReturn.get(returnItem.orderItemId) ?? 0
+      const remaining =
+        Number(existing.purchasedQuantity) - Number(existing.returnedQuantity) - alreadyConsumed
       if (returnItem.quantity > remaining) {
         throw new ApiError(
           'VALIDATION_ERROR',
           `${existing.productName}: số lượng trả (${returnItem.quantity}) vượt quá còn lại (${remaining})`,
         )
       }
+      consumedInThisReturn.set(returnItem.orderItemId, alreadyConsumed + returnItem.quantity)
 
       const lineTotal = Number(existing.unitPrice) * returnItem.quantity
       totalAmount += lineTotal

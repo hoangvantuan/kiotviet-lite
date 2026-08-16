@@ -103,6 +103,15 @@ export const createOrderSchema = z
     message: 'total không khớp với subtotal - discountAmount',
   })
   .refine(
+    // CRIT C2: chặn client gửi subtotal nhỏ hơn tổng dòng hàng (vd subtotal=0 với
+    // hàng thật) để trừ kho mà ghi doanh thu 0. subtotal phải bằng tổng lineTotal.
+    (order) => order.subtotal === order.items.reduce((sum, item) => sum + item.lineTotal, 0),
+    {
+      message: 'subtotal không khớp với tổng thành tiền các dòng',
+      path: ['subtotal'],
+    },
+  )
+  .refine(
     (order) => {
       if (order.paymentMethod === 'cash') {
         return order.cashAmount != null && order.cashAmount >= order.total
