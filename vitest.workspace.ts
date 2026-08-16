@@ -19,6 +19,17 @@ const TEST_ENV = {
   COOKIE_SECURE: 'false',
 }
 
+/**
+ * Integration test dựng PGlite trong bộ nhớ rồi chạy migration cho từng test,
+ * có test dựng hai instance cùng lúc (kiểm tra multi-tenant). Ngưỡng mặc định
+ * của vitest (test 5s, hook 10s) đủ trên máy dev nhưng không đủ trên runner CI,
+ * vốn chậm hơn khoảng 4 lần.
+ */
+const PGLITE_TIMEOUTS = {
+  testTimeout: 30_000,
+  hookTimeout: 30_000,
+}
+
 export default defineWorkspace([
   {
     test: {
@@ -26,6 +37,7 @@ export default defineWorkspace([
       root: './apps/web',
       environment: 'node',
       include: ['src/**/*.test.{ts,tsx}'],
+      ...PGLITE_TIMEOUTS,
     },
   },
   {
@@ -35,6 +47,7 @@ export default defineWorkspace([
       environment: 'node',
       include: ['src/**/*.test.ts'],
       env: TEST_ENV,
+      ...PGLITE_TIMEOUTS,
     },
   },
   {
