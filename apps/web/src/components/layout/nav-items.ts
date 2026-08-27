@@ -116,5 +116,5 @@ export const NAV_ITEMS: NavItem[] = [
     requiredPermission: 'reports.view',
   },
   { path: '/reports', label: 'Công nợ', icon: BarChart3, requiredPermission: 'reports.view' },
-  { path: '/settings', label: 'Cài đặt', icon: Settings, requiredPermission: 'store.manage' },
+  { path: '/settings', label: 'Cài đặt', icon: Settings, requiredPermission: 'audit.viewOwn' },
 ]

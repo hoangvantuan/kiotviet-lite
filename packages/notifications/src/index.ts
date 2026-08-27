@@ -39,9 +39,9 @@ export async function notify(
   } catch (err) {
     const message =
       err instanceof ZodError
-        ? `Invalid notification event: ${err.issues.map((i) => i.path.join('.')).join(', ')}`
+        ? `Invalid notification event: ${err.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`
         : 'Invalid notification event'
-    return [{ ok: false, error: message, attempts: 0, retriable: false }]
+    throw new Error(message, { cause: err })
   }
 
   const matchedRules = await findMatchingRules(
@@ -177,7 +177,12 @@ export async function notify(
   return settled.map((outcome) =>
     outcome.status === 'fulfilled'
       ? outcome.value
-      : { ok: false, error: outcome.reason instanceof Error ? outcome.reason.message : 'Delivery failed', attempts: 0, retriable: true },
+      : {
+          ok: false,
+          error: outcome.reason instanceof Error ? outcome.reason.message : 'Delivery failed',
+          attempts: 0,
+          retriable: true,
+        },
   )
 }
 

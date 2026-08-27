@@ -1,4 +1,18 @@
-import { and, asc, desc, eq, ilike, isNotNull, isNull, or, type SQL, sql } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm'
 
 import {
   type CreateCustomerInput,
@@ -7,10 +21,14 @@ import {
   customerGroups,
   type CustomerListItem,
   type CustomerOrderItem,
+  type CustomerOrderStatus,
   customers,
   type CustomerStats,
+  debts,
   type ListCustomerOrdersQuery,
   type ListCustomersQuery,
+  orderItems,
+  orders,
   type QuickCreateCustomerInput,
   type UpdateCustomerInput,
   type UserRole,
@@ -18,6 +36,7 @@ import {
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
+import { paginationMeta } from '../lib/pagination.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { diffObjects, logAction, type RequestMeta } from './audit.service.js'
@@ -223,14 +242,10 @@ export async function listCustomers({
     .where(whereClause)
 
   const total = totalRows[0]?.count ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   return {
     items: rows.map(toCustomerListItem),
-    total,
-    page,
-    pageSize,
-    totalPages,
+    ...paginationMeta({ total, page, pageSize }),
   }
 }
 
@@ -266,14 +281,10 @@ export async function listTrashedCustomers({
     .where(whereClause)
 
   const total = totalRows[0]?.count ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   return {
     items: rows.map(toCustomerListItem),
-    total,
-    page,
-    pageSize,
-    totalPages,
+    ...paginationMeta({ total, page, pageSize }),
   }
 }
 
@@ -674,13 +685,61 @@ export async function listCustomerOrders({
   query,
 }: ListCustomerOrdersDeps): Promise<CustomerOrdersResult> {
   await ensureCustomerExists({ db, storeId, targetId })
-  const { page, pageSize } = query
+  const { page, pageSize, status, dateFrom, dateTo } = query
+
+  const conditions: SQL[] = [eq(orders.storeId, storeId), eq(orders.customerId, targetId)]
+
+  if (status) {
+    if (status === 'refunded') {
+      conditions.push(inArray(orders.status, ['full_return', 'partial_return']))
+    } else {
+      conditions.push(eq(orders.status, status))
+    }
+  }
+
+  if (dateFrom) conditions.push(gte(orders.createdAt, new Date(dateFrom)))
+  if (dateTo) conditions.push(lte(orders.createdAt, new Date(dateTo)))
+
+  const whereClause = and(...conditions)
+
+  const offset = (page - 1) * pageSize
+
+  const rows = await db
+    .select({
+      id: orders.id,
+      orderCode: orders.orderNumber,
+      date: orders.createdAt,
+      total: orders.total,
+      status: orders.status,
+    })
+    .from(orders)
+    .where(whereClause)
+    .orderBy(desc(orders.createdAt))
+    .limit(pageSize)
+    .offset(offset)
+
+  const totalRows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(orders)
+    .where(whereClause)
+
+  const total = totalRows[0]?.count ?? 0
+
   return {
-    items: [],
-    total: 0,
-    page,
-    pageSize,
-    totalPages: 1,
+    items: rows.map((row) => {
+      let mappedStatus: CustomerOrderStatus = row.status as CustomerOrderStatus
+      if (row.status === 'full_return' || row.status === 'partial_return') {
+        mappedStatus = 'refunded'
+      }
+      return {
+        id: row.id,
+        orderCode: row.orderCode,
+        date: row.date.toISOString(),
+        total: Number(row.total),
+        status: mappedStatus,
+      }
+    }),
+    ...paginationMeta({ total, page, pageSize }),
   }
 }
 
@@ -702,11 +761,33 @@ export async function getCustomerDebts({
     effectiveDebtLimit && effectiveDebtLimit > 0
       ? Math.round((currentDebt / effectiveDebtLimit) * 100)
       : 0
+
+  const rows = await db
+    .select({
+      id: debts.id,
+      orderCode: orders.orderNumber,
+      date: debts.createdAt,
+      originalAmount: debts.amount,
+      paidAmount: debts.paid,
+      remainingAmount: debts.remaining,
+    })
+    .from(debts)
+    .innerJoin(orders, eq(debts.orderId, orders.id))
+    .where(and(eq(debts.storeId, storeId), eq(debts.customerId, targetId)))
+    .orderBy(desc(debts.createdAt))
+
   return {
     currentDebt,
     effectiveDebtLimit,
     usagePercent,
-    items: [],
+    items: rows.map((row) => ({
+      id: row.id,
+      orderCode: row.orderCode,
+      date: row.date.toISOString(),
+      originalAmount: Number(row.originalAmount),
+      paidAmount: Number(row.paidAmount),
+      remainingAmount: Number(row.remainingAmount),
+    })),
   }
 }
 
@@ -722,8 +803,54 @@ export async function getCustomerStats({
   targetId,
 }: GetCustomerStatsDeps): Promise<CustomerStats> {
   await ensureCustomerExists({ db, storeId, targetId })
+
+  const topProductRows = await db
+    .select({
+      productId: orderItems.productId,
+      productName: sql<string>`max(${orderItems.productName})`,
+      quantity: sql<number>`sum(${orderItems.quantity})::int`,
+      lineTotal: sql<number>`sum(${orderItems.lineTotal})::bigint`,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orderItems.orderId, orders.id))
+    .where(
+      and(
+        eq(orders.storeId, storeId),
+        eq(orders.customerId, targetId),
+        inArray(orders.status, ['completed', 'partial_return']),
+      ),
+    )
+    .groupBy(orderItems.productId)
+    .orderBy(desc(sql`sum(${orderItems.quantity})`))
+    .limit(10)
+
+  const monthlySaleRows = await db
+    .select({
+      month: sql<string>`to_char(${orders.createdAt}, 'YYYY-MM')`,
+      total: sql<number>`sum(${orders.total})::bigint`,
+    })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.storeId, storeId),
+        eq(orders.customerId, targetId),
+        inArray(orders.status, ['completed', 'partial_return']),
+        gte(orders.createdAt, sql`now() - interval '12 months'`),
+      ),
+    )
+    .groupBy(sql`to_char(${orders.createdAt}, 'YYYY-MM')`)
+    .orderBy(sql`to_char(${orders.createdAt}, 'YYYY-MM')`)
+
   return {
-    topProducts: [],
-    monthlySales: [],
+    topProducts: topProductRows.map((row) => ({
+      productId: row.productId,
+      productName: row.productName,
+      quantity: Number(row.quantity),
+      total: Number(row.lineTotal),
+    })),
+    monthlySales: monthlySaleRows.map((row) => ({
+      month: row.month,
+      total: Number(row.total),
+    })),
   }
 }

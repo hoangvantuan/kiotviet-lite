@@ -13,6 +13,7 @@ import {
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
+import { paginationMeta } from '../lib/pagination.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { diffObjects, logAction, type RequestMeta } from './audit.service.js'
@@ -126,10 +127,7 @@ export async function listCustomerPrices({
   const offset = (page - 1) * pageSize
 
   const rows = await db
-    .select({
-      ...buildSelectColumns(),
-      _totalCount: sql<number>`COUNT(*) OVER()`,
-    })
+    .select(buildSelectColumns())
     .from(customerPrices)
     .innerJoin(customers, eq(customerPrices.customerId, customers.id))
     .innerJoin(products, eq(customerPrices.productId, products.id))
@@ -138,15 +136,18 @@ export async function listCustomerPrices({
     .limit(pageSize)
     .offset(offset)
 
-  const total = rows.length > 0 ? Number(rows[0]!._totalCount) : 0
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const totalRows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(customerPrices)
+    .innerJoin(customers, eq(customerPrices.customerId, customers.id))
+    .innerJoin(products, eq(customerPrices.productId, products.id))
+    .where(whereClause)
+
+  const total = totalRows[0]?.count ?? 0
 
   return {
     items: rows.map((row) => toCustomerPriceListItem(row as CustomerPriceRow)),
-    total,
-    page,
-    pageSize,
-    totalPages,
+    ...paginationMeta({ total, page, pageSize }),
   }
 }
 
