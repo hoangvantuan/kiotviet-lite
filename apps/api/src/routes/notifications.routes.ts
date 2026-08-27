@@ -1,4 +1,4 @@
-import { notify } from '@kiotviet-lite/notifications'
+import { notify, type SendResult } from '@kiotviet-lite/notifications'
 import { Hono } from 'hono'
 import { rateLimiter } from 'hono-rate-limiter'
 import { uuidv7 } from 'uuidv7'
@@ -81,7 +81,13 @@ export function createNotificationRoutes({ db }: NotificationRoutesDeps) {
       correlationId,
     }
 
-    const results = await notify(db, event, { configKey: env.notificationConfigKey })
+    let results: SendResult[]
+    try {
+      results = await notify(db, event, { configKey: env.notificationConfigKey })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Invalid notification event'
+      return c.json({ error: message }, 400)
+    }
 
     const safeResults = results.map((r) => (r.ok ? { ok: true as const } : { ok: false as const }))
     return c.json({ data: { accepted: true, results: safeResults } })
