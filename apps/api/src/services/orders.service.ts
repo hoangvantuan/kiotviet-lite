@@ -56,6 +56,8 @@ export interface OrderDetailItem {
   lineTotal: number
   originalPrice: number | null
   priceOverride: boolean
+  sku?: string | null
+  costPrice?: number | null
 }
 
 export interface OrderDetail {
@@ -75,6 +77,8 @@ export interface OrderDetail {
   status: string
   items: OrderDetailItem[]
   createdAt: string
+  oldDebt?: number | null
+  customerCurrentDebt?: number | null
 }
 
 export interface StockInfoVariant {
@@ -333,6 +337,19 @@ export async function createOrder({
         }
       }
 
+      let itemSku = product.sku ?? null
+      let itemCostPrice = product.costPrice != null ? Number(product.costPrice) : null
+      let variant = null
+      if (item.variantId) {
+        variant = await loadVariantForUpdate({
+          tx: txDb,
+          productId: item.productId,
+          variantId: item.variantId,
+        })
+        itemSku = variant.sku ?? product.sku ?? null
+        itemCostPrice = variant.costPrice != null ? Number(variant.costPrice) : itemCostPrice
+      }
+
       processedItems.push({
         id: insertedItem!.id,
         productId: item.productId,
@@ -348,6 +365,8 @@ export async function createOrder({
         lineTotal: item.lineTotal,
         originalPrice: item.originalPrice ?? null,
         priceOverride: item.priceOverride,
+        sku: itemSku,
+        costPrice: itemCostPrice,
       })
 
       // Stock deduction
@@ -379,12 +398,14 @@ export async function createOrder({
         let newStock: number
 
         if (item.variantId) {
-          const variant = await loadVariantForUpdate({
-            tx: txDb,
-            productId: item.productId,
-            variantId: item.variantId,
-          })
-          newStock = variant.stockQuantity - deductQty
+          const v =
+            variant ??
+            (await loadVariantForUpdate({
+              tx: txDb,
+              productId: item.productId,
+              variantId: item.variantId,
+            }))
+          newStock = v.stockQuantity - deductQty
           await tx
             .update(productVariants)
             .set({ stockQuantity: newStock })
@@ -444,6 +465,9 @@ export async function createOrder({
       }
     }
 
+    let oldDebt: number | null = null
+    let customerCurrentDebt: number | null = null
+
     // Story 5.1: Debt creation
     if (debtAmount > 0) {
       // Defense in depth: Zod refine đã enforce, vẫn check lại
@@ -484,6 +508,8 @@ export async function createOrder({
 
       const debtBefore = customer.currentDebt
       const debtAfter = debtBefore + debtAmount
+      oldDebt = debtBefore
+      customerCurrentDebt = debtAfter
 
       // Check limit: null hoặc 0 = không giới hạn
       if (effectiveDebtLimit !== null && effectiveDebtLimit > 0 && debtAfter > effectiveDebtLimit) {
@@ -575,6 +601,20 @@ export async function createOrder({
         },
         'debt.created',
       )
+    } else if (input.customerId) {
+      const customerRows = await tx
+        .select({ currentDebt: customers.currentDebt })
+        .from(customers)
+        .where(
+          and(
+            eq(customers.id, input.customerId),
+            eq(customers.storeId, actor.storeId),
+            isNull(customers.deletedAt),
+          ),
+        )
+        .limit(1)
+      oldDebt = customerRows[0]?.currentDebt != null ? Number(customerRows[0].currentDebt) : 0
+      customerCurrentDebt = oldDebt
     }
 
     // Audit log
@@ -645,6 +685,8 @@ export async function createOrder({
       status: 'completed',
       items: processedItems,
       createdAt: new Date().toISOString(),
+      oldDebt,
+      customerCurrentDebt,
     } satisfies OrderDetail
   })
 
@@ -955,6 +997,8 @@ export interface OrderDetailFull {
   customerName: string | null
   customerPhone: string | null
   customerGroupName: string | null
+  customerCurrentDebt?: number | null
+  oldDebt?: number | null
   createdByName: string | null
   subtotal: number
   discountType: string | null
@@ -994,6 +1038,7 @@ export async function getOrderDetail({
       customerName: customers.name,
       customerPhone: customers.phone,
       customerGroupName: customerGroups.name,
+      customerCurrentDebt: customers.currentDebt,
       createdByName: users.name,
       subtotal: orders.subtotal,
       discountType: orders.discountType,
@@ -1040,8 +1085,14 @@ export async function getOrderDetail({
       lineTotal: orderItems.lineTotal,
       originalPrice: orderItems.originalPrice,
       priceOverride: orderItems.priceOverride,
+      sku: sql<string | null>`COALESCE(${productVariants.sku}, ${products.sku})`.as('sku'),
+      costPrice: sql<
+        number | null
+      >`COALESCE(${productVariants.costPrice}, ${products.costPrice})`.as('cost_price'),
     })
     .from(orderItems)
+    .leftJoin(products, eq(orderItems.productId, products.id))
+    .leftJoin(productVariants, eq(orderItems.variantId, productVariants.id))
     .where(eq(orderItems.orderId, orderId))
     .orderBy(asc(orderItems.createdAt))
 
@@ -1060,12 +1111,16 @@ export async function getOrderDetail({
     lineTotal: Number(it.lineTotal),
     originalPrice: it.originalPrice != null ? Number(it.originalPrice) : null,
     priceOverride: it.priceOverride,
+    sku: it.sku ?? null,
+    costPrice: it.costPrice != null ? Number(it.costPrice) : null,
   }))
 
   const totalAmount = Number(row.total)
   // CRIT-3: Lấy debtAmount từ debts.remaining (source of truth)
   const debtAmount = row.debtRemaining != null ? Number(row.debtRemaining) : 0
   const paidAmount = totalAmount - debtAmount
+  const currentDebt = row.customerCurrentDebt != null ? Number(row.customerCurrentDebt) : null
+  const oldDebt = currentDebt != null ? Math.max(0, currentDebt - debtAmount) : null
 
   return {
     id: row.id,
@@ -1074,6 +1129,8 @@ export async function getOrderDetail({
     customerName: row.customerName ?? null,
     customerPhone: row.customerPhone ?? null,
     customerGroupName: row.customerGroupName ?? null,
+    customerCurrentDebt: currentDebt,
+    oldDebt,
     createdByName: row.createdByName ?? null,
     subtotal: Number(row.subtotal),
     discountType: row.discountType ?? null,
