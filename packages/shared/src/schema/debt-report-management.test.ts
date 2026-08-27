@@ -10,13 +10,22 @@ describe('debtAgingQuerySchema', () => {
     expect(result.to).toBeUndefined()
   })
 
-  it('accepts valid from/to dates', () => {
+  it('accepts valid from/to dates (datetime format)', () => {
     const result = debtAgingQuerySchema.parse({
       from: '2026-01-01T00:00:00Z',
       to: '2026-05-04T23:59:59Z',
     })
     expect(result.from).toBe('2026-01-01T00:00:00Z')
     expect(result.to).toBe('2026-05-04T23:59:59Z')
+  })
+
+  it('accepts valid from/to dates (YYYY-MM-DD format)', () => {
+    const result = debtAgingQuerySchema.parse({
+      from: '2026-08-01',
+      to: '2026-08-31',
+    })
+    expect(result.from).toBe('2026-08-01')
+    expect(result.to).toBe('2026-08-31')
   })
 
   it('rejects invalid date format', () => {

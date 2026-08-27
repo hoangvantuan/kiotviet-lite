@@ -251,6 +251,137 @@ describe('GET /api/v1/reports/debt-aging', () => {
     })
     expect(res.status).toBe(200)
   })
+
+  it('filters by date range (from/to)', async () => {
+    const now = Date.now()
+    // Lọc nợ trong vòng 30 ngày qua: chỉ có khoản nợ 10 ngày trước (300k của KH Nợ Nhiều)
+    const thirtyDaysAgo = new Date(now - 30 * 86400000).toISOString()
+    const tomorrow = new Date(now + 86400000).toISOString()
+
+    const res = await env.app.request(
+      `/api/v1/reports/debt-aging?from=${thirtyDaysAgo}&to=${tomorrow}`,
+      {
+        headers: env.base.owner.authHeader,
+      },
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { data: DebtAgingReport }
+    expect(body.data.rows).toHaveLength(1)
+    expect(body.data.rows[0]!.customerName).toBe('KH Nợ Nhiều')
+    expect(body.data.rows[0]!.totalDebt).toBe(300_000)
+    expect(body.data.totals.totalDebt).toBe(300_000)
+  })
+
+  it('xử lý chính xác múi giờ Việt Nam (+07:00) với bộ lọc YYYY-MM-DD', async () => {
+    const [cust] = await env.base.db
+      .insert(customers)
+      .values({
+        storeId: env.base.storeId,
+        name: 'KH Timezone Test',
+        phone: '0977777777',
+        currentDebt: 600_000,
+      })
+      .returning()
+
+    const insertedOrders = await env.base.db
+      .insert(orders)
+      .values([
+        {
+          storeId: env.base.storeId,
+          customerId: cust!.id,
+          orderNumber: 'ORD-TZ-001',
+          subtotal: 100_000,
+          total: 100_000,
+          paymentMethod: 'debt',
+          paymentStatus: 'unpaid',
+          userId: env.base.owner.id,
+        },
+        {
+          storeId: env.base.storeId,
+          customerId: cust!.id,
+          orderNumber: 'ORD-TZ-002',
+          subtotal: 200_000,
+          total: 200_000,
+          paymentMethod: 'debt',
+          paymentStatus: 'unpaid',
+          userId: env.base.owner.id,
+        },
+        {
+          storeId: env.base.storeId,
+          customerId: cust!.id,
+          orderNumber: 'ORD-TZ-003',
+          subtotal: 300_000,
+          total: 300_000,
+          paymentMethod: 'debt',
+          paymentStatus: 'unpaid',
+          userId: env.base.owner.id,
+        },
+        {
+          storeId: env.base.storeId,
+          customerId: cust!.id,
+          orderNumber: 'ORD-TZ-004',
+          subtotal: 400_000,
+          total: 400_000,
+          paymentMethod: 'debt',
+          paymentStatus: 'unpaid',
+          userId: env.base.owner.id,
+        },
+      ])
+      .returning()
+
+    // 1. Khoản nợ ngày trước from: 2026-07-31 lúc 23:30 giờ VN (+07:00) -> bị loại
+    // 2. Khoản nợ lúc 00:30 giờ VN (+07:00) ngày from (2026-08-01) -> được lấy (200k)
+    // 3. Khoản nợ lúc 23:00 giờ VN (+07:00) của đúng ngày to (2026-08-15) -> được lấy (300k)
+    // 4. Khoản nợ ngày sau to: 2026-08-16 lúc 00:30 giờ VN (+07:00) -> bị loại
+    await env.base.db.insert(debts).values([
+      {
+        storeId: env.base.storeId,
+        orderId: insertedOrders[0]!.id,
+        customerId: cust!.id,
+        amount: 100_000,
+        paid: 0,
+        remaining: 100_000,
+        createdAt: new Date('2026-07-31T23:30:00.000+07:00'),
+      },
+      {
+        storeId: env.base.storeId,
+        orderId: insertedOrders[1]!.id,
+        customerId: cust!.id,
+        amount: 200_000,
+        paid: 0,
+        remaining: 200_000,
+        createdAt: new Date('2026-08-01T00:30:00.000+07:00'),
+      },
+      {
+        storeId: env.base.storeId,
+        orderId: insertedOrders[2]!.id,
+        customerId: cust!.id,
+        amount: 300_000,
+        paid: 0,
+        remaining: 300_000,
+        createdAt: new Date('2026-08-15T23:00:00.000+07:00'),
+      },
+      {
+        storeId: env.base.storeId,
+        orderId: insertedOrders[3]!.id,
+        customerId: cust!.id,
+        amount: 400_000,
+        paid: 0,
+        remaining: 400_000,
+        createdAt: new Date('2026-08-16T00:30:00.000+07:00'),
+      },
+    ])
+
+    const res = await env.app.request('/api/v1/reports/debt-aging?from=2026-08-01&to=2026-08-15', {
+      headers: env.base.owner.authHeader,
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { data: DebtAgingReport }
+
+    const tzCustomer = body.data.rows.find((r) => r.customerId === cust!.id)
+    expect(tzCustomer).toBeDefined()
+    expect(tzCustomer?.totalDebt).toBe(500_000)
+  })
 })
 
 describe('GET /api/v1/reports/debt-aging/csv', () => {
@@ -263,6 +394,23 @@ describe('GET /api/v1/reports/debt-aging/csv', () => {
     const text = await res.text()
     expect(text).toContain('Khách hàng')
     expect(text).toContain('Tổng cộng')
+  })
+
+  it('filters CSV export by date range', async () => {
+    const now = Date.now()
+    const thirtyDaysAgo = new Date(now - 30 * 86400000).toISOString()
+    const tomorrow = new Date(now + 86400000).toISOString()
+
+    const res = await env.app.request(
+      `/api/v1/reports/debt-aging/csv?from=${thirtyDaysAgo}&to=${tomorrow}`,
+      {
+        headers: env.base.owner.authHeader,
+      },
+    )
+    expect(res.status).toBe(200)
+    const text = await res.text()
+    expect(text).toContain('KH Nợ Nhiều')
+    expect(text).not.toContain('KH Nợ Ít')
   })
 })
 

@@ -19,6 +19,28 @@ interface ReportQuery {
   to?: string
 }
 
+/**
+ * Chuyển đổi chuỗi ngày/thời gian sang Date theo múi giờ Việt Nam (+07:00).
+ * - Nếu là YYYY-MM-DD:
+ *   - 'start' -> 00:00:00.000+07:00 (đầu ngày)
+ *   - 'end'   -> 23:59:59.999+07:00 (cuối ngày)
+ * - Nếu đã có giờ/offset đầy đủ: giữ nguyên.
+ *
+ * TODO (Pha 6): Hợp nhất logic này về helper timezone dùng chung (apps/api/src/lib/timezone.ts).
+ */
+function parseDateRangeBoundary(
+  value: string | undefined,
+  boundary: 'start' | 'end',
+): Date | undefined {
+  if (!value) return undefined
+  const trimmed = value.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const timeSuffix = boundary === 'start' ? 'T00:00:00.000+07:00' : 'T23:59:59.999+07:00'
+    return new Date(`${trimmed}${timeSuffix}`)
+  }
+  return new Date(trimmed)
+}
+
 function parseOverdueDays(raw: string): number[] {
   return raw
     .split(',')
@@ -40,6 +62,7 @@ function buildBucketLabels(days: number[]): string[] {
 export async function getDebtAgingReport({
   db,
   storeId,
+  query,
 }: {
   db: Db
   storeId: string
@@ -49,6 +72,9 @@ export async function getDebtAgingReport({
   const overdueDays = parseOverdueDays(store?.debtOverdueDays ?? '30,60,90')
   const bucketLabels = buildBucketLabels(overdueDays)
   const bucketCount = overdueDays.length + 1
+
+  const fromDate = parseDateRangeBoundary(query.from, 'start')
+  const toDate = parseDateRangeBoundary(query.to, 'end')
 
   const rows = await db
     .select({
@@ -63,7 +89,13 @@ export async function getDebtAgingReport({
     .from(debts)
     .innerJoin(customers, eq(debts.customerId, customers.id))
     .where(
-      and(eq(debts.storeId, storeId), sql`${debts.remaining} > 0`, isNull(customers.deletedAt)),
+      and(
+        eq(debts.storeId, storeId),
+        sql`${debts.remaining} > 0`,
+        isNull(customers.deletedAt),
+        ...(fromDate ? [gte(debts.createdAt, fromDate)] : []),
+        ...(toDate ? [lte(debts.createdAt, toDate)] : []),
+      ),
     )
 
   const grouped = new Map<

@@ -1,8 +1,14 @@
 import { z } from 'zod'
 
+const dateOrDatetimeString = z.union([
+  z.string().date(),
+  z.string().datetime({ offset: true }),
+  z.string().datetime(),
+])
+
 export const debtAgingQuerySchema = z.object({
-  from: z.string().datetime().optional(),
-  to: z.string().datetime().optional(),
+  from: dateOrDatetimeString.optional(),
+  to: dateOrDatetimeString.optional(),
 })
 
 export const debtAgingRowSchema = z.object({
@@ -24,8 +30,8 @@ export const debtAgingReportSchema = z.object({
 })
 
 export const debtSummaryQuerySchema = z.object({
-  from: z.string().datetime().optional(),
-  to: z.string().datetime().optional(),
+  from: dateOrDatetimeString.optional(),
+  to: dateOrDatetimeString.optional(),
 })
 
 export const debtSummaryReportSchema = z.object({
