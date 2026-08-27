@@ -17,7 +17,7 @@ export interface InvoiceStoreInfo {
   slogan?: string | null
 }
 
-interface InvoiceProps {
+export interface InvoiceProps {
   order: OrderDetailResponse
   store?: InvoiceStoreInfo
   isReprint?: boolean
@@ -38,6 +38,10 @@ function formatDateTime(iso: string): string {
   }
 }
 
+function calculateTotalCost(items: OrderDetailItem[]): number {
+  return items.reduce((sum, it) => sum + (it.costPrice != null ? it.costPrice * it.quantity : 0), 0)
+}
+
 // ================================================================
 // THERMAL TEMPLATE (CSS fallback for browser print)
 // ================================================================
@@ -49,9 +53,18 @@ function isThermalFormat(f: PrintFormat | null): boolean {
 
 export function OrderInvoiceThermal({ order, store, isReprint, printSettings }: InvoiceProps) {
   const activePrintFormat = usePrintStore((s) => s.activePrintFormat)
+
   const showCustomerName = printSettings?.showCustomerName ?? true
   const showCustomerPhone = printSettings?.showCustomerPhone ?? true
   const showDiscount = printSettings?.showDiscount ?? true
+  const showSku = printSettings?.showSku ?? false
+  const showOldDebt = printSettings?.showOldDebt ?? false
+  const showNewDebt = printSettings?.showNewDebt ?? true
+  const showCostPrice = printSettings?.showCostPrice ?? false
+  const showNotes = printSettings?.showNotes ?? true
+  const footerText = printSettings?.footerText ?? 'Cảm ơn quý khách!'
+  const logoUrl = printSettings?.logoUrl
+  const slogan = printSettings?.slogan ?? store?.slogan
 
   // C1: Chỉ hiện template khi format đang in là thermal
   if (!isThermalFormat(activePrintFormat)) return null
@@ -60,6 +73,8 @@ export function OrderInvoiceThermal({ order, store, isReprint, printSettings }: 
   const is58mm = activePrintFormat === 'thermal-58'
   const width = is58mm ? '54mm' : '76mm'
   const pageSize = is58mm ? '58mm auto' : '80mm auto'
+
+  const totalCost = calculateTotalCost(order.items)
 
   return (
     <div
@@ -75,8 +90,15 @@ export function OrderInvoiceThermal({ order, store, isReprint, printSettings }: 
 
       {/* Store header */}
       <header className="text-center">
+        {logoUrl && (
+          <img
+            src={logoUrl}
+            alt="Logo"
+            className="mx-auto mb-1 max-h-12 max-w-[120px] object-contain"
+          />
+        )}
         {store?.name && <h1 className="text-sm font-bold">{store.name}</h1>}
-        {store?.slogan && <p className="text-[10px]">{store.slogan}</p>}
+        {slogan && <p className="text-[10px]">{slogan}</p>}
         {store?.address && <p className="text-[10px]">{store.address}</p>}
         {store?.phone && <p className="text-[10px]">SĐT: {store.phone}</p>}
       </header>
@@ -98,7 +120,7 @@ export function OrderInvoiceThermal({ order, store, isReprint, printSettings }: 
       {/* Items */}
       <div className="space-y-1">
         {order.items.map((item) => (
-          <ThermalItemRow key={item.id} item={item} />
+          <ThermalItemRow key={item.id} item={item} showSku={showSku} />
         ))}
       </div>
 
@@ -122,12 +144,27 @@ export function OrderInvoiceThermal({ order, store, isReprint, printSettings }: 
           <ThermalRow label="Chuyển khoản" value={formatVnd(order.transferAmount)} />
         )}
         {order.change > 0 && <ThermalRow label="Tiền thừa" value={formatVnd(order.change)} />}
-        {order.debtAmount > 0 && <ThermalRow label="Còn nợ" value={formatVnd(order.debtAmount)} />}
+        {showOldDebt && order.oldDebt != null && order.oldDebt > 0 && (
+          <ThermalRow label="Nợ cũ" value={formatVnd(order.oldDebt)} />
+        )}
+        {showNewDebt && order.debtAmount > 0 && (
+          <ThermalRow label="Còn nợ" value={formatVnd(order.debtAmount)} />
+        )}
+        {showCostPrice && totalCost > 0 && (
+          <ThermalRow label="Giá vốn" value={formatVnd(totalCost)} />
+        )}
       </div>
+
+      {showNotes && order.note && (
+        <>
+          <ThermalSeparator />
+          <p className="text-center text-[10px] text-gray-500 italic">Ghi chú: {order.note}</p>
+        </>
+      )}
 
       <ThermalSeparator />
 
-      <p className="text-center mt-1">{printSettings?.footerText ?? 'Cảm ơn quý khách!'}</p>
+      <p className="text-center mt-1">{footerText}</p>
     </div>
   )
 }
@@ -145,8 +182,11 @@ function ThermalRow({ label, value, bold }: { label: string; value: string; bold
   )
 }
 
-function ThermalItemRow({ item }: { item: OrderDetailItem }) {
-  const name = item.variantName ? `${item.productName} (${item.variantName})` : item.productName
+function ThermalItemRow({ item, showSku }: { item: OrderDetailItem; showSku: boolean }) {
+  let name = item.variantName ? `${item.productName} (${item.variantName})` : item.productName
+  if (showSku && item.sku) {
+    name = `[${item.sku}] ${name}`
+  }
 
   return (
     <div>
@@ -165,11 +205,25 @@ function ThermalItemRow({ item }: { item: OrderDetailItem }) {
 // A4 TEMPLATE
 // ================================================================
 
-export function OrderInvoiceA4({ order, store, isReprint }: InvoiceProps) {
+export function OrderInvoiceA4({ order, store, isReprint, printSettings }: InvoiceProps) {
   const activePrintFormat = usePrintStore((s) => s.activePrintFormat)
+
+  const showCustomerName = printSettings?.showCustomerName ?? true
+  const showCustomerPhone = printSettings?.showCustomerPhone ?? true
+  const showDiscount = printSettings?.showDiscount ?? true
+  const showSku = printSettings?.showSku ?? false
+  const showOldDebt = printSettings?.showOldDebt ?? false
+  const showNewDebt = printSettings?.showNewDebt ?? true
+  const showCostPrice = printSettings?.showCostPrice ?? false
+  const showNotes = printSettings?.showNotes ?? true
+  const footerText = printSettings?.footerText ?? 'Cảm ơn quý khách!'
+  const logoUrl = printSettings?.logoUrl
+  const slogan = printSettings?.slogan ?? store?.slogan
 
   // C1: Chỉ hiện template khi format đang in là a4
   if (activePrintFormat !== 'a4') return null
+
+  const totalCost = calculateTotalCost(order.items)
 
   return (
     <div
@@ -190,10 +244,14 @@ export function OrderInvoiceA4({ order, store, isReprint }: InvoiceProps) {
 
       {/* Header */}
       <header className="flex justify-between items-start mb-4">
-        <div className="flex-1">
-          {store?.name && <h2 className="text-base font-bold">{store.name}</h2>}
-          {store?.address && <p className="text-xs">{store.address}</p>}
-          {store?.phone && <p className="text-xs">SĐT: {store.phone}</p>}
+        <div className="flex items-start gap-3 flex-1">
+          {logoUrl && <img src={logoUrl} alt="Logo" className="h-14 w-14 object-contain" />}
+          <div>
+            {store?.name && <h2 className="text-base font-bold">{store.name}</h2>}
+            {slogan && <p className="text-xs text-gray-600">{slogan}</p>}
+            {store?.address && <p className="text-xs">{store.address}</p>}
+            {store?.phone && <p className="text-xs">SĐT: {store.phone}</p>}
+          </div>
         </div>
         {isReprint && (
           <span className="text-xs font-bold border border-black px-2 py-0.5">BẢN IN LẠI</span>
@@ -209,10 +267,12 @@ export function OrderInvoiceA4({ order, store, isReprint }: InvoiceProps) {
           Mã HĐ: <span className="font-mono font-medium">{order.orderNumber}</span>
         </p>
         <p>Ngày: {formatDateTime(order.createdAt)}</p>
-        <p>
-          Khách hàng: <span className="font-medium">{order.customerName ?? 'Khách lẻ'}</span>
-        </p>
-        {order.customerPhone && <p>SĐT: {order.customerPhone}</p>}
+        {showCustomerName && (
+          <p>
+            Khách hàng: <span className="font-medium">{order.customerName ?? 'Khách lẻ'}</span>
+          </p>
+        )}
+        {showCustomerPhone && order.customerPhone && <p>SĐT: {order.customerPhone}</p>}
         {order.customerGroupName && <p>Nhóm KH: {order.customerGroupName}</p>}
       </div>
 
@@ -225,7 +285,7 @@ export function OrderInvoiceA4({ order, store, isReprint }: InvoiceProps) {
             <th className="text-center">ĐVT</th>
             <th className="text-right">SL</th>
             <th className="text-right">Đơn giá</th>
-            <th className="text-right">CK</th>
+            {showDiscount && <th className="text-right">CK</th>}
             <th className="text-right">Thành tiền</th>
           </tr>
         </thead>
@@ -234,6 +294,9 @@ export function OrderInvoiceA4({ order, store, isReprint }: InvoiceProps) {
             <tr key={item.id}>
               <td className="text-center">{idx + 1}</td>
               <td>
+                {showSku && item.sku && (
+                  <span className="text-xs text-gray-500 font-mono">[{item.sku}] </span>
+                )}
                 {item.productName}
                 {item.variantName && (
                   <span className="text-xs text-gray-500"> ({item.variantName})</span>
@@ -242,9 +305,11 @@ export function OrderInvoiceA4({ order, store, isReprint }: InvoiceProps) {
               <td className="text-center">{item.unit ?? ''}</td>
               <td className="text-right">{item.quantity}</td>
               <td className="text-right">{formatVnd(item.unitPrice)}</td>
-              <td className="text-right">
-                {item.discountAmount > 0 ? formatVnd(item.discountAmount) : ''}
-              </td>
+              {showDiscount && (
+                <td className="text-right">
+                  {item.discountAmount > 0 ? formatVnd(item.discountAmount) : ''}
+                </td>
+              )}
               <td className="text-right font-medium">{formatVnd(item.lineTotal)}</td>
             </tr>
           ))}
@@ -252,7 +317,7 @@ export function OrderInvoiceA4({ order, store, isReprint }: InvoiceProps) {
       </table>
 
       {/* Totals */}
-      <A4Totals order={order} />
+      <A4Totals order={order} showDiscount={showDiscount} />
 
       {/* Amount in words */}
       <p className="text-sm italic mt-2 mb-4">Bằng chữ: {numberToVietnameseWords(order.total)}</p>
@@ -261,13 +326,22 @@ export function OrderInvoiceA4({ order, store, isReprint }: InvoiceProps) {
       <div className="text-sm space-y-1 mb-6">
         <p>Thanh toán: {PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}</p>
         <p>Đã trả: {formatVndWithSuffix(order.paidAmount)}</p>
-        {order.debtAmount > 0 && (
+        {showOldDebt && order.oldDebt != null && order.oldDebt > 0 && (
+          <p>Nợ cũ: {formatVndWithSuffix(order.oldDebt)}</p>
+        )}
+        {showNewDebt && order.debtAmount > 0 && (
           <p className="font-medium">Còn nợ: {formatVndWithSuffix(order.debtAmount)}</p>
+        )}
+        {showCostPrice && totalCost > 0 && (
+          <p className="text-gray-500 text-xs">Tổng giá vốn: {formatVnd(totalCost)}</p>
         )}
       </div>
 
       {/* Note */}
-      {order.note && <p className="text-sm mb-4">Ghi chú: {order.note}</p>}
+      {showNotes && order.note && <p className="text-sm mb-4">Ghi chú: {order.note}</p>}
+
+      {/* Footer text */}
+      <p className="text-center my-4 text-xs text-gray-600 italic">{footerText}</p>
 
       {/* Signatures */}
       <div className="flex justify-around mt-8 text-sm text-center">
@@ -286,7 +360,7 @@ export function OrderInvoiceA4({ order, store, isReprint }: InvoiceProps) {
   )
 }
 
-function A4Totals({ order }: { order: OrderDetailResponse }) {
+function A4Totals({ order, showDiscount }: { order: OrderDetailResponse; showDiscount: boolean }) {
   return (
     <div className="flex justify-end">
       <div className="w-64 space-y-1 text-sm">
@@ -294,7 +368,7 @@ function A4Totals({ order }: { order: OrderDetailResponse }) {
           <span>Tạm tính:</span>
           <span>{formatVnd(order.subtotal)}</span>
         </div>
-        {order.discountAmount > 0 && (
+        {showDiscount && order.discountAmount > 0 && (
           <div className="flex justify-between">
             <span>
               Chiết khấu
@@ -319,11 +393,25 @@ function A4Totals({ order }: { order: OrderDetailResponse }) {
 // A5 TEMPLATE (compact version of A4)
 // ================================================================
 
-export function OrderInvoiceA5({ order, store, isReprint }: InvoiceProps) {
+export function OrderInvoiceA5({ order, store, isReprint, printSettings }: InvoiceProps) {
   const activePrintFormat = usePrintStore((s) => s.activePrintFormat)
+
+  const showCustomerName = printSettings?.showCustomerName ?? true
+  const showCustomerPhone = printSettings?.showCustomerPhone ?? true
+  const showDiscount = printSettings?.showDiscount ?? true
+  const showSku = printSettings?.showSku ?? false
+  const showOldDebt = printSettings?.showOldDebt ?? false
+  const showNewDebt = printSettings?.showNewDebt ?? true
+  const showCostPrice = printSettings?.showCostPrice ?? false
+  const showNotes = printSettings?.showNotes ?? true
+  const footerText = printSettings?.footerText ?? 'Cảm ơn quý khách!'
+  const logoUrl = printSettings?.logoUrl
+  const slogan = printSettings?.slogan ?? store?.slogan
 
   // C1: Chỉ hiện template khi format đang in là a5
   if (activePrintFormat !== 'a5') return null
+
+  const totalCost = calculateTotalCost(order.items)
 
   return (
     <div
@@ -345,10 +433,14 @@ export function OrderInvoiceA5({ order, store, isReprint }: InvoiceProps) {
 
       {/* Header */}
       <header className="flex justify-between items-start mb-2">
-        <div className="flex-1">
-          {store?.name && <h2 className="text-sm font-bold">{store.name}</h2>}
-          {store?.address && <p className="text-[10px]">{store.address}</p>}
-          {store?.phone && <p className="text-[10px]">SĐT: {store.phone}</p>}
+        <div className="flex items-start gap-2 flex-1">
+          {logoUrl && <img src={logoUrl} alt="Logo" className="h-10 w-10 object-contain" />}
+          <div>
+            {store?.name && <h2 className="text-sm font-bold">{store.name}</h2>}
+            {slogan && <p className="text-[10px] text-gray-600">{slogan}</p>}
+            {store?.address && <p className="text-[10px]">{store.address}</p>}
+            {store?.phone && <p className="text-[10px]">SĐT: {store.phone}</p>}
+          </div>
         </div>
         {isReprint && (
           <span className="text-[10px] font-bold border border-black px-1 py-0.5">BẢN IN LẠI</span>
@@ -364,8 +456,8 @@ export function OrderInvoiceA5({ order, store, isReprint }: InvoiceProps) {
           Mã HĐ: <span className="font-mono">{order.orderNumber}</span>
         </p>
         <p>Ngày: {formatDateTime(order.createdAt)}</p>
-        <p>KH: {order.customerName ?? 'Khách lẻ'}</p>
-        {order.customerPhone && <p>SĐT: {order.customerPhone}</p>}
+        {showCustomerName && <p>KH: {order.customerName ?? 'Khách lẻ'}</p>}
+        {showCustomerPhone && order.customerPhone && <p>SĐT: {order.customerPhone}</p>}
       </div>
 
       {/* Items table */}
@@ -384,6 +476,9 @@ export function OrderInvoiceA5({ order, store, isReprint }: InvoiceProps) {
             <tr key={item.id}>
               <td className="text-center">{idx + 1}</td>
               <td>
+                {showSku && item.sku && (
+                  <span className="text-[10px] text-gray-500 font-mono">[{item.sku}] </span>
+                )}
                 {item.productName}
                 {item.variantName && (
                   <span className="text-[10px] text-gray-500"> ({item.variantName})</span>
@@ -404,7 +499,7 @@ export function OrderInvoiceA5({ order, store, isReprint }: InvoiceProps) {
             <span>Tạm tính:</span>
             <span>{formatVnd(order.subtotal)}</span>
           </div>
-          {order.discountAmount > 0 && (
+          {showDiscount && order.discountAmount > 0 && (
             <div className="flex justify-between">
               <span>CK:</span>
               <span>-{formatVnd(order.discountAmount)}</span>
@@ -426,10 +521,22 @@ export function OrderInvoiceA5({ order, store, isReprint }: InvoiceProps) {
           TT: {PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod} | Đã trả:{' '}
           {formatVndWithSuffix(order.paidAmount)}
         </p>
-        {order.debtAmount > 0 && (
+        {showOldDebt && order.oldDebt != null && order.oldDebt > 0 && (
+          <p>Nợ cũ: {formatVndWithSuffix(order.oldDebt)}</p>
+        )}
+        {showNewDebt && order.debtAmount > 0 && (
           <p className="font-medium">Còn nợ: {formatVndWithSuffix(order.debtAmount)}</p>
         )}
+        {showCostPrice && totalCost > 0 && (
+          <p className="text-gray-500 text-[10px]">Giá vốn: {formatVnd(totalCost)}</p>
+        )}
       </div>
+
+      {/* Note */}
+      {showNotes && order.note && <p className="text-[10px] mb-2 italic">Ghi chú: {order.note}</p>}
+
+      {/* Footer text */}
+      <p className="text-center my-2 text-[10px] text-gray-600 italic">{footerText}</p>
 
       {/* Signatures */}
       <div className="flex justify-around text-[11px] text-center">
