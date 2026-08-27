@@ -19,6 +19,28 @@ interface ReportQuery {
   to?: string
 }
 
+/**
+ * Chuyển đổi chuỗi ngày/thời gian sang Date theo múi giờ Việt Nam (+07:00).
+ * - Nếu là YYYY-MM-DD:
+ *   - 'start' -> 00:00:00.000+07:00 (đầu ngày)
+ *   - 'end'   -> 23:59:59.999+07:00 (cuối ngày)
+ * - Nếu đã có giờ/offset đầy đủ: giữ nguyên.
+ *
+ * TODO (Pha 6): Hợp nhất logic này về helper timezone dùng chung (apps/api/src/lib/timezone.ts).
+ */
+function parseDateRangeBoundary(
+  value: string | undefined,
+  boundary: 'start' | 'end',
+): Date | undefined {
+  if (!value) return undefined
+  const trimmed = value.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const timeSuffix = boundary === 'start' ? 'T00:00:00.000+07:00' : 'T23:59:59.999+07:00'
+    return new Date(`${trimmed}${timeSuffix}`)
+  }
+  return new Date(trimmed)
+}
+
 function parseOverdueDays(raw: string): number[] {
   return raw
     .split(',')
@@ -51,8 +73,8 @@ export async function getDebtAgingReport({
   const bucketLabels = buildBucketLabels(overdueDays)
   const bucketCount = overdueDays.length + 1
 
-  const fromDate = query.from ? new Date(query.from) : undefined
-  const toDate = query.to ? new Date(query.to) : undefined
+  const fromDate = parseDateRangeBoundary(query.from, 'start')
+  const toDate = parseDateRangeBoundary(query.to, 'end')
 
   const rows = await db
     .select({
