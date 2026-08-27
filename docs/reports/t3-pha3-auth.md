@@ -3,7 +3,7 @@
 - **Task ID**: `task_f1e8d957182c`
 - **Branch**: `hoangvantuan/t3-pha3-auth`
 - **Người thực hiện**: Worker t3-pha3-auth
-- **Ngày hoàn thành**: 2026-08-28
+- **Ngày cập nhật**: 2026-08-28
 
 ---
 
@@ -11,39 +11,46 @@
 
 ### 1. H10: Race condition trong Refresh Token Rotation (Tranh chấp phiên đăng nhập)
 
-- **File**: `apps/api/src/services/auth.service.ts:190-256`
+- **File**: `apps/api/src/services/auth.service.ts:190-265`
 - **Gốc rễ đã xử lý**:
   - Trước đây: Kiểm tra trạng thái `revokedAt` thông qua câu lệnh `SELECT` riêng biệt trước khi `UPDATE` và `INSERT`. Khi hai yêu cầu refresh gửi cùng một token diễn ra đồng thời, cả hai đều đọc được `revokedAt = null`, dẫn đến việc cả hai cùng cấp phát token mới (sinh ra 2 phiên hợp lệ từ 1 token duy nhất).
-  - Khắc phục tận gốc: Sử dụng cập nhật nguyên tử (atomic update) ở tầng cơ sở dữ liệu:
-    `UPDATE refresh_tokens SET revoked_at = now(), replaced_by_token_hash = next_hash WHERE id = existing_id AND revoked_at IS NULL RETURNING id`
-  - Nếu kết quả trả về rỗng (`affected = 0`): token đã bị thu hồi bởi yêu cầu đồng thời khác hoặc đã qua sử dụng trước đó (dấu hiệu tấn công phát lại - replay attack). Hệ thống lập tức thu hồi toàn bộ họ token (token family) của người dùng đó (`WHERE user_id = sub AND revoked_at IS NULL`), ghi log lỗi bảo mật và trả về mã lỗi 401 `UNAUTHORIZED` kèm mã chi tiết `reason: 'reuse'`.
-  - Chỉ khi cập nhật nguyên tử thành công thì mới tiến hành chèn bản ghi token mới vào cơ sở dữ liệu.
+  - Khắc phục tận gốc:
+    - Gói cả `UPDATE ... WHERE id = existing_id AND revoked_at IS NULL RETURNING id` và `INSERT` token mới vào cùng một `db.transaction` để đảm bảo tính nguyên tử tuyệt đối của cặp revoke token cũ và cấp token mới.
+    - Nếu kết quả trả về rỗng (`affected = 0`): token đã bị thu hồi bởi yêu cầu đồng thời khác hoặc đã qua sử dụng trước đó (dấu hiệu tấn công phát lại - replay attack). Hệ thống lập tức thu hồi toàn bộ họ token (token family) của người dùng đó (`WHERE user_id = sub AND revoked_at IS NULL`), ghi log lỗi bảo mật và trả về mã lỗi 401 `UNAUTHORIZED` kèm mã chi tiết `reason: 'reuse'`.
 
-### 2. M19: Grace period cho xác thực JWT (iss/aud)
+### 2. M19: Grace period cho xác thực JWT (iss/aud) có thời hạn thực tế
 
 - **File cấu hình môi trường**: `apps/api/src/lib/env.ts:74-76`
   - Bổ sung cấu hình `jwtGracePeriodDays` đọc từ biến môi trường `JWT_GRACE_PERIOD_DAYS` (mặc định là `0`).
-- **File xử lý JWT**: `apps/api/src/lib/jwt.ts:56-118`
+- **File xử lý JWT**: `apps/api/src/lib/jwt.ts:56-125`
   - **Gốc rễ đã xử lý**: Việc bắt buộc các trường `iss` (issuer) và `aud` (audience) một cách tuyệt đối khiến toàn bộ token cũ được cấp trước thời điểm deploy bị từ chối với lỗi 401, làm gián đoạn phiên làm việc của người dùng.
-  - Khắc phục tận gốc: Triển khai cơ chế xác thực có thời gian ân hạn (`verifyWithGrace`). Khi xác thực chuẩn thất bại do thiếu hoặc sai `iss`/`aud`, nếu `JWT_GRACE_PERIOD_DAYS > 0`, hàm sẽ tự động giải mã thử lại không bắt buộc `iss`/`aud`. Nếu hợp lệ, hệ thống ghi log cảnh báo (`logger.warn`) để quản trị viên theo dõi và vẫn chấp nhận phiên. Khi thời gian ân hạn kết thúc (cấu hình về `0`), các token thiếu `iss`/`aud` sẽ bị từ chối 401 như bình thường.
+  - Khắc phục tận gốc:
+    - Triển khai cơ chế xác thực có thời gian ân hạn (`verifyWithGrace`).
+    - Đọc `iat` (issued at) từ token và kiểm tra thời hạn ân hạn thực tế: `iat * 1000 + graceDays * 86_400_000 > Date.now()`.
+    - Nếu token còn trong thời hạn ân hạn: chấp nhận token và ghi log cảnh báo (`logger.warn`) với số ngày còn lại thực tế (`graceDaysRemaining`).
+    - Nếu token thiếu trường `iat` hoặc đã vượt quá thời hạn ân hạn: từ chối 401 `UNAUTHORIZED` (Token không hợp lệ).
+    - Khi tắt grace period (cấu hình về `0`): các token thiếu `iss`/`aud` sẽ bị từ chối 401 ngay lập tức.
 
-### 3. Tối ưu cấu hình kiểm thử (Vitest Workspace)
+### 3. Điều chỉnh cấu hình kiểm thử (Vitest Workspace) theo review
 
 - **File**: `vitest.workspace.ts:28-75`
-  - Bổ sung cấu hình thời gian chờ (`PGLITE_TIMEOUTS = 90_000`), `fileParallelism: false` và `maxForks: 1` cho project `api` cũng như áp dụng timeout cho `notifications` để đảm bảo bộ kiểm thử tích hợp sử dụng cơ sở dữ liệu PGlite WASM trong bộ nhớ chạy ổn định, không bị nghẽn tài nguyên CPU.
+  - Hoàn nguyên tùy chọn `fileParallelism: false` và `poolOptions.forks.maxForks: 1` cho project `api` để tránh làm chậm CI chung.
+  - Giữ lại cấu hình thời gian chờ (`PGLITE_TIMEOUTS = 90_000`) và áp dụng cho project `notifications` để đảm bảo các bài test PGlite WASM in-memory chạy ổn định.
 
 ---
 
 ## 2. Kiểm thử tự động đã bổ sung
 
-- **File kiểm thử mới**: `apps/api/src/__tests__/auth-h10-m19.integration.test.ts` (7 ca kiểm thử tích hợp chuyên biệt):
+- **File kiểm thử mới**: `apps/api/src/__tests__/auth-h10-m19.integration.test.ts` (9 ca kiểm thử tích hợp chuyên biệt):
   1. `H10`: Hai yêu cầu refresh đồng thời cùng một token: chính xác một yêu cầu thành công, một yêu cầu nhận 401 với mã lỗi `reuse`.
   2. `H10`: Sau khi xảy ra tranh chấp đồng thời (race condition), toàn bộ token family của người dùng bị thu hồi.
   3. `H10`: Quy trình refresh tuần tự hoạt động bình thường, token cũ bị thu hồi khi có token mới.
   4. `H10`: Token đã dùng rồi khi được gửi lại sẽ kích hoạt phát hiện tái sử dụng và thu hồi toàn bộ token family.
-  5. `M19`: Khi bật grace period (`JWT_GRACE_PERIOD_DAYS = 7`), token cũ thiếu `iss`/`aud` vẫn refresh thành công.
-  6. `M19`: Khi tắt grace period (`JWT_GRACE_PERIOD_DAYS = 0`), token cũ thiếu `iss`/`aud` bị từ chối 401.
-  7. `M19`: Token mới có đầy đủ `iss`/`aud` luôn hoạt động bình thường trong mọi trường hợp.
+  5. `M19`: Khi bật grace period (`JWT_GRACE_PERIOD_DAYS = 7`), token cũ thiếu `iss`/`aud` có `iat` trong hạn grace thì refresh thành công.
+  6. `M19`: Khi bật grace period, token thiếu `iss`/`aud` có `iat` cũ hơn `graceDays` (ví dụ phát hành từ 8 ngày trước) bị từ chối 401.
+  7. `M19`: Khi bật grace period, token thiếu `iss`/`aud` không có trường `iat` bị từ chối 401.
+  8. `M19`: Khi tắt grace period (`JWT_GRACE_PERIOD_DAYS = 0`), token cũ thiếu `iss`/`aud` bị từ chối 401.
+  9. `M19`: Token mới có đầy đủ `iss`/`aud` luôn hoạt động bình thường trong mọi trường hợp.
 - **File kiểm thử hiện hữu**: `apps/api/src/__tests__/auth.integration.test.ts` (9 ca kiểm thử tích hợp) tiếp tục pass 100%.
 
 ---
@@ -54,7 +61,7 @@
 | ------------------- | -------------------------------------------------- | ---------------------------------------------------------------- |
 | `pnpm lint`         | **THÀNH CÔNG (0 lỗi)**                             | 0 error, 6 warnings (từ các file UI không liên quan)             |
 | `pnpm -r typecheck` | **THÀNH CÔNG**                                     | 4/4 packages (shared, web, notifications, api) không có lỗi kiểu |
-| `pnpm test`         | **THÀNH CÔNG (89/89 test files, 1314/1314 tests)** | Toàn bộ các bộ kiểm thử đều xanh 100%                            |
+| `pnpm test`         | **THÀNH CÔNG (89/89 test files, 1316/1316 tests)** | Toàn bộ các bộ kiểm thử đều xanh 100%                            |
 | `pnpm -r build`     | **THÀNH CÔNG**                                     | Đóng gói production thành công cho toàn bộ ứng dụng              |
 
 ---

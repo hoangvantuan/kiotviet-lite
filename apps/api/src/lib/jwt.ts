@@ -86,18 +86,30 @@ function verifyWithGrace<T>(token: string, secret: string, parse: (raw: unknown)
       throw new ApiError('UNAUTHORIZED', 'Token đã hết hạn', { reason: 'expired' })
     }
 
-    // Grace period: token cũ thiếu iss/aud vẫn được chấp nhận tạm thời
+    // Grace period: token cũ thiếu iss/aud vẫn được chấp nhận tạm thời nếu còn trong thời hạn ân hạn tính từ iat
     const graceDays = env.jwtGracePeriodDays
     if (graceDays > 0 && isIssuerAudienceError(err)) {
       try {
         const decoded = jwt.verify(token, secret) as JwtPayload | string
-        const parsed = parse(decoded)
-        logger.warn(
-          { graceDaysRemaining: graceDays },
-          'Token thiếu iss/aud được chấp nhận qua grace period. Vui lòng đăng nhập lại.',
-        )
-        return parsed
+        if (typeof decoded === 'object' && decoded !== null && typeof decoded.iat === 'number') {
+          const expirationTimeMs = decoded.iat * 1000 + graceDays * 86_400_000
+          const now = Date.now()
+          if (expirationTimeMs > now) {
+            const parsed = parse(decoded)
+            const msRemaining = expirationTimeMs - now
+            const daysRemaining = Math.max(0, Math.ceil(msRemaining / 86_400_000))
+            logger.warn(
+              { graceDaysRemaining: daysRemaining },
+              'Token thiếu iss/aud được chấp nhận qua grace period. Vui lòng đăng nhập lại.',
+            )
+            return parsed
+          }
+        }
+        throw new ApiError('UNAUTHORIZED', 'Token không hợp lệ', { reason: 'invalid' })
       } catch (graceErr) {
+        if (graceErr instanceof ApiError) {
+          throw graceErr
+        }
         if (graceErr instanceof jwt.TokenExpiredError) {
           throw new ApiError('UNAUTHORIZED', 'Token đã hết hạn', { reason: 'expired' })
         }

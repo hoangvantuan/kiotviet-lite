@@ -145,7 +145,27 @@ describe('M19 — JWT grace period cho iss/aud', () => {
     return { token, tokenHash }
   }
 
-  it('grace period bật: token cũ thiếu iss/aud vẫn refresh được', async () => {
+  /**
+   * Helper: tạo refresh token KHÔNG có iss/aud với iat tuỳ chỉnh trong quá khứ,
+   * nhưng hạn exp vẫn còn sống trong tương lai.
+   */
+  async function issueTokenWithoutIssAudWithCustomIat(userId: string, daysAgo: number) {
+    const secret = process.env.JWT_REFRESH_SECRET!
+    const nowSeconds = Math.floor(Date.now() / 1000)
+    const iat = nowSeconds - daysAgo * 86_400
+    const exp = nowSeconds + 86_400 // vẫn còn hạn sống 1 ngày
+    const payload = { sub: userId, jti: crypto.randomUUID(), type: 'refresh', iat, exp }
+    const token = jwt.sign(payload, secret)
+    const tokenHash = hashToken(token)
+    await env.db.insert(refreshTokens).values({
+      userId,
+      tokenHash,
+      expiresAt: new Date(exp * 1000),
+    })
+    return { token, tokenHash }
+  }
+
+  it('grace period bật: token cũ thiếu iss/aud có iat trong hạn grace thì refresh được', async () => {
     process.env.JWT_GRACE_PERIOD_DAYS = '7'
 
     const { token } = await issueTokenWithoutIssAud(env.owner.id)
@@ -153,6 +173,35 @@ describe('M19 — JWT grace period cho iss/aud', () => {
 
     expect(result.accessToken).toBeTruthy()
     expect(result.refreshToken).toBeTruthy()
+  })
+
+  it('grace period bật: token thiếu iss/aud có iat cũ hơn graceDays bị từ chối 401', async () => {
+    process.env.JWT_GRACE_PERIOD_DAYS = '7'
+
+    // Token phát hành từ 8 ngày trước, vượt quá 7 ngày grace
+    const { token } = await issueTokenWithoutIssAudWithCustomIat(env.owner.id, 8)
+
+    await expect(rotateRefreshToken({ db: env.db, token })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
+  })
+
+  it('grace period bật: token thiếu iss/aud không có iat bị từ chối 401', async () => {
+    process.env.JWT_GRACE_PERIOD_DAYS = '7'
+    const secret = process.env.JWT_REFRESH_SECRET!
+    const exp = Math.floor(Date.now() / 1000) + 604800
+    const payload = { sub: env.owner.id, jti: crypto.randomUUID(), type: 'refresh', exp }
+    const token = jwt.sign(payload, secret, { noTimestamp: true })
+    const tokenHash = hashToken(token)
+    await env.db.insert(refreshTokens).values({
+      userId: env.owner.id,
+      tokenHash,
+      expiresAt: new Date(exp * 1000),
+    })
+
+    await expect(rotateRefreshToken({ db: env.db, token })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    })
   })
 
   it('grace period tắt (0): token cũ thiếu iss/aud bị từ chối 401', async () => {

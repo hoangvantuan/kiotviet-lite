@@ -47,12 +47,6 @@ export default defineWorkspace([
       environment: 'node',
       include: ['src/**/*.test.ts'],
       env: TEST_ENV,
-      fileParallelism: false,
-      poolOptions: {
-        forks: {
-          maxForks: 1,
-        },
-      },
       ...PGLITE_TIMEOUTS,
     },
   },

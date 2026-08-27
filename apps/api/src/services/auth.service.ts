@@ -223,15 +223,30 @@ export async function rotateRefreshToken({
 
   const next = signRefreshToken(user.id)
 
-  // Cập nhật nguyên tử: chỉ revoke nếu token CHƯA bị revoke (revokedAt IS NULL).
-  // Nếu affected=0 → request đồng thời khác đã revoke trước → token đã dùng rồi.
-  const revoked = await db
-    .update(refreshTokens)
-    .set({ revokedAt: new Date(), replacedByTokenHash: next.tokenHash })
-    .where(and(eq(refreshTokens.id, existing.id), isNull(refreshTokens.revokedAt)))
-    .returning({ id: refreshTokens.id })
+  let isReused = false
+  await db.transaction(async (tx) => {
+    // Cập nhật nguyên tử: chỉ revoke nếu token CHƯA bị revoke (revokedAt IS NULL).
+    // Nếu affected=0 → request đồng thời khác đã revoke trước → token đã dùng rồi.
+    const revoked = await tx
+      .update(refreshTokens)
+      .set({ revokedAt: new Date(), replacedByTokenHash: next.tokenHash })
+      .where(and(eq(refreshTokens.id, existing.id), isNull(refreshTokens.revokedAt)))
+      .returning({ id: refreshTokens.id })
 
-  if (revoked.length === 0) {
+    if (revoked.length === 0) {
+      isReused = true
+      return
+    }
+
+    // Insert token mới trong cùng transaction
+    await tx.insert(refreshTokens).values({
+      userId: user.id,
+      tokenHash: next.tokenHash,
+      expiresAt: next.expiresAt,
+    })
+  })
+
+  if (isReused) {
     // Race condition: request khác đã revoke token này trước.
     // Thu hồi toàn bộ token family của user vì đây là dấu hiệu tái sử dụng.
     await db
@@ -246,13 +261,6 @@ export async function rotateRefreshToken({
       reason: 'reuse',
     })
   }
-
-  // Insert token mới
-  await db.insert(refreshTokens).values({
-    userId: user.id,
-    tokenHash: next.tokenHash,
-    expiresAt: next.expiresAt,
-  })
 
   const accessToken = signAccessToken({
     userId: user.id,
