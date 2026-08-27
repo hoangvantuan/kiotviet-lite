@@ -59,6 +59,8 @@ export interface ThermalOrderItem {
   unitPrice: number
   discountAmount: number
   lineTotal: number
+  sku?: string | null
+  costPrice?: number | null
 }
 
 export interface ThermalOrder {
@@ -76,15 +78,22 @@ export interface ThermalOrder {
   paidAmount: number
   change: number
   debtAmount: number
+  oldDebt?: number | null
+  customerCurrentDebt?: number | null
   note?: string | null
 }
 
 export interface PrintOptions {
   paperWidth: PaperWidth
   isReprint?: boolean
+  showCustomerName?: boolean
+  showCustomerPhone?: boolean
+  showDiscount?: boolean
+  showSku?: boolean
   showOldDebt?: boolean
   showNewDebt?: boolean
-  showDiscount?: boolean
+  showCostPrice?: boolean
+  showNotes?: boolean
   footerText?: string | null
 }
 
@@ -214,10 +223,10 @@ export function buildOrderReceipt(
   buf.pushLine(twoColumns(`HĐ: ${order.orderNumber}`, formatDateTimeForReceipt(order.createdAt), w))
 
   // Customer info
-  if (order.customerName) {
+  if ((options.showCustomerName ?? true) && order.customerName) {
     buf.pushLine(`KH: ${order.customerName}`)
   }
-  if (order.customerPhone) {
+  if ((options.showCustomerPhone ?? true) && order.customerPhone) {
     buf.pushLine(`SĐT: ${order.customerPhone}`)
   }
 
@@ -226,9 +235,9 @@ export function buildOrderReceipt(
 
   // 7. Items
   if (options.paperWidth === '58mm') {
-    buildItems58mm(buf, order.items, w)
+    buildItems58mm(buf, order.items, w, options.showSku ?? false)
   } else {
-    buildItems80mm(buf, order.items, w, options.showDiscount ?? true)
+    buildItems80mm(buf, order.items, w, options.showDiscount ?? true, options.showSku ?? false)
   }
 
   // 8. Separator
@@ -262,12 +271,34 @@ export function buildOrderReceipt(
   }
 
   // Debt
+  if (options.showOldDebt && order.oldDebt != null && order.oldDebt > 0) {
+    buf.pushLine(twoColumns('Nợ cũ:', formatVnd(order.oldDebt), w))
+  }
   if ((options.showNewDebt ?? true) && order.debtAmount > 0) {
     buf.pushLine(twoColumns('Còn nợ:', formatVnd(order.debtAmount), w))
   }
 
+  // Cost price
+  if (options.showCostPrice) {
+    const totalCost = order.items.reduce(
+      (sum, it) => sum + (it.costPrice != null ? it.costPrice * it.quantity : 0),
+      0,
+    )
+    if (totalCost > 0) {
+      buf.pushLine(twoColumns('Giá vốn:', formatVnd(totalCost), w))
+    }
+  }
+
   // Separator
   buf.pushLine(separatorLine(w))
+
+  // Notes
+  if ((options.showNotes ?? true) && order.note) {
+    buf.pushBytes([...CMD.CENTER])
+    buf.pushLine(`Ghi chú: ${order.note}`)
+    buf.pushBytes([...CMD.LEFT])
+    buf.pushLine(separatorLine(w))
+  }
 
   // Footer
   buf.pushBytes([...CMD.CENTER])
@@ -284,9 +315,17 @@ export function buildOrderReceipt(
 
 // ---- Item formatters ----
 
-function buildItems58mm(buf: BufferBuilder, items: ThermalOrderItem[], w: number): void {
+function buildItems58mm(
+  buf: BufferBuilder,
+  items: ThermalOrderItem[],
+  w: number,
+  showSku: boolean,
+): void {
   for (const item of items) {
-    const name = item.variantName ? `${item.productName} (${item.variantName})` : item.productName
+    let name = item.variantName ? `${item.productName} (${item.variantName})` : item.productName
+    if (showSku && item.sku) {
+      name = `[${item.sku}] ${name}`
+    }
     // Line 1: product name (truncate if needed)
     buf.pushLine(name.length > w ? name.slice(0, w) : name)
     // Line 2: qty x price = total
@@ -301,9 +340,13 @@ function buildItems80mm(
   items: ThermalOrderItem[],
   w: number,
   showDiscount: boolean,
+  showSku: boolean,
 ): void {
   for (const item of items) {
-    const name = item.variantName ? `${item.productName} (${item.variantName})` : item.productName
+    let name = item.variantName ? `${item.productName} (${item.variantName})` : item.productName
+    if (showSku && item.sku) {
+      name = `[${item.sku}] ${name}`
+    }
 
     if (showDiscount && item.discountAmount > 0) {
       // Name might be long, put on its own line if needed

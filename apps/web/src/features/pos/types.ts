@@ -13,12 +13,16 @@ export interface OrderDetailItem {
   quantity: number
   discountAmount: number
   lineTotal: number
+  sku?: string | null
+  costPrice?: number | null
 }
 
 export interface OrderDetail {
   id: string
   orderNumber: string
   customerId: string | null
+  customerName?: string | null
+  customerPhone?: string | null
   subtotal: number
   discountAmount: number
   total: number
@@ -28,6 +32,8 @@ export interface OrderDetail {
   transferAmount: number | null
   debtAmount: number
   change: number
+  oldDebt?: number | null
+  customerCurrentDebt?: number | null
   note: string | null
   status: string
   items: OrderDetailItem[]

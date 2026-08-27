@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { defineWorkspace } from 'vitest/config'
 
 /**
@@ -32,6 +33,11 @@ const PGLITE_TIMEOUTS = {
 
 export default defineWorkspace([
   {
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './apps/web/src'),
+      },
+    },
     test: {
       name: 'web',
       root: './apps/web',

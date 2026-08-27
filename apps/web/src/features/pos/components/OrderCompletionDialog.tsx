@@ -30,9 +30,11 @@ const AUTO_CLOSE_MS = 3000
 function toOrderDetailResponse(order: OrderDetail): OrderDetailResponse {
   return {
     ...order,
-    customerName: null,
-    customerPhone: null,
+    customerName: order.customerName ?? null,
+    customerPhone: order.customerPhone ?? null,
     customerGroupName: null,
+    customerCurrentDebt: order.customerCurrentDebt ?? null,
+    oldDebt: order.oldDebt ?? null,
     createdByName: null,
     discountType: null,
     discountValue: 0,
@@ -45,6 +47,8 @@ function toOrderDetailResponse(order: OrderDetail): OrderDetailResponse {
       discountValue: 0,
       originalPrice: null,
       priceOverride: false,
+      sku: item.sku ?? null,
+      costPrice: item.costPrice ?? null,
     })),
   }
 }

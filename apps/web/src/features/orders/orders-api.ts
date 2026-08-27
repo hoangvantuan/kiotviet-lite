@@ -28,6 +28,8 @@ interface OrderDetailResponse {
   customerName: string | null
   customerPhone: string | null
   customerGroupName: string | null
+  customerCurrentDebt?: number | null
+  oldDebt?: number | null
   createdByName: string | null
   subtotal: number
   discountType: string | null
@@ -63,6 +65,8 @@ interface OrderDetailItem {
   lineTotal: number
   originalPrice: number | null
   priceOverride: boolean
+  sku?: string | null
+  costPrice?: number | null
 }
 
 interface ListEnvelope<T> {

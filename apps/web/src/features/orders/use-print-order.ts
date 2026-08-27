@@ -25,9 +25,14 @@ function settingsToOptions(
   const s = settings ?? DEFAULT_PRINT_SETTINGS
   return {
     isReprint: false,
+    showCustomerName: s.showCustomerName,
+    showCustomerPhone: s.showCustomerPhone,
+    showDiscount: s.showDiscount,
+    showSku: s.showSku,
     showOldDebt: s.showOldDebt,
     showNewDebt: s.showNewDebt,
-    showDiscount: s.showDiscount,
+    showCostPrice: s.showCostPrice,
+    showNotes: s.showNotes,
     footerText: s.footerText,
   }
 }
@@ -98,6 +103,8 @@ export function toThermalOrder(order: {
     unitPrice: number
     discountAmount: number
     lineTotal: number
+    sku?: string | null
+    costPrice?: number | null
   }>
   subtotal: number
   discountAmount: number
@@ -108,6 +115,8 @@ export function toThermalOrder(order: {
   paidAmount: number
   change: number
   debtAmount: number
+  oldDebt?: number | null
+  customerCurrentDebt?: number | null
   note?: string | null
 }): ThermalOrder {
   return {
@@ -123,6 +132,8 @@ export function toThermalOrder(order: {
       unitPrice: it.unitPrice,
       discountAmount: it.discountAmount,
       lineTotal: it.lineTotal,
+      sku: it.sku,
+      costPrice: it.costPrice,
     })),
     subtotal: order.subtotal,
     discountAmount: order.discountAmount,
@@ -133,6 +144,8 @@ export function toThermalOrder(order: {
     paidAmount: order.paidAmount,
     change: order.change,
     debtAmount: order.debtAmount,
+    oldDebt: order.oldDebt,
+    customerCurrentDebt: order.customerCurrentDebt,
     note: order.note,
   }
 }
@@ -195,47 +208,53 @@ export function usePrintOrder() {
     }
   }, [])
 
-  const printBrowserFallback = useCallback((format: PrintFormat) => {
-    setActivePrintFormat(format)
-    setStatus('fallback')
+  const printBrowserFallback = useCallback(
+    (format: PrintFormat) => {
+      setActivePrintFormat(format)
+      setStatus('fallback')
 
-    const cleanup = () => {
-      setActivePrintFormat(null)
-      setStatus('idle')
-    }
-
-    // Dùng afterprint event thay vì setTimeout để reset đáng tin hơn (H4)
-    window.addEventListener('afterprint', cleanup, { once: true })
-
-    requestAnimationFrame(() => {
-      window.print()
-    })
-  }, [setActivePrintFormat])
-
-  const printOrder = useCallback(async (params: PrintOrderParams) => {
-    if (printingRef.current) return
-    printingRef.current = true
-
-    try {
-      const format = params.format ?? formatFromSettings(params.printSettings)
-      const isThermal = format === 'thermal-58' || format === 'thermal-80'
-
-      if (isThermal) {
-        const success = await printThermal({ ...params, format })
-        if (!success) {
-          toast.info('Máy in nhiệt không kết nối, đang in qua trình duyệt')
-          // Thermal fallback: giữ format gốc để template biết paper width
-          printBrowserFallback(browserPrintFormat(format))
-        }
-      } else {
-        printBrowserFallback(format)
+      const cleanup = () => {
+        setActivePrintFormat(null)
+        setStatus('idle')
       }
 
-      saveDefaultFormat(format)
-    } finally {
-      printingRef.current = false
-    }
-  }, [printThermal, printBrowserFallback])
+      // Dùng afterprint event thay vì setTimeout để reset đáng tin hơn (H4)
+      window.addEventListener('afterprint', cleanup, { once: true })
+
+      requestAnimationFrame(() => {
+        window.print()
+      })
+    },
+    [setActivePrintFormat],
+  )
+
+  const printOrder = useCallback(
+    async (params: PrintOrderParams) => {
+      if (printingRef.current) return
+      printingRef.current = true
+
+      try {
+        const format = params.format ?? formatFromSettings(params.printSettings)
+        const isThermal = format === 'thermal-58' || format === 'thermal-80'
+
+        if (isThermal) {
+          const success = await printThermal({ ...params, format })
+          if (!success) {
+            toast.info('Máy in nhiệt không kết nối, đang in qua trình duyệt')
+            // Thermal fallback: giữ format gốc để template biết paper width
+            printBrowserFallback(browserPrintFormat(format))
+          }
+        } else {
+          printBrowserFallback(format)
+        }
+
+        saveDefaultFormat(format)
+      } finally {
+        printingRef.current = false
+      }
+    },
+    [printThermal, printBrowserFallback],
+  )
 
   const reset = useCallback(() => {
     setStatus('idle')
