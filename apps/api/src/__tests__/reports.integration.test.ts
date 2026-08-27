@@ -251,6 +251,26 @@ describe('GET /api/v1/reports/debt-aging', () => {
     })
     expect(res.status).toBe(200)
   })
+
+  it('filters by date range (from/to)', async () => {
+    const now = Date.now()
+    // Lọc nợ trong vòng 30 ngày qua: chỉ có khoản nợ 10 ngày trước (300k của KH Nợ Nhiều)
+    const thirtyDaysAgo = new Date(now - 30 * 86400000).toISOString()
+    const tomorrow = new Date(now + 86400000).toISOString()
+
+    const res = await env.app.request(
+      `/api/v1/reports/debt-aging?from=${thirtyDaysAgo}&to=${tomorrow}`,
+      {
+        headers: env.base.owner.authHeader,
+      },
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { data: DebtAgingReport }
+    expect(body.data.rows).toHaveLength(1)
+    expect(body.data.rows[0]!.customerName).toBe('KH Nợ Nhiều')
+    expect(body.data.rows[0]!.totalDebt).toBe(300_000)
+    expect(body.data.totals.totalDebt).toBe(300_000)
+  })
 })
 
 describe('GET /api/v1/reports/debt-aging/csv', () => {
@@ -263,6 +283,23 @@ describe('GET /api/v1/reports/debt-aging/csv', () => {
     const text = await res.text()
     expect(text).toContain('Khách hàng')
     expect(text).toContain('Tổng cộng')
+  })
+
+  it('filters CSV export by date range', async () => {
+    const now = Date.now()
+    const thirtyDaysAgo = new Date(now - 30 * 86400000).toISOString()
+    const tomorrow = new Date(now + 86400000).toISOString()
+
+    const res = await env.app.request(
+      `/api/v1/reports/debt-aging/csv?from=${thirtyDaysAgo}&to=${tomorrow}`,
+      {
+        headers: env.base.owner.authHeader,
+      },
+    )
+    expect(res.status).toBe(200)
+    const text = await res.text()
+    expect(text).toContain('KH Nợ Nhiều')
+    expect(text).not.toContain('KH Nợ Ít')
   })
 })
 

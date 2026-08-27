@@ -40,6 +40,7 @@ function buildBucketLabels(days: number[]): string[] {
 export async function getDebtAgingReport({
   db,
   storeId,
+  query,
 }: {
   db: Db
   storeId: string
@@ -49,6 +50,9 @@ export async function getDebtAgingReport({
   const overdueDays = parseOverdueDays(store?.debtOverdueDays ?? '30,60,90')
   const bucketLabels = buildBucketLabels(overdueDays)
   const bucketCount = overdueDays.length + 1
+
+  const fromDate = query.from ? new Date(query.from) : undefined
+  const toDate = query.to ? new Date(query.to) : undefined
 
   const rows = await db
     .select({
@@ -63,7 +67,13 @@ export async function getDebtAgingReport({
     .from(debts)
     .innerJoin(customers, eq(debts.customerId, customers.id))
     .where(
-      and(eq(debts.storeId, storeId), sql`${debts.remaining} > 0`, isNull(customers.deletedAt)),
+      and(
+        eq(debts.storeId, storeId),
+        sql`${debts.remaining} > 0`,
+        isNull(customers.deletedAt),
+        ...(fromDate ? [gte(debts.createdAt, fromDate)] : []),
+        ...(toDate ? [lte(debts.createdAt, toDate)] : []),
+      ),
     )
 
   const grouped = new Map<
