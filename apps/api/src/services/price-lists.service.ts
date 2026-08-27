@@ -836,7 +836,7 @@ export async function updatePriceList({
       const [row] = await tx
         .update(priceLists)
         .set(updates)
-        .where(eq(priceLists.id, targetId))
+        .where(and(eq(priceLists.id, targetId), eq(priceLists.storeId, actor.storeId)))
         .returning({ id: priceLists.id })
       if (!row) {
         throw new ApiError('INTERNAL_ERROR', 'Không cập nhật được bảng giá')
@@ -883,16 +883,22 @@ export async function deletePriceList({
   meta,
 }: DeletePriceListDeps): Promise<{ ok: true }> {
   const target = await db.query.priceLists.findFirst({
-    where: eq(priceLists.id, targetId),
+    where: and(eq(priceLists.id, targetId), eq(priceLists.storeId, actor.storeId)),
   })
-  if (!target || target.storeId !== actor.storeId || target.deletedAt !== null) {
+  if (!target || target.deletedAt !== null) {
     throw new ApiError('NOT_FOUND', 'Không tìm thấy bảng giá')
   }
 
   const groupRefs = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(customerGroups)
-    .where(and(eq(customerGroups.defaultPriceListId, targetId), isNull(customerGroups.deletedAt)))
+    .where(
+      and(
+        eq(customerGroups.defaultPriceListId, targetId),
+        eq(customerGroups.storeId, actor.storeId),
+        isNull(customerGroups.deletedAt),
+      ),
+    )
   const groupRefCount = groupRefs[0]?.count ?? 0
   if (groupRefCount > 0) {
     throw new ApiError(
@@ -929,7 +935,7 @@ export async function deletePriceList({
       const [row] = await tx
         .update(priceLists)
         .set({ deletedAt: new Date() })
-        .where(eq(priceLists.id, targetId))
+        .where(and(eq(priceLists.id, targetId), eq(priceLists.storeId, actor.storeId)))
         .returning({ id: priceLists.id })
       if (!row) {
         throw new ApiError('INTERNAL_ERROR', 'Không xoá được bảng giá')
@@ -950,16 +956,12 @@ export async function deletePriceList({
       action: 'price_list.deleted',
       targetType: 'price_list',
       targetId,
-      changes: {
-        name: target.name,
-        method: target.method,
-        baseListId: target.basePriceListId,
-      },
+      changes: { deletedAt: { from: null, to: new Date() } },
       ipAddress: meta?.ipAddress,
       userAgent: meta?.userAgent,
     })
 
-    return { ok: true as const }
+    return { ok: true }
   })
 }
 
@@ -977,9 +979,9 @@ export async function restorePriceList({
   meta,
 }: RestorePriceListDeps): Promise<PriceListDetail> {
   const target = await db.query.priceLists.findFirst({
-    where: eq(priceLists.id, targetId),
+    where: and(eq(priceLists.id, targetId), eq(priceLists.storeId, actor.storeId)),
   })
-  if (!target || target.storeId !== actor.storeId || target.deletedAt === null) {
+  if (!target || target.deletedAt === null) {
     throw new ApiError('NOT_FOUND', 'Không tìm thấy bảng giá đã xoá')
   }
 
@@ -987,7 +989,7 @@ export async function restorePriceList({
 
   if ((target.method === 'formula' || target.method === 'chain') && target.basePriceListId) {
     const base = await db.query.priceLists.findFirst({
-      where: eq(priceLists.id, target.basePriceListId),
+      where: and(eq(priceLists.id, target.basePriceListId), eq(priceLists.storeId, actor.storeId)),
     })
     if (!base || base.deletedAt !== null) {
       throw new ApiError(
@@ -1002,7 +1004,7 @@ export async function restorePriceList({
       const [row] = await tx
         .update(priceLists)
         .set({ deletedAt: null })
-        .where(eq(priceLists.id, targetId))
+        .where(and(eq(priceLists.id, targetId), eq(priceLists.storeId, actor.storeId)))
         .returning({ id: priceLists.id })
       if (!row) {
         throw new ApiError('INTERNAL_ERROR', 'Không khôi phục được bảng giá')

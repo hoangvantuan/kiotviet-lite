@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, like, lte, type SQL, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, ilike, isNull, like, lte, type SQL, sql } from 'drizzle-orm'
 
 import {
   type CreateStockCheckInput,
@@ -150,10 +150,16 @@ async function resolveItems({
     const productRows = await tx
       .select()
       .from(products)
-      .where(eq(products.id, item.productId))
+      .where(
+        and(
+          eq(products.id, item.productId),
+          eq(products.storeId, storeId),
+          isNull(products.deletedAt),
+        ),
+      )
       .limit(1)
     const product = productRows[0]
-    if (!product || product.storeId !== storeId || product.deletedAt !== null) {
+    if (!product) {
       throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm')
     }
 
@@ -175,10 +181,16 @@ async function resolveItems({
       const variantRows = await tx
         .select()
         .from(productVariants)
-        .where(eq(productVariants.id, variantId))
+        .where(
+          and(
+            eq(productVariants.id, variantId),
+            eq(productVariants.productId, product.id),
+            isNull(productVariants.deletedAt),
+          ),
+        )
         .limit(1)
       const variant = variantRows[0]
-      if (!variant || variant.productId !== product.id || variant.deletedAt !== null) {
+      if (!variant) {
         throw new ApiError('NOT_FOUND', 'Không tìm thấy biến thể')
       }
       variantLabelSnapshot = variant.attribute2Value
@@ -409,7 +421,7 @@ export async function updateStockCheck({
         totalDiffPositive: totals.totalDiffPositive,
         totalDiffNegative: totals.totalDiffNegative,
       })
-      .where(eq(stockChecks.id, stockCheckId))
+      .where(and(eq(stockChecks.id, stockCheckId), eq(stockChecks.storeId, actor.storeId)))
 
     await logAction({
       db: txDb,
@@ -565,17 +577,19 @@ export async function confirmStockCheck({
         await tx
           .update(productVariants)
           .set({ stockQuantity: p.newStock })
-          .where(eq(productVariants.id, p.variantId))
+          .where(
+            and(eq(productVariants.id, p.variantId), eq(productVariants.storeId, actor.storeId)),
+          )
         const aggregated = await aggregateVariantStock({ tx: txDb, productId: p.productId })
         await tx
           .update(products)
           .set({ currentStock: aggregated })
-          .where(eq(products.id, p.productId))
+          .where(and(eq(products.id, p.productId), eq(products.storeId, actor.storeId)))
       } else {
         await tx
           .update(products)
           .set({ currentStock: p.newStock })
-          .where(eq(products.id, p.productId))
+          .where(and(eq(products.id, p.productId), eq(products.storeId, actor.storeId)))
       }
 
       await tx.insert(inventoryTransactions).values({
@@ -610,7 +624,7 @@ export async function confirmStockCheck({
         confirmedAt: new Date(),
         confirmedBy: actor.userId,
       })
-      .where(eq(stockChecks.id, stockCheckId))
+      .where(and(eq(stockChecks.id, stockCheckId), eq(stockChecks.storeId, actor.storeId)))
 
     await logAction({
       db: txDb,
@@ -621,10 +635,9 @@ export async function confirmStockCheck({
       targetType: 'stock_check',
       targetId: stockCheckId,
       changes: {
-        code: header.code,
+        status: { from: header.status, to: 'confirmed' },
+        itemCount: header.totalItems,
         totalAdjusted: processed.length,
-        totalDiffPositive: header.totalDiffPositive,
-        totalDiffNegative: header.totalDiffNegative,
       },
       ipAddress: meta?.ipAddress,
       userAgent: meta?.userAgent,
@@ -660,21 +673,13 @@ export async function deleteStockCheck({
   stockCheckId,
   meta,
 }: DeleteStockCheckDeps): Promise<{ ok: true }> {
+  const current = await getStockCheckById({ db, storeId: actor.storeId, stockCheckId })
+  if (current.status === 'confirmed') {
+    throw new ApiError('CONFLICT', 'Phiếu đã xác nhận, không thể xoá')
+  }
+
   await db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
-    const rows = await tx
-      .select()
-      .from(stockChecks)
-      .where(and(eq(stockChecks.id, stockCheckId), eq(stockChecks.storeId, actor.storeId)))
-      .for('update')
-      .limit(1)
-    const current = rows[0]
-    if (!current) {
-      throw new ApiError('NOT_FOUND', 'Không tìm thấy phiếu kiểm kho')
-    }
-    if (current.status !== 'draft') {
-      throw new ApiError('CONFLICT', 'Phiếu đã xác nhận, không thể xoá')
-    }
 
     await logAction({
       db: txDb,
@@ -695,7 +700,9 @@ export async function deleteStockCheck({
       userAgent: meta?.userAgent,
     })
 
-    await tx.delete(stockChecks).where(eq(stockChecks.id, stockCheckId))
+    await tx
+      .delete(stockChecks)
+      .where(and(eq(stockChecks.id, stockCheckId), eq(stockChecks.storeId, actor.storeId)))
 
     logger.info(
       {

@@ -43,5 +43,10 @@ export const inventoryTransactions = pgTable(
     index('idx_inventory_tx_product_created').on(table.productId, table.createdAt),
     index('idx_inventory_tx_variant_created').on(table.variantId, table.createdAt),
     index('idx_inventory_tx_store_created').on(table.storeId, table.createdAt),
+    index('idx_inventory_tx_store_product_date').on(
+      table.storeId,
+      table.productId,
+      table.createdAt.desc(),
+    ),
   ],
 )

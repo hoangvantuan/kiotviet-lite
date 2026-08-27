@@ -68,19 +68,15 @@ describe('POST /emit', () => {
     expect(res.status).toBe(400)
   })
 
-  it('client không được gửi field storeId, id: bị reject', async () => {
+  it('403 Forbidden khi staff gọi POST /emit', async () => {
     const res = await app.request('/emit', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...env.owner.authHeader,
+        ...env.staff.authHeader,
       },
-      body: JSON.stringify({
-        ...validEmitBody,
-        storeId: 'injected-store-id',
-        id: 'injected-id',
-      }),
+      body: JSON.stringify(validEmitBody),
     })
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(403)
   })
 })

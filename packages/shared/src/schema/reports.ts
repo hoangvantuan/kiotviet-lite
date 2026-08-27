@@ -30,6 +30,8 @@ export type InventoryReportTab = z.infer<typeof inventoryReportTabSchema>
 
 export const inventoryReportQuerySchema = z.object({
   tab: inventoryReportTabSchema.default('current'),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
 })
 export type InventoryReportQuery = z.infer<typeof inventoryReportQuerySchema>
 
@@ -177,17 +179,27 @@ export const inventorySlowRowSchema = z.object({
 })
 export type InventorySlowRow = z.infer<typeof inventorySlowRowSchema>
 
+export interface InventoryReportPaginationMeta {
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
 export interface InventoryCurrentResponse {
   rows: InventoryCurrentRow[]
   summary: { totalProducts: number; totalStockValue: number }
+  pagination: InventoryReportPaginationMeta
 }
 
 export interface InventoryReorderResponse {
   rows: InventoryReorderRow[]
+  pagination: InventoryReportPaginationMeta
 }
 
 export interface InventorySlowResponse {
   rows: InventorySlowRow[]
+  pagination: InventoryReportPaginationMeta
 }
 
 export type InventoryReportResponse =

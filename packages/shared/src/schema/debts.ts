@@ -35,5 +35,9 @@ export const debts = pgTable(
     index('idx_debts_remaining')
       .on(table.storeId, table.customerId, table.remaining)
       .where(sql`${table.remaining} > 0`),
+    // Index cho báo cáo tuổi nợ và nợ quá hạn dashboard
+    index('idx_debts_store_remaining_created')
+      .on(table.storeId, table.createdAt)
+      .where(sql`${table.remaining} > 0`),
   ],
 )

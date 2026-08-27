@@ -15,27 +15,45 @@ import type { Db } from '../db/index.js'
 export async function getInventoryCurrent(
   db: Db,
   storeId: string,
+  page: number = 1,
+  pageSize: number = 20,
 ): Promise<InventoryCurrentResponse> {
-  const result = await db
-    .select({
-      productId: products.id,
-      productName: products.name,
-      sku: products.sku,
-      currentStock: products.currentStock,
-      costPrice: sql<number>`coalesce(${products.costPrice}, 0)`.as('cost_price'),
-      stockValue: sql<number>`${products.currentStock} * coalesce(${products.costPrice}, 0)`.as(
-        'stock_value',
-      ),
-    })
-    .from(products)
-    .where(
-      and(
-        eq(products.storeId, storeId),
-        eq(products.trackInventory, true),
-        isNull(products.deletedAt),
-      ),
-    )
-    .orderBy(sql`stock_value DESC`)
+  const offset = (page - 1) * pageSize
+  const whereCondition = and(
+    eq(products.storeId, storeId),
+    eq(products.trackInventory, true),
+    isNull(products.deletedAt),
+  )
+
+  const [result, summaryResult] = await Promise.all([
+    db
+      .select({
+        productId: products.id,
+        productName: products.name,
+        sku: products.sku,
+        currentStock: products.currentStock,
+        costPrice: sql<number>`coalesce(${products.costPrice}, 0)`.as('cost_price'),
+        stockValue: sql<number>`${products.currentStock} * coalesce(${products.costPrice}, 0)`.as(
+          'stock_value',
+        ),
+      })
+      .from(products)
+      .where(whereCondition)
+      .orderBy(sql`stock_value DESC`)
+      .limit(pageSize)
+      .offset(offset),
+
+    db
+      .select({
+        totalProducts: sql<number>`count(*)::int`,
+        totalStockValue: sql<number>`coalesce(sum(${products.currentStock} * coalesce(${products.costPrice}, 0)), 0)::bigint`,
+      })
+      .from(products)
+      .where(whereCondition),
+  ])
+
+  const total = Number(summaryResult[0]?.totalProducts ?? 0)
+  const totalStockValue = Number(summaryResult[0]?.totalStockValue ?? 0)
 
   const rows = result.map((r) => ({
     productId: r.productId,
@@ -46,33 +64,56 @@ export async function getInventoryCurrent(
     stockValue: Number(r.stockValue),
   }))
 
-  const totalStockValue = rows.reduce((sum, r) => sum + r.stockValue, 0)
-
-  return { rows, summary: { totalProducts: rows.length, totalStockValue } }
+  return {
+    rows,
+    summary: { totalProducts: total, totalStockValue },
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    },
+  }
 }
 
 export async function getInventoryReorder(
   db: Db,
   storeId: string,
+  page: number = 1,
+  pageSize: number = 20,
 ): Promise<InventoryReorderResponse> {
-  const result = await db
-    .select({
-      productId: products.id,
-      productName: products.name,
-      sku: products.sku,
-      currentStock: products.currentStock,
-      minStock: products.minStock,
-    })
-    .from(products)
-    .where(
-      and(
-        eq(products.storeId, storeId),
-        isNull(products.deletedAt),
-        gt(products.minStock, 0),
-        sql`${products.currentStock} <= ${products.minStock}`,
-      ),
-    )
-    .orderBy(sql`${products.currentStock} - ${products.minStock} ASC`)
+  const offset = (page - 1) * pageSize
+  const whereCondition = and(
+    eq(products.storeId, storeId),
+    isNull(products.deletedAt),
+    gt(products.minStock, 0),
+    sql`${products.currentStock} <= ${products.minStock}`,
+  )
+
+  const [result, countResult] = await Promise.all([
+    db
+      .select({
+        productId: products.id,
+        productName: products.name,
+        sku: products.sku,
+        currentStock: products.currentStock,
+        minStock: products.minStock,
+      })
+      .from(products)
+      .where(whereCondition)
+      .orderBy(sql`${products.currentStock} - ${products.minStock} ASC`)
+      .limit(pageSize)
+      .offset(offset),
+
+    db
+      .select({
+        total: sql<number>`count(*)::int`,
+      })
+      .from(products)
+      .where(whereCondition),
+  ])
+
+  const total = Number(countResult[0]?.total ?? 0)
 
   const rows = result.map((r) => ({
     productId: r.productId,
@@ -83,10 +124,24 @@ export async function getInventoryReorder(
     reorderQuantity: r.minStock - r.currentStock,
   }))
 
-  return { rows }
+  return {
+    rows,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    },
+  }
 }
 
-export async function getInventorySlow(db: Db, storeId: string): Promise<InventorySlowResponse> {
+export async function getInventorySlow(
+  db: Db,
+  storeId: string,
+  page: number = 1,
+  pageSize: number = 20,
+): Promise<InventorySlowResponse> {
+  const offset = (page - 1) * pageSize
   const thirtyDaysAgo = subDays(new Date(), 30)
 
   const lastSoldSubquery = db
@@ -100,26 +155,39 @@ export async function getInventorySlow(db: Db, storeId: string): Promise<Invento
     .groupBy(orderItems.productId)
     .as('last_sold')
 
-  const result = await db
-    .select({
-      productId: products.id,
-      productName: products.name,
-      sku: products.sku,
-      currentStock: products.currentStock,
-      lastSoldDate: lastSoldSubquery.lastSoldDate,
-    })
-    .from(products)
-    .leftJoin(lastSoldSubquery, eq(products.id, lastSoldSubquery.productId))
-    .where(
-      and(
-        eq(products.storeId, storeId),
-        isNull(products.deletedAt),
-        gt(products.currentStock, 0),
-        sql`(${lastSoldSubquery.lastSoldDate} IS NULL OR ${lastSoldSubquery.lastSoldDate} < ${thirtyDaysAgo.toISOString().slice(0, 10)})`,
-      ),
-    )
-    .orderBy(sql`${lastSoldSubquery.lastSoldDate} ASC NULLS FIRST`)
+  const whereCondition = and(
+    eq(products.storeId, storeId),
+    isNull(products.deletedAt),
+    gt(products.currentStock, 0),
+    sql`(${lastSoldSubquery.lastSoldDate} IS NULL OR ${lastSoldSubquery.lastSoldDate} < ${thirtyDaysAgo.toISOString().slice(0, 10)})`,
+  )
 
+  const [result, countResult] = await Promise.all([
+    db
+      .select({
+        productId: products.id,
+        productName: products.name,
+        sku: products.sku,
+        currentStock: products.currentStock,
+        lastSoldDate: lastSoldSubquery.lastSoldDate,
+      })
+      .from(products)
+      .leftJoin(lastSoldSubquery, eq(products.id, lastSoldSubquery.productId))
+      .where(whereCondition)
+      .orderBy(sql`${lastSoldSubquery.lastSoldDate} ASC NULLS FIRST`)
+      .limit(pageSize)
+      .offset(offset),
+
+    db
+      .select({
+        total: sql<number>`count(*)::int`,
+      })
+      .from(products)
+      .leftJoin(lastSoldSubquery, eq(products.id, lastSoldSubquery.productId))
+      .where(whereCondition),
+  ])
+
+  const total = Number(countResult[0]?.total ?? 0)
   const now = new Date()
   const rows = result.map((r) => {
     const lastSold = r.lastSoldDate ? String(r.lastSoldDate) : null
@@ -136,5 +204,13 @@ export async function getInventorySlow(db: Db, storeId: string): Promise<Invento
     }
   })
 
-  return { rows }
+  return {
+    rows,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    },
+  }
 }

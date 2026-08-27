@@ -50,5 +50,6 @@ export const purchaseOrders = pgTable(
     index('idx_purchase_orders_store_date').on(table.storeId, table.purchaseDate),
     index('idx_purchase_orders_store_supplier').on(table.storeId, table.supplierId),
     index('idx_purchase_orders_store_payment_status').on(table.storeId, table.paymentStatus),
+    index('idx_purchase_orders_store_created').on(table.storeId, table.createdAt.desc()),
   ],
 )

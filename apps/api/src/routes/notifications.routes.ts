@@ -11,6 +11,7 @@ import { env } from '../lib/env.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
+import { requirePermission } from '../middleware/rbac.middleware.js'
 
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX = 60
@@ -18,7 +19,10 @@ const RATE_LIMIT_MAX = 60
 const emitRateLimiter = rateLimiter({
   windowMs: RATE_LIMIT_WINDOW_MS,
   limit: RATE_LIMIT_MAX,
-  keyGenerator: (c) => c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? 'anonymous',
+  keyGenerator: (c) =>
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-real-ip') ||
+    'anonymous',
   standardHeaders: 'draft-7',
 })
 
@@ -62,7 +66,7 @@ export function createNotificationRoutes({ db }: NotificationRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
 
-  app.post('/emit', emitRateLimiter, requireAuth, async (c) => {
+  app.post('/emit', emitRateLimiter, requireAuth, requirePermission('store.manage'), async (c) => {
     const auth = c.get('auth')
     const input = await parseJson(c, emitInputSchema)
 

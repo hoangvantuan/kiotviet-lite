@@ -76,43 +76,35 @@ interface MetricsRow {
 }
 
 async function queryMetrics(db: Db, storeId: string, start: Date, end: Date): Promise<MetricsRow> {
-  const result = await db
-    .select({
-      revenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
-      orderCount: sql<number>`count(${orders.id})`,
-    })
-    .from(orders)
-    .where(
-      and(
-        eq(orders.storeId, storeId),
-        eq(orders.status, 'completed'),
-        gte(orders.createdAt, start),
-        lte(orders.createdAt, end),
-      ),
-    )
+  const whereCondition = and(
+    eq(orders.storeId, storeId),
+    eq(orders.status, 'completed'),
+    gte(orders.createdAt, start),
+    lte(orders.createdAt, end),
+  )
+
+  const [result, cogsResult] = await Promise.all([
+    db
+      .select({
+        revenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
+        orderCount: sql<number>`count(${orders.id})`,
+      })
+      .from(orders)
+      .where(whereCondition),
+
+    db
+      .select({
+        totalCogs: sql<number>`coalesce(sum(coalesce(${products.costPrice}, 0) * ${orderItems.quantity}), 0)`,
+      })
+      .from(orderItems)
+      .innerJoin(orders, eq(orderItems.orderId, orders.id))
+      .innerJoin(products, eq(orderItems.productId, products.id))
+      .where(whereCondition),
+  ])
 
   const row = result[0]!
   const revenue = Number(row.revenue)
   const orderCount = Number(row.orderCount)
-
-  // Profit = revenue - COGS. Since order_items doesn't have costPrice,
-  // join with products to get current costPrice as best approximation.
-  const cogsResult = await db
-    .select({
-      totalCogs: sql<number>`coalesce(sum(coalesce(${products.costPrice}, 0) * ${orderItems.quantity}), 0)`,
-    })
-    .from(orderItems)
-    .innerJoin(orders, eq(orderItems.orderId, orders.id))
-    .innerJoin(products, eq(orderItems.productId, products.id))
-    .where(
-      and(
-        eq(orders.storeId, storeId),
-        eq(orders.status, 'completed'),
-        gte(orders.createdAt, start),
-        lte(orders.createdAt, end),
-      ),
-    )
-
   const totalCogs = Number(cogsResult[0]?.totalCogs ?? 0)
   const profit = revenue - totalCogs
 
@@ -159,11 +151,14 @@ export async function getDashboardMetrics(
   const current = getPeriodRange(period, now)
   const previous = getPreviousPeriodRange(period, now)
 
-  const [currentMetrics, previousMetrics, revenueSparkline] = await Promise.all([
-    queryMetrics(db, storeId, current.start, current.end),
-    queryMetrics(db, storeId, previous.start, previous.end),
-    getSparkline(db, storeId),
-  ])
+  const [currentMetrics, previousMetrics, revenueSparkline, orderSparkline, profitSparkline] =
+    await Promise.all([
+      queryMetrics(db, storeId, current.start, current.end),
+      queryMetrics(db, storeId, previous.start, previous.end),
+      getSparkline(db, storeId),
+      getOrderCountSparkline(db, storeId),
+      getProfitSparkline(db, storeId),
+    ])
 
   const avgOrderValue =
     currentMetrics.orderCount > 0
@@ -174,10 +169,6 @@ export async function getDashboardMetrics(
       ? Math.round(previousMetrics.revenue / previousMetrics.orderCount)
       : 0
 
-  // Build sparklines for each metric (revenue sparkline is the base)
-  // For simplicity, orderCount sparkline and profit sparkline use separate queries
-  const orderSparkline = await getOrderCountSparkline(db, storeId)
-  const profitSparkline = await getProfitSparkline(db, storeId)
   const avgSparkline = revenueSparkline.map((rev, i) => {
     const oc = orderSparkline[i] ?? 0
     return oc > 0 ? Math.round(rev / oc) : 0
@@ -246,40 +237,33 @@ async function getProfitSparkline(db: Db, storeId: string): Promise<number[]> {
   const now = new Date()
   const sevenDaysAgo = subDays(startOfDay(now), 6)
   const days = eachDayOfInterval({ start: sevenDaysAgo, end: startOfDay(now) })
+  const whereCondition = and(
+    eq(orders.storeId, storeId),
+    eq(orders.status, 'completed'),
+    gte(orders.createdAt, sevenDaysAgo),
+  )
 
-  // Revenue per day
-  const revResult = await db
-    .select({
-      day: sql<string>`date_trunc('day', ${orders.createdAt})::date`,
-      revenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
-    })
-    .from(orders)
-    .where(
-      and(
-        eq(orders.storeId, storeId),
-        eq(orders.status, 'completed'),
-        gte(orders.createdAt, sevenDaysAgo),
-      ),
-    )
-    .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`)
+  const [revResult, cogsResult] = await Promise.all([
+    db
+      .select({
+        day: sql<string>`date_trunc('day', ${orders.createdAt})::date`,
+        revenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
+      })
+      .from(orders)
+      .where(whereCondition)
+      .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`),
 
-  // COGS per day
-  const cogsResult = await db
-    .select({
-      day: sql<string>`date_trunc('day', ${orders.createdAt})::date`,
-      cogs: sql<number>`coalesce(sum(coalesce(${products.costPrice}, 0) * ${orderItems.quantity}), 0)`,
-    })
-    .from(orderItems)
-    .innerJoin(orders, eq(orderItems.orderId, orders.id))
-    .innerJoin(products, eq(orderItems.productId, products.id))
-    .where(
-      and(
-        eq(orders.storeId, storeId),
-        eq(orders.status, 'completed'),
-        gte(orders.createdAt, sevenDaysAgo),
-      ),
-    )
-    .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`)
+    db
+      .select({
+        day: sql<string>`date_trunc('day', ${orders.createdAt})::date`,
+        cogs: sql<number>`coalesce(sum(coalesce(${products.costPrice}, 0) * ${orderItems.quantity}), 0)`,
+      })
+      .from(orderItems)
+      .innerJoin(orders, eq(orderItems.orderId, orders.id))
+      .innerJoin(products, eq(orderItems.productId, products.id))
+      .where(whereCondition)
+      .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`),
+  ])
 
   const revByDay = new Map<string, number>()
   for (const r of revResult) {

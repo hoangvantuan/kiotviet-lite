@@ -263,17 +263,19 @@ export function createReportsRoutes({ db }: { db: Db }) {
     const auth = c.get('auth')
     const query = inventoryReportQuerySchema.parse({
       tab: c.req.query('tab') || undefined,
+      page: c.req.query('page') || undefined,
+      pageSize: c.req.query('pageSize') || undefined,
     })
     let data
     switch (query.tab) {
       case 'current':
-        data = await getInventoryCurrent(db, auth.storeId)
+        data = await getInventoryCurrent(db, auth.storeId, query.page, query.pageSize)
         break
       case 'reorder':
-        data = await getInventoryReorder(db, auth.storeId)
+        data = await getInventoryReorder(db, auth.storeId, query.page, query.pageSize)
         break
       case 'slow':
-        data = await getInventorySlow(db, auth.storeId)
+        data = await getInventorySlow(db, auth.storeId, query.page, query.pageSize)
         break
     }
     return c.json({ data })
