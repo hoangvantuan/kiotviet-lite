@@ -123,21 +123,25 @@ describe('Bảo mật & Hiệu năng (T8 Integration Tests)', () => {
   })
 
   describe('Phân trang Báo cáo Tồn kho (inventory-report)', () => {
-    it('trả về dữ liệu phân trang chuẩn kèm summary và pagination', async () => {
-      // Tạo 5 sản phẩm
-      for (let i = 1; i <= 5; i++) {
+    it('trả về dữ liệu phân trang chuẩn kèm summary toàn kho và pagination', async () => {
+      // Tạo 25 sản phẩm
+      let expectedTotalStockValue = 0
+      for (let i = 1; i <= 25; i++) {
+        const cost = 50_000 * i
+        const stock = 10 * i
+        expectedTotalStockValue += cost * stock
         await env.db.insert(products).values({
           storeId: env.storeId,
           name: `Sản phẩm tồn ${i}`,
           sku: `SKU-TON-${i}`,
-          costPrice: 50_000 * i,
-          currentStock: 10 * i,
+          costPrice: cost,
+          currentStock: stock,
           trackInventory: true,
         })
       }
 
-      // Gọi tab=current với page=1, pageSize=2
-      const res = await app.request('/api/v1/reports/inventory?tab=current&page=1&pageSize=2', {
+      // Gọi tab=current với page=1, pageSize=10
+      const res = await app.request('/api/v1/reports/inventory?tab=current&page=1&pageSize=10', {
         method: 'GET',
         headers: {
           ...env.owner.authHeader,
@@ -158,13 +162,45 @@ describe('Bảo mật & Hiệu năng (T8 Integration Tests)', () => {
         }
       }
 
-      expect(body.data.rows.length).toBe(2)
+      expect(body.data.rows.length).toBe(10)
       expect(body.data.pagination.page).toBe(1)
-      expect(body.data.pagination.pageSize).toBe(2)
-      expect(body.data.pagination.total).toBe(5)
+      expect(body.data.pagination.pageSize).toBe(10)
+      expect(body.data.pagination.total).toBe(25)
       expect(body.data.pagination.totalPages).toBe(3)
-      expect(body.data.summary.totalProducts).toBe(5)
-      expect(body.data.summary.totalStockValue).toBeGreaterThan(0)
+      expect(body.data.summary.totalProducts).toBe(25)
+      expect(body.data.summary.totalStockValue).toBe(expectedTotalStockValue)
+    })
+
+    it('xuất CSV báo cáo tồn kho xuất TOÀN BỘ 25 dòng sản phẩm (không bị giới hạn 20 dòng)', async () => {
+      // Tạo 25 sản phẩm
+      for (let i = 1; i <= 25; i++) {
+        await env.db.insert(products).values({
+          storeId: env.storeId,
+          name: `Sản phẩm xuất CSV ${i}`,
+          sku: `SKU-CSV-${i}`,
+          costPrice: 100_000,
+          currentStock: i,
+          trackInventory: true,
+        })
+      }
+
+      const res = await app.request('/api/v1/reports/inventory/export?tab=current&format=csv', {
+        method: 'GET',
+        headers: {
+          ...env.owner.authHeader,
+        },
+      })
+
+      expect(res.status).toBe(200)
+      expect(res.headers.get('Content-Type')).toContain('text/csv')
+      const csvText = await res.text()
+      // BOM + Header + 25 dòng sản phẩm = 26 dòng không trống
+      const lines = csvText
+        .trim()
+        .split('\n')
+        .filter((l) => l.trim().length > 0)
+      // Dòng 0 là header, từ dòng 1 đến 25 là data
+      expect(lines.length).toBe(26)
     })
   })
 

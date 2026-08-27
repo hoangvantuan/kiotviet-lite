@@ -15,34 +15,34 @@ import type { Db } from '../db/index.js'
 export async function getInventoryCurrent(
   db: Db,
   storeId: string,
-  page: number = 1,
-  pageSize: number = 20,
+  page?: number,
+  pageSize?: number,
 ): Promise<InventoryCurrentResponse> {
-  const offset = (page - 1) * pageSize
+  const isPaged = page !== undefined && pageSize !== undefined
+  const offset = isPaged ? (page - 1) * pageSize : 0
   const whereCondition = and(
     eq(products.storeId, storeId),
     eq(products.trackInventory, true),
     isNull(products.deletedAt),
   )
 
-  const [result, summaryResult] = await Promise.all([
-    db
-      .select({
-        productId: products.id,
-        productName: products.name,
-        sku: products.sku,
-        currentStock: products.currentStock,
-        costPrice: sql<number>`coalesce(${products.costPrice}, 0)`.as('cost_price'),
-        stockValue: sql<number>`${products.currentStock} * coalesce(${products.costPrice}, 0)`.as(
-          'stock_value',
-        ),
-      })
-      .from(products)
-      .where(whereCondition)
-      .orderBy(sql`stock_value DESC`)
-      .limit(pageSize)
-      .offset(offset),
+  const query = db
+    .select({
+      productId: products.id,
+      productName: products.name,
+      sku: products.sku,
+      currentStock: products.currentStock,
+      costPrice: sql<number>`coalesce(${products.costPrice}, 0)`.as('cost_price'),
+      stockValue: sql<number>`${products.currentStock} * coalesce(${products.costPrice}, 0)`.as(
+        'stock_value',
+      ),
+    })
+    .from(products)
+    .where(whereCondition)
+    .orderBy(sql`stock_value DESC`)
 
+  const [result, summaryResult] = await Promise.all([
+    isPaged ? query.limit(pageSize).offset(offset) : query,
     db
       .select({
         totalProducts: sql<number>`count(*)::int`,
@@ -68,10 +68,10 @@ export async function getInventoryCurrent(
     rows,
     summary: { totalProducts: total, totalStockValue },
     pagination: {
-      page,
-      pageSize,
+      page: isPaged ? page : 1,
+      pageSize: isPaged ? pageSize : total,
       total,
-      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      totalPages: isPaged ? Math.max(1, Math.ceil(total / pageSize)) : 1,
     },
   }
 }
@@ -79,10 +79,11 @@ export async function getInventoryCurrent(
 export async function getInventoryReorder(
   db: Db,
   storeId: string,
-  page: number = 1,
-  pageSize: number = 20,
+  page?: number,
+  pageSize?: number,
 ): Promise<InventoryReorderResponse> {
-  const offset = (page - 1) * pageSize
+  const isPaged = page !== undefined && pageSize !== undefined
+  const offset = isPaged ? (page - 1) * pageSize : 0
   const whereCondition = and(
     eq(products.storeId, storeId),
     isNull(products.deletedAt),
@@ -90,21 +91,20 @@ export async function getInventoryReorder(
     sql`${products.currentStock} <= ${products.minStock}`,
   )
 
-  const [result, countResult] = await Promise.all([
-    db
-      .select({
-        productId: products.id,
-        productName: products.name,
-        sku: products.sku,
-        currentStock: products.currentStock,
-        minStock: products.minStock,
-      })
-      .from(products)
-      .where(whereCondition)
-      .orderBy(sql`${products.currentStock} - ${products.minStock} ASC`)
-      .limit(pageSize)
-      .offset(offset),
+  const query = db
+    .select({
+      productId: products.id,
+      productName: products.name,
+      sku: products.sku,
+      currentStock: products.currentStock,
+      minStock: products.minStock,
+    })
+    .from(products)
+    .where(whereCondition)
+    .orderBy(sql`${products.currentStock} - ${products.minStock} ASC`)
 
+  const [result, countResult] = await Promise.all([
+    isPaged ? query.limit(pageSize).offset(offset) : query,
     db
       .select({
         total: sql<number>`count(*)::int`,
@@ -127,10 +127,10 @@ export async function getInventoryReorder(
   return {
     rows,
     pagination: {
-      page,
-      pageSize,
+      page: isPaged ? page : 1,
+      pageSize: isPaged ? pageSize : total,
       total,
-      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      totalPages: isPaged ? Math.max(1, Math.ceil(total / pageSize)) : 1,
     },
   }
 }
@@ -138,10 +138,11 @@ export async function getInventoryReorder(
 export async function getInventorySlow(
   db: Db,
   storeId: string,
-  page: number = 1,
-  pageSize: number = 20,
+  page?: number,
+  pageSize?: number,
 ): Promise<InventorySlowResponse> {
-  const offset = (page - 1) * pageSize
+  const isPaged = page !== undefined && pageSize !== undefined
+  const offset = isPaged ? (page - 1) * pageSize : 0
   const thirtyDaysAgo = subDays(new Date(), 30)
 
   const lastSoldSubquery = db
@@ -162,22 +163,21 @@ export async function getInventorySlow(
     sql`(${lastSoldSubquery.lastSoldDate} IS NULL OR ${lastSoldSubquery.lastSoldDate} < ${thirtyDaysAgo.toISOString().slice(0, 10)})`,
   )
 
-  const [result, countResult] = await Promise.all([
-    db
-      .select({
-        productId: products.id,
-        productName: products.name,
-        sku: products.sku,
-        currentStock: products.currentStock,
-        lastSoldDate: lastSoldSubquery.lastSoldDate,
-      })
-      .from(products)
-      .leftJoin(lastSoldSubquery, eq(products.id, lastSoldSubquery.productId))
-      .where(whereCondition)
-      .orderBy(sql`${lastSoldSubquery.lastSoldDate} ASC NULLS FIRST`)
-      .limit(pageSize)
-      .offset(offset),
+  const query = db
+    .select({
+      productId: products.id,
+      productName: products.name,
+      sku: products.sku,
+      currentStock: products.currentStock,
+      lastSoldDate: lastSoldSubquery.lastSoldDate,
+    })
+    .from(products)
+    .leftJoin(lastSoldSubquery, eq(products.id, lastSoldSubquery.productId))
+    .where(whereCondition)
+    .orderBy(sql`${lastSoldSubquery.lastSoldDate} ASC NULLS FIRST`)
 
+  const [result, countResult] = await Promise.all([
+    isPaged ? query.limit(pageSize).offset(offset) : query,
     db
       .select({
         total: sql<number>`count(*)::int`,
@@ -207,10 +207,10 @@ export async function getInventorySlow(
   return {
     rows,
     pagination: {
-      page,
-      pageSize,
+      page: isPaged ? page : 1,
+      pageSize: isPaged ? pageSize : total,
       total,
-      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      totalPages: isPaged ? Math.max(1, Math.ceil(total / pageSize)) : 1,
     },
   }
 }

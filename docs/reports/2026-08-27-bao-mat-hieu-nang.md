@@ -190,3 +190,29 @@ Thực hiện nghiêm túc quy tắc kiểm thử mới từ Điều phối viê
 22. `apps/api/src/db/migrations/0031_long_human_cannonball.sql`: Tệp di chuyển cơ sở dữ liệu tạo các chỉ mục mới.
 23. `apps/api/src/__tests__/security-and-performance.integration.test.ts`: Bộ kiểm thử tích hợp chuyên biệt cho các tính năng bảo mật và hiệu năng.
 24. `apps/api/src/__tests__/notifications-emit.integration.test.ts`: Bổ sung kiểm thử phân quyền 403 cho phát thông báo.
+25. `apps/web/src/features/reports/reports-api.ts`: Bổ sung truyền tham số phân trang `page` và `pageSize` cho API báo cáo tồn kho.
+26. `apps/web/src/features/reports/hooks/use-reports.ts`: Cập nhật hook `useInventoryReport` nhận `page` và `pageSize`.
+27. `apps/web/src/features/reports/components/InventoryReport.tsx`: Bổ sung điều hướng phân trang đầy đủ cho 3 tab báo cáo tồn kho.
+
+---
+
+## 7. XỬ LÝ PHẢN HỒI REVIEW TỪ ĐIỀU PHỐI VIÊN (REVIEW FEEDBACK)
+
+Sau khi Điều phối viên (Coordinator) rà soát, hai vấn đề hồi quy liên quan đến tính năng phân trang báo cáo tồn kho đã được khắc phục triệt để:
+
+### 7.1. Hồi quy 1: Xuất CSV báo cáo tồn kho chỉ còn 20 dòng
+
+- **Hiện tượng**: Khi phân trang được thêm vào `getInventoryCurrent`, `getInventoryReorder`, và `getInventorySlow` với giá trị mặc định `pageSize = 20`, nhánh xuất CSV tại `GET /api/v1/reports/inventory/export` vô tình bị giới hạn chỉ xuất 20 dòng đầu tiên thay vì toàn bộ dữ liệu kho của người dùng.
+- **Khắc phục**:
+  - Tái cấu trúc cả 3 hàm trong `apps/api/src/services/inventory-report.service.ts` để nhận `page?: number, pageSize?: number`. Khi không truyền tham số phân trang (hoặc truyền không đủ cặp `page`/`pageSize`), truy vấn sẽ nạp toàn bộ 100% dữ liệu mà không áp dụng `limit`/`offset`.
+  - Nhánh xuất CSV tại `apps/api/src/routes/reports.routes.ts` gọi hàm lấy toàn bộ dữ liệu, đảm bảo tệp xuất đầy đủ.
+  - Bổ sung bài kiểm tra tích hợp trong `security-and-performance.integration.test.ts` xác thực việc xuất CSV với 25 sản phẩm trả về đúng 25 dòng dữ liệu sản phẩm.
+
+### 7.2. Hồi quy 2: Giao diện báo cáo tồn kho thiếu điều khiển phân trang
+
+- **Hiện tượng**: Phía giao diện người dùng (`apps/web`) chưa truyền tham số `page`/`pageSize` và chưa gắn thanh điều khiển phân trang, khiến người dùng chỉ nhìn thấy 20 sản phẩm đầu mà không thể chuyển trang để xem các sản phẩm tiếp theo.
+- **Khắc phục**:
+  - Cập nhật hàm gọi API `getInventoryReportApi` trong `apps/web/src/features/reports/reports-api.ts` và hook `useInventoryReport` trong `apps/web/src/features/reports/hooks/use-reports.ts` tiếp nhận tham số `page` và `pageSize`.
+  - Tích hợp component phân trang dùng chung `Pagination` (`apps/web/src/components/shared/pagination.tsx`) vào giao diện `InventoryReport.tsx` cho cả ba tab (tồn kho hiện tại, hàng cần nhập, hàng chậm bán).
+  - Tự động chuyển về trang 1 khi người dùng đổi tab báo cáo.
+  - Xác nhận giá trị tổng kho `summary.totalStockValue` luôn được tính toán trên toàn bộ kho qua truy vấn tổng hợp độc lập ở tầng cơ sở dữ liệu.

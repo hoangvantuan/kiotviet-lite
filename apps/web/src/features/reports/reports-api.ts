@@ -78,8 +78,14 @@ export async function getProfitReportApi(query: ReportDateQuery) {
   return apiClient.get<ApiEnvelope<ProfitReportResponse>>(`/api/v1/reports/profit${buildQs(query)}`)
 }
 
-export async function getInventoryReportApi(tab: InventoryReportTab) {
-  return apiClient.get<ApiEnvelope<InventoryReportResponse>>(`/api/v1/reports/inventory?tab=${tab}`)
+export async function getInventoryReportApi(
+  tab: InventoryReportTab,
+  page: number = 1,
+  pageSize: number = 20,
+) {
+  return apiClient.get<ApiEnvelope<InventoryReportResponse>>(
+    `/api/v1/reports/inventory?tab=${tab}&page=${page}&pageSize=${pageSize}`,
+  )
 }
 
 export async function getPricingReportApi(query: PricingReportQueryParams) {
