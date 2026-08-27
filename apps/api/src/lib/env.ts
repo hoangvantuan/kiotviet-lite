@@ -71,4 +71,7 @@ export const env = {
   get highValueOrderThreshold(): number {
     return Number.parseInt(optional('HIGH_VALUE_ORDER_THRESHOLD', '5000000'), 10)
   },
+  get jwtGracePeriodDays(): number {
+    return Number.parseInt(optional('JWT_GRACE_PERIOD_DAYS', '0'), 10)
+  },
 } as const
