@@ -190,12 +190,17 @@ export async function rotateRefreshToken({
   const payload = verifyRefreshToken(token)
   const tokenHash = hashToken(token)
 
-  // Token reuse detection: check if token was already used (revoked)
+  // Tìm token trong DB (bao gồm cả token đã revoke, để phát hiện tái sử dụng)
   const existing = await db.query.refreshTokens.findFirst({
     where: and(eq(refreshTokens.tokenHash, tokenHash), eq(refreshTokens.userId, payload.sub)),
   })
-  if (existing && existing.revokedAt) {
-    // Reuse attack detected — revoke entire token family
+
+  if (!existing) {
+    throw new ApiError('UNAUTHORIZED', 'Phiên đăng nhập đã hết hạn', { reason: 'invalid' })
+  }
+
+  // Token đã bị thu hồi → tái sử dụng (replay attack) → thu hồi toàn bộ token family
+  if (existing.revokedAt) {
     await db
       .update(refreshTokens)
       .set({ revokedAt: new Date() })
@@ -206,9 +211,8 @@ export async function rotateRefreshToken({
     })
   }
 
-  const stored =
-    existing && !existing.revokedAt && existing.expiresAt > new Date() ? existing : null
-  if (!stored) {
+  // Token hết hạn
+  if (existing.expiresAt <= new Date()) {
     throw new ApiError('UNAUTHORIZED', 'Phiên đăng nhập đã hết hạn', { reason: 'invalid' })
   }
 
@@ -218,17 +222,45 @@ export async function rotateRefreshToken({
   }
 
   const next = signRefreshToken(user.id)
+
+  let isReused = false
   await db.transaction(async (tx) => {
-    await tx
+    // Cập nhật nguyên tử: chỉ revoke nếu token CHƯA bị revoke (revokedAt IS NULL).
+    // Nếu affected=0 → request đồng thời khác đã revoke trước → token đã dùng rồi.
+    const revoked = await tx
       .update(refreshTokens)
       .set({ revokedAt: new Date(), replacedByTokenHash: next.tokenHash })
-      .where(eq(refreshTokens.id, stored.id))
+      .where(and(eq(refreshTokens.id, existing.id), isNull(refreshTokens.revokedAt)))
+      .returning({ id: refreshTokens.id })
+
+    if (revoked.length === 0) {
+      isReused = true
+      return
+    }
+
+    // Insert token mới trong cùng transaction
     await tx.insert(refreshTokens).values({
       userId: user.id,
       tokenHash: next.tokenHash,
       expiresAt: next.expiresAt,
     })
   })
+
+  if (isReused) {
+    // Race condition: request khác đã revoke token này trước.
+    // Thu hồi toàn bộ token family của user vì đây là dấu hiệu tái sử dụng.
+    await db
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(refreshTokens.userId, payload.sub), isNull(refreshTokens.revokedAt)))
+    logger.error(
+      { userId: payload.sub },
+      'Refresh token concurrent reuse detected, all sessions revoked',
+    )
+    throw new ApiError('UNAUTHORIZED', 'Token reuse detected, all sessions revoked', {
+      reason: 'reuse',
+    })
+  }
 
   const accessToken = signAccessToken({
     userId: user.id,

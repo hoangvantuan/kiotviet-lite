@@ -26,8 +26,8 @@ const TEST_ENV = {
  * vốn chậm hơn khoảng 4 lần.
  */
 const PGLITE_TIMEOUTS = {
-  testTimeout: 30_000,
-  hookTimeout: 30_000,
+  testTimeout: 90_000,
+  hookTimeout: 90_000,
 }
 
 export default defineWorkspace([
@@ -64,6 +64,7 @@ export default defineWorkspace([
       root: './packages/notifications',
       environment: 'node',
       include: ['src/**/*.test.ts'],
+      ...PGLITE_TIMEOUTS,
     },
   },
 ])

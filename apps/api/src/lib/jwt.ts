@@ -11,6 +11,7 @@ import {
 
 import { env } from './env.js'
 import { ApiError } from './errors.js'
+import { logger } from './logger.js'
 
 export interface SignedRefreshToken {
   token: string
@@ -22,7 +23,11 @@ export interface SignedRefreshToken {
 const JWT_ISSUER = 'kiotviet-lite'
 const JWT_AUDIENCE = 'kiotviet-lite-web'
 
-export function signAccessToken(input: { userId: string; storeId: string; role: UserRole }): string {
+export function signAccessToken(input: {
+  userId: string
+  storeId: string
+  role: UserRole
+}): string {
   const payload: AccessTokenPayload = {
     sub: input.userId,
     storeId: input.storeId,
@@ -53,39 +58,73 @@ export function signRefreshToken(userId: string): SignedRefreshToken {
 }
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
-  return verify(token, env.jwtAccessSecret, accessTokenPayloadSchema.parse, {
-    issuer: JWT_ISSUER,
-    audience: JWT_AUDIENCE,
-  })
+  return verifyWithGrace(token, env.jwtAccessSecret, accessTokenPayloadSchema.parse)
 }
 
 export function verifyRefreshToken(token: string): RefreshTokenPayload {
-  return verify(token, env.jwtRefreshSecret, refreshTokenPayloadSchema.parse, {
-    issuer: JWT_ISSUER,
-    audience: JWT_AUDIENCE,
-  })
+  return verifyWithGrace(token, env.jwtRefreshSecret, refreshTokenPayloadSchema.parse)
 }
 
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
 
-function verify<T>(
-  token: string,
-  secret: string,
-  parse: (raw: unknown) => T,
-  options?: { issuer?: string; audience?: string },
-): T {
+/**
+ * Verify JWT với grace period: thử verify bình thường (có iss/aud) trước.
+ * Nếu lỗi do iss/aud không khớp và đang trong grace period, thử lại
+ * không kiểm tra iss/aud. Log cảnh báo khi dùng đường grace.
+ */
+function verifyWithGrace<T>(token: string, secret: string, parse: (raw: unknown) => T): T {
   try {
     const decoded = jwt.verify(token, secret, {
-      issuer: options?.issuer,
-      audience: options?.audience,
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
     }) as JwtPayload | string
     return parse(decoded)
   } catch (err) {
     if (err instanceof jwt.TokenExpiredError) {
       throw new ApiError('UNAUTHORIZED', 'Token đã hết hạn', { reason: 'expired' })
     }
+
+    // Grace period: token cũ thiếu iss/aud vẫn được chấp nhận tạm thời nếu còn trong thời hạn ân hạn tính từ iat
+    const graceDays = env.jwtGracePeriodDays
+    if (graceDays > 0 && isIssuerAudienceError(err)) {
+      try {
+        const decoded = jwt.verify(token, secret) as JwtPayload | string
+        if (typeof decoded === 'object' && decoded !== null && typeof decoded.iat === 'number') {
+          const expirationTimeMs = decoded.iat * 1000 + graceDays * 86_400_000
+          const now = Date.now()
+          if (expirationTimeMs > now) {
+            const parsed = parse(decoded)
+            const msRemaining = expirationTimeMs - now
+            const daysRemaining = Math.max(0, Math.ceil(msRemaining / 86_400_000))
+            logger.warn(
+              { graceDaysRemaining: daysRemaining },
+              'Token thiếu iss/aud được chấp nhận qua grace period. Vui lòng đăng nhập lại.',
+            )
+            return parsed
+          }
+        }
+        throw new ApiError('UNAUTHORIZED', 'Token không hợp lệ', { reason: 'invalid' })
+      } catch (graceErr) {
+        if (graceErr instanceof ApiError) {
+          throw graceErr
+        }
+        if (graceErr instanceof jwt.TokenExpiredError) {
+          throw new ApiError('UNAUTHORIZED', 'Token đã hết hạn', { reason: 'expired' })
+        }
+        throw new ApiError('UNAUTHORIZED', 'Token không hợp lệ', { reason: 'invalid' })
+      }
+    }
+
     throw new ApiError('UNAUTHORIZED', 'Token không hợp lệ', { reason: 'invalid' })
   }
+}
+
+function isIssuerAudienceError(err: unknown): boolean {
+  if (err instanceof jwt.JsonWebTokenError) {
+    const msg = err.message.toLowerCase()
+    return msg.includes('issuer') || msg.includes('audience')
+  }
+  return false
 }
