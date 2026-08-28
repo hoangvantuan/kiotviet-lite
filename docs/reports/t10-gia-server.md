@@ -1,31 +1,30 @@
-# Báo cáo hoàn thành tích hợp Order Price Guard & Debt Limit (Vòng 2)
+# Báo cáo hoàn thành tích hợp Order Price Guard & Debt Limit (Vòng 3)
 
-- **Trạng thái**: Đã sửa toàn bộ các phản hồi từ `FEEDBACK-T10-2.md` và hoàn tất kiểm thử tích hợp (integration tests).
-- **Kết quả kiểm thử**: Đã chạy thành công bộ kiểm thử đầy đủ được yêu cầu. Toàn bộ 11/11 file và 202/202 bài kiểm thử đều Passed!
+- **Trạng thái**: Đã khắc phục việc sót cảnh báo (audit notification) khi đơn hàng đồng bộ ngoại tuyến có thao tác sửa giá mà không xác thực mã PIN.
+- **Kết quả kiểm thử**: Đã tạo thành công bộ kiểm thử thứ 6 trong tệp `order-price-guard.integration.test.ts` (giữ nguyên giá, tạo ra notification loại `audit.price_override` với cấp độ `warn`). Toàn bộ 11/11 file với 203/203 bài kiểm thử đều Passed!
 
 ## Kết quả kiểm thử toàn diện
 
-Dưới đây là nguyên văn dòng tổng kết sau khi chạy các tệp kiểm thử tích hợp được liệt kê trong phản hồi (11 files):
+Dưới đây là nguyên văn dòng tổng kết sau khi chạy các tệp kiểm thử tích hợp được yêu cầu:
 
 ```
  Test Files  11 passed (11)
-      Tests  202 passed (202)
-   Start at  12:26:15
+      Tests  203 passed (203)
+   Start at  12:37:43
    Duration  ...
 ```
 
-## Chi tiết xử lý vòng 2:
+## Chi tiết xử lý Vòng 3:
 
-1. **Hoàn nguyên và sửa dữ liệu test (`pos-debt.integration.test.ts`)**:
-   - Trả toàn bộ 7 chỗ đã "lỡ" thêm `priceOverride: true`, `priceOverridePinUsed: true` về mặc định ban đầu (`false`).
-   - Sửa lại dữ liệu kiểm tra nghiệp vụ vượt hạn mức công nợ bằng cách **tăng `quantity`** thay vì bán sai `unitPrice`. Ví dụ: đơn giá của SP là 100.000đ, thay vì truyền `unitPrice: 200_000`, test đã được đổi lại thành `quantity: 2, unitPrice: 100_000, lineTotal: 200_000`. Nhờ đó, các bài test không bị vướng logic giá và kiểm tra chính xác hạn mức nợ như đúng thiết kế nghiệp vụ của chúng.
+1. **Phát sự kiện cảnh báo đơn ngoại tuyến sửa giá (`orders.service.ts`)**:
+   - Khi dòng hàng có `effectivePriceOverride === true` và `effectivePriceOverridePinUsed === false` (ở nguồn `offline_sync`), hệ thống đã kích hoạt `emitEvent`.
+   - Cảnh báo có `type: 'audit.price_override'`, `severity: 'warn'`, thông báo rành mạch sản phẩm bị đổi giá chưa được xác thực, và cung cấp `context` để dò tìm (`orderId`, `orderNumber`, `productId`, `unitPrice`, `systemPrice`, `userId`).
 
-2. **Khắc phục lỗi logic đối với đơn hàng đồng bộ (Offline Sync)**:
-   - File `orders.service.ts` vô tình gán `effectivePriceOverride = false` đối với nguồn `offline_sync`. Điều này khiến những đơn hàng ngoại tuyến thực sự cần bán sai giá không được tính là override (và từ đó mất đi audit log liên quan).
-   - Đã loại bỏ lệnh ghi đè `effectivePriceOverride = false` để giữ lại cờ giảm giá offline, giúp bài kiểm tra số 9 của tệp đồng bộ ngoại tuyến báo xanh thành công.
+2. **Bài kiểm tra mới**:
+   - Bổ sung bài `6. Đơn ngoại tuyến qua /sync/push có priceOverride=true và giá lệch...` vào `order-price-guard.integration.test.ts`. Bài kiểm tra giả lập lệnh từ `/sync/push`, sau đó đối chiếu kết quả trả về cũng như kiểm tra các bản ghi trong bộ giả lập `notifyMock`, khẳng định event đúng nội dung và cấp độ `warn`.
 
-## Cleanup
+## Dọn dẹp
 
-- Đã chạy thành công `pnpm lint`, `pnpm -r typecheck` và khắc phục triệt để các cảnh báo.
-- Đã chạy `pnpm -r build` để đảm bảo hệ thống dịch chuẩn và sẵn sàng deploy.
-- Đã xóa `FEEDBACK-T10.md` và `FEEDBACK-T10-2.md` khỏi thư mục làm việc.
+- Đã chạy thành công `pnpm lint`, `pnpm -r typecheck`.
+- Đã chạy `pnpm -r build` hoàn chỉnh.
+- Xóa tất cả các tệp FEEDBACK. Sẵn sàng tích hợp.

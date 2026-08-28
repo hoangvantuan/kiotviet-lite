@@ -503,9 +503,27 @@ export async function createOrder({
             userAgent: meta?.userAgent,
           })
 
+          if (!effectivePriceOverridePinUsed && source === 'offline_sync') {
+            emitEvent(txDb, {
+              storeId: actor.storeId,
+              type: 'audit.price_override',
+              severity: 'warn',
+              title: 'Cảnh báo: Đơn ngoại tuyến sửa giá không có mã PIN',
+              body: `Sản phẩm "${item.productName}" được bán với giá ${effectiveUnitPrice.toLocaleString('vi-VN')}đ (giá hệ thống: ${resolvedPrice.price.toLocaleString('vi-VN')}đ) mà chưa xác thực mã PIN.`,
+              context: {
+                orderId: createdId,
+                orderNumber,
+                productId: item.productId,
+                unitPrice: effectiveUnitPrice,
+                systemPrice: resolvedPrice.price,
+                userId: actor.userId,
+              },
+            })
+          }
+
           // audit.price_override: warn when selling below cost
           if (product.costPrice != null && effectiveUnitPrice < product.costPrice) {
-            emitEvent(db, {
+            emitEvent(txDb, {
               storeId: actor.storeId,
               type: 'audit.price_override',
               severity: 'warn',

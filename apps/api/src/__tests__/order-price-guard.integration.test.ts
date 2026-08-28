@@ -1,6 +1,14 @@
+/* eslint-disable */
 // @ts-nocheck
+import { notify } from '@kiotviet-lite/notifications'
 import { eq } from 'drizzle-orm'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { vi } from 'vitest'
+
+vi.mock('@kiotviet-lite/notifications', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@kiotviet-lite/notifications')>()),
+  notify: vi.fn().mockResolvedValue([{ ok: true }]),
+}))
 
 import {
   auditLogs,
@@ -317,5 +325,71 @@ describe('T10 - order-price-guard.integration.test', () => {
     )
 
     expect(res.status).toBe(201)
+  })
+
+  it('6. Đơn ngoại tuyến qua /sync/push có priceOverride=true và giá lệch -> giữ nguyên, tạo notification audit.price_override', async () => {
+    const notifyMock = vi.mocked(notify)
+    notifyMock.mockClear() // Xóa lịch sử cũ
+
+    const p1 = await createProduct(env.base as any, { sellingPrice: 100000 })
+
+    const res = await makeRequest(
+      (env as any).syncApp,
+      'POST',
+      '/push',
+      {
+        clientId: '33333333-3333-3333-3333-333333333333',
+        orders: [
+          {
+            clientId: '44444444-4444-4444-4444-444444444444',
+            createdAt: new Date().toISOString(),
+            orderData: {
+              subtotal: 100000,
+              discountValue: 0,
+              discountAmount: 0,
+              total: 100000,
+              paymentMethod: 'cash',
+              paymentStatus: 'paid',
+              cashAmount: 100000,
+              debtLimitOverridden: false,
+              items: [
+                {
+                  productId: p1.id,
+                  productName: p1.name,
+                  unitPrice: 50000,
+                  quantity: 2,
+                  lineTotal: 100000,
+                  originalPrice: 100000,
+                  priceOverride: true,
+                },
+              ],
+            },
+          },
+        ],
+      },
+      (env.base as any).owner.authHeader,
+    )
+
+    expect(res.status).toBe(200)
+    const orderRes = (res.body as any).data.results[0]
+    expect(orderRes.status).toBe('synced')
+
+    const orderId = orderRes.serverId
+    const orderList = await (env.base as any).db.select().from(orders).where(eq(orders.id, orderId))
+    const order = orderList[0]
+    expect(order?.subtotal).toBe(100000)
+    expect(order?.total).toBe(100000)
+
+    expect(notifyMock).toHaveBeenCalled()
+    const notificationCalls = notifyMock.mock.calls
+    const warnLogs = notificationCalls
+      .map((call) => call[1])
+      .filter((e) => e.type === 'audit.price_override' && e.severity === 'warn')
+
+    const matchedLog = warnLogs.find((l: any) => l.context.orderId === orderId)
+    expect(matchedLog).toBeDefined()
+    expect(matchedLog.context.systemPrice).toBe(100000)
+    expect(matchedLog.context.unitPrice).toBe(50000)
+    expect(matchedLog.body).toContain('chưa xác thực mã PIN')
   })
 })
