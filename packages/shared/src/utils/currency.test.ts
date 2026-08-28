@@ -16,8 +16,8 @@ describe('currency utils', () => {
 
   describe('formatVndWithSuffix', () => {
     it('định dạng kèm hậu tố mặc định hoặc tùy chỉnh', () => {
-      expect(formatVndWithSuffix(1_000_000)).toBe('1.000.000đ')
-      expect(formatVndWithSuffix(1_000_000, ' đ')).toBe('1.000.000 đ')
+      expect(formatVndWithSuffix(1_000_000)).toBe('1.000.000 đ')
+      expect(formatVndWithSuffix(1_000_000, 'đ')).toBe('1.000.000đ')
       expect(formatVndWithSuffix(null)).toBe('')
     })
   })

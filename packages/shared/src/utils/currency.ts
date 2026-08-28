@@ -22,13 +22,13 @@ export function formatVnd(value: number | null | undefined): string {
  * Định dạng số tiền VND kèm hậu tố đơn vị tiền tệ (mặc định 'đ').
  *
  * Ví dụ:
- * - formatVndWithSuffix(1000000) -> '1.000.000đ'
- * - formatVndWithSuffix(1000000, ' đ') -> '1.000.000 đ'
+ * - formatVndWithSuffix(1000000) -> '1.000.000 đ'
+ * - formatVndWithSuffix(1000000, 'đ') -> '1.000.000đ'
  * - formatVndWithSuffix(null) -> ''
  */
 export function formatVndWithSuffix(
   value: number | null | undefined,
-  suffix: string = 'đ',
+  suffix: string = ' đ',
 ): string {
   const formatted = formatVnd(value)
   if (!formatted) return ''
