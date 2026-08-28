@@ -67,6 +67,7 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'order_item.price_overridden': 'Sửa giá trên đơn hàng',
   'debt.created': 'Tạo khoản nợ',
   'debt.limit_overridden': 'Vượt hạn mức công nợ (PIN)',
+  'order.debt_limit_exceeded': 'Đơn ngoại tuyến vượt hạn mức nợ',
   'receipt.created': 'Tạo phiếu thu nợ KH',
   'receipt.printed': 'In phiếu thu',
   'debt_adjustment.created': 'Điều chỉnh nợ khách hàng',
@@ -120,11 +121,15 @@ export const ACTION_GROUPS: ActionGroup[] = [
   },
   {
     label: 'Khách hàng',
-    actions: ['customer.created', 'customer.updated', 'customer.deleted', 'customer.restored'],
-  },
-  {
-    label: 'Nhóm khách hàng',
-    actions: ['customer_group.created', 'customer_group.updated', 'customer_group.deleted'],
+    actions: [
+      'customer.created',
+      'customer.updated',
+      'customer.deleted',
+      'customer.restored',
+      'customer_group.created',
+      'customer_group.updated',
+      'customer_group.deleted',
+    ],
   },
   {
     label: 'Bảng giá',
@@ -136,22 +141,17 @@ export const ACTION_GROUPS: ActionGroup[] = [
       'price_list.recalculated',
       'price_list.cloned',
       'price_list.imported',
+      'price_list_item.created',
+      'price_list_item.updated',
+      'price_list_item.deleted',
+      'customer_price.created',
+      'customer_price.updated',
+      'customer_price.deleted',
+      'volume_prices.replaced',
     ],
   },
   {
-    label: 'Mục bảng giá',
-    actions: ['price_list_item.created', 'price_list_item.updated', 'price_list_item.deleted'],
-  },
-  {
-    label: 'Giá riêng KH',
-    actions: ['customer_price.created', 'customer_price.updated', 'customer_price.deleted'],
-  },
-  {
-    label: 'Giá theo số lượng',
-    actions: ['volume_prices.replaced'],
-  },
-  {
-    label: 'Nhập hàng',
+    label: 'Nhà cung cấp',
     actions: [
       'supplier.created',
       'supplier.updated',
@@ -189,7 +189,12 @@ export const ACTION_GROUPS: ActionGroup[] = [
   },
   {
     label: 'Công nợ',
-    actions: ['debt.created', 'debt.limit_overridden', 'debt_adjustment.created'],
+    actions: [
+      'debt.created',
+      'debt.limit_overridden',
+      'order.debt_limit_exceeded',
+      'debt_adjustment.created',
+    ],
   },
   {
     label: 'Phiếu thu',

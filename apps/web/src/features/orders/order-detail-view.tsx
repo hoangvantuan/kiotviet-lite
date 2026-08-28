@@ -108,9 +108,17 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
       {/* Header */}
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-semibold font-mono">{order.orderNumber}</h1>
             <StatusBadge status={order.status} />
+            {order.debtLimitExceeded && (
+              <Badge
+                variant="outline"
+                className="border-amber-500 bg-amber-50 text-amber-700 font-medium"
+              >
+                Vượt hạn mức nợ (Offline)
+              </Badge>
+            )}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             Tạo lúc {formatDateTime(order.createdAt)}
@@ -126,6 +134,14 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
           <PrintButton onPrint={handlePrint} label="In lại" size="sm" />
         </div>
       </header>
+
+      {/* Cảnh báo đơn ngoại tuyến vượt hạn mức nợ */}
+      {order.debtLimitExceeded && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          ⚠️ <strong>Đơn ngoại tuyến vượt hạn mức nợ:</strong> Đơn hàng này được tạo khi mất mạng
+          (offline) và đã ghi nhận nợ vượt hạn mức công nợ của khách hàng.
+        </div>
+      )}
 
       {/* Customer info + Payment method */}
       <section className="grid gap-3 sm:grid-cols-2">

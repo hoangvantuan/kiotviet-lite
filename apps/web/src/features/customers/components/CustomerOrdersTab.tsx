@@ -160,7 +160,19 @@ export function CustomerOrdersTab({ customerId }: CustomerOrdersTabProps) {
             <TableBody>
               {items.map((order) => (
                 <TableRow key={order.id}>
-                  <TableCell className="font-mono text-sm">{order.orderCode}</TableCell>
+                  <TableCell className="font-mono text-sm">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span>{order.orderCode}</span>
+                      {order.debtLimitExceeded && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] px-1.5 py-0 border-amber-500 bg-amber-50 text-amber-700 font-normal"
+                        >
+                          Vượt hạn mức
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {formatDate(order.date)}
                   </TableCell>
