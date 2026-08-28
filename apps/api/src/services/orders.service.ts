@@ -412,14 +412,13 @@ export async function createOrder({
           quantity: item.quantity,
         })
 
-        let effectivePriceOverride = item.priceOverride ?? false
+        const effectivePriceOverride = item.priceOverride ?? false
         let effectivePriceOverridePinUsed = item.priceOverridePinUsed ?? false
 
         if (effectivePriceOverride) {
           if (verifiedPriceOverridePin) {
             effectivePriceOverridePinUsed = true
           } else if (source === 'offline_sync') {
-            effectivePriceOverride = false
             effectivePriceOverridePinUsed = false
           }
         } else {

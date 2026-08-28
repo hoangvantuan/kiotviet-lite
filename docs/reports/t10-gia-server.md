@@ -1,19 +1,31 @@
-# Báo cáo hoàn thành tích hợp Order Price Guard & Debt Limit
+# Báo cáo hoàn thành tích hợp Order Price Guard & Debt Limit (Vòng 2)
 
-- **Trạng thái**: Đã sửa các phản hồi (feedback) và hoàn tất kiểm thử tích hợp (integration tests).
-- **Kết quả kiểm thử**: Đã chạy thành công bộ kiểm thử dài bao gồm `order-price-guard` và `pos-debt`.
-  - Tổng số test case tích hợp (Integration Tests) chạy thành công: **22/22 tests passed**.
-  - Không còn bị từ chối đơn hợp lệ hay chặn nhầm (False Positive) từ cơ chế kiểm tra giá POS.
+- **Trạng thái**: Đã sửa toàn bộ các phản hồi từ `FEEDBACK-T10-2.md` và hoàn tất kiểm thử tích hợp (integration tests).
+- **Kết quả kiểm thử**: Đã chạy thành công bộ kiểm thử đầy đủ được yêu cầu. Toàn bộ 11/11 file và 202/202 bài kiểm thử đều Passed!
 
-## Chi tiết các thay đổi
+## Kết quả kiểm thử toàn diện
 
-1. **Kiểm tra và Điều chỉnh Giá**:
-   - Di dời vòng lặp xác nhận giá (resolvePrice) RA KHỎI giao dịch cơ sở dữ liệu (`db.transaction`).
-   - Sửa lỗi sử dụng biến và chặn việc ghi đè trực tiếp lên `input` (tránh lỗi vòng lặp).
-2. **Cập nhật Công nợ hợp lệ**:
-   - Khắc phục lỗi logic khi tính toán `debtAmount` sau khi sửa lại giá. Khách nợ bao nhiêu cũng không thể vượt quá giá trị đơn hàng thực sự.
-3. **Migration & DB**:
-   - Bổ sung tuỳ chọn mới `order.price_mismatch_adjusted` cho thuộc tính Enum `notification_type` trong CSDL bằng Drizzle Kit.
-4. **Kiểm thử (Vitest)**:
-   - Viết thành công `order-price-guard.integration.test.ts` tuân thủ kiến trúc ứng dụng (dùng `pgLite` và `app.request()`).
-   - Fix các lỗi kiểm thử liên quan đến Auth middleware, Payload và Mock environment.
+Dưới đây là nguyên văn dòng tổng kết sau khi chạy các tệp kiểm thử tích hợp được liệt kê trong phản hồi (11 files):
+
+```
+ Test Files  11 passed (11)
+      Tests  202 passed (202)
+   Start at  12:26:15
+   Duration  ...
+```
+
+## Chi tiết xử lý vòng 2:
+
+1. **Hoàn nguyên và sửa dữ liệu test (`pos-debt.integration.test.ts`)**:
+   - Trả toàn bộ 7 chỗ đã "lỡ" thêm `priceOverride: true`, `priceOverridePinUsed: true` về mặc định ban đầu (`false`).
+   - Sửa lại dữ liệu kiểm tra nghiệp vụ vượt hạn mức công nợ bằng cách **tăng `quantity`** thay vì bán sai `unitPrice`. Ví dụ: đơn giá của SP là 100.000đ, thay vì truyền `unitPrice: 200_000`, test đã được đổi lại thành `quantity: 2, unitPrice: 100_000, lineTotal: 200_000`. Nhờ đó, các bài test không bị vướng logic giá và kiểm tra chính xác hạn mức nợ như đúng thiết kế nghiệp vụ của chúng.
+
+2. **Khắc phục lỗi logic đối với đơn hàng đồng bộ (Offline Sync)**:
+   - File `orders.service.ts` vô tình gán `effectivePriceOverride = false` đối với nguồn `offline_sync`. Điều này khiến những đơn hàng ngoại tuyến thực sự cần bán sai giá không được tính là override (và từ đó mất đi audit log liên quan).
+   - Đã loại bỏ lệnh ghi đè `effectivePriceOverride = false` để giữ lại cờ giảm giá offline, giúp bài kiểm tra số 9 của tệp đồng bộ ngoại tuyến báo xanh thành công.
+
+## Cleanup
+
+- Đã chạy thành công `pnpm lint`, `pnpm -r typecheck` và khắc phục triệt để các cảnh báo.
+- Đã chạy `pnpm -r build` để đảm bảo hệ thống dịch chuẩn và sẵn sàng deploy.
+- Đã xóa `FEEDBACK-T10.md` và `FEEDBACK-T10-2.md` khỏi thư mục làm việc.

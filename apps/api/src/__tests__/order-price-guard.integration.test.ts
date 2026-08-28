@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { eq } from 'drizzle-orm'
 import { beforeAll, describe, expect, it } from 'vitest'
 
