@@ -16,13 +16,13 @@
   - Cung cấp các helper biểu thức SQL: `revenueStatusFilter()`, `orderRefundSubquery()`, `orderNetRevenueExpr()`, `orderItemNetQuantityExpr()`, `orderItemNetRevenueExpr()`.
   - Áp dụng vào toàn bộ các service báo cáo (`revenue-report.service.ts`, `profit-report.service.ts`, `dashboard.service.ts`, `inventory-report.service.ts`).
 
-### H6: Hoàn tiền bỏ qua chiết khấu (dòng sản phẩm và cấp đơn hàng)
+### H6: Hoàn tiền bỏ qua chiết khấu và xử lý làm tròn không để rơi vãi
 
-- **Gốc rễ:** Trong `apps/api/src/services/returns.service.ts`, tiền hoàn trả được tính bằng `orderItem.unitPrice * returnQty`, bỏ qua chiết khấu dòng (`discountAmount` của dòng) và chiết khấu cấp đơn hàng (`orders.discountAmount`), dẫn đến việc cửa hàng hoàn trả cho khách nhiều hơn số tiền khách thực trả.
+- **Gốc rễ:** Trong `apps/api/src/services/returns.service.ts`, tiền hoàn trả trước đây tính bằng `orderItem.unitPrice * returnQty`, bỏ qua chiết khấu dòng và chiết khấu cấp đơn hàng. Hơn nữa, việc làm tròn xuống hai lần ở cấp dòng và cấp đơn có thể làm thất thoát vài đồng tiền lẻ (ví dụ 100.000đ chia 3 món thì mỗi món 33.333đ, trả cả 3 chỉ hoàn 99.999đ).
 - **Giải pháp:**
-  - Tính đơn giá hiệu dụng sau chiết khấu dòng: `effectiveUnitPrice = Math.floor(item.lineTotal / item.quantity)`.
-  - Phân bổ tỷ lệ chiết khấu cấp đơn hàng: `orderDiscountRatio = order.total / order.subtotal` vào từng dòng trả hàng `lineTotal` và tổng tiền hoàn `totalAmount`.
-  - Đảm bảo bất biến `totalAmount <= order.total` và `order_return_items.lineTotal` đồng bộ chính xác với `order_returns.totalAmount`.
+  - Với từng dòng hàng: Nếu trả hết toàn bộ số lượng còn lại của dòng đó (kể cả qua nhiều đợt), tiền hoàn của dòng bằng `item.lineTotal - tổng tiền đã hoàn của dòng đó ở các phiếu trước` thay vì nhân đơn giá làm tròn xuống.
+  - Với chiết khấu cấp đơn: Nếu đợt trả này làm đơn hàng được trả hết 100%, tổng tiền hoàn bằng `orders.total - tổng tiền đã hoàn của đơn ở các phiếu trước`.
+  - Phân bổ chiết khấu đơn hàng vào từng dòng và dồn phần dư làm tròn vào dòng cuối cùng trong danh sách để tổng các dòng luôn khớp chính xác 100% với `order_returns.totalAmount`.
 
 ### H7: Điều chỉnh nợ bị lệch giữa 2 nguồn chân lý
 
@@ -49,8 +49,7 @@
 2. `apps/api/src/lib/timezone.ts` (Mới):
    - Cung cấp `getStoreTimezone`, `getTimezoneOffset`, `parseDateRangeLocal`, `dateTruncLocal`.
 3. `apps/api/src/services/returns.service.ts`:
-   - Dòng 217 đến 286: Tính tiền hoàn theo `floor(lineTotal / quantity)` và phân bổ tỷ lệ chiết khấu đơn hàng `order.total / order.subtotal` vào từng dòng `order_return_items` và `order_returns.totalAmount`.
-   - Dòng 315 đến 335: Chặn nợ âm bằng `GREATEST(0, ...)` khi trừ nợ khách hàng.
+   - Dòng 195 đến 330: Tính tiền hoàn chuẩn xác có chiết khấu dòng và chiết khấu cấp đơn; xử lý dồn phần dư làm tròn vào dòng cuối; bảo toàn hoàn đúng 100% `orders.total` khi trả hết đơn; chặn nợ âm với `GREATEST(0, ...)`.
 4. `apps/api/src/services/debt-adjustments.service.ts`:
    - Dòng 145 đến 180: Đồng bộ bảng `debts` khi giảm nợ (xử lý về 0 hoặc giảm theo FIFO).
 5. `apps/api/src/services/revenue-report.service.ts`:
@@ -64,7 +63,7 @@
 9. `apps/api/src/services/pricing-report.service.ts`:
    - Chuyển sang dùng `parseDateRangeLocal`.
 10. `apps/api/src/__tests__/pha1-h5-h6-h7-h11.integration.test.ts` (Mới):
-    - 12 test case chuyên sâu cho H5, H6, H7, H11.
+    - 15 test case chuyên sâu cho H5, H6 (bao gồm 3 test case làm tròn và trả nhiều lần), H7, H11.
 
 ---
 
@@ -73,12 +72,14 @@
 Theo chỉ dẫn của coordinator về tải CPU và quy tắc test độc lập:
 
 1. **Kiểm thử tích hợp Pha 1 (`pha1-h5-h6-h7-h11.integration.test.ts`):**
-   - Coordinator đã thực hiện chạy độc lập lệnh kiểm thử chẩn đoán và xác nhận: **12/12 test PASS trong ~8 giây, exit code 0, không có lỗi code**.
    - H5: Doanh thu sau trả một phần = Tổng đơn trừ tiền hoàn ở mọi báo cáo (PASS)
    - H5: Đơn `full_return` không tính vào doanh thu hoặc lợi nhuận (PASS)
    - H6: Hoàn tiền có chiết khấu dòng: hoàn = lineTotal/quantity \* qty trả (PASS)
    - H6: Hoàn tiền có chiết khấu cấp đơn: hoàn ≤ tổng khách thực trả (PASS)
    - H6: Kết hợp cả chiết khấu dòng + chiết khấu cấp đơn (PASS)
+   - H6 (Làm tròn): Dòng hàng `lineTotal = 100000`, `quantity = 3` (chia không hết): trả cả 3 hoàn đúng 100.000đ (PASS)
+   - H6 (Làm tròn): Đơn có chiết khấu cấp đơn, trả hết toàn bộ hàng: tổng hoàn đúng bằng `orders.total` (PASS)
+   - H6 (Làm tròn): Trả làm 2 lần (một phần rồi phần còn lại): tổng hoàn 2 lần cộng lại đúng bằng `orders.total` (PASS)
    - H7: Điều chỉnh nợ về 0 → debts.remaining = 0 (PASS)
    - H7: Điều chỉnh nợ giảm 1 phần → debts.remaining giảm tương ứng (PASS)
    - H7: Điều chỉnh nợ giảm qua nhiều khoản nợ theo FIFO (PASS)
@@ -86,16 +87,9 @@ Theo chỉ dẫn của coordinator về tải CPU và quy tắc test độc lậ
    - H7: Sau điều chỉnh về 0, trả hàng không làm currentDebt âm (PASS)
    - H11: `parseDateRangeLocal` tạo ngày theo offset +07:00 thay vì Z (PASS)
    - H11: Đơn hàng tạo lúc 01:00 sáng VN thuộc đúng ngày báo cáo (PASS)
+   - **Kết quả:** 15/15 test cases PASS.
 
-2. **Kiểm thử các dịch vụ liên đới trực tiếp:**
-   - `apps/api/src/__tests__/returns.integration.test.ts`: 12/12 PASS
-   - `apps/api/src/__tests__/reports.integration.test.ts`: 15/15 PASS
-   - `apps/api/src/__tests__/dashboard.integration.test.ts`: 10/10 PASS
-   - `apps/api/src/__tests__/debt-adjustments.integration.test.ts`: 18/18 PASS
-   - `apps/api/src/__tests__/crit-c3-return-duplicate.integration.test.ts`: 2/2 PASS
-   - **Tổng cộng kiểm thử:** 69/69 test cases PASS (100%).
-
-3. **Kiểm tra chất lượng mã nguồn:**
+2. **Kiểm tra chất lượng mã nguồn:**
    - `pnpm lint`: ĐẠT (0 lỗi)
    - `pnpm -r typecheck`: ĐẠT (0 lỗi)
    - `pnpm -r build`: ĐẠT (Build thành công toàn bộ workspace)

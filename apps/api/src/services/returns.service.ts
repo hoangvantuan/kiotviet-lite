@@ -209,6 +209,7 @@ export async function createReturn({
         discountAmount: orderItems.discountAmount,
         purchasedQuantity: orderItems.quantity,
         returnedQuantity: sql<number>`COALESCE(SUM(${orderReturnItems.quantity}), 0)::int`,
+        returnedLineTotal: sql<number>`COALESCE(SUM(${orderReturnItems.lineTotal}), 0)::int`,
       })
       .from(orderItems)
       .leftJoin(orderReturnItems, eq(orderReturnItems.orderItemId, orderItems.id))
@@ -226,6 +227,14 @@ export async function createReturn({
         orderItems.quantity,
       )
 
+    const priorReturns = await tx
+      .select({
+        priorTotal: sql<number>`COALESCE(SUM(${orderReturns.totalAmount}), 0)::int`,
+      })
+      .from(orderReturns)
+      .where(eq(orderReturns.orderId, orderId))
+    const priorRefundTotal = Number(priorReturns[0]?.priorTotal ?? 0)
+
     const itemMap = new Map(existingItems.map((it) => [it.orderItemId, it]))
     // CRIT C3: trừ dồn số đã trả trong chính phiếu này. itemMap là snapshot đầu
     // transaction nên không tự cập nhật; nếu thiếu, các dòng trùng orderItemId đều
@@ -233,7 +242,7 @@ export async function createReturn({
     const consumedInThisReturn = new Map<string, number>()
 
     // 3. Validate return items + calculate total
-    let totalAmount = 0
+    let unroundedSubtotal = 0
     const validatedItems: Array<{
       orderItemId: string
       productId: string
@@ -265,13 +274,22 @@ export async function createReturn({
       consumedInThisReturn.set(returnItem.orderItemId, alreadyConsumed + returnItem.quantity)
 
       // H6: tính hoàn tiền theo tỷ lệ lineTotal/quantity (đã trừ chiết khấu dòng)
-      // thay vì unitPrice * quantity (bỏ qua chiết khấu → hoàn nhiều hơn khách trả)
+      // Nếu dòng này được trả hết toàn bộ số lượng còn lại:
+      // tiền hoàn = lineTotal dòng - tổng tiền đã hoàn cho dòng này ở các phiếu trước (không để rơi phần dư làm tròn)
       const purchasedQty = Number(existing.purchasedQuantity)
       const itemLineTotal = Number(existing.lineTotal)
-      // Đơn giá thực sau chiết khấu dòng = lineTotal / quantity (làm tròn xuống)
-      const effectiveUnitPrice = purchasedQty > 0 ? Math.floor(itemLineTotal / purchasedQty) : 0
-      const lineTotal = effectiveUnitPrice * returnItem.quantity
-      totalAmount += lineTotal
+      const alreadyReturnedQty = Number(existing.returnedQuantity)
+      const alreadyReturnedLineTotal = Number(existing.returnedLineTotal)
+      const totalReturnedForThisItem = alreadyReturnedQty + alreadyConsumed + returnItem.quantity
+
+      let lineTotal: number
+      if (totalReturnedForThisItem >= purchasedQty) {
+        lineTotal = Math.max(0, itemLineTotal - alreadyReturnedLineTotal)
+      } else {
+        const effectiveUnitPrice = purchasedQty > 0 ? Math.floor(itemLineTotal / purchasedQty) : 0
+        lineTotal = effectiveUnitPrice * returnItem.quantity
+      }
+      unroundedSubtotal += lineTotal
 
       validatedItems.push({
         orderItemId: returnItem.orderItemId,
@@ -287,18 +305,44 @@ export async function createReturn({
       })
     }
 
+    // Kiểm tra xem sau phiếu này, toàn bộ đơn hàng đã được trả hết chưa
+    let isEntireOrderFullyReturned = true
+    for (const it of existingItems) {
+      const consumed = consumedInThisReturn.get(it.orderItemId) ?? 0
+      const totalReturned = Number(it.returnedQuantity) + consumed
+      if (totalReturned < Number(it.purchasedQuantity)) {
+        isEntireOrderFullyReturned = false
+        break
+      }
+    }
+
     // H6: phân bổ chiết khấu cấp đơn hàng theo tỷ lệ
-    // orders.total = orders.subtotal - orders.discountAmount
-    // Nếu đơn có chiết khấu cấp đơn, doanh thu thực của mỗi dòng thấp hơn lineTotal
+    // Nếu đơn được trả hết toàn bộ: totalAmount = orders.total - tổng đã hoàn ở các phiếu trước
+    // Dồn phần dư làm tròn vào dòng cuối cùng để tổng các dòng khớp 100% với totalAmount
     const orderTotal = Number(order.total)
     const orderSubtotal = Number(order.subtotal)
-    if (orderSubtotal > 0 && orderTotal < orderSubtotal) {
-      // Tỷ lệ thanh toán thực: total / subtotal
+    const hasOrderDiscount = orderSubtotal > 0 && orderTotal < orderSubtotal
+
+    let totalAmount = unroundedSubtotal
+    if (isEntireOrderFullyReturned) {
+      totalAmount = Math.max(0, orderTotal - priorRefundTotal)
+    } else if (hasOrderDiscount) {
       const ratio = orderTotal / orderSubtotal
-      totalAmount = 0
-      for (const item of validatedItems) {
-        item.lineTotal = Math.floor(item.lineTotal * ratio)
-        totalAmount += item.lineTotal
+      totalAmount = Math.round(unroundedSubtotal * ratio)
+    }
+
+    if (hasOrderDiscount || isEntireOrderFullyReturned) {
+      const ratio = orderSubtotal > 0 ? orderTotal / orderSubtotal : 1
+      let allocatedSum = 0
+      for (let i = 0; i < validatedItems.length; i++) {
+        if (i === validatedItems.length - 1) {
+          // Dòng cuối cùng: nhận toàn bộ phần dư còn lại để tổng khớp chính xác
+          validatedItems[i]!.lineTotal = Math.max(0, totalAmount - allocatedSum)
+        } else {
+          const allocated = Math.floor(validatedItems[i]!.lineTotal * ratio)
+          validatedItems[i]!.lineTotal = allocated
+          allocatedSum += allocated
+        }
       }
     }
 

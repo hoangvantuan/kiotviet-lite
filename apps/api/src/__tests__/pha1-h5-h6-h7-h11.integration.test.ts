@@ -506,6 +506,269 @@ describe('H6 — Hoàn tiền tính đúng chiết khấu', () => {
     expect(data.totalAmount).toBe(140000)
     expect(data.refundAmount).toBe(140000)
   })
+
+  it('dòng hàng lineTotal = 100000, quantity = 3 (chia không hết): trả cả 3 hoàn đúng 100000', async () => {
+    const [product] = await base.db
+      .insert(products)
+      .values({
+        storeId: base.storeId,
+        name: 'SP Chia 3',
+        sku: 'SKU-DIV-3',
+        currentStock: 10,
+        costPrice: 20000,
+        sellingPrice: 40000,
+        hasVariants: false,
+      })
+      .returning()
+
+    const [customer] = await base.db
+      .insert(customers)
+      .values({
+        storeId: base.storeId,
+        name: 'KH Chia 3',
+        phone: '0900000333',
+        currentDebt: 0,
+      })
+      .returning()
+
+    // Đơn: 3 cái, giảm giá 20.000đ → lineTotal = 100.000đ (100.000 / 3 = 33333.33...)
+    const [order] = await base.db
+      .insert(orders)
+      .values({
+        storeId: base.storeId,
+        orderNumber: 'HD-DIV-3',
+        customerId: customer!.id,
+        userId: base.owner.id,
+        subtotal: 100000,
+        discountAmount: 0,
+        total: 100000,
+        paymentMethod: 'cash',
+        paymentStatus: 'paid',
+        cashAmount: 100000,
+        change: 0,
+        status: 'completed',
+      })
+      .returning()
+
+    const [item] = await base.db
+      .insert(orderItems)
+      .values({
+        orderId: order!.id,
+        productId: product!.id,
+        productName: 'SP Chia 3',
+        unit: 'cái',
+        unitPrice: 40000,
+        quantity: 3,
+        discountAmount: 20000,
+        lineTotal: 100000,
+      })
+      .returning()
+
+    // Trả cả 3 sản phẩm trong 1 lần
+    const returnRes = await ordersApp.request(`/${order!.id}/returns`, {
+      method: 'POST',
+      headers: { ...base.owner.authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: [{ orderItemId: item!.id, quantity: 3, reason: 'defective' }],
+      }),
+    })
+    expect(returnRes.status).toBe(201)
+    const { data } = (await returnRes.json()) as {
+      data: { refundAmount: number; totalAmount: number }
+    }
+    // Phải hoàn ĐÚNG 100.000đ, KHÔNG phải 99.999đ do làm tròn
+    expect(data.totalAmount).toBe(100000)
+    expect(data.refundAmount).toBe(100000)
+  })
+
+  it('đơn có chiết khấu cấp đơn, trả hết toàn bộ hàng: tổng hoàn đúng bằng orders.total', async () => {
+    const [productA] = await base.db
+      .insert(products)
+      .values({
+        storeId: base.storeId,
+        name: 'SP CK Đơn A',
+        sku: 'SKU-CK-A',
+        costPrice: 50000,
+        sellingPrice: 100000,
+        hasVariants: false,
+      })
+      .returning()
+
+    const [productB] = await base.db
+      .insert(products)
+      .values({
+        storeId: base.storeId,
+        name: 'SP CK Đơn B',
+        sku: 'SKU-CK-B',
+        costPrice: 100000,
+        sellingPrice: 200000,
+        hasVariants: false,
+      })
+      .returning()
+
+    const [customer] = await base.db
+      .insert(customers)
+      .values({
+        storeId: base.storeId,
+        name: 'KH CK Full',
+        phone: '0900000444',
+        currentDebt: 0,
+      })
+      .returning()
+
+    // Subtotal: 100k + 200k = 300k, CK đơn 50k → Total = 250.000đ
+    const [order] = await base.db
+      .insert(orders)
+      .values({
+        storeId: base.storeId,
+        orderNumber: 'HD-CK-FULL',
+        customerId: customer!.id,
+        userId: base.owner.id,
+        subtotal: 300000,
+        discountAmount: 50000,
+        total: 250000,
+        paymentMethod: 'cash',
+        paymentStatus: 'paid',
+        cashAmount: 250000,
+        change: 0,
+        status: 'completed',
+      })
+      .returning()
+
+    const [itemA] = await base.db
+      .insert(orderItems)
+      .values({
+        orderId: order!.id,
+        productId: productA!.id,
+        productName: 'SP CK Đơn A',
+        unit: 'cái',
+        unitPrice: 100000,
+        quantity: 1,
+        discountAmount: 0,
+        lineTotal: 100000,
+      })
+      .returning()
+
+    const [itemB] = await base.db
+      .insert(orderItems)
+      .values({
+        orderId: order!.id,
+        productId: productB!.id,
+        productName: 'SP CK Đơn B',
+        unit: 'cái',
+        unitPrice: 200000,
+        quantity: 1,
+        discountAmount: 0,
+        lineTotal: 200000,
+      })
+      .returning()
+
+    // Trả toàn bộ đơn (cả itemA và itemB)
+    const returnRes = await ordersApp.request(`/${order!.id}/returns`, {
+      method: 'POST',
+      headers: { ...base.owner.authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: [
+          { orderItemId: itemA!.id, quantity: 1, reason: 'defective' },
+          { orderItemId: itemB!.id, quantity: 1, reason: 'defective' },
+        ],
+      }),
+    })
+    expect(returnRes.status).toBe(201)
+    const { data } = (await returnRes.json()) as {
+      data: { refundAmount: number; totalAmount: number }
+    }
+    // Tổng hoàn phải đúng bằng 250.000đ (orders.total)
+    expect(data.totalAmount).toBe(250000)
+    expect(data.refundAmount).toBe(250000)
+  })
+
+  it('trả làm hai lần (một phần rồi phần còn lại): tổng hoàn 2 lần cộng lại đúng bằng orders.total', async () => {
+    const [product] = await base.db
+      .insert(products)
+      .values({
+        storeId: base.storeId,
+        name: 'SP 2 Lan',
+        sku: 'SKU-2-LAN',
+        costPrice: 20000,
+        sellingPrice: 50000,
+        hasVariants: false,
+      })
+      .returning()
+
+    const [customer] = await base.db
+      .insert(customers)
+      .values({
+        storeId: base.storeId,
+        name: 'KH 2 Lan',
+        phone: '0900000555',
+        currentDebt: 0,
+      })
+      .returning()
+
+    // Đơn: 3 cái x 50.000đ = subtotal 150.000đ, CK đơn 50.000đ → Total = 100.000đ
+    const [order] = await base.db
+      .insert(orders)
+      .values({
+        storeId: base.storeId,
+        orderNumber: 'HD-2-LAN',
+        customerId: customer!.id,
+        userId: base.owner.id,
+        subtotal: 150000,
+        discountAmount: 50000,
+        total: 100000,
+        paymentMethod: 'cash',
+        paymentStatus: 'paid',
+        cashAmount: 100000,
+        change: 0,
+        status: 'completed',
+      })
+      .returning()
+
+    const [item] = await base.db
+      .insert(orderItems)
+      .values({
+        orderId: order!.id,
+        productId: product!.id,
+        productName: 'SP 2 Lan',
+        unit: 'cái',
+        unitPrice: 50000,
+        quantity: 3,
+        discountAmount: 0,
+        lineTotal: 150000,
+      })
+      .returning()
+
+    // Lần 1: Trả 1 cái
+    const returnRes1 = await ordersApp.request(`/${order!.id}/returns`, {
+      method: 'POST',
+      headers: { ...base.owner.authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: [{ orderItemId: item!.id, quantity: 1, reason: 'defective' }],
+      }),
+    })
+    expect(returnRes1.status).toBe(201)
+    const { data: data1 } = (await returnRes1.json()) as {
+      data: { refundAmount: number; totalAmount: number }
+    }
+
+    // Lần 2: Trả nốt 2 cái còn lại
+    const returnRes2 = await ordersApp.request(`/${order!.id}/returns`, {
+      method: 'POST',
+      headers: { ...base.owner.authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: [{ orderItemId: item!.id, quantity: 2, reason: 'defective' }],
+      }),
+    })
+    expect(returnRes2.status).toBe(201)
+    const { data: data2 } = (await returnRes2.json()) as {
+      data: { refundAmount: number; totalAmount: number }
+    }
+
+    // Tổng hoàn của 2 lần cộng lại PHẢI đúng bằng 100.000đ (orders.total)
+    expect(data1.totalAmount + data2.totalAmount).toBe(100000)
+    expect(data1.refundAmount + data2.refundAmount).toBe(100000)
+  })
 })
 
 // ============================================================================
