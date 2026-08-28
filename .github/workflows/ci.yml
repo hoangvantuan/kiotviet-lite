@@ -32,3 +32,79 @@ jobs:
 
       - name: Build
         run: pnpm -r build
+
+  e2e:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: ci
+    # Cho phép thất bại mềm trong lần đầu (mới chỉ có test khói), sẽ siết lại khi bộ E2E hoàn thiện và ổn định
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: kiotviet
+          POSTGRES_PASSWORD: kiotviet_password
+          POSTGRES_DB: kiotviet_lite_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://kiotviet:kiotviet_password@localhost:5432/kiotviet_lite_test
+      JWT_ACCESS_SECRET: e2e-test-jwt-access-secret-at-least-32-chars
+      JWT_REFRESH_SECRET: e2e-test-jwt-refresh-secret-at-least-32-chars
+      PORT: 3000
+      VITE_API_URL: http://localhost:3000
+      ALLOWED_ORIGINS: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @kiotviet-lite/web exec playwright install --with-deps chromium
+
+      - name: Migrate Database Schema
+        run: pnpm db:migrate
+
+      - name: Seed Database
+        run: pnpm --filter @kiotviet-lite/api run db:seed
+
+      - name: Start API Server and Wait for Ready
+        run: |
+          pnpm --filter @kiotviet-lite/api run dev &
+          echo "Waiting for API server to become ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/v1/health > /dev/null; then
+              echo "API server is ready at http://localhost:3000 after ${i}s"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "Error: API server failed to start within 30s"
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Run Playwright E2E Tests
+        run: pnpm --filter @kiotviet-lite/web run test:e2e
+
+      - name: Upload Playwright Artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
