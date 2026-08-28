@@ -13,6 +13,7 @@ import { useDebounced } from '@/hooks/use-debounced'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { ApiClientError } from '@/lib/api-client'
 import { downloadCsv, slugify } from '@/lib/csv'
+import { formatDate } from '@/lib/date'
 import { showError, showSuccess } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
@@ -32,13 +33,6 @@ interface Props {
   listBId: string
   onSwap: () => void
   onBack: () => void
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return ''
-  const [y, m, d] = iso.split('-')
-  if (!y || !m || !d) return iso
-  return `${d}/${m}/${y}`
 }
 
 function buildIneffectiveReason(list: PriceListDetail): string {

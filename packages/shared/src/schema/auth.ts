@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const VN_PHONE_REGEX = /^0(3|5|7|8|9)\d{8}$/
+import { VN_PHONE_REGEX } from '../constants/regex.js'
 
 export const phoneSchema = z
   .string({ required_error: 'Vui lòng nhập số điện thoại' })

@@ -1,10 +1,13 @@
 import { and, asc, desc, eq, gte, ilike, isNull, like, lte, type SQL, sql } from 'drizzle-orm'
 
 import {
+  calculateLineTotal,
+  calculateUnitConversionPrice,
   type CreateOrderInput,
   customerGroups,
   customers,
   debts,
+  formatCurrencyVnd as formatVnd,
   inventoryTransactions,
   type ListOrdersQuery,
   orderItems,
@@ -162,10 +165,6 @@ export interface CreateOrderDeps {
   clientId?: string | null
   offlineCreatedAt?: string
   skipDebtLimitCheck?: boolean
-}
-
-function formatVnd(value: number): string {
-  return `${value.toLocaleString('vi-VN')}đ`
 }
 
 export async function createOrder({
@@ -387,14 +386,20 @@ export async function createOrder({
         // M16: Đơn vị quy đổi có giá 0 dẫn tới bán 0đ: BE tự tính lại giá thay vì tin client
         if (conv && !item.priceOverride) {
           const basePrice = variant ? Number(variant.sellingPrice) : Number(product.sellingPrice)
-          const expectedConvPrice =
-            conv.sellingPrice ?? Math.round(basePrice * conv.conversionFactor)
+          const expectedConvPrice = calculateUnitConversionPrice({
+            basePrice,
+            conversionFactor: conv.conversionFactor,
+            customSellingPrice: conv.sellingPrice,
+          })
           if (effectiveUnitPrice <= 0 && expectedConvPrice > 0) {
             effectiveUnitPrice = expectedConvPrice
-            effectiveLineTotal = Math.max(
-              0,
-              effectiveUnitPrice * item.quantity - item.discountAmount,
-            )
+            const lineRes = calculateLineTotal({
+              unitPrice: effectiveUnitPrice,
+              quantity: item.quantity,
+              discountType: item.discountType,
+              discountValue: item.discountValue,
+            })
+            effectiveLineTotal = lineRes.lineTotal
           }
         }
 

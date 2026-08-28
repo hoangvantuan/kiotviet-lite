@@ -252,19 +252,19 @@ export function PosScreen() {
               className="fixed bottom-4 left-4 right-4 z-40 flex h-14 items-center justify-between gap-3 rounded-full bg-primary px-5 text-primary-foreground shadow-lg transition-transform active:scale-[0.98]"
               aria-label={
                 cartCount > 0
-                  ? `Mo gio hang: ${cartCount} san pham, tong ${formatVndWithSuffix(cartGrandTotal)}`
-                  : 'Mo gio hang trong'
+                  ? `Mở giỏ hàng: ${cartCount} sản phẩm, tổng ${formatVndWithSuffix(cartGrandTotal)}`
+                  : 'Mở giỏ hàng trống'
               }
             >
               <span className="flex items-center gap-2">
                 <ShoppingCart className="h-5 w-5" aria-hidden="true" />
                 <span className="text-sm font-semibold">
-                  {cartCount > 0 ? `${cartCount} SP` : 'Gio hang trong'}
+                  {cartCount > 0 ? `${cartCount} SP` : 'Giỏ hàng trống'}
                 </span>
               </span>
               {cartCount > 0 && (
                 <span className="font-mono text-base font-bold">
-                  Tong: {formatVndWithSuffix(cartGrandTotal)}
+                  Tổng: {formatVndWithSuffix(cartGrandTotal)}
                 </span>
               )}
             </button>
@@ -272,8 +272,8 @@ export function PosScreen() {
             <Sheet open={cartSheetOpen} onOpenChange={setCartSheetOpen}>
               <SheetContent side="bottom" className="h-[85vh] p-0">
                 <SheetHeader className="sr-only">
-                  <SheetTitle>Gio hang</SheetTitle>
-                  <SheetDescription>Danh sach san pham trong gio hang</SheetDescription>
+                  <SheetTitle>Giỏ hàng</SheetTitle>
+                  <SheetDescription>Danh sách sản phẩm trong giỏ hàng</SheetDescription>
                 </SheetHeader>
                 <CartPanel onPayment={handleOpenPayment} />
               </SheetContent>

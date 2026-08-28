@@ -15,6 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
+import { formatDateTime } from '@/lib/date'
 
 import { usePurchaseOrderQuery } from './use-purchase-orders'
 
@@ -48,21 +49,6 @@ function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
       {PAYMENT_STATUS_LABELS[status]}
     </Badge>
   )
-}
-
-function formatDateTime(iso: string): string {
-  try {
-    const d = new Date(iso)
-    return d.toLocaleString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return iso
-  }
 }
 
 export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProps) {

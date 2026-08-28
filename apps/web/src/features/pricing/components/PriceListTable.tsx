@@ -12,15 +12,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { formatDate } from '@/lib/date'
 
 import { PriceListStatusBadge } from './PriceListStatusBadge'
-
-function formatDate(iso: string | null): string {
-  if (!iso) return ''
-  const [y, m, d] = iso.split('-')
-  if (!y || !m || !d) return iso
-  return `${d}/${m}/${y}`
-}
 
 interface Props {
   items: PriceListListItem[]

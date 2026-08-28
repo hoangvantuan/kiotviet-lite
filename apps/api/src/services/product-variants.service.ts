@@ -1,23 +1,16 @@
 import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm'
 
-import { inventoryTransactions, productVariants, type VariantItem } from '@kiotviet-lite/shared'
+import {
+  inventoryTransactions,
+  productVariants,
+  slugify,
+  type VariantItem,
+} from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 
 const SKU_REGEX = /^[A-Za-z0-9_\-./]+$/
-
-export function slugify(s: string): string {
-  return s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/đ/gi, 'd')
-    .toLowerCase()
-    .replace(/[\s_]+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-}
 
 interface VariantRow {
   id: string

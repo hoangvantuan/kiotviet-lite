@@ -23,6 +23,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatVnd } from '@/lib/currency'
+import { formatDate } from '@/lib/date'
 
 import { useCustomerOrders } from '../hooks/use-customer-detail'
 
@@ -50,18 +51,6 @@ function StatusBadge({ status }: { status: CustomerOrderStatus }) {
       {STATUS_LABELS[status]}
     </Badge>
   )
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  } catch {
-    return iso
-  }
 }
 
 interface CustomerOrdersTabProps {

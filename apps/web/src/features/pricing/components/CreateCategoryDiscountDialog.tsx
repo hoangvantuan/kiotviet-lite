@@ -28,8 +28,8 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { useCategoriesQuery } from '@/features/categories/use-categories'
 import { useCustomerGroupsQuery, useCustomersQuery } from '@/features/customers/use-customers'
-import { ApiClientError } from '@/lib/api-client'
-import { showError, showSuccess } from '@/lib/toast'
+import { handleApiError } from '@/lib/api-error'
+import { showSuccess } from '@/lib/toast'
 
 import { useCreateCategoryDiscountMutation } from '../use-category-discounts'
 
@@ -394,36 +394,4 @@ export function CreateCategoryDiscountDialog({ open, onOpenChange }: Props) {
       </DialogContent>
     </Dialog>
   )
-}
-
-function handleApiError(err: unknown, form: ReturnType<typeof useForm<FormShape>>) {
-  if (err instanceof ApiClientError) {
-    if (err.code === 'NOT_FOUND') {
-      showError(err.message)
-      return
-    }
-    if (err.code === 'VALIDATION_ERROR') {
-      const detail = err.details as { field?: string } | Array<{ path: string; message: string }>
-      if (Array.isArray(detail)) {
-        for (const issue of detail) {
-          if (
-            issue.path === 'discountValue' ||
-            issue.path === 'minQty' ||
-            issue.path === 'effectiveTo' ||
-            issue.path === 'note'
-          ) {
-            form.setError(issue.path as keyof FormShape, { message: issue.message })
-          }
-        }
-        return
-      }
-      if (detail.field) {
-        form.setError(detail.field as keyof FormShape, { message: err.message })
-      }
-      return
-    }
-    showError(err.message)
-    return
-  }
-  showError('Đã xảy ra lỗi không xác định')
 }

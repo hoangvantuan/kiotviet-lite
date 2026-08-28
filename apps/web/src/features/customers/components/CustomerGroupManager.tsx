@@ -48,8 +48,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ApiClientError } from '@/lib/api-client'
-import { showError, showSuccess } from '@/lib/toast'
+import { asFormSetError, handleApiError } from '@/lib/api-error'
+import { formatVndWithSuffix } from '@/lib/currency'
+import { showSuccess } from '@/lib/toast'
 
 import { useDirectPriceListsQuery } from '../../pricing/use-price-lists'
 import {
@@ -61,11 +62,9 @@ import {
 
 const NO_PRICE_LIST = '__NONE__'
 
-const VND_FORMATTER = new Intl.NumberFormat('vi-VN')
-
 function formatDebtLimit(value: number | null): string {
   if (value === null) return 'Không giới hạn'
-  return `${VND_FORMATTER.format(value)} ₫`
+  return formatVndWithSuffix(value, ' ₫')
 }
 
 export function CustomerGroupManager() {
@@ -486,11 +485,7 @@ function DeleteGroupDialog({ open, onOpenChange, group }: DeleteGroupDialogProps
       showSuccess('Đã xoá nhóm')
       onOpenChange(false)
     } catch (err) {
-      if (err instanceof ApiClientError) {
-        showError(err.message)
-      } else {
-        showError('Đã xảy ra lỗi không xác định')
-      }
+      handleApiError(err)
     }
   }
 
@@ -516,39 +511,4 @@ function DeleteGroupDialog({ open, onOpenChange, group }: DeleteGroupDialogProps
       </AlertDialogContent>
     </AlertDialog>
   )
-}
-
-interface FormSetError {
-  setError: (name: string, error: { message: string }) => void
-}
-
-function asFormSetError(form: { setError: (...args: never[]) => void }): FormSetError {
-  return {
-    setError: (name, error) => {
-      ;(form.setError as unknown as (n: string, e: { message: string }) => void)(name, error)
-    },
-  }
-}
-
-function handleApiError(err: unknown, form: FormSetError, knownFields: string[]) {
-  if (err instanceof ApiClientError) {
-    if (err.code === 'CONFLICT') {
-      const detail = err.details as { field?: string } | undefined
-      if (detail?.field === 'name' && knownFields.includes('name')) {
-        form.setError('name', { message: err.message })
-        showError(err.message)
-        return
-      }
-    }
-    if (err.code === 'VALIDATION_ERROR' && Array.isArray(err.details)) {
-      for (const issue of err.details as Array<{ path: string; message: string }>) {
-        if (knownFields.includes(issue.path)) {
-          form.setError(issue.path, { message: issue.message })
-        }
-      }
-    }
-    showError(err.message)
-    return
-  }
-  showError('Đã xảy ra lỗi không xác định')
 }

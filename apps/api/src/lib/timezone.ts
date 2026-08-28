@@ -41,6 +41,27 @@ export function parseDateRangeLocal(from?: string, to?: string, defaultRangeDays
 }
 
 /**
+ * Chuyển đổi chuỗi ngày/thời gian sang Date theo múi giờ cửa hàng (mặc định +07:00).
+ * - Nếu là YYYY-MM-DD:
+ *   - 'start' -> 00:00:00.000 + offset (đầu ngày)
+ *   - 'end'   -> 23:59:59.999 + offset (cuối ngày)
+ * - Nếu đã có giờ/offset đầy đủ: giữ nguyên.
+ */
+export function parseDateRangeBoundary(
+  value: string | undefined,
+  boundary: 'start' | 'end',
+): Date | undefined {
+  if (!value) return undefined
+  const trimmed = value.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const offset = getTimezoneOffset()
+    const timeSuffix = boundary === 'start' ? `T00:00:00.000${offset}` : `T23:59:59.999${offset}`
+    return new Date(`${trimmed}${timeSuffix}`)
+  }
+  return new Date(trimmed)
+}
+
+/**
  * Biểu thức SQL date_trunc theo múi giờ cửa hàng.
  * Dùng cho groupBy trong báo cáo doanh thu/lợi nhuận.
  */

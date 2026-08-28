@@ -13,22 +13,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
+import { formatDate } from '@/lib/date'
 
 import { useProductPurchaseHistoryQuery } from './use-product-history'
 
 const PAGE_SIZE = 20
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  } catch {
-    return iso
-  }
-}
 
 export function ProductPurchaseHistory({ productId }: { productId: string }) {
   const [page, setPage] = useState(1)

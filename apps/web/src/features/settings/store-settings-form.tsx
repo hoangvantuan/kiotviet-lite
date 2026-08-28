@@ -8,8 +8,8 @@ import { type UpdateStoreInput, updateStoreSchema } from '@kiotviet-lite/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ApiClientError } from '@/lib/api-client'
-import { showError, showSuccess } from '@/lib/toast'
+import { handleApiError } from '@/lib/api-error'
+import { showSuccess } from '@/lib/toast'
 
 import { useStoreQuery, useUpdateStoreMutation } from './use-store-settings'
 
@@ -177,19 +177,4 @@ export function StoreSettingsForm() {
       </div>
     </form>
   )
-}
-
-function handleApiError(err: unknown, form: ReturnType<typeof useForm<UpdateStoreInput>>) {
-  if (err instanceof ApiClientError) {
-    if (err.code === 'VALIDATION_ERROR' && Array.isArray(err.details)) {
-      for (const issue of err.details as Array<{ path: string; message: string }>) {
-        if (['name', 'address', 'phone', 'logoUrl'].includes(issue.path)) {
-          form.setError(issue.path as keyof UpdateStoreInput, { message: issue.message })
-        }
-      }
-    }
-    showError(err.message)
-    return
-  }
-  showError('Đã xảy ra lỗi không xác định')
 }

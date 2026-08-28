@@ -23,8 +23,8 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { ApiClientError } from '@/lib/api-client'
-import { showError, showSuccess } from '@/lib/toast'
+import { handleApiError } from '@/lib/api-error'
+import { showSuccess } from '@/lib/toast'
 
 import { useUpdatePriceListMutation } from '../use-price-lists'
 
@@ -200,33 +200,4 @@ export function EditPriceListDialog({ open, onOpenChange, priceList }: Props) {
       </DialogContent>
     </Dialog>
   )
-}
-
-function handleApiError(err: unknown, form: ReturnType<typeof useForm<FormShape>>) {
-  if (err instanceof ApiClientError) {
-    if (err.code === 'CONFLICT') {
-      const detail = err.details as { field?: string } | undefined
-      if (detail?.field === 'name') {
-        form.setError('name', { message: err.message })
-      }
-      showError(err.message)
-      return
-    }
-    if (err.code === 'VALIDATION_ERROR' && Array.isArray(err.details)) {
-      for (const issue of err.details as Array<{ path: string; message: string }>) {
-        if (
-          issue.path === 'name' ||
-          issue.path === 'description' ||
-          issue.path === 'effectiveFrom' ||
-          issue.path === 'effectiveTo' ||
-          issue.path === 'roundingRule'
-        ) {
-          form.setError(issue.path as keyof FormShape, { message: issue.message })
-        }
-      }
-    }
-    showError(err.message)
-    return
-  }
-  showError('Đã xảy ra lỗi không xác định')
 }

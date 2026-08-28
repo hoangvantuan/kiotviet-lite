@@ -1,9 +1,8 @@
 import { z } from 'zod'
 
-const NAME_REGEX = /^[\p{L}\p{N}\s\-_&()'./,]+$/u
+import { NAME_REGEX, PHONE_REGEX, TAX_ID_REGEX } from '../constants/regex.js'
+
 const GROUP_NAME_REGEX = /^[\p{L}\p{N}\s\-_&()'./]+$/u
-const PHONE_REGEX = /^[0-9+]+$/
-const TAX_ID_REGEX = /^[A-Za-z0-9-]+$/
 
 export const customerNameSchema = z
   .string({ required_error: 'Vui lòng nhập tên khách hàng' })

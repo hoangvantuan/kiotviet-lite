@@ -19,13 +19,12 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ApiClientError } from '@/lib/api-client'
+import { handleApiError } from '@/lib/api-error'
+import { formatVnd } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
 
 import { useProductsQuery } from '../../products/use-products'
 import { useCreatePriceListItemMutation } from '../use-price-lists'
-
-const VND_FORMATTER = new Intl.NumberFormat('vi-VN')
 
 interface FormShape {
   productId: string
@@ -146,9 +145,7 @@ export function AddPriceListItemDialog({
                     <p className="truncate text-sm font-medium">{p.name}</p>
                     <p className="text-xs text-muted-foreground">SKU {p.sku}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {VND_FORMATTER.format(p.sellingPrice)}đ
-                  </p>
+                  <p className="text-xs text-muted-foreground">{formatVnd(p.sellingPrice)}đ</p>
                 </button>
               ))
             )}
@@ -165,8 +162,7 @@ export function AddPriceListItemDialog({
                 onChange={(v) => form.setValue('price', v, { shouldValidate: true })}
               />
               <p className="text-xs text-muted-foreground">
-                Sản phẩm: {selectedProduct.name}. Sau làm tròn:{' '}
-                {VND_FORMATTER.format(previewRounded)}đ
+                Sản phẩm: {selectedProduct.name}. Sau làm tròn: {formatVnd(previewRounded)}đ
               </p>
               {form.formState.errors.price && (
                 <p className="text-sm text-destructive">{form.formState.errors.price.message}</p>
@@ -194,28 +190,4 @@ export function AddPriceListItemDialog({
       </DialogContent>
     </Dialog>
   )
-}
-
-function handleApiError(err: unknown, form: ReturnType<typeof useForm<FormShape>>) {
-  if (err instanceof ApiClientError) {
-    if (err.code === 'CONFLICT') {
-      const detail = err.details as { field?: string } | undefined
-      if (detail?.field === 'productId') {
-        showError('Sản phẩm đã có trong bảng giá')
-        return
-      }
-      showError(err.message)
-      return
-    }
-    if (err.code === 'VALIDATION_ERROR' && Array.isArray(err.details)) {
-      for (const issue of err.details as Array<{ path: string; message: string }>) {
-        if (issue.path === 'price') {
-          form.setError('price', { message: issue.message })
-        }
-      }
-    }
-    showError(err.message)
-    return
-  }
-  showError('Đã xảy ra lỗi không xác định')
 }

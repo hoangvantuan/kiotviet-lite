@@ -1,23 +1,10 @@
 import type { SupplierPaymentListItem } from '@kiotviet-lite/shared'
 
 import { formatVndWithSuffix } from '@/lib/currency'
+import { formatDateTime } from '@/lib/date'
 
 interface SupplierPaymentsCardListProps {
   items: SupplierPaymentListItem[]
-}
-
-function formatDateTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return iso
-  }
 }
 
 function truncate(text: string | null, max = 50): string {

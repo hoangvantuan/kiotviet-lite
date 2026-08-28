@@ -52,7 +52,7 @@ export function StockInfoPopover({ productId }: StockInfoPopoverProps) {
           variant="ghost"
           size="icon"
           className="h-7 w-7 shrink-0"
-          aria-label="Xem ton kho"
+          aria-label="Xem tồn kho"
         >
           <Info className="h-3.5 w-3.5" />
         </Button>
@@ -65,27 +65,27 @@ export function StockInfoPopover({ productId }: StockInfoPopoverProps) {
             <p className="text-sm font-semibold text-foreground">{stockInfo.productName}</p>
 
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Ton kho</span>
+              <span className="text-xs text-muted-foreground">Tồn kho</span>
               <span className="font-mono text-sm font-medium">
                 {formatVnd(stockInfo.currentStock)} {stockInfo.unit}
               </span>
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Dinh muc toi thieu</span>
+              <span className="text-xs text-muted-foreground">Định mức tối thiểu</span>
               <span className="font-mono text-sm">
                 {formatVnd(stockInfo.minStock)} {stockInfo.unit}
               </span>
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Trang thai</span>
+              <span className="text-xs text-muted-foreground">Trạng thái</span>
               <StockBadge stock={stockInfo.currentStock} minStock={stockInfo.minStock} />
             </div>
 
             {stockInfo.variants.length > 0 && (
               <div className="border-t border-border pt-2">
-                <p className="mb-1 text-xs font-medium text-muted-foreground">Bien the</p>
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Biến thể</p>
                 <div className="space-y-1">
                   {stockInfo.variants.map((v) => (
                     <div key={v.id} className="flex items-center justify-between text-xs">
@@ -99,12 +99,12 @@ export function StockInfoPopover({ productId }: StockInfoPopoverProps) {
 
             {!stockInfo.trackInventory && (
               <p className="text-xs italic text-muted-foreground">
-                San pham nay khong theo doi ton kho
+                Sản phẩm này không theo dõi tồn kho
               </p>
             )}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Khong tim thay thong tin</p>
+          <p className="text-sm text-muted-foreground">Không tìm thấy thông tin</p>
         )}
       </PopoverContent>
     </Popover>

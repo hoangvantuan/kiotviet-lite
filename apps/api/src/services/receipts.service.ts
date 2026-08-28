@@ -18,6 +18,7 @@ import {
   type CreateReceiptInput,
   customers,
   debts,
+  formatCurrencyVnd as formatVnd,
   type ListReceiptsQuery,
   type OpenDebtItem,
   orders,
@@ -42,9 +43,7 @@ export interface ReceiptsActor {
   role: UserRole
 }
 
-export function formatVnd(amount: number): string {
-  return `${new Intl.NumberFormat('vi-VN').format(amount)}đ`
-}
+export { formatVnd }
 
 interface ReceiptRow {
   id: string

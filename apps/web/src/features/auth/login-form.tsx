@@ -8,7 +8,7 @@ import { type LoginInput, loginSchema } from '@kiotviet-lite/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ApiClientError } from '@/lib/api-client'
+import { handleApiError } from '@/lib/api-error'
 
 import { useLogin } from './use-login'
 
@@ -70,9 +70,7 @@ export function LoginForm() {
           <p className="text-sm text-destructive">{form.formState.errors.password.message}</p>
         ) : null}
         {hasPasswordSpaces && !form.formState.errors.password && (
-          <p className="text-sm text-yellow-600">
-            Mật khẩu có chứa khoảng trắng ở đầu hoặc cuối
-          </p>
+          <p className="text-sm text-yellow-600">Mật khẩu có chứa khoảng trắng ở đầu hoặc cuối</p>
         )}
       </div>
 
@@ -92,19 +90,4 @@ export function LoginForm() {
       </p>
     </form>
   )
-}
-
-function handleApiError(err: unknown, form: ReturnType<typeof useForm<LoginInput>>) {
-  if (err instanceof ApiClientError) {
-    if (err.code === 'VALIDATION_ERROR' && Array.isArray(err.details)) {
-      for (const issue of err.details as Array<{ path: string; message: string }>) {
-        if (issue.path === 'phone' || issue.path === 'password') {
-          form.setError(issue.path, { message: issue.message })
-        }
-      }
-    }
-    toast.error(err.message)
-    return
-  }
-  toast.error('Đã xảy ra lỗi không xác định')
 }

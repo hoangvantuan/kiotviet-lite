@@ -13,24 +13,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatDiff } from '@/features/stock-checks/stock-check-utils'
+import { formatDateTime } from '@/lib/date'
 
 import { useProductStockCheckHistoryQuery } from './use-product-history'
 
 const PAGE_SIZE = 20
-
-function formatDateTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return iso
-  }
-}
 
 export function ProductStockCheckHistory({ productId }: { productId: string }) {
   const [page, setPage] = useState(1)

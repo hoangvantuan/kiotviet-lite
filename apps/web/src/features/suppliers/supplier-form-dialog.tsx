@@ -22,40 +22,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { ApiClientError } from '@/lib/api-client'
+import { asFormSetError, handleApiError } from '@/lib/api-error'
 import { formatVnd } from '@/lib/currency'
-import { showError, showSuccess } from '@/lib/toast'
+import { showSuccess } from '@/lib/toast'
 
 import { useCreateSupplierMutation, useUpdateSupplierMutation } from './use-suppliers'
 
 const KNOWN_FIELDS = ['name', 'phone', 'email', 'address', 'taxId', 'notes']
-
-interface FormSetError {
-  setError: (name: string, error: { message: string }) => void
-}
-
-function asFormSetError(form: { setError: (...args: never[]) => void }): FormSetError {
-  return {
-    setError: (name, error) => {
-      ;(form.setError as unknown as (n: string, e: { message: string }) => void)(name, error)
-    },
-  }
-}
-
-function handleApiError(err: unknown, form: FormSetError, knownFields: string[]) {
-  if (err instanceof ApiClientError) {
-    if (err.code === 'CONFLICT' && err.details && typeof err.details === 'object') {
-      const field = (err.details as { field?: string }).field
-      if (field && knownFields.includes(field)) {
-        form.setError(field, { message: err.message })
-        return
-      }
-    }
-    showError(err.message)
-    return
-  }
-  showError('Đã có lỗi xảy ra, vui lòng thử lại')
-}
 
 interface SupplierFormDialogProps {
   open: boolean

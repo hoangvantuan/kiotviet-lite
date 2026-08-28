@@ -49,7 +49,10 @@ export const errorHandler: ErrorHandler = (err, c) => {
       context: {
         errorMessage: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack?.slice(0, 500) : undefined,
-        requestId: c.get('requestId') as string | undefined,
+        requestId:
+          (c.get('requestId') as string | undefined) ??
+          (reqLogger as unknown as { bindings?: () => { requestId?: string } })?.bindings?.()
+            ?.requestId,
       },
     })
   }

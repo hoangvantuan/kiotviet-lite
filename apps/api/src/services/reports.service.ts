@@ -6,6 +6,7 @@ import {
   type DebtAgingRow,
   debts,
   type DebtSummaryReport,
+  formatVnd,
   receipts,
   stores,
   supplierPayments,
@@ -13,32 +14,11 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { parseDateRangeBoundary } from '../lib/timezone.js'
 
 interface ReportQuery {
   from?: string
   to?: string
-}
-
-/**
- * Chuyển đổi chuỗi ngày/thời gian sang Date theo múi giờ Việt Nam (+07:00).
- * - Nếu là YYYY-MM-DD:
- *   - 'start' -> 00:00:00.000+07:00 (đầu ngày)
- *   - 'end'   -> 23:59:59.999+07:00 (cuối ngày)
- * - Nếu đã có giờ/offset đầy đủ: giữ nguyên.
- *
- * TODO (Pha 6): Hợp nhất logic này về helper timezone dùng chung (apps/api/src/lib/timezone.ts).
- */
-function parseDateRangeBoundary(
-  value: string | undefined,
-  boundary: 'start' | 'end',
-): Date | undefined {
-  if (!value) return undefined
-  const trimmed = value.trim()
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    const timeSuffix = boundary === 'start' ? 'T00:00:00.000+07:00' : 'T23:59:59.999+07:00'
-    return new Date(`${trimmed}${timeSuffix}`)
-  }
-  return new Date(trimmed)
 }
 
 function parseOverdueDays(raw: string): number[] {
@@ -256,10 +236,6 @@ export async function getDebtSummaryReport({
       to: toDate.toISOString(),
     },
   }
-}
-
-function formatVnd(amount: number): string {
-  return new Intl.NumberFormat('vi-VN').format(amount)
 }
 
 export function buildAgingCsv(report: DebtAgingReport): string {

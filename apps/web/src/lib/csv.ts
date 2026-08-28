@@ -1,3 +1,5 @@
+import { slugify as sharedSlugify } from '@kiotviet-lite/shared'
+
 export function escapeCsvField(value: unknown): string {
   if (value === null || value === undefined) return ''
   const s = String(value)
@@ -15,7 +17,7 @@ export function buildCsv(headers: string[], rows: (string | number | null)[][]):
 }
 
 export function downloadCsv(filename: string, csvText: string): void {
-  const blob = new Blob(['﻿' + csvText], { type: 'text/csv;charset=utf-8;' })
+  const blob = new Blob(['\ufeff' + csvText], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -27,12 +29,5 @@ export function downloadCsv(filename: string, csvText: string): void {
 }
 
 export function slugify(input: string): string {
-  return input
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[đĐ]/g, 'd')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 30)
+  return sharedSlugify(input, { maxLength: 30 })
 }
