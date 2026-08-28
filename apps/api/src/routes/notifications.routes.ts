@@ -70,8 +70,9 @@ export function createNotificationRoutes({ db }: NotificationRoutesDeps) {
     const auth = c.get('auth')
     const input = await parseJson(c, emitInputSchema)
 
-    const logger = c.get('logger')
-    const correlationId = logger?.bindings?.()?.requestId as string | undefined
+    const correlationId =
+      (c.get('requestId') as string | undefined) ??
+      (logger as unknown as { bindings?: () => { requestId?: string } })?.bindings?.()?.requestId
 
     const event = {
       id: uuidv7(),
