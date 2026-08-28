@@ -175,6 +175,7 @@ export async function createReturn({
         storeId: orders.storeId,
         orderNumber: orders.orderNumber,
         customerId: orders.customerId,
+        subtotal: orders.subtotal,
         total: orders.total,
         paymentStatus: orders.paymentStatus,
         status: orders.status,
@@ -194,6 +195,7 @@ export async function createReturn({
     }
 
     // 2. Load order items + returned quantities
+    // H6: cần lineTotal và discountAmount để tính hoàn tiền chính xác (có chiết khấu)
     const existingItems = await tx
       .select({
         orderItemId: orderItems.id,
@@ -203,6 +205,8 @@ export async function createReturn({
         variantName: orderItems.variantName,
         unit: orderItems.unit,
         unitPrice: orderItems.unitPrice,
+        lineTotal: orderItems.lineTotal,
+        discountAmount: orderItems.discountAmount,
         purchasedQuantity: orderItems.quantity,
         returnedQuantity: sql<number>`COALESCE(SUM(${orderReturnItems.quantity}), 0)::int`,
       })
@@ -217,6 +221,8 @@ export async function createReturn({
         orderItems.variantName,
         orderItems.unit,
         orderItems.unitPrice,
+        orderItems.lineTotal,
+        orderItems.discountAmount,
         orderItems.quantity,
       )
 
@@ -258,7 +264,13 @@ export async function createReturn({
       }
       consumedInThisReturn.set(returnItem.orderItemId, alreadyConsumed + returnItem.quantity)
 
-      const lineTotal = Number(existing.unitPrice) * returnItem.quantity
+      // H6: tính hoàn tiền theo tỷ lệ lineTotal/quantity (đã trừ chiết khấu dòng)
+      // thay vì unitPrice * quantity (bỏ qua chiết khấu → hoàn nhiều hơn khách trả)
+      const purchasedQty = Number(existing.purchasedQuantity)
+      const itemLineTotal = Number(existing.lineTotal)
+      // Đơn giá thực sau chiết khấu dòng = lineTotal / quantity (làm tròn xuống)
+      const effectiveUnitPrice = purchasedQty > 0 ? Math.floor(itemLineTotal / purchasedQty) : 0
+      const lineTotal = effectiveUnitPrice * returnItem.quantity
       totalAmount += lineTotal
 
       validatedItems.push({
@@ -273,6 +285,21 @@ export async function createReturn({
         lineTotal,
         reason: returnItem.reason,
       })
+    }
+
+    // H6: phân bổ chiết khấu cấp đơn hàng theo tỷ lệ
+    // orders.total = orders.subtotal - orders.discountAmount
+    // Nếu đơn có chiết khấu cấp đơn, doanh thu thực của mỗi dòng thấp hơn lineTotal
+    const orderTotal = Number(order.total)
+    const orderSubtotal = Number(order.subtotal)
+    if (orderSubtotal > 0 && orderTotal < orderSubtotal) {
+      // Tỷ lệ thanh toán thực: total / subtotal
+      const ratio = orderTotal / orderSubtotal
+      totalAmount = 0
+      for (const item of validatedItems) {
+        item.lineTotal = Math.floor(item.lineTotal * ratio)
+        totalAmount += item.lineTotal
+      }
     }
 
     // 4. Generate return number with retry
@@ -435,14 +462,14 @@ export async function createReturn({
       await tx
         .update(debts)
         .set({
-          remaining: sql`${debts.remaining} - ${debtReductionAmount}`,
+          remaining: sql`GREATEST(0, ${debts.remaining} - ${debtReductionAmount})`,
           paid: sql`${debts.paid} + ${debtReductionAmount}`,
         })
         .where(eq(debts.id, debt.id))
 
       await tx
         .update(customers)
-        .set({ currentDebt: sql`${customers.currentDebt} - ${debtReductionAmount}` })
+        .set({ currentDebt: sql`GREATEST(0, ${customers.currentDebt} - ${debtReductionAmount})` })
         .where(eq(customers.id, debt.customerId))
 
       // Check if debt is fully paid after reduction
