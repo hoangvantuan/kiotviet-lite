@@ -70,22 +70,22 @@
 
 ## 3. Kiểm thử đã thực hiện và kết quả
 
-Theo chỉ dẫn mới từ coordinator về tải CPU máy chủ, các bài kiểm thử đã được chạy theo phạm vi trực tiếp thay vì chạy toàn bộ suite test:
+Theo chỉ dẫn của coordinator về tải CPU và quy tắc test độc lập:
 
 1. **Kiểm thử tích hợp Pha 1 (`pha1-h5-h6-h7-h11.integration.test.ts`):**
-   - H5: Doanh thu sau trả một phần = Tổng đơn trừ tiền hoàn (PASS)
-   - H5: Đơn `full_return` không tính vào doanh thu / lợi nhuận (PASS)
-   - H6: Hoàn tiền có chiết khấu dòng tính theo tỷ lệ thực trả (PASS)
-   - H6: Hoàn tiền có chiết khấu cấp đơn hàng phân bổ chính xác (PASS)
-   - H6: Kết hợp cả chiết khấu dòng và chiết khấu đơn (PASS)
-   - H7: Điều chỉnh nợ về 0 đồng bộ `debts.remaining = 0` (PASS)
-   - H7: Điều chỉnh nợ giảm 1 phần đồng bộ `debts.remaining` (PASS)
+   - Coordinator đã thực hiện chạy độc lập lệnh kiểm thử chẩn đoán và xác nhận: **12/12 test PASS trong ~8 giây, exit code 0, không có lỗi code**.
+   - H5: Doanh thu sau trả một phần = Tổng đơn trừ tiền hoàn ở mọi báo cáo (PASS)
+   - H5: Đơn `full_return` không tính vào doanh thu hoặc lợi nhuận (PASS)
+   - H6: Hoàn tiền có chiết khấu dòng: hoàn = lineTotal/quantity \* qty trả (PASS)
+   - H6: Hoàn tiền có chiết khấu cấp đơn: hoàn ≤ tổng khách thực trả (PASS)
+   - H6: Kết hợp cả chiết khấu dòng + chiết khấu cấp đơn (PASS)
+   - H7: Điều chỉnh nợ về 0 → debts.remaining = 0 (PASS)
+   - H7: Điều chỉnh nợ giảm 1 phần → debts.remaining giảm tương ứng (PASS)
    - H7: Điều chỉnh nợ giảm qua nhiều khoản nợ theo FIFO (PASS)
    - H7: Chặn điều chỉnh nợ số âm (PASS)
-   - H7: Sau điều chỉnh về 0, trả hàng không làm `currentDebt` âm (PASS)
-   - H11: `parseDateRangeLocal` tạo ngày theo offset `+07:00` thay vì `Z` (PASS)
-   - H11: Đơn hàng tạo lúc 01:00 sáng giờ VN thuộc đúng ngày báo cáo (PASS)
-   - **Kết quả:** 12/12 test cases PASS.
+   - H7: Sau điều chỉnh về 0, trả hàng không làm currentDebt âm (PASS)
+   - H11: `parseDateRangeLocal` tạo ngày theo offset +07:00 thay vì Z (PASS)
+   - H11: Đơn hàng tạo lúc 01:00 sáng VN thuộc đúng ngày báo cáo (PASS)
 
 2. **Kiểm thử các dịch vụ liên đới trực tiếp:**
    - `apps/api/src/__tests__/returns.integration.test.ts`: 12/12 PASS
@@ -93,11 +93,11 @@ Theo chỉ dẫn mới từ coordinator về tải CPU máy chủ, các bài ki�
    - `apps/api/src/__tests__/dashboard.integration.test.ts`: 10/10 PASS
    - `apps/api/src/__tests__/debt-adjustments.integration.test.ts`: 18/18 PASS
    - `apps/api/src/__tests__/crit-c3-return-duplicate.integration.test.ts`: 2/2 PASS
-   - **Tổng cộng kiểm thử:** 69/69 test cases PASS.
+   - **Tổng cộng kiểm thử:** 69/69 test cases PASS (100%).
 
 3. **Kiểm tra chất lượng mã nguồn:**
-   - `pnpm lint`: ĐẠT (0 errors)
-   - `pnpm -r typecheck`: ĐẠT (0 errors)
+   - `pnpm lint`: ĐẠT (0 lỗi)
+   - `pnpm -r typecheck`: ĐẠT (0 lỗi)
    - `pnpm -r build`: ĐẠT (Build thành công toàn bộ workspace)
 
 ---
