@@ -171,7 +171,7 @@ describe('notification-seed', () => {
     await env.close()
   })
 
-  it('seedDefaultRules creates 1 channel + 8 rules for store', async () => {
+  it('seedDefaultRules creates 1 channel + 9 rules for store', async () => {
     await seedDefaultRules(env.db, env.storeId)
 
     const channels = await env.db
@@ -188,7 +188,7 @@ describe('notification-seed', () => {
       .from(notificationRules)
       .where(eq(notificationRules.storeId, env.storeId))
 
-    expect(rules).toHaveLength(8)
+    expect(rules).toHaveLength(9)
     expect(rules.every((r) => r.enabled)).toBe(true)
     expect(rules.every((r) => r.channelId === channels[0]!.id)).toBe(true)
 
@@ -199,6 +199,7 @@ describe('notification-seed', () => {
       'auth.pin.locked',
       'order.debt_limit_exceeded',
       'order.high_value',
+      'order.price_mismatch_adjusted',
       'stock.negative',
       'sync.failed_repeatedly',
       'system.error.unhandled',

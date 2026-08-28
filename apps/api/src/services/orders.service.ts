@@ -428,6 +428,18 @@ export async function createOrder({
         let effectiveUnitPrice = item.unitPrice
         let effectiveLineTotal = item.lineTotal
 
+        // M16: Tự tính lại giá cho đơn vị quy đổi nếu client gửi unitPrice <= 0
+        if (item.unitConversionId && effectiveUnitPrice <= 0) {
+          effectiveUnitPrice = resolvedPrice.price
+          const lineRes = calculateLineTotal({
+            unitPrice: effectiveUnitPrice,
+            quantity: item.quantity,
+            discountType: item.discountType,
+            discountValue: item.discountValue,
+          })
+          effectiveLineTotal = lineRes.lineTotal
+        }
+
         if (!effectivePriceOverride) {
           const expectedSysPrice = resolvedPrice.price
           if (effectiveUnitPrice !== expectedSysPrice) {

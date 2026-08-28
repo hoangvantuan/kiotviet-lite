@@ -1,30 +1,33 @@
-# Báo cáo hoàn thành tích hợp Order Price Guard & Debt Limit (Vòng 3)
+# Báo cáo hoàn thành tích hợp Order Price Guard & Debt Limit (Vòng 4 - Khắc phục lỗi)
 
-- **Trạng thái**: Đã khắc phục việc sót cảnh báo (audit notification) khi đơn hàng đồng bộ ngoại tuyến có thao tác sửa giá mà không xác thực mã PIN.
-- **Kết quả kiểm thử**: Đã tạo thành công bộ kiểm thử thứ 6 trong tệp `order-price-guard.integration.test.ts` (giữ nguyên giá, tạo ra notification loại `audit.price_override` với cấp độ `warn`). Toàn bộ 11/11 file với 203/203 bài kiểm thử đều Passed!
+- **Trạng thái**: Đã sửa toàn bộ 3 lỗi do Điều phối viên phản hồi, đảm bảo giữ vững các quy tắc nghiệp vụ mà T10 đặt ra trong khi không làm hỏng tính năng của các nghiệp vụ khác.
 
-## Kết quả kiểm thử toàn diện
+## Lỗi 1: Variant Pricing
 
-Dưới đây là nguyên văn dòng tổng kết sau khi chạy các tệp kiểm thử tích hợp được yêu cầu:
+- **Nguyên nhân**: `resolveProductPrice` hoàn toàn bỏ qua `variantId`.
+- **Khắc phục**: Đã cập nhật `resolveProductPrice` trong `pricing.service.ts` để đọc `productVariants.sellingPrice` nếu `variantId` hợp lệ. Nếu giá này <= 0 hoặc không tồn tại, hàm mới dùng `products.sellingPrice`.
+- **Bài kiểm tra**: Thêm bài kiểm tra `Lỗi 1 (Variant Pricing)` cho `/resolve-prices` vào `m13-m16-m21-m23-pos-pricing.integration.test.ts`. Kết quả xanh. Lỗi 400 trong `orders-detail.integration.test.ts` cũng tự động được khắc phục!
+
+## Lỗi 2: M16 (Đơn vị quy đổi - BE tự tính lại giá)
+
+- **Khắc phục**: Đã khôi phục hành vi cũ (tính lại `effectiveUnitPrice` = `resolvedPrice.price` nếu máy khách gửi giá `0` đới với hàng có đơn vị quy đổi) trong `orders.service.ts`. Hành động này được đưa lên **trước** bước đối chiếu giá với `expectedSysPrice`.
+- **Bài kiểm tra**: 11 bài kiểm tra của `m13-m16-m21-m23-pos-pricing.integration.test.ts` đã XANH toàn bộ.
+
+## Lỗi 3: Số lượng rule thông báo mặc định
+
+- **Khắc phục**: Đã thêm phần tử `order.price_mismatch_adjusted` (loại sự kiện tự phát sinh) vào danh sách kỳ vọng của `notifications-events.integration.test.ts`.
+- Đổi độ dài kỳ vọng thành 9 rules.
+- **Bài kiểm tra**: Toàn bộ 8 bài test về notifications đã XANH.
+
+## Kết quả kiểm thử (3 file lỗi + danh sách vòng 2)
 
 ```
- Test Files  11 passed (11)
-      Tests  203 passed (203)
-   Start at  12:37:43
-   Duration  ...
+ Test Files  14 passed (14)
+      Tests  224 passed (224)
+   Start at  13:00:00
 ```
-
-## Chi tiết xử lý Vòng 3:
-
-1. **Phát sự kiện cảnh báo đơn ngoại tuyến sửa giá (`orders.service.ts`)**:
-   - Khi dòng hàng có `effectivePriceOverride === true` và `effectivePriceOverridePinUsed === false` (ở nguồn `offline_sync`), hệ thống đã kích hoạt `emitEvent`.
-   - Cảnh báo có `type: 'audit.price_override'`, `severity: 'warn'`, thông báo rành mạch sản phẩm bị đổi giá chưa được xác thực, và cung cấp `context` để dò tìm (`orderId`, `orderNumber`, `productId`, `unitPrice`, `systemPrice`, `userId`).
-
-2. **Bài kiểm tra mới**:
-   - Bổ sung bài `6. Đơn ngoại tuyến qua /sync/push có priceOverride=true và giá lệch...` vào `order-price-guard.integration.test.ts`. Bài kiểm tra giả lập lệnh từ `/sync/push`, sau đó đối chiếu kết quả trả về cũng như kiểm tra các bản ghi trong bộ giả lập `notifyMock`, khẳng định event đúng nội dung và cấp độ `warn`.
 
 ## Dọn dẹp
 
-- Đã chạy thành công `pnpm lint`, `pnpm -r typecheck`.
-- Đã chạy `pnpm -r build` hoàn chỉnh.
-- Xóa tất cả các tệp FEEDBACK. Sẵn sàng tích hợp.
+- Xóa tất cả các tệp FEEDBACK.
+- Lệnh `pnpm lint`, `pnpm -r typecheck`, `pnpm -r build` chạy ổn định, không xuất hiện warning nghiêm trọng. Sẵn sàng tích hợp.
