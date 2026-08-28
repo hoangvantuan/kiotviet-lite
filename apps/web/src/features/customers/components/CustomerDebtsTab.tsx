@@ -109,8 +109,9 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
 
   const { currentDebt, effectiveDebtLimit, usagePercent, items } = debtsQuery.data
   const hasLimit = effectiveDebtLimit !== null && effectiveDebtLimit > 0
+  const warningPercent = storeQuery.data?.debtWarningPercent ?? 80
   const variant: 'safe' | 'warn' | 'danger' =
-    usagePercent > 100 ? 'danger' : usagePercent > 80 ? 'warn' : 'safe'
+    usagePercent > 100 ? 'danger' : usagePercent > warningPercent ? 'warn' : 'safe'
 
   return (
     <div className="space-y-4">
@@ -119,15 +120,9 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
           <div>
             <p className="text-xs text-muted-foreground">Tổng công nợ hiện tại</p>
             <div className="mt-1 flex items-center gap-3">
-              <p className="text-2xl font-semibold text-foreground">
-                {formatVnd(currentDebt)} ₫
-              </p>
+              <p className="text-2xl font-semibold text-foreground">{formatVnd(currentDebt)} ₫</p>
               {isOwner && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setAdjustDialogOpen(true)}
-                >
+                <Button variant="outline" size="sm" onClick={() => setAdjustDialogOpen(true)}>
                   <PenLine className="mr-1 size-4" />
                   Điều chỉnh nợ
                 </Button>
@@ -218,12 +213,16 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
                     </TableCell>
                     <TableCell>
                       {(() => {
-                        const status = getDebtStatusBadge(debt.date, debt.remainingAmount, overdueDays)
+                        const status = getDebtStatusBadge(
+                          debt.date,
+                          debt.remainingAmount,
+                          overdueDays,
+                        )
                         return (
                           <Badge variant="outline" className={status.className}>
-                            {debt.remainingAmount > 0 && status.label !== 'Trong hạn' && status.label !== 'Đã tất toán' && (
-                              <Clock className="mr-1 size-3" />
-                            )}
+                            {debt.remainingAmount > 0 &&
+                              status.label !== 'Trong hạn' &&
+                              status.label !== 'Đã tất toán' && <Clock className="mr-1 size-3" />}
                             {status.label}
                           </Badge>
                         )

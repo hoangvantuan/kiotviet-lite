@@ -3,6 +3,7 @@ import { Package } from 'lucide-react'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { useCartStore } from '@/stores/use-cart-store'
 
+import { useAddToCart } from '../hooks/use-add-to-cart'
 import type { PosProductItem } from '../types'
 
 interface ProductGridProps {
@@ -25,7 +26,7 @@ function ProductCardSkeleton() {
 
 export function ProductGrid({ products, isLoading, onSelectProduct }: ProductGridProps) {
   const mode = useCartStore((s) => s.mode)
-  const addItem = useCartStore((s) => s.addItem)
+  const addToCart = useAddToCart()
 
   if (isLoading) {
     return (
@@ -56,19 +57,7 @@ export function ProductGrid({ products, isLoading, onSelectProduct }: ProductGri
     }
 
     if (mode === 'quick') {
-      addItem({
-        productId: product.id,
-        variantId: null,
-        productName: product.name,
-        variantName: null,
-        sku: product.sku,
-        unitPrice: product.basePrice,
-        costPrice: product.costPrice,
-        imageUrl: product.imageUrl,
-        notes: null,
-        unitName: null,
-        unitConversionId: null,
-      })
+      addToCart({ product })
     } else {
       onSelectProduct(product)
     }

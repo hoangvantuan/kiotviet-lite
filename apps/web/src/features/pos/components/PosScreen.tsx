@@ -15,7 +15,7 @@ import { showError, showSuccess } from '@/lib/toast'
 import { useCartStore } from '@/stores/use-cart-store'
 
 import { MAX_CART_TABS } from '../constants'
-import { useRepriceOnAdd } from '../hooks/use-auto-reprice'
+import { useAddToCart } from '../hooks/use-add-to-cart'
 import { useCheckoutMutation } from '../hooks/use-checkout'
 import { usePosKeyboard } from '../hooks/use-pos-keyboard'
 import { usePosProducts } from '../hooks/use-pos-products'
@@ -59,7 +59,6 @@ export function PosScreen() {
   const cartCustomerId = useCartStore((s) => s.tabs[s.activeTab]?.customerId ?? null)
   const cartCustomerName = useCartStore((s) => s.tabs[s.activeTab]?.customerName ?? null)
   const mode = useCartStore((s) => s.mode)
-  const addItem = useCartStore((s) => s.addItem)
   const clearCart = useCartStore((s) => s.clearCart)
   const activeTab = useCartStore((s) => s.activeTab)
   const setActiveTab = useCartStore((s) => s.setActiveTab)
@@ -68,7 +67,7 @@ export function PosScreen() {
   const searchRef = useRef<HTMLInputElement>(null)
   const { data: products, isLoading } = usePosProducts(selectedCategory)
   const checkoutMutation = useCheckoutMutation()
-  const repriceOnAdd = useRepriceOnAdd()
+  const addToCart = useAddToCart()
 
   function handleSelectProduct(product: PosProductItem) {
     if (product.hasVariants) {
@@ -85,20 +84,7 @@ export function PosScreen() {
     }
 
     // Quick mode, no variants: add directly
-    addItem({
-      productId: product.id,
-      variantId: null,
-      productName: product.name,
-      variantName: null,
-      sku: product.sku,
-      unitPrice: product.basePrice,
-      costPrice: product.costPrice,
-      imageUrl: product.imageUrl,
-      notes: null,
-      unitName: null,
-      unitConversionId: null,
-    })
-    repriceOnAdd(product.id, null, 1)
+    addToCart({ product })
     setTimeout(() => searchRef.current?.focus(), 0)
   }
 

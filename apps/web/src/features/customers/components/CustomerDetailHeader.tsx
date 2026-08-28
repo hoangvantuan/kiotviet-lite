@@ -6,6 +6,7 @@ import type { CustomerDetail } from '@kiotviet-lite/shared'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { useStoreQuery } from '@/features/settings/use-store-settings'
 import { formatVnd } from '@/lib/currency'
 
 interface CustomerDetailHeaderProps {
@@ -20,6 +21,10 @@ function DebtStatusBadge({
   currentDebt: number
   effectiveDebtLimit: number | null
 }) {
+  const storeQuery = useStoreQuery()
+  const warningPercent = storeQuery.data?.debtWarningPercent ?? 80
+  const warningRatio = warningPercent / 100
+
   if (currentDebt === 0) {
     return (
       <Badge className="bg-green-100 text-green-700 border-green-200" variant="outline">
@@ -42,7 +47,7 @@ function DebtStatusBadge({
       </Badge>
     )
   }
-  if (ratio >= 0.8) {
+  if (ratio >= warningRatio) {
     return (
       <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200" variant="outline">
         {formatVnd(currentDebt)} ₫ ({Math.round(ratio * 100)}%)

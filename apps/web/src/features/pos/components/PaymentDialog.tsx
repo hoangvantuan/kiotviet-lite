@@ -196,13 +196,20 @@ export function PaymentDialog({
         })
         break
       case 'debt':
-        onComplete({
-          paymentMethod: 'debt',
-          cashAmount: debtCashVal,
-          debtAmount,
-          debtLimitOverridden,
-          debtLimitOverridePin: debtLimitOverridden ? (overridePin ?? undefined) : undefined,
-        })
+        if (debtAmount <= 0) {
+          onComplete({
+            paymentMethod: 'cash',
+            cashAmount: debtCashVal > 0 ? debtCashVal : grandTotal,
+          })
+        } else {
+          onComplete({
+            paymentMethod: 'debt',
+            cashAmount: debtCashVal > 0 ? debtCashVal : undefined,
+            debtAmount,
+            debtLimitOverridden,
+            debtLimitOverridePin: debtLimitOverridden ? (overridePin ?? undefined) : undefined,
+          })
+        }
         break
     }
   }
