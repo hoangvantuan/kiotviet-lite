@@ -1,4 +1,3 @@
-import { subDays } from 'date-fns'
 import { and, eq, gt, gte, lte, sql } from 'drizzle-orm'
 
 import {
@@ -16,19 +15,13 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
-
-function getDefaultRange() {
-  const now = new Date()
-  return { from: subDays(now, 30), to: now }
-}
-
-function parseDateRange(from?: string, to?: string) {
-  const defaults = getDefaultRange()
-  return {
-    start: from ? new Date(from + 'T00:00:00Z') : defaults.from,
-    end: to ? new Date(to + 'T23:59:59.999Z') : defaults.to,
-  }
-}
+import {
+  orderItemNetQuantityExpr,
+  orderItemNetRevenueExpr,
+  orderNetRevenueExpr,
+  revenueStatusFilter,
+} from '../lib/order-status.js'
+import { dateTruncLocal, parseDateRangeLocal } from '../lib/timezone.js'
 
 export async function getRevenueByTime(
   db: Db,
@@ -37,30 +30,25 @@ export async function getRevenueByTime(
   to: string | undefined,
   groupBy: RevenueGroupBy,
 ): Promise<RevenueByTimeResponse> {
-  const { start, end } = parseDateRange(from, to)
+  const { start, end } = parseDateRangeLocal(from, to)
   const periodLength = end.getTime() - start.getTime()
   const prevEnd = new Date(start.getTime() - 1)
   const prevStart = new Date(prevEnd.getTime() - periodLength)
 
-  const truncExpr =
-    groupBy === 'day'
-      ? sql`date_trunc('day', ${orders.createdAt})::date`
-      : groupBy === 'week'
-        ? sql`date_trunc('week', ${orders.createdAt})::date`
-        : sql`date_trunc('month', ${orders.createdAt})::date`
+  const truncExpr = dateTruncLocal(groupBy)
 
   const [result, prevResult] = await Promise.all([
     db
       .select({
         date: truncExpr.as('date'),
         orderCount: sql<number>`count(${orders.id})`.as('order_count'),
-        revenue: sql<number>`coalesce(sum(${orders.total}), 0)`.as('revenue'),
+        revenue: sql<number>`coalesce(sum(${orderNetRevenueExpr()}), 0)`.as('revenue'),
       })
       .from(orders)
       .where(
         and(
           eq(orders.storeId, storeId),
-          eq(orders.status, 'completed'),
+          revenueStatusFilter(),
           gte(orders.createdAt, start),
           lte(orders.createdAt, end),
         ),
@@ -69,13 +57,13 @@ export async function getRevenueByTime(
       .orderBy(truncExpr),
     db
       .select({
-        revenue: sql<number>`coalesce(sum(${orders.total}), 0)`.as('revenue'),
+        revenue: sql<number>`coalesce(sum(${orderNetRevenueExpr()}), 0)`.as('revenue'),
       })
       .from(orders)
       .where(
         and(
           eq(orders.storeId, storeId),
-          eq(orders.status, 'completed'),
+          revenueStatusFilter(),
           gte(orders.createdAt, prevStart),
           lte(orders.createdAt, prevEnd),
         ),
@@ -112,15 +100,15 @@ export async function getRevenueByProduct(
   from: string | undefined,
   to: string | undefined,
 ): Promise<RevenueByProductResponse> {
-  const { start, end } = parseDateRange(from, to)
+  const { start, end } = parseDateRangeLocal(from, to)
 
   const result = await db
     .select({
       productId: orderItems.productId,
       productName: sql<string>`max(${orderItems.productName})`.as('product_name'),
       sku: sql<string>`max(${products.sku})`.as('sku'),
-      quantity: sql<number>`sum(${orderItems.quantity})`.as('quantity'),
-      revenue: sql<number>`sum(${orderItems.lineTotal})`.as('revenue'),
+      quantity: sql<number>`sum(${orderItemNetQuantityExpr()})`.as('quantity'),
+      revenue: sql<number>`sum(${orderItemNetRevenueExpr()})`.as('revenue'),
     })
     .from(orderItems)
     .innerJoin(orders, eq(orderItems.orderId, orders.id))
@@ -128,7 +116,7 @@ export async function getRevenueByProduct(
     .where(
       and(
         eq(orders.storeId, storeId),
-        eq(orders.status, 'completed'),
+        revenueStatusFilter(),
         gte(orders.createdAt, start),
         lte(orders.createdAt, end),
       ),
@@ -157,7 +145,7 @@ export async function getRevenueByCustomer(
   from: string | undefined,
   to: string | undefined,
 ): Promise<RevenueByCustomerResponse> {
-  const { start, end } = parseDateRange(from, to)
+  const { start, end } = parseDateRangeLocal(from, to)
 
   const result = await db
     .select({
@@ -165,14 +153,14 @@ export async function getRevenueByCustomer(
       customerName: sql<string>`coalesce(max(${customers.name}), 'Khách lẻ')`.as('customer_name'),
       phone: sql<string | null>`max(${customers.phone})`.as('phone'),
       orderCount: sql<number>`count(${orders.id})`.as('order_count'),
-      revenue: sql<number>`sum(${orders.total})`.as('revenue'),
+      revenue: sql<number>`coalesce(sum(${orderNetRevenueExpr()}), 0)`.as('revenue'),
     })
     .from(orders)
     .leftJoin(customers, eq(orders.customerId, customers.id))
     .where(
       and(
         eq(orders.storeId, storeId),
-        eq(orders.status, 'completed'),
+        revenueStatusFilter(),
         gte(orders.createdAt, start),
         lte(orders.createdAt, end),
       ),
@@ -219,21 +207,21 @@ export async function getRevenueByEmployee(
   from: string | undefined,
   to: string | undefined,
 ): Promise<RevenueByEmployeeResponse> {
-  const { start, end } = parseDateRange(from, to)
+  const { start, end } = parseDateRangeLocal(from, to)
 
   const result = await db
     .select({
       userId: orders.userId,
       userName: sql<string>`max(${users.name})`.as('user_name'),
       orderCount: sql<number>`count(${orders.id})`.as('order_count'),
-      revenue: sql<number>`sum(${orders.total})`.as('revenue'),
+      revenue: sql<number>`coalesce(sum(${orderNetRevenueExpr()}), 0)`.as('revenue'),
     })
     .from(orders)
     .innerJoin(users, eq(orders.userId, users.id))
     .where(
       and(
         eq(orders.storeId, storeId),
-        eq(orders.status, 'completed'),
+        revenueStatusFilter(),
         gte(orders.createdAt, start),
         lte(orders.createdAt, end),
       ),
