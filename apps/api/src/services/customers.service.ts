@@ -711,6 +711,7 @@ export async function listCustomerOrders({
       date: orders.createdAt,
       total: orders.total,
       status: orders.status,
+      debtLimitExceeded: orders.debtLimitExceeded,
     })
     .from(orders)
     .where(whereClause)
@@ -737,6 +738,7 @@ export async function listCustomerOrders({
         date: row.date.toISOString(),
         total: Number(row.total),
         status: mappedStatus,
+        debtLimitExceeded: Boolean(row.debtLimitExceeded),
       }
     }),
     ...paginationMeta({ total, page, pageSize }),
