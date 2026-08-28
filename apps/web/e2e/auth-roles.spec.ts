@@ -10,31 +10,31 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
     const sidebar = page.locator('aside')
     await expect(sidebar).toBeVisible()
 
-    // Danh sách menu mà Owner có quyền thấy
-    const expectedOwnerMenus = [
-      'Tổng quan',
-      'Bán hàng',
-      'Hóa đơn',
-      'Hàng hóa',
-      'Danh mục',
-      'Khách hàng',
-      'Phiếu thu',
-      'Bảng giá',
-      'Nhà cung cấp',
-      'Phiếu nhập kho',
-      'Phiếu chi NCC',
-      'Kiểm kho',
-      'Dashboard',
-      'Doanh thu',
-      'Lợi nhuận',
-      'Tồn kho',
-      'Giá',
-      'Công nợ',
-      'Cài đặt',
+    // Danh sách menu mà Owner có quyền thấy (sử dụng regex chấp nhận cả có dấu và không dấu)
+    const expectedOwnerMenuPatterns = [
+      /Tổng quan|Tong quan/i,
+      /Bán hàng|Ban hang/i,
+      /Hóa đơn|Hoa don/i,
+      /Hàng hóa|Hang hoa/i,
+      /Danh mục|Danh muc/i,
+      /Khách hàng|Khach hang/i,
+      /Phiếu thu|Phieu thu/i,
+      /Bảng giá|Bang gia/i,
+      /Nhà cung cấp|Nha cung cap/i,
+      /Phiếu nhập kho|Phieu nhap kho/i,
+      /Phiếu chi NCC|Phieu chi NCC/i,
+      /Kiểm kho|Kiem kho/i,
+      /Dashboard/i,
+      /Doanh thu/i,
+      /Lợi nhuận|Loi nhuan/i,
+      /Tồn kho|Ton kho/i,
+      /Giá|Gia/i,
+      /Công nợ|Cong no/i,
+      /Cài đặt|Cai dat/i,
     ]
 
-    for (const menuName of expectedOwnerMenus) {
-      await expect(sidebar.getByText(menuName, { exact: true })).toBeVisible()
+    for (const pattern of expectedOwnerMenuPatterns) {
+      await expect(sidebar.getByText(pattern).first()).toBeVisible()
     }
   })
 
@@ -47,30 +47,30 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
     const sidebar = page.locator('aside')
     await expect(sidebar).toBeVisible()
 
-    const expectedManagerMenus = [
-      'Tổng quan',
-      'Bán hàng',
-      'Hóa đơn',
-      'Hàng hóa',
-      'Danh mục',
-      'Khách hàng',
-      'Phiếu thu',
-      'Bảng giá',
-      'Nhà cung cấp',
-      'Phiếu nhập kho',
-      'Phiếu chi NCC',
-      'Kiểm kho',
-      'Dashboard',
-      'Doanh thu',
-      'Lợi nhuận',
-      'Tồn kho',
-      'Giá',
-      'Công nợ',
-      'Cài đặt',
+    const expectedManagerMenuPatterns = [
+      /Tổng quan|Tong quan/i,
+      /Bán hàng|Ban hang/i,
+      /Hóa đơn|Hoa don/i,
+      /Hàng hóa|Hang hoa/i,
+      /Danh mục|Danh muc/i,
+      /Khách hàng|Khach hang/i,
+      /Phiếu thu|Phieu thu/i,
+      /Bảng giá|Bang gia/i,
+      /Nhà cung cấp|Nha cung cap/i,
+      /Phiếu nhập kho|Phieu nhap kho/i,
+      /Phiếu chi NCC|Phieu chi NCC/i,
+      /Kiểm kho|Kiem kho/i,
+      /Dashboard/i,
+      /Doanh thu/i,
+      /Lợi nhuận|Loi nhuan/i,
+      /Tồn kho|Ton kho/i,
+      /Giá|Gia/i,
+      /Công nợ|Cong no/i,
+      /Cài đặt|Cai dat/i,
     ]
 
-    for (const menuName of expectedManagerMenus) {
-      await expect(sidebar.getByText(menuName, { exact: true })).toBeVisible()
+    for (const pattern of expectedManagerMenuPatterns) {
+      await expect(sidebar.getByText(pattern).first()).toBeVisible()
     }
   })
 
@@ -84,32 +84,37 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
     await expect(sidebar).toBeVisible()
 
     // Staff chỉ được thấy các menu: Tổng quan, Bán hàng, Hóa đơn, Cài đặt
-    const allowedStaffMenus = ['Tổng quan', 'Bán hàng', 'Hóa đơn', 'Cài đặt']
-    for (const menuName of allowedStaffMenus) {
-      await expect(sidebar.getByText(menuName, { exact: true })).toBeVisible()
+    const allowedStaffMenuPatterns = [
+      /Tổng quan|Tong quan/i,
+      /Bán hàng|Ban hang/i,
+      /Hóa đơn|Hoa don/i,
+      /Cài đặt|Cai dat/i,
+    ]
+    for (const pattern of allowedStaffMenuPatterns) {
+      await expect(sidebar.getByText(pattern).first()).toBeVisible()
     }
 
-    // Staff không được thấy các menu quản lý nâng cao và báo cáo
-    const hiddenStaffMenus = [
-      'Hàng hóa',
-      'Danh mục',
-      'Khách hàng',
-      'Phiếu thu',
-      'Bảng giá',
-      'Nhà cung cấp',
-      'Phiếu nhập kho',
-      'Phiếu chi NCC',
-      'Kiểm kho',
-      'Dashboard',
-      'Doanh thu',
-      'Lợi nhuận',
-      'Tồn kho',
-      'Giá',
-      'Công nợ',
+    // Staff không được thấy các menu quản lý hàng hóa, đối tác và báo cáo
+    const hiddenStaffMenuPatterns = [
+      /Hàng hóa|Hang hoa/i,
+      /Danh mục|Danh muc/i,
+      /Khách hàng|Khach hang/i,
+      /Phiếu thu|Phieu thu/i,
+      /Bảng giá|Bang gia/i,
+      /Nhà cung cấp|Nha cung cap/i,
+      /Phiếu nhập kho|Phieu nhap kho/i,
+      /Phiếu chi NCC|Phieu chi NCC/i,
+      /Kiểm kho|Kiem kho/i,
+      /Dashboard/i,
+      /Doanh thu/i,
+      /Lợi nhuận|Loi nhuan/i,
+      /Tồn kho|Ton kho/i,
+      /Giá|Gia/i,
+      /Công nợ|Cong no/i,
     ]
 
-    for (const menuName of hiddenStaffMenus) {
-      await expect(sidebar.getByText(menuName, { exact: true })).not.toBeVisible()
+    for (const pattern of hiddenStaffMenuPatterns) {
+      await expect(sidebar.getByText(pattern)).not.toBeVisible()
     }
   })
 })

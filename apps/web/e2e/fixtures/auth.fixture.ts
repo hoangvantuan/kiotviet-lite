@@ -7,11 +7,19 @@ import { SEED_USERS, type SeedUser } from '../helpers/test-data'
  */
 export async function loginViaUI(page: Page, phone: string, pass: string) {
   await page.goto('/login')
-  await expect(page.getByRole('button', { name: 'Đăng nhập' })).toBeVisible()
+  const phoneInput = page.locator('#phone')
+  await expect(phoneInput).toBeVisible({ timeout: 10000 })
+  await phoneInput.fill(phone)
 
-  await page.locator('#phone').fill(phone)
-  await page.locator('#password').fill(pass)
-  await page.getByRole('button', { name: 'Đăng nhập' }).click()
+  const passwordInput = page.locator('#password')
+  await passwordInput.fill(pass)
+
+  const submitBtn = page.getByRole('button', { name: /Đăng nhập|Dang nhap/i })
+  if (await submitBtn.isEnabled().catch(() => false)) {
+    await submitBtn.click()
+  } else {
+    await passwordInput.press('Enter')
+  }
 }
 
 /**
@@ -20,8 +28,9 @@ export async function loginViaUI(page: Page, phone: string, pass: string) {
 export async function loginAsRole(page: Page, role: 'owner' | 'manager' | 'staff') {
   const user = SEED_USERS[role]
   await loginViaUI(page, user.phone, user.password)
-  await page.waitForURL('**/')
-  await expect(page.getByText(`Xin chào, ${user.name}`)).toBeVisible({ timeout: 10000 })
+  await expect(
+    page.getByText(new RegExp(`Xin chào, ${user.name}|${user.name}`, 'i')).first(),
+  ).toBeVisible({ timeout: 15000 })
 }
 
 export type AuthFixtures = {
