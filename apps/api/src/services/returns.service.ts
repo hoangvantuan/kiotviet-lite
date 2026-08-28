@@ -175,6 +175,7 @@ export async function createReturn({
         storeId: orders.storeId,
         orderNumber: orders.orderNumber,
         customerId: orders.customerId,
+        subtotal: orders.subtotal,
         total: orders.total,
         paymentStatus: orders.paymentStatus,
         status: orders.status,
@@ -194,6 +195,7 @@ export async function createReturn({
     }
 
     // 2. Load order items + returned quantities
+    // H6: cần lineTotal và discountAmount để tính hoàn tiền chính xác (có chiết khấu)
     const existingItems = await tx
       .select({
         orderItemId: orderItems.id,
@@ -203,8 +205,11 @@ export async function createReturn({
         variantName: orderItems.variantName,
         unit: orderItems.unit,
         unitPrice: orderItems.unitPrice,
+        lineTotal: orderItems.lineTotal,
+        discountAmount: orderItems.discountAmount,
         purchasedQuantity: orderItems.quantity,
         returnedQuantity: sql<number>`COALESCE(SUM(${orderReturnItems.quantity}), 0)::int`,
+        returnedLineTotal: sql<number>`COALESCE(SUM(${orderReturnItems.lineTotal}), 0)::int`,
       })
       .from(orderItems)
       .leftJoin(orderReturnItems, eq(orderReturnItems.orderItemId, orderItems.id))
@@ -217,8 +222,18 @@ export async function createReturn({
         orderItems.variantName,
         orderItems.unit,
         orderItems.unitPrice,
+        orderItems.lineTotal,
+        orderItems.discountAmount,
         orderItems.quantity,
       )
+
+    const priorReturns = await tx
+      .select({
+        priorTotal: sql<number>`COALESCE(SUM(${orderReturns.totalAmount}), 0)::int`,
+      })
+      .from(orderReturns)
+      .where(eq(orderReturns.orderId, orderId))
+    const priorRefundTotal = Number(priorReturns[0]?.priorTotal ?? 0)
 
     const itemMap = new Map(existingItems.map((it) => [it.orderItemId, it]))
     // CRIT C3: trừ dồn số đã trả trong chính phiếu này. itemMap là snapshot đầu
@@ -227,7 +242,7 @@ export async function createReturn({
     const consumedInThisReturn = new Map<string, number>()
 
     // 3. Validate return items + calculate total
-    let totalAmount = 0
+    let unroundedSubtotal = 0
     const validatedItems: Array<{
       orderItemId: string
       productId: string
@@ -258,8 +273,23 @@ export async function createReturn({
       }
       consumedInThisReturn.set(returnItem.orderItemId, alreadyConsumed + returnItem.quantity)
 
-      const lineTotal = Number(existing.unitPrice) * returnItem.quantity
-      totalAmount += lineTotal
+      // H6: tính hoàn tiền theo tỷ lệ lineTotal/quantity (đã trừ chiết khấu dòng)
+      // Nếu dòng này được trả hết toàn bộ số lượng còn lại:
+      // tiền hoàn = lineTotal dòng - tổng tiền đã hoàn cho dòng này ở các phiếu trước (không để rơi phần dư làm tròn)
+      const purchasedQty = Number(existing.purchasedQuantity)
+      const itemLineTotal = Number(existing.lineTotal)
+      const alreadyReturnedQty = Number(existing.returnedQuantity)
+      const alreadyReturnedLineTotal = Number(existing.returnedLineTotal)
+      const totalReturnedForThisItem = alreadyReturnedQty + alreadyConsumed + returnItem.quantity
+
+      let lineTotal: number
+      if (totalReturnedForThisItem >= purchasedQty) {
+        lineTotal = Math.max(0, itemLineTotal - alreadyReturnedLineTotal)
+      } else {
+        const effectiveUnitPrice = purchasedQty > 0 ? Math.floor(itemLineTotal / purchasedQty) : 0
+        lineTotal = effectiveUnitPrice * returnItem.quantity
+      }
+      unroundedSubtotal += lineTotal
 
       validatedItems.push({
         orderItemId: returnItem.orderItemId,
@@ -273,6 +303,47 @@ export async function createReturn({
         lineTotal,
         reason: returnItem.reason,
       })
+    }
+
+    // Kiểm tra xem sau phiếu này, toàn bộ đơn hàng đã được trả hết chưa
+    let isEntireOrderFullyReturned = true
+    for (const it of existingItems) {
+      const consumed = consumedInThisReturn.get(it.orderItemId) ?? 0
+      const totalReturned = Number(it.returnedQuantity) + consumed
+      if (totalReturned < Number(it.purchasedQuantity)) {
+        isEntireOrderFullyReturned = false
+        break
+      }
+    }
+
+    // H6: phân bổ chiết khấu cấp đơn hàng theo tỷ lệ
+    // Nếu đơn được trả hết toàn bộ: totalAmount = orders.total - tổng đã hoàn ở các phiếu trước
+    // Dồn phần dư làm tròn vào dòng cuối cùng để tổng các dòng khớp 100% với totalAmount
+    const orderTotal = Number(order.total)
+    const orderSubtotal = Number(order.subtotal)
+    const hasOrderDiscount = orderSubtotal > 0 && orderTotal < orderSubtotal
+
+    let totalAmount = unroundedSubtotal
+    if (isEntireOrderFullyReturned) {
+      totalAmount = Math.max(0, orderTotal - priorRefundTotal)
+    } else if (hasOrderDiscount) {
+      const ratio = orderTotal / orderSubtotal
+      totalAmount = Math.round(unroundedSubtotal * ratio)
+    }
+
+    if (hasOrderDiscount || isEntireOrderFullyReturned) {
+      const ratio = orderSubtotal > 0 ? orderTotal / orderSubtotal : 1
+      let allocatedSum = 0
+      for (let i = 0; i < validatedItems.length; i++) {
+        if (i === validatedItems.length - 1) {
+          // Dòng cuối cùng: nhận toàn bộ phần dư còn lại để tổng khớp chính xác
+          validatedItems[i]!.lineTotal = Math.max(0, totalAmount - allocatedSum)
+        } else {
+          const allocated = Math.floor(validatedItems[i]!.lineTotal * ratio)
+          validatedItems[i]!.lineTotal = allocated
+          allocatedSum += allocated
+        }
+      }
     }
 
     // 4. Generate return number with retry
@@ -435,14 +506,14 @@ export async function createReturn({
       await tx
         .update(debts)
         .set({
-          remaining: sql`${debts.remaining} - ${debtReductionAmount}`,
+          remaining: sql`GREATEST(0, ${debts.remaining} - ${debtReductionAmount})`,
           paid: sql`${debts.paid} + ${debtReductionAmount}`,
         })
         .where(eq(debts.id, debt.id))
 
       await tx
         .update(customers)
-        .set({ currentDebt: sql`${customers.currentDebt} - ${debtReductionAmount}` })
+        .set({ currentDebt: sql`GREATEST(0, ${customers.currentDebt} - ${debtReductionAmount})` })
         .where(eq(customers.id, debt.customerId))
 
       // Check if debt is fully paid after reduction

@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, isNull, sql } from 'drizzle-orm'
 
 import {
   type CreateDebtAdjustmentInput,
@@ -6,6 +6,7 @@ import {
   type DebtAdjustmentDetail,
   type DebtAdjustmentListItem,
   debtAdjustments,
+  debts,
   type ListDebtAdjustmentsQuery,
   type UserRole,
   users,
@@ -164,7 +165,10 @@ export async function createDebtAdjustment({
     // 2. Lấy oldAmount snapshot
     const oldAmount = Number(customer.currentDebt)
 
-    // 3. Validate newAmount !== oldAmount
+    // 3. Validate newAmount !== oldAmount và không âm
+    if (input.newAmount < 0) {
+      throw new ApiError('VALIDATION_ERROR', 'Số nợ mới không được âm')
+    }
     if (input.newAmount === oldAmount) {
       throw new ApiError(
         'BUSINESS_RULE_VIOLATION',
@@ -194,6 +198,62 @@ export async function createDebtAdjustment({
       .update(customers)
       .set({ currentDebt: input.newAmount })
       .where(eq(customers.id, input.customerId))
+
+    // H7: đồng bộ debts.remaining khi điều chỉnh nợ
+    // Khi giảm nợ (newAmount < oldAmount): settle các khoản nợ cũ nhất (FIFO)
+    // Khi tăng nợ (newAmount > oldAmount): không cần sửa debts vì nợ mới chưa phát sinh
+    if (input.newAmount < oldAmount) {
+      const reduction = oldAmount - input.newAmount
+
+      if (input.newAmount === 0) {
+        // Xoá toàn bộ nợ: set remaining=0, paid=amount cho tất cả khoản nợ còn lại
+        await tx
+          .update(debts)
+          .set({
+            remaining: 0,
+            paid: debts.amount,
+          })
+          .where(
+            and(
+              eq(debts.storeId, actor.storeId),
+              eq(debts.customerId, input.customerId),
+              gt(debts.remaining, 0),
+            ),
+          )
+      } else {
+        // Giảm nợ một phần: phân bổ theo FIFO (nợ cũ nhất tất toán trước)
+        const openDebts = await tx
+          .select({
+            id: debts.id,
+            remaining: debts.remaining,
+          })
+          .from(debts)
+          .where(
+            and(
+              eq(debts.storeId, actor.storeId),
+              eq(debts.customerId, input.customerId),
+              gt(debts.remaining, 0),
+            ),
+          )
+          .orderBy(asc(debts.createdAt))
+          .for('update')
+
+        let leftToSettle = reduction
+        for (const d of openDebts) {
+          if (leftToSettle <= 0) break
+          const rem = Number(d.remaining)
+          const settleAmount = Math.min(leftToSettle, rem)
+          await tx
+            .update(debts)
+            .set({
+              remaining: sql`GREATEST(0, ${debts.remaining} - ${settleAmount})`,
+              paid: sql`${debts.paid} + ${settleAmount}`,
+            })
+            .where(eq(debts.id, d.id))
+          leftToSettle -= settleAmount
+        }
+      }
+    }
 
     // 6. Audit log trong cùng transaction
     await logAction({

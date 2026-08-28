@@ -24,6 +24,13 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import {
+  orderItemNetQuantityExpr,
+  orderItemNetRevenueExpr,
+  orderNetRevenueExpr,
+  revenueStatusFilter,
+} from '../lib/order-status.js'
+import { dateTruncLocal } from '../lib/timezone.js'
 
 interface PeriodRange {
   start: Date
@@ -78,15 +85,16 @@ interface MetricsRow {
 async function queryMetrics(db: Db, storeId: string, start: Date, end: Date): Promise<MetricsRow> {
   const whereCondition = and(
     eq(orders.storeId, storeId),
-    eq(orders.status, 'completed'),
+    revenueStatusFilter(),
     gte(orders.createdAt, start),
     lte(orders.createdAt, end),
   )
 
+  // Doanh thu ròng (đã trừ tiền hoàn) và giá vốn theo số lượng thực bán, chạy song song
   const [result, cogsResult] = await Promise.all([
     db
       .select({
-        revenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
+        revenue: sql<number>`coalesce(sum(${orderNetRevenueExpr()}), 0)`,
         orderCount: sql<number>`count(${orders.id})`,
       })
       .from(orders)
@@ -94,7 +102,7 @@ async function queryMetrics(db: Db, storeId: string, start: Date, end: Date): Pr
 
     db
       .select({
-        totalCogs: sql<number>`coalesce(sum(coalesce(${products.costPrice}, 0) * ${orderItems.quantity}), 0)`,
+        totalCogs: sql<number>`coalesce(sum(coalesce(${products.costPrice}, 0) * ${orderItemNetQuantityExpr()}), 0)`,
       })
       .from(orderItems)
       .innerJoin(orders, eq(orderItems.orderId, orders.id))
@@ -105,6 +113,7 @@ async function queryMetrics(db: Db, storeId: string, start: Date, end: Date): Pr
   const row = result[0]!
   const revenue = Number(row.revenue)
   const orderCount = Number(row.orderCount)
+
   const totalCogs = Number(cogsResult[0]?.totalCogs ?? 0)
   const profit = revenue - totalCogs
 
@@ -115,25 +124,22 @@ async function getSparkline(db: Db, storeId: string): Promise<number[]> {
   const now = new Date()
   const sevenDaysAgo = subDays(startOfDay(now), 6)
   const days = eachDayOfInterval({ start: sevenDaysAgo, end: startOfDay(now) })
+  const truncExpr = dateTruncLocal('day')
 
   const result = await db
     .select({
-      day: sql<string>`date_trunc('day', ${orders.createdAt})::date`,
-      revenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
+      day: truncExpr.as('day'),
+      revenue: sql<number>`coalesce(sum(${orderNetRevenueExpr()}), 0)`,
     })
     .from(orders)
     .where(
-      and(
-        eq(orders.storeId, storeId),
-        eq(orders.status, 'completed'),
-        gte(orders.createdAt, sevenDaysAgo),
-      ),
+      and(eq(orders.storeId, storeId), revenueStatusFilter(), gte(orders.createdAt, sevenDaysAgo)),
     )
-    .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`)
+    .groupBy(truncExpr)
 
   const revenueByDay = new Map<string, number>()
   for (const r of result) {
-    revenueByDay.set(r.day, Number(r.revenue))
+    revenueByDay.set(String(r.day), Number(r.revenue))
   }
 
   return days.map((d: Date) => {
@@ -206,25 +212,22 @@ async function getOrderCountSparkline(db: Db, storeId: string): Promise<number[]
   const now = new Date()
   const sevenDaysAgo = subDays(startOfDay(now), 6)
   const days = eachDayOfInterval({ start: sevenDaysAgo, end: startOfDay(now) })
+  const truncExpr = dateTruncLocal('day')
 
   const result = await db
     .select({
-      day: sql<string>`date_trunc('day', ${orders.createdAt})::date`,
+      day: truncExpr.as('day'),
       cnt: sql<number>`count(${orders.id})`,
     })
     .from(orders)
     .where(
-      and(
-        eq(orders.storeId, storeId),
-        eq(orders.status, 'completed'),
-        gte(orders.createdAt, sevenDaysAgo),
-      ),
+      and(eq(orders.storeId, storeId), revenueStatusFilter(), gte(orders.createdAt, sevenDaysAgo)),
     )
-    .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`)
+    .groupBy(truncExpr)
 
   const countByDay = new Map<string, number>()
   for (const r of result) {
-    countByDay.set(r.day, Number(r.cnt))
+    countByDay.set(String(r.day), Number(r.cnt))
   }
 
   return days.map((d: Date) => {
@@ -237,41 +240,43 @@ async function getProfitSparkline(db: Db, storeId: string): Promise<number[]> {
   const now = new Date()
   const sevenDaysAgo = subDays(startOfDay(now), 6)
   const days = eachDayOfInterval({ start: sevenDaysAgo, end: startOfDay(now) })
+  const truncExpr = dateTruncLocal('day')
   const whereCondition = and(
     eq(orders.storeId, storeId),
-    eq(orders.status, 'completed'),
+    revenueStatusFilter(),
     gte(orders.createdAt, sevenDaysAgo),
   )
 
+  // Doanh thu ròng và giá vốn theo ngày (múi giờ cửa hàng), chạy song song
   const [revResult, cogsResult] = await Promise.all([
     db
       .select({
-        day: sql<string>`date_trunc('day', ${orders.createdAt})::date`,
-        revenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
+        day: truncExpr.as('day'),
+        revenue: sql<number>`coalesce(sum(${orderNetRevenueExpr()}), 0)`,
       })
       .from(orders)
       .where(whereCondition)
-      .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`),
+      .groupBy(truncExpr),
 
     db
       .select({
-        day: sql<string>`date_trunc('day', ${orders.createdAt})::date`,
-        cogs: sql<number>`coalesce(sum(coalesce(${products.costPrice}, 0) * ${orderItems.quantity}), 0)`,
+        day: truncExpr.as('day'),
+        cogs: sql<number>`coalesce(sum(coalesce(${products.costPrice}, 0) * ${orderItemNetQuantityExpr()}), 0)`,
       })
       .from(orderItems)
       .innerJoin(orders, eq(orderItems.orderId, orders.id))
       .innerJoin(products, eq(orderItems.productId, products.id))
       .where(whereCondition)
-      .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`),
+      .groupBy(truncExpr),
   ])
 
   const revByDay = new Map<string, number>()
   for (const r of revResult) {
-    revByDay.set(r.day, Number(r.revenue))
+    revByDay.set(String(r.day), Number(r.revenue))
   }
   const cogsByDay = new Map<string, number>()
   for (const r of cogsResult) {
-    cogsByDay.set(r.day, Number(r.cogs))
+    cogsByDay.set(String(r.day), Number(r.cogs))
   }
 
   return days.map((d: Date) => {
@@ -299,26 +304,23 @@ export async function getRevenueChart(
   const now = new Date()
   const sevenDaysAgo = subDays(startOfDay(now), 6)
   const days = eachDayOfInterval({ start: sevenDaysAgo, end: startOfDay(now) })
+  const truncExpr = dateTruncLocal('day')
 
   const result = await db
     .select({
-      day: sql<string>`date_trunc('day', ${orders.createdAt})::date`,
-      revenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
+      day: truncExpr.as('day'),
+      revenue: sql<number>`coalesce(sum(${orderNetRevenueExpr()}), 0)`,
       orderCount: sql<number>`count(${orders.id})`,
     })
     .from(orders)
     .where(
-      and(
-        eq(orders.storeId, storeId),
-        eq(orders.status, 'completed'),
-        gte(orders.createdAt, sevenDaysAgo),
-      ),
+      and(eq(orders.storeId, storeId), revenueStatusFilter(), gte(orders.createdAt, sevenDaysAgo)),
     )
-    .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`)
+    .groupBy(truncExpr)
 
   const dataByDay = new Map<string, { revenue: number; orderCount: number }>()
   for (const r of result) {
-    dataByDay.set(r.day, {
+    dataByDay.set(String(r.day), {
       revenue: Number(r.revenue),
       orderCount: Number(r.orderCount),
     })
@@ -347,13 +349,13 @@ export async function getTopProducts(
   // Total revenue in period for percentage calculation
   const totalResult = await db
     .select({
-      totalRevenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
+      totalRevenue: sql<number>`coalesce(sum(${orderNetRevenueExpr()}), 0)`,
     })
     .from(orders)
     .where(
       and(
         eq(orders.storeId, storeId),
-        eq(orders.status, 'completed'),
+        revenueStatusFilter(),
         gte(orders.createdAt, start),
         lte(orders.createdAt, end),
       ),
@@ -364,21 +366,21 @@ export async function getTopProducts(
     .select({
       productId: orderItems.productId,
       name: orderItems.productName,
-      quantity: sql<number>`sum(${orderItems.quantity})`,
-      revenue: sql<number>`sum(${orderItems.lineTotal})`,
+      quantity: sql<number>`sum(${orderItemNetQuantityExpr()})`,
+      revenue: sql<number>`sum(${orderItemNetRevenueExpr()})`,
     })
     .from(orderItems)
     .innerJoin(orders, eq(orderItems.orderId, orders.id))
     .where(
       and(
         eq(orders.storeId, storeId),
-        eq(orders.status, 'completed'),
+        revenueStatusFilter(),
         gte(orders.createdAt, start),
         lte(orders.createdAt, end),
       ),
     )
     .groupBy(orderItems.productId, orderItems.productName)
-    .orderBy(sql`sum(${orderItems.quantity}) DESC`)
+    .orderBy(sql`sum(${orderItemNetQuantityExpr()}) DESC`)
     .limit(5)
 
   return result.map((r) => ({

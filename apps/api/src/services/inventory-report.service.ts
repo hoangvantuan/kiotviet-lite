@@ -11,6 +11,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { revenueStatusFilter } from '../lib/order-status.js'
 
 export async function getInventoryCurrent(
   db: Db,
@@ -152,7 +153,7 @@ export async function getInventorySlow(
     })
     .from(orderItems)
     .innerJoin(orders, eq(orderItems.orderId, orders.id))
-    .where(and(eq(orders.storeId, storeId), eq(orders.status, 'completed')))
+    .where(and(eq(orders.storeId, storeId), revenueStatusFilter()))
     .groupBy(orderItems.productId)
     .as('last_sold')
 

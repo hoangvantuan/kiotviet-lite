@@ -1,4 +1,3 @@
-import { subDays } from 'date-fns'
 import { and, eq, gte, isNull, lte, sql } from 'drizzle-orm'
 
 import {
@@ -17,14 +16,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
-
-function parseDateRange(from?: string, to?: string) {
-  const now = new Date()
-  return {
-    start: from ? new Date(from + 'T00:00:00Z') : subDays(now, 30),
-    end: to ? new Date(to + 'T23:59:59.999Z') : now,
-  }
-}
+import { parseDateRangeLocal } from '../lib/timezone.js'
 
 export async function getPriceOverrides(
   db: Db,
@@ -32,7 +24,7 @@ export async function getPriceOverrides(
   from: string | undefined,
   to: string | undefined,
 ): Promise<PriceOverridesResponse> {
-  const { start, end } = parseDateRange(from, to)
+  const { start, end } = parseDateRangeLocal(from, to)
 
   const result = await db
     .select({
@@ -172,7 +164,7 @@ export async function getPriceHistory(
   to: string | undefined,
   productId: string | undefined,
 ): Promise<PriceHistoryResponse> {
-  const { start, end } = parseDateRange(from, to)
+  const { start, end } = parseDateRangeLocal(from, to)
 
   const conditions = [
     eq(purchaseOrders.storeId, storeId),
