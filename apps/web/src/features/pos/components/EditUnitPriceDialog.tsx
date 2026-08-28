@@ -27,6 +27,7 @@ interface EditUnitPriceDialogProps {
 
 export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceDialogProps) {
   const updateUnitPrice = useCartStore((s) => s.updateUnitPrice)
+  const setPriceOverridePin = useCartStore((s) => s.setPriceOverridePin)
   const permissions = usePermissions()
 
   const [draftPrice, setDraftPrice] = useState<number | null>(null)
@@ -80,10 +81,13 @@ export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceD
     applyEdit(draftPrice, trimmedReason, false)
   }
 
-  function handlePinVerified() {
+  function handlePinVerified(pin?: string) {
     const price = pendingPriceRef.current
     const reasonText = pendingReasonRef.current
     if (price === null) return
+    if (pin) {
+      setPriceOverridePin(pin)
+    }
     applyEdit(price, reasonText, true)
   }
 

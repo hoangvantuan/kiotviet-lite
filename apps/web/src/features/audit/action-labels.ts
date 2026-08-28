@@ -68,6 +68,7 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'debt.created': 'Tạo khoản nợ',
   'debt.limit_overridden': 'Vượt hạn mức công nợ (PIN)',
   'order.debt_limit_exceeded': 'Đơn ngoại tuyến vượt hạn mức nợ',
+  'order.price_mismatch_adjusted': 'Đơn ngoại tuyến điều chỉnh giá',
   'receipt.created': 'Tạo phiếu thu nợ KH',
   'receipt.printed': 'In phiếu thu',
   'debt_adjustment.created': 'Điều chỉnh nợ khách hàng',

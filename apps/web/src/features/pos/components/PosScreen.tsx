@@ -142,6 +142,7 @@ export function PosScreen() {
         debtAmount: debtAmount > 0 ? debtAmount : undefined,
         debtLimitOverridden: payload.debtLimitOverridden ?? false,
         debtLimitOverridePin: payload.debtLimitOverridePin,
+        priceOverridePin: tab.priceOverridePin ?? undefined,
         note: null,
         items: tab.items.map((item) => ({
           productId: item.productId,

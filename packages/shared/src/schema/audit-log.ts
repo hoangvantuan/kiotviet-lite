@@ -70,6 +70,7 @@ export const auditActionSchema = z.enum([
   'debt.created',
   'debt.limit_overridden',
   'order.debt_limit_exceeded',
+  'order.price_mismatch_adjusted',
   'receipt.created',
   'receipt.printed',
   'debt_adjustment.created',

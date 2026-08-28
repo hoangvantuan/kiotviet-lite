@@ -232,6 +232,13 @@
       "when": 1788000000000,
       "tag": "0032_order_debt_limit_exceeded",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1787893912082,
+      "tag": "0033_lonely_mongu",
+      "breakpoints": true
     }
   ]
 }
