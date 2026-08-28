@@ -7,6 +7,7 @@ import {
   type DebtAdjustmentListItem,
   debtAdjustments,
   debts,
+  formatCurrencyVnd as formatVnd,
   type ListDebtAdjustmentsQuery,
   type UserRole,
   users,
@@ -23,9 +24,7 @@ export interface DebtAdjustmentsActor {
   role: UserRole
 }
 
-export function formatVnd(amount: number): string {
-  return `${new Intl.NumberFormat('vi-VN').format(amount)}đ`
-}
+export { formatVnd }
 
 interface DebtAdjustmentRow {
   id: string

@@ -5,6 +5,7 @@ import {
   customerGroups,
   customers,
   debts,
+  formatCurrencyVnd as formatVnd,
   inventoryTransactions,
   type ListOrdersQuery,
   orderItems,
@@ -162,10 +163,6 @@ export interface CreateOrderDeps {
   clientId?: string | null
   offlineCreatedAt?: string
   skipDebtLimitCheck?: boolean
-}
-
-function formatVnd(value: number): string {
-  return `${value.toLocaleString('vi-VN')}đ`
 }
 
 export async function createOrder({

@@ -6,6 +6,7 @@ import {
   type DebtAgingRow,
   debts,
   type DebtSummaryReport,
+  formatVnd,
   receipts,
   stores,
   supplierPayments,
@@ -235,10 +236,6 @@ export async function getDebtSummaryReport({
       to: toDate.toISOString(),
     },
   }
-}
-
-function formatVnd(amount: number): string {
-  return new Intl.NumberFormat('vi-VN').format(amount)
 }
 
 export function buildAgingCsv(report: DebtAgingReport): string {

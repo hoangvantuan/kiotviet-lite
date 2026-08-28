@@ -2,6 +2,7 @@ import { and, desc, eq, gte, ilike, isNull, lte, or, type SQL, sql } from 'drizz
 
 import {
   type CreateSupplierPaymentInput,
+  formatCurrencyVnd as formatVnd,
   type ListSupplierPaymentsQuery,
   type SupplierPaymentDetail,
   type SupplierPaymentListItem,
@@ -59,9 +60,7 @@ export function toSupplierPaymentDetail(
   }
 }
 
-export function formatVnd(amount: number): string {
-  return `${new Intl.NumberFormat('vi-VN').format(amount)}đ`
-}
+export { formatVnd }
 
 const supplierPaymentSelectColumns = {
   id: supplierPayments.id,

@@ -1,4 +1,4 @@
-import type { VariantsConfigResponse } from '@kiotviet-lite/shared'
+import { slugifyForSku, type VariantsConfigResponse } from '@kiotviet-lite/shared'
 
 const SKU_REGEX = /^[A-Za-z0-9_\-./]+$/
 
@@ -28,17 +28,7 @@ export interface VariantsForm {
   variants: VariantFormItem[]
 }
 
-export function slugifyForSku(s: string): string {
-  return s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/đ/gi, 'd')
-    .toLowerCase()
-    .replace(/[\s_]+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-}
+export { slugifyForSku }
 
 export function buildVariantSku(
   parentSku: string,
