@@ -40,6 +40,7 @@ export const notificationTypeValues = [
   'auth.pin.locked',
   'order.high_value',
   'order.debt_limit_exceeded',
+  'order.price_mismatch_adjusted',
   'stock.negative',
   'sync.failed_repeatedly',
   'audit.price_override',

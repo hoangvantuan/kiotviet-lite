@@ -2,7 +2,6 @@ import { and, asc, desc, eq, gte, ilike, isNull, like, lte, type SQL, sql } from
 
 import {
   calculateLineTotal,
-  calculateUnitConversionPrice,
   type CreateOrderInput,
   customerGroups,
   customers,
@@ -28,6 +27,7 @@ import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import { emitEvent } from './notification-emitter.js'
 import { verifyPin } from './pin.service.js'
+import { resolveProductPrice } from './pricing.service.js'
 import {
   aggregateVariantStock,
   loadProductForUpdate,
@@ -245,6 +245,23 @@ export async function createOrder({
       meta,
     })
   }
+  // T10: Xác minh mã PIN sửa giá (priceOverridePin) nếu có
+  const hasPriceOverride = input.items.some((i) => i.priceOverride)
+  let verifiedPriceOverridePin = false
+  if (hasPriceOverride) {
+    if (input.priceOverridePin) {
+      await verifyPin({
+        db,
+        userId: actor.userId,
+        storeId: actor.storeId,
+        pin: input.priceOverridePin,
+        meta,
+      })
+      verifiedPriceOverridePin = true
+    } else if (source === 'pos') {
+      throw new ApiError('VALIDATION_ERROR', 'Sửa giá yêu cầu mã PIN')
+    }
+  }
 
   const debtAmount = input.debtAmount ?? 0
 
@@ -326,7 +343,11 @@ export async function createOrder({
       }
 
       // Process items: insert order_items + deduct stock
+
+      // Process items: insert order_items + deduct stock
       const processedItems: OrderDetailItem[] = []
+      let isPriceMismatchAdjusted = false
+      let adjustedSubtotal = 0
 
       for (const item of input.items) {
         const product = await loadProductForUpdate({
@@ -380,28 +401,59 @@ export async function createOrder({
           }
         }
 
+        // T10: Máy chủ đối chiếu đơn giá với giá tự tính
+        const resolvedPrice = await resolveProductPrice({
+          db: txDb,
+          storeId: actor.storeId,
+          customerId: input.customerId ?? null,
+          productId: item.productId,
+          variantId: item.variantId ?? null,
+          unitConversionId: item.unitConversionId ?? null,
+          quantity: item.quantity,
+        })
+
+        if (item.priceOverride) {
+          if (verifiedPriceOverridePin) {
+            item.priceOverridePinUsed = true
+          } else if (source === 'offline_sync') {
+            item.priceOverride = false
+            item.priceOverridePinUsed = false
+          }
+        } else {
+          item.priceOverridePinUsed = false
+        }
+
         let effectiveUnitPrice = item.unitPrice
         let effectiveLineTotal = item.lineTotal
 
-        // M16: Đơn vị quy đổi có giá 0 dẫn tới bán 0đ: BE tự tính lại giá thay vì tin client
-        if (conv && !item.priceOverride) {
-          const basePrice = variant ? Number(variant.sellingPrice) : Number(product.sellingPrice)
-          const expectedConvPrice = calculateUnitConversionPrice({
-            basePrice,
-            conversionFactor: conv.conversionFactor,
-            customSellingPrice: conv.sellingPrice,
-          })
-          if (effectiveUnitPrice <= 0 && expectedConvPrice > 0) {
-            effectiveUnitPrice = expectedConvPrice
-            const lineRes = calculateLineTotal({
-              unitPrice: effectiveUnitPrice,
-              quantity: item.quantity,
-              discountType: item.discountType,
-              discountValue: item.discountValue,
-            })
-            effectiveLineTotal = lineRes.lineTotal
+        if (!item.priceOverride) {
+          const expectedSysPrice = resolvedPrice.price
+          if (effectiveUnitPrice !== expectedSysPrice) {
+            if (source === 'pos') {
+              throw new ApiError(
+                'VALIDATION_ERROR',
+                'Đơn giá không khớp giá hệ thống, vui lòng tải lại giỏ hàng',
+                {
+                  productId: item.productId,
+                  clientPrice: item.unitPrice,
+                  serverPrice: expectedSysPrice,
+                },
+              )
+            } else {
+              effectiveUnitPrice = expectedSysPrice
+              const lineRes = calculateLineTotal({
+                unitPrice: effectiveUnitPrice,
+                quantity: item.quantity,
+                discountType: item.discountType,
+                discountValue: item.discountValue,
+              })
+              effectiveLineTotal = lineRes.lineTotal
+              isPriceMismatchAdjusted = true
+            }
           }
         }
+
+        adjustedSubtotal += effectiveLineTotal
 
         // Insert order_item
         const [insertedItem] = await tx
@@ -568,6 +620,69 @@ export async function createOrder({
             })
           }
         }
+      }
+
+      if (isPriceMismatchAdjusted) {
+        const newTotal = Math.max(0, adjustedSubtotal - input.discountAmount)
+
+        let newChange = 0
+        if (input.paymentMethod === 'cash' && input.cashAmount != null) {
+          newChange = input.cashAmount - newTotal
+        } else if (input.paymentMethod === 'combined') {
+          const cashPart = input.cashAmount ?? 0
+          const transferPart = input.transferAmount ?? 0
+          newChange = cashPart + transferPart - newTotal
+        } else if (input.paymentMethod === 'debt' && input.cashAmount != null) {
+          newChange = input.cashAmount - (newTotal - debtAmount)
+        }
+        newChange = Math.max(0, newChange)
+
+        await tx
+          .update(orders)
+          .set({
+            subtotal: adjustedSubtotal,
+            total: newTotal,
+            change: newChange,
+          })
+          .where(eq(orders.id, createdId))
+
+        await logAction({
+          db: txDb,
+          storeId: actor.storeId,
+          actorId: actor.userId,
+          actorRole: actor.role,
+          action: 'order.price_mismatch_adjusted',
+          targetType: 'order',
+          targetId: createdId,
+          changes: {
+            orderId: createdId,
+            orderNumber,
+            oldSubtotal: input.subtotal,
+            newSubtotal: adjustedSubtotal,
+            oldTotal: input.total,
+            newTotal,
+          },
+          ipAddress: meta?.ipAddress,
+          userAgent: meta?.userAgent,
+        })
+
+        emitEvent(db, {
+          storeId: actor.storeId,
+          type: 'order.price_mismatch_adjusted',
+          severity: 'warn',
+          title: `Đơn ngoại tuyến điều chỉnh giá: ${orderNumber}`,
+          body: `Đơn ${orderNumber} có sai lệch giá so với hệ thống. Tự động điều chỉnh tổng đơn từ ${formatVnd(input.total)} thành ${formatVnd(newTotal)}.`,
+          context: {
+            orderId: createdId,
+            orderNumber,
+            oldTotal: input.total,
+            newTotal,
+          },
+        })
+
+        input.subtotal = adjustedSubtotal
+        input.total = newTotal
+        change = newChange
       }
 
       let oldDebt: number | null = null

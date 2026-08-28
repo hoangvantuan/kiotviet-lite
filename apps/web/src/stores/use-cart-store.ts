@@ -79,6 +79,7 @@ export interface TabState {
   customerName: string | null
   customerGroupId: string | null
   customerGroupName: string | null
+  priceOverridePin: string | null
 }
 
 interface CartState {
@@ -111,6 +112,7 @@ interface CartState {
     source: PriceSource,
     sourceDetail: string | null,
   ) => void
+  setPriceOverridePin: (pin: string | null) => void
   clearCart: () => void
   setMode: (mode: 'quick' | 'normal') => void
 }
@@ -166,6 +168,7 @@ function createEmptyTab(): TabState {
     customerName: null,
     customerGroupId: null,
     customerGroupName: null,
+    priceOverridePin: null,
   }
 }
 
@@ -348,6 +351,10 @@ export const useCartStore = create<CartState>((set, get) => ({
         return recomputeOrderDiscount({ ...tab, items: nextItems })
       }),
     )
+  },
+
+  setPriceOverridePin: (pin) => {
+    set((state) => updateActiveTab(state, (tab) => ({ ...tab, priceOverridePin: pin })))
   },
 
   clearCart: () => {

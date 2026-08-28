@@ -25,6 +25,7 @@ interface CheckoutPayload {
   debtAmount?: number
   debtLimitOverridden?: boolean
   debtLimitOverridePin?: string
+  priceOverridePin?: string
   note?: string | null
   items: {
     productId: string
