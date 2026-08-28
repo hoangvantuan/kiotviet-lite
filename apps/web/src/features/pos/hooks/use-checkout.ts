@@ -71,7 +71,60 @@ export function useCheckoutMutation() {
 
         const clientId = await saveOfflineOrder(pglite, storeId, payload as CreateOrderInput)
         toast.success('Đơn hàng đã lưu (chờ đồng bộ)')
-        return { data: { id: clientId, offline: true } } as unknown as CheckoutResponse
+
+        const debtAmount = payload.debtAmount ?? 0
+        let change = 0
+        if (payload.paymentMethod === 'cash' && payload.cashAmount != null) {
+          change = Math.max(0, payload.cashAmount - payload.total)
+        } else if (payload.paymentMethod === 'combined') {
+          const cashPart = payload.cashAmount ?? 0
+          const transferPart = payload.transferAmount ?? 0
+          change = Math.max(0, cashPart + transferPart - payload.total)
+        } else if (payload.paymentMethod === 'debt' && payload.cashAmount != null) {
+          change = Math.max(0, payload.cashAmount - (payload.total - debtAmount))
+        }
+
+        const offlineOrder: OrderDetail = {
+          id: clientId,
+          orderNumber: `OFFLINE-${clientId.slice(0, 8).toUpperCase()}`,
+          customerId: payload.customerId ?? null,
+          subtotal: payload.subtotal,
+          discountAmount: payload.discountAmount,
+          total: payload.total,
+          paymentMethod: payload.paymentMethod,
+          paymentStatus:
+            payload.paymentStatus ??
+            (debtAmount > 0 ? (debtAmount === payload.total ? 'unpaid' : 'partial') : 'paid'),
+          cashAmount: payload.cashAmount ?? null,
+          transferAmount: payload.transferAmount ?? null,
+          debtAmount,
+          change,
+          note: payload.note ?? null,
+          status: 'completed',
+          items: payload.items.map((item, idx) => ({
+            id: `offline-item-${idx}`,
+            productId: item.productId,
+            variantId: item.variantId,
+            productName: item.productName,
+            variantName: item.variantName,
+            unit: item.unit,
+            unitPrice: item.unitPrice,
+            quantity: item.quantity,
+            discountType: item.discountType,
+            discountValue: item.discountValue,
+            discountAmount: item.discountAmount,
+            lineTotal: item.lineTotal,
+            originalPrice: null,
+            priceOverride: false,
+            sku: null,
+            costPrice: null,
+          })),
+          createdAt: new Date().toISOString(),
+          oldDebt: null,
+          customerCurrentDebt: null,
+        }
+
+        return { data: offlineOrder }
       }
 
       return apiClient.post<CheckoutResponse>('/api/v1/pos/orders', payload)

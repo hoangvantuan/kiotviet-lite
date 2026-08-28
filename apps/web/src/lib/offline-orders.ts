@@ -118,6 +118,17 @@ export async function resetErrorOrders(pglite: PGlite): Promise<number> {
   return result.affectedRows ?? 0
 }
 
+export async function resetSingleErrorOrder(pglite: PGlite, clientId: string): Promise<boolean> {
+  const result = await pglite.query(
+    `UPDATE offline_orders SET sync_status = 'pending', error_message = NULL
+     WHERE client_id = $1 AND sync_status = 'error'`,
+    [clientId],
+  )
+  const counts = await getOrderCounts(pglite)
+  useOfflineStore.getState().setPendingCount(counts.pending)
+  return (result.affectedRows ?? 0) > 0
+}
+
 export async function getOrderCounts(
   pglite: PGlite,
 ): Promise<{ pending: number; synced: number; error: number }> {

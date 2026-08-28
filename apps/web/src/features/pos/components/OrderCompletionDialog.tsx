@@ -38,9 +38,9 @@ function toOrderDetailResponse(order: OrderDetail): OrderDetailResponse {
     createdByName: null,
     discountType: null,
     discountValue: 0,
-    paidAmount: order.total - order.debtAmount,
+    paidAmount: order.total - (order.debtAmount ?? 0),
     updatedAt: order.createdAt,
-    items: order.items.map((item, idx) => ({
+    items: (order.items ?? []).map((item, idx) => ({
       id: `item-${idx}`,
       ...item,
       discountType: null,
@@ -179,7 +179,7 @@ export function OrderCompletionDialog({
 
           {/* Item list */}
           <div className="max-h-48 space-y-1 overflow-y-auto">
-            {order.items.map((item, idx) => (
+            {(order.items ?? []).map((item, idx) => (
               <div key={idx} className="flex items-center justify-between text-sm">
                 <span className="min-w-0 flex-1 truncate text-foreground">
                   {item.productName}

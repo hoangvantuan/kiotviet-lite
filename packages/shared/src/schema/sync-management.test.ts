@@ -22,6 +22,7 @@ function validData(over: Record<string, unknown> = {}) {
     discountAmount: 0,
     total: 200000,
     paymentMethod: 'cash' as const,
+    cashAmount: 200000,
     items: [validItem()],
     ...over,
   }

@@ -18,58 +18,11 @@ export type SchemaVersionResponse = z.infer<typeof schemaVersionResponseSchema>
 
 export const PGLITE_SCHEMA_VERSION = 2
 
+import { createOrderItemSchema, createOrderSchema } from './order-management.js'
+
 // Story 9-2: Sync push schemas
-
-export const syncPushOrderItemSchema = z
-  .object({
-    productId: z.string().uuid(),
-    variantId: z.string().uuid().nullable().default(null),
-    productName: z.string().trim().min(1).max(255),
-    variantName: z.string().trim().max(255).nullable().default(null),
-    unit: z.string().trim().max(50).nullable().default(null),
-    unitPrice: z.number().int().min(0),
-    quantity: z.number().int().min(1).max(1_000_000),
-    discountType: z.enum(['percent', 'amount']).nullable().default(null),
-    discountValue: z.number().int().min(0).default(0),
-    discountAmount: z.number().int().min(0).default(0),
-    lineTotal: z.number().int().min(0),
-    note: z.string().trim().max(500).nullable().default(null),
-    unitConversionId: z.string().uuid().nullable().default(null),
-    originalPrice: z.number().int().min(0).nullable().default(null),
-    priceOverride: z.boolean().default(false),
-    priceOverrideReason: z.string().trim().max(255).nullable().default(null),
-    priceOverridePinUsed: z.boolean().default(false),
-  })
-  // CRIT C2: đơn offline cũng phải khoá bất biến tiền như POS online, nếu không
-  // server tin tuyệt đối số liệu client gửi (trừ kho, ghi doanh thu sai).
-  .refine((item) => item.lineTotal === item.unitPrice * item.quantity - item.discountAmount, {
-    message: 'lineTotal không khớp với unitPrice * quantity - discountAmount',
-  })
-
-export const syncPushOrderDataSchema = z
-  .object({
-    customerId: z.string().uuid().nullable().default(null),
-    subtotal: z.number().int().min(0),
-    discountType: z.enum(['percent', 'amount']).nullable().default(null),
-    discountValue: z.number().int().min(0).default(0),
-    discountAmount: z.number().int().min(0).default(0),
-    total: z.number().int().min(0),
-    paymentMethod: z.enum(['cash', 'transfer', 'qr', 'combined', 'debt']),
-    paymentStatus: z.enum(['paid', 'partial', 'unpaid']).default('paid'),
-    cashAmount: z.number().int().min(0).optional(),
-    transferAmount: z.number().int().min(0).optional(),
-    debtAmount: z.number().int().min(0).optional(),
-    note: z.string().trim().max(1000).nullable().default(null),
-    items: z.array(syncPushOrderItemSchema).min(1).max(200),
-  })
-  .refine((order) => order.subtotal === order.items.reduce((sum, item) => sum + item.lineTotal, 0), {
-    message: 'subtotal không khớp với tổng thành tiền các dòng',
-    path: ['subtotal'],
-  })
-  .refine((order) => order.total === order.subtotal - order.discountAmount, {
-    message: 'total không khớp với subtotal - discountAmount',
-    path: ['total'],
-  })
+export const syncPushOrderItemSchema = createOrderItemSchema
+export const syncPushOrderDataSchema = createOrderSchema
 
 export const syncPushOrderSchema = z.object({
   clientId: z.string().uuid(),

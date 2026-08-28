@@ -13,6 +13,7 @@ import { AppLayout } from '@/components/layout/app-layout'
 import { ErrorBoundary } from '@/components/layout/error-boundary'
 import { Toaster } from '@/components/ui/sonner'
 import { useMediaQuery as useMediaQueryRoot } from '@/hooks/use-media-query'
+import { useNetworkStatus } from '@/hooks/use-network-status'
 import { CategoryDiscountsPage } from '@/pages/category-discounts-page'
 import { CustomerDetailPage } from '@/pages/customer-detail-page'
 import { CustomerPricesPage } from '@/pages/customer-prices-page'
@@ -456,6 +457,8 @@ declare module '@tanstack/react-router' {
 }
 
 function RootComponent() {
+  useNetworkStatus()
+
   return (
     <ErrorBoundary>
       <Outlet />

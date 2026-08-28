@@ -1,5 +1,7 @@
 import type { PGlite } from '@electric-sql/pglite'
 
+import { apiFetch } from './api-client'
+
 interface SyncData {
   products: unknown[]
   variants: unknown[]
@@ -37,35 +39,15 @@ interface SchemaVersionResponse {
   data: { version: number }
 }
 
-async function fetchWithRetry(url: string, token: string, retries = 3): Promise<Response> {
-  let lastError: Error | null = null
-  for (let i = 0; i < retries; i++) {
-    try {
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (res.ok) return res
-      if (res.status === 401) throw new Error('Unauthorized')
-      lastError = new Error(`HTTP ${res.status}`)
-    } catch (err) {
-      lastError = err as Error
-    }
-    if (i < retries - 1) {
-      await new Promise((r) => setTimeout(r, 2000 * 2 ** i))
-    }
-  }
-  throw lastError
-}
-
 export async function runInitialSync(
   pglite: PGlite,
-  apiBase: string,
-  token: string,
-  onProgress?: (percent: number) => void,
+  apiBaseOrOnProgress?: string | ((percent: number) => void),
+  _token?: string,
+  onProgressCb?: (percent: number) => void,
 ): Promise<string> {
+  const onProgress = typeof apiBaseOrOnProgress === 'function' ? apiBaseOrOnProgress : onProgressCb
   onProgress?.(10)
-  const res = await fetchWithRetry(`${apiBase}/api/v1/sync/initial`, token)
-  const json: SyncResponse = await res.json()
+  const json = await apiFetch<SyncResponse>('/api/v1/sync/initial')
   onProgress?.(60)
 
   const { data } = json
@@ -106,15 +88,14 @@ export async function runInitialSync(
 
 export async function runIncrementalSync(
   pglite: PGlite,
-  apiBase: string,
-  token: string,
-  lastSyncedAt: string,
+  apiBaseOrLastSyncedAt: string,
+  _tokenOrLastSyncedAt?: string,
+  explicitLastSyncedAt?: string,
 ): Promise<string> {
-  const res = await fetchWithRetry(
-    `${apiBase}/api/v1/sync/incremental?since=${encodeURIComponent(lastSyncedAt)}`,
-    token,
+  const lastSyncedAt = explicitLastSyncedAt ?? _tokenOrLastSyncedAt ?? apiBaseOrLastSyncedAt
+  const json = await apiFetch<SyncResponse>(
+    `/api/v1/sync/incremental?since=${encodeURIComponent(lastSyncedAt)}`,
   )
-  const json: SyncResponse = await res.json()
   const { data } = json
 
   for (const [key, rows] of Object.entries(data)) {
@@ -151,11 +132,7 @@ export async function runIncrementalSync(
   return json.meta.syncedAt
 }
 
-export async function checkSchemaVersion(
-  apiBase: string,
-  token: string,
-): Promise<{ version: number }> {
-  const res = await fetchWithRetry(`${apiBase}/api/v1/sync/schema-version`, token)
-  const json: SchemaVersionResponse = await res.json()
+export async function checkSchemaVersion(): Promise<{ version: number }> {
+  const json = await apiFetch<SchemaVersionResponse>('/api/v1/sync/schema-version')
   return json.data
 }
