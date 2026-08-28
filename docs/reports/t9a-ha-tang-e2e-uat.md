@@ -22,7 +22,9 @@ Hạng mục T9a (Dựng hạ tầng kiểm thử đầu cuối E2E và bộ k�
 2. **Cấu hình luồng tích hợp liên tục (CI Workflow) riêng biệt trong `.github/workflows/ci.yml`**:
    - Thêm công việc `e2e` chạy phụ thuộc sau công việc `ci` (`needs: ci`), không làm chậm chu trình kiểm tra cơ bản.
    - Khởi tạo dịch vụ cơ sở dữ liệu PostgreSQL (`postgres:16-alpine`), tự động chạy di chuyển lược đồ (`pnpm db:migrate`) và nạp dữ liệu mẫu (`pnpm db:seed`).
-   - Cài đặt trình duyệt Playwright Chromium, xây dựng bản dựng ứng dụng web (`pnpm run build`), khởi động máy chủ API ngầm và thực thi bộ kiểm thử E2E.
+   - Cài đặt trình duyệt Playwright Chromium, cấu hình biến môi trường chuẩn xác (`JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`, `PORT`, `VITE_API_URL`, `ALLOWED_ORIGINS`).
+   - Khởi động máy chủ API ngầm và thăm dò tín hiệu sức khỏe thật qua endpoint `/api/v1/health` với thời gian chờ tối đa 30 giây (không dùng thời gian chờ cố định thiếu tin cậy).
+   - Loại bỏ bước xây dựng bản dựng web (`Build Web`) thừa để Playwright `webServer` tự khởi động Vite dev server (`pnpm run dev`), giúp tiết kiệm tài nguyên và đồng bộ môi trường.
    - Thiết lập cờ `continue-on-error: true` cho phép thất bại mềm trong giai đoạn khởi tạo ban đầu, kèm ghi chú sẽ siết chặt sau khi mở rộng thêm các kịch bản kiểm thử.
    - Tự động lưu trữ báo cáo kiểm thử (Playwright report artifacts) phục vụ tra cứu.
 
@@ -38,7 +40,23 @@ Hạng mục T9a (Dựng hạ tầng kiểm thử đầu cuối E2E và bộ k�
 
 ---
 
-## 2. Danh sách các tập tin đã tạo mới và chỉnh sửa
+## 2. Chi tiết 3 điểm đã chỉnh sửa theo phản hồi của điều phối viên (Coordinator Review)
+
+1. **Chuẩn hoá biến môi trường bí mật (Secrets)**:
+   - Sửa từ biến không tồn tại `JWT_SECRET` thành hai biến bắt buộc theo `apps/api/src/lib/env.ts` (mỗi chuỗi tối thiểu 32 ký tự):
+     - `JWT_ACCESS_SECRET: e2e-test-jwt-access-secret-at-least-32-chars`
+     - `JWT_REFRESH_SECRET: e2e-test-jwt-refresh-secret-at-least-32-chars`
+   - Bổ sung `ALLOWED_ORIGINS: http://localhost:5173`.
+2. **Cơ chế chờ máy chủ API sẵn sàng theo tín hiệu sức khỏe thực tế**:
+   - Thay thế lệnh chờ cố định `sleep 5` bằng vòng lặp kiểm tra tín hiệu phản hồi thực tế từ endpoint `http://localhost:3000/api/v1/health` trong vòng 30 giây qua `curl -sf`.
+   - Nếu quá 30 giây máy chủ API chưa sẵn sàng, quy trình báo lỗi rõ ràng và dừng ngay lập tức.
+3. **Tối ưu bước khởi động web**:
+   - Loại bỏ bước `Build Web` khỏi job `e2e` trong CI.
+   - Lý do: `playwright.config.ts` đã thiết lập `webServer` tự động khởi chạy `pnpm run dev`, việc chạy dev server trực tiếp vừa nhanh chóng, vừa đồng nhất môi trường cục bộ và tiết kiệm thời gian chạy CI.
+
+---
+
+## 3. Danh sách các tập tin đã tạo mới và chỉnh sửa
 
 ### Tập tin cấu hình và kiểm thử:
 
@@ -48,7 +66,7 @@ Hạng mục T9a (Dựng hạ tầng kiểm thử đầu cuối E2E và bộ k�
 - `apps/web/e2e/helpers/test-data.ts`: Dữ liệu mẫu seed chuẩn.
 - `apps/web/e2e/smoke.spec.ts`: Bài kiểm thử khói mở màn hình đăng nhập và xác thực trang chủ.
 - `apps/web/e2e/README.md`: Hướng dẫn vận hành kiểm thử E2E.
-- `.github/workflows/ci.yml`: Bổ sung công việc (job) `e2e` chạy container PostgreSQL và Playwright.
+- `.github/workflows/ci.yml`: Bổ sung và tinh chỉnh công việc (job) `e2e` chạy container PostgreSQL, thăm dò API health và Playwright.
 
 ### Tập tin tài liệu kịch bản UAT:
 
@@ -63,14 +81,14 @@ Hạng mục T9a (Dựng hạ tầng kiểm thử đầu cuối E2E và bộ k�
 
 ---
 
-## 3. Tuân thủ ràng buộc kỹ thuật
+## 4. Tuân thủ ràng buộc kỹ thuật
 
 - **Không sửa đổi mã logic nghiệp vụ**: Không can thiệp hoặc sửa đổi bất kỳ tập tin nào trong `apps/api/src/services`, `apps/api/src/routes`, hay `apps/web/src/features` (ngoại trừ việc tạo mới thư mục `apps/web/e2e/`).
 - **Tuân thủ quy tắc kiểm thử thu hẹp**: Không chạy toàn bộ bộ kiểm thử tích hợp nặng `pnpm test` (tránh quá tải CPU máy theo chỉ dẫn của điều phối viên). Thay vào đó, tập trung chạy đầy đủ các bước kiểm tra tĩnh và kiểm tra kiểu.
 
 ---
 
-## 4. Kết quả xác thực chất lượng (Verification)
+## 5. Kết quả xác thực chất lượng (Verification)
 
 | Lệnh kiểm tra          | Kết quả                      | Chi tiết                                                                                                                              |
 | :--------------------- | :--------------------------- | :------------------------------------------------------------------------------------------------------------------------------------ |
@@ -81,6 +99,6 @@ Hạng mục T9a (Dựng hạ tầng kiểm thử đầu cuối E2E và bộ k�
 
 ---
 
-## 5. Kết luận và Bước tiếp theo
+## 6. Kết luận và Bước tiếp theo
 
 Toàn bộ hạ tầng E2E và bộ kịch bản nghiệm thu UAT đã sẵn sàng để tích hợp vào nhánh chính sau khi các tác vụ refactor nghiệp vụ độc lập hoàn tất. Mã nguồn đã được kiểm tra nghiêm ngặt và đóng gói sẵn sàng trong nhánh làm việc hiện tại.

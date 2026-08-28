@@ -55,9 +55,11 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgres://kiotviet:kiotviet_password@localhost:5432/kiotviet_lite_test
-      JWT_SECRET: supersecret-jwt-key-must-be-at-least-32-chars-long
+      JWT_ACCESS_SECRET: e2e-test-jwt-access-secret-at-least-32-chars
+      JWT_REFRESH_SECRET: e2e-test-jwt-refresh-secret-at-least-32-chars
       PORT: 3000
       VITE_API_URL: http://localhost:3000
+      ALLOWED_ORIGINS: http://localhost:5173
     steps:
       - uses: actions/checkout@v4
 
@@ -80,13 +82,21 @@ jobs:
       - name: Seed Database
         run: pnpm --filter @kiotviet-lite/api run db:seed
 
-      - name: Build Web
-        run: pnpm --filter @kiotviet-lite/web run build
-
-      - name: Start API Server
+      - name: Start API Server and Wait for Ready
         run: |
           pnpm --filter @kiotviet-lite/api run dev &
-          sleep 5
+          echo "Waiting for API server to become ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/v1/health > /dev/null; then
+              echo "API server is ready at http://localhost:3000 after ${i}s"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "Error: API server failed to start within 30s"
+              exit 1
+            fi
+            sleep 1
+          done
 
       - name: Run Playwright E2E Tests
         run: pnpm --filter @kiotviet-lite/web run test:e2e
