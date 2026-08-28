@@ -2,12 +2,14 @@ import type { PGlite } from '@electric-sql/pglite'
 
 import { useOfflineStore } from '@/stores/use-offline-store'
 
+import { apiFetch } from './api-client'
 import {
   getErrorOrders,
   getOrderCounts,
   getPendingOrders,
   markOrderError,
   markOrderSynced,
+  resetSingleErrorOrder,
 } from './offline-orders'
 import { runIncrementalSync } from './sync-engine'
 
@@ -23,43 +25,8 @@ interface SyncPushResponse {
   }
 }
 
-const RETRY_BASE = 2000
-const RETRY_MULTIPLIER = 4
-const MAX_RETRIES = 3
-
-async function fetchWithRetryPerOrder(
-  url: string,
-  token: string,
-  body: unknown,
-): Promise<Response> {
-  let lastError: Error | null = null
-  for (let i = 0; i < MAX_RETRIES; i++) {
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      })
-      if (res.ok) return res
-      if (res.status === 401) throw new Error('Unauthorized')
-      lastError = new Error(`HTTP ${res.status}`)
-    } catch (err) {
-      lastError = err as Error
-    }
-    if (i < MAX_RETRIES - 1) {
-      await new Promise((r) => setTimeout(r, RETRY_BASE * RETRY_MULTIPLIER ** i))
-    }
-  }
-  throw lastError
-}
-
 export async function pushPendingOrders(
   pglite: PGlite,
-  apiBase: string,
-  token: string,
 ): Promise<{ synced: number; errors: number }> {
   const pending = await getPendingOrders(pglite)
   if (pending.length === 0) return { synced: 0, errors: 0 }
@@ -77,11 +44,10 @@ export async function pushPendingOrders(
       orderData: o.orderData,
     }))
 
-    const res = await fetchWithRetryPerOrder(`${apiBase}/api/v1/sync/push`, token, {
-      orders: ordersPayload,
+    const json = await apiFetch<SyncPushResponse>('/api/v1/sync/push', {
+      method: 'POST',
+      body: { orders: ordersPayload },
     })
-
-    const json: SyncPushResponse = await res.json()
 
     for (const result of json.data.results) {
       if (result.status === 'synced' || result.status === 'duplicate') {
@@ -117,34 +83,41 @@ export async function pushPendingOrders(
 
 export async function retryErrorOrders(
   pglite: PGlite,
-  apiBase: string,
-  token: string,
 ): Promise<{ synced: number; errors: number }> {
   const errorOrders = await getErrorOrders(pglite)
   if (errorOrders.length === 0) return { synced: 0, errors: 0 }
 
   // Reset error orders to pending first
   for (const o of errorOrders) {
-    await pglite.query(`UPDATE offline_orders SET sync_status = 'pending' WHERE client_id = $1`, [
-      o.clientId,
-    ])
+    await pglite.query(
+      `UPDATE offline_orders SET sync_status = 'pending', error_message = NULL WHERE client_id = $1`,
+      [o.clientId],
+    )
   }
 
-  return pushPendingOrders(pglite, apiBase, token)
+  return pushPendingOrders(pglite)
+}
+
+export async function retrySingleOrder(
+  pglite: PGlite,
+  clientId: string,
+): Promise<{ synced: number; errors: number }> {
+  await resetSingleErrorOrder(pglite, clientId)
+  return pushPendingOrders(pglite)
 }
 
 export async function startSyncCycle(
   pglite: PGlite,
-  apiBase: string,
-  token: string,
-  lastSyncedAt: string | null,
+  _apiBase?: string,
+  _token?: string,
+  lastSyncedAt?: string | null,
 ): Promise<string> {
-  const pushResult = await pushPendingOrders(pglite, apiBase, token)
+  const pushResult = await pushPendingOrders(pglite)
 
   let newWatermark = lastSyncedAt ?? new Date(0).toISOString()
   if (lastSyncedAt) {
     try {
-      newWatermark = await runIncrementalSync(pglite, apiBase, token, lastSyncedAt)
+      newWatermark = await runIncrementalSync(pglite, lastSyncedAt)
     } catch {
       // Incremental sync failure should not block order push
     }
@@ -165,28 +138,19 @@ export async function startSyncCycle(
 
 let syncInterval: ReturnType<typeof setInterval> | null = null
 
-export function startAutoSync(
-  pglite: PGlite,
-  apiBase: string,
-  getToken: () => string | null,
-): () => void {
+export function startAutoSync(pglite: PGlite): () => void {
   const handleOnline = () => {
-    const token = getToken()
-    if (token) {
-      const store = useOfflineStore.getState()
-      startSyncCycle(pglite, apiBase, token, store.lastSyncedAt).catch(() => {})
-    }
+    const store = useOfflineStore.getState()
+    startSyncCycle(pglite, undefined, undefined, store.lastSyncedAt).catch(() => {})
   }
 
   window.addEventListener('online', handleOnline)
 
   syncInterval = setInterval(() => {
     if (!navigator.onLine) return
-    const token = getToken()
-    if (!token) return
     const store = useOfflineStore.getState()
     if (store.pendingOrderCount > 0 || store.status === 'error') {
-      startSyncCycle(pglite, apiBase, token, store.lastSyncedAt).catch(() => {})
+      startSyncCycle(pglite, undefined, undefined, store.lastSyncedAt).catch(() => {})
     }
   }, 60_000)
 

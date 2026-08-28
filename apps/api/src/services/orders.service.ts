@@ -79,6 +79,7 @@ export interface OrderDetail {
   createdAt: string
   oldDebt?: number | null
   customerCurrentDebt?: number | null
+  isDuplicate?: boolean
 }
 
 export interface StockInfoVariant {
@@ -156,6 +157,9 @@ export interface CreateOrderDeps {
   actor: OrdersActor
   input: CreateOrderInput
   meta?: RequestMeta
+  source?: 'pos' | 'offline_sync'
+  clientId?: string | null
+  skipDebtLimitCheck?: boolean
 }
 
 function formatVnd(value: number): string {
@@ -167,9 +171,63 @@ export async function createOrder({
   actor,
   input,
   meta,
+  source = 'pos',
+  clientId: explicitClientId,
+  skipDebtLimitCheck = false,
 }: CreateOrderDeps): Promise<OrderDetail> {
   if (input.items.length === 0) {
     throw new ApiError('VALIDATION_ERROR', 'Đơn hàng phải có ít nhất 1 sản phẩm')
+  }
+
+  const clientId =
+    explicitClientId ??
+    ('clientId' in input ? (input as { clientId?: string }).clientId : undefined) ??
+    null
+
+  // Chống trùng tuần tự nhanh theo clientId nếu đã tồn tại trong store
+  if (clientId) {
+    const [existing] = await db
+      .select({
+        id: orders.id,
+        orderNumber: orders.orderNumber,
+        customerId: orders.customerId,
+        subtotal: orders.subtotal,
+        discountAmount: orders.discountAmount,
+        total: orders.total,
+        paymentMethod: orders.paymentMethod,
+        paymentStatus: orders.paymentStatus,
+        cashAmount: orders.cashAmount,
+        transferAmount: orders.transferAmount,
+        change: orders.change,
+        note: orders.note,
+        status: orders.status,
+        createdAt: orders.createdAt,
+      })
+      .from(orders)
+      .where(and(eq(orders.storeId, actor.storeId), eq(orders.clientId, clientId)))
+      .limit(1)
+
+    if (existing) {
+      return {
+        id: existing.id,
+        orderNumber: existing.orderNumber,
+        customerId: existing.customerId,
+        subtotal: existing.subtotal,
+        discountAmount: existing.discountAmount,
+        total: existing.total,
+        paymentMethod: existing.paymentMethod,
+        paymentStatus: existing.paymentStatus,
+        cashAmount: existing.cashAmount,
+        transferAmount: existing.transferAmount,
+        debtAmount: input.debtAmount ?? 0,
+        change: existing.change,
+        note: existing.note,
+        status: existing.status,
+        items: [],
+        createdAt: existing.createdAt.toISOString(),
+        isDuplicate: true,
+      }
+    }
   }
 
   // SF-1: Khi debtLimitOverridden=true, verify PIN server-side trước khi vào transaction.
@@ -199,83 +257,161 @@ export async function createOrder({
   }
   change = Math.max(0, change)
 
-  const result = await db.transaction(async (tx) => {
-    const txDb = tx as unknown as Db
+  try {
+    const result = await db.transaction(async (tx) => {
+      const txDb = tx as unknown as Db
 
-    // Generate order number with retry on unique violation
-    let orderNumber = await generateOrderNumber({ tx: txDb, storeId: actor.storeId })
-    let createdId: string | null = null
-    let attempts = 0
-    const MAX_ATTEMPTS = 3
+      // Generate order number with retry on unique violation
+      let orderNumber = await generateOrderNumber({ tx: txDb, storeId: actor.storeId })
+      let createdId: string | null = null
+      let attempts = 0
+      const MAX_ATTEMPTS = 3
 
-    while (attempts < MAX_ATTEMPTS && createdId === null) {
-      try {
-        const [row] = await tx
-          .insert(orders)
-          .values({
-            storeId: actor.storeId,
-            orderNumber,
-            customerId: input.customerId ?? null,
-            userId: actor.userId,
-            subtotal: input.subtotal,
-            discountType: input.discountType ?? null,
-            discountValue: input.discountValue,
-            discountAmount: input.discountAmount,
-            total: input.total,
-            paymentMethod: input.paymentMethod,
-            paymentStatus: input.paymentStatus,
-            cashAmount: input.cashAmount ?? null,
-            transferAmount: input.transferAmount ?? null,
-            change,
-            note: input.note ?? null,
-            status: 'completed',
-          })
-          .returning({ id: orders.id })
-        if (!row) {
-          throw new ApiError('INTERNAL_ERROR', 'Không tạo được đơn hàng')
-        }
-        createdId = row.id
-      } catch (err) {
-        if (isUniqueViolation(err, 'uniq_orders_store_number')) {
-          attempts++
-          if (attempts >= MAX_ATTEMPTS) {
-            throw new ApiError('INTERNAL_ERROR', 'Không thể sinh mã đơn hàng, vui lòng thử lại')
-          }
-          const nextCode = incrementOrderSequence(orderNumber)
-          logger.warn(
-            {
+      while (attempts < MAX_ATTEMPTS && createdId === null) {
+        try {
+          const [row] = await tx
+            .insert(orders)
+            .values({
               storeId: actor.storeId,
               orderNumber,
-              nextCode,
-              attempt: attempts,
-            },
-            'order.code_collision_retry',
-          )
-          orderNumber = nextCode
-          continue
+              customerId: input.customerId ?? null,
+              userId: actor.userId,
+              subtotal: input.subtotal,
+              discountType: input.discountType ?? null,
+              discountValue: input.discountValue,
+              discountAmount: input.discountAmount,
+              total: input.total,
+              paymentMethod: input.paymentMethod,
+              paymentStatus: input.paymentStatus,
+              cashAmount: input.cashAmount ?? null,
+              transferAmount: input.transferAmount ?? null,
+              change,
+              clientId,
+              note: input.note ?? null,
+              status: 'completed',
+            })
+            .returning({ id: orders.id })
+          if (!row) {
+            throw new ApiError('INTERNAL_ERROR', 'Không tạo được đơn hàng')
+          }
+          createdId = row.id
+        } catch (err) {
+          if (isUniqueViolation(err, 'uniq_orders_store_number')) {
+            attempts++
+            if (attempts >= MAX_ATTEMPTS) {
+              throw new ApiError('INTERNAL_ERROR', 'Không thể sinh mã đơn hàng, vui lòng thử lại')
+            }
+            const nextCode = incrementOrderSequence(orderNumber)
+            logger.warn(
+              {
+                storeId: actor.storeId,
+                orderNumber,
+                nextCode,
+                attempt: attempts,
+              },
+              'order.code_collision_retry',
+            )
+            orderNumber = nextCode
+            continue
+          }
+          throw err
         }
-        throw err
       }
-    }
-    if (!createdId) {
-      throw new ApiError('INTERNAL_ERROR', 'Không tạo được đơn hàng')
-    }
+      if (!createdId) {
+        throw new ApiError('INTERNAL_ERROR', 'Không tạo được đơn hàng')
+      }
 
-    // Process items: insert order_items + deduct stock
-    const processedItems: OrderDetailItem[] = []
+      // Process items: insert order_items + deduct stock
+      const processedItems: OrderDetailItem[] = []
 
-    for (const item of input.items) {
-      const product = await loadProductForUpdate({
-        tx: txDb,
-        storeId: actor.storeId,
-        productId: item.productId,
-      })
+      for (const item of input.items) {
+        const product = await loadProductForUpdate({
+          tx: txDb,
+          storeId: actor.storeId,
+          productId: item.productId,
+        })
 
-      // Insert order_item
-      const [insertedItem] = await tx
-        .insert(orderItems)
-        .values({
-          orderId: createdId,
+        // Insert order_item
+        const [insertedItem] = await tx
+          .insert(orderItems)
+          .values({
+            orderId: createdId,
+            productId: item.productId,
+            variantId: item.variantId ?? null,
+            productName: item.productName,
+            variantName: item.variantName ?? null,
+            unit: item.unit ?? null,
+            unitPrice: item.unitPrice,
+            quantity: item.quantity,
+            discountType: item.discountType ?? null,
+            discountValue: item.discountValue,
+            discountAmount: item.discountAmount,
+            lineTotal: item.lineTotal,
+            note: item.note ?? null,
+            originalPrice: item.originalPrice ?? null,
+            priceOverride: item.priceOverride,
+            priceOverrideReason: item.priceOverrideReason ?? null,
+            priceOverridePinUsed: item.priceOverridePinUsed,
+          })
+          .returning({ id: orderItems.id })
+
+        if (item.priceOverride) {
+          await logAction({
+            db: txDb,
+            storeId: actor.storeId,
+            actorId: actor.userId,
+            actorRole: actor.role,
+            action: 'order_item.price_overridden',
+            targetType: 'order_item',
+            targetId: createdId,
+            changes: {
+              orderId: createdId,
+              productId: item.productId,
+              variantId: item.variantId ?? null,
+              originalPrice: item.originalPrice ?? null,
+              unitPrice: item.unitPrice,
+              reason: item.priceOverrideReason ?? null,
+              pinUsed: item.priceOverridePinUsed,
+            },
+            ipAddress: meta?.ipAddress,
+            userAgent: meta?.userAgent,
+          })
+
+          // audit.price_override: warn when selling below cost
+          if (product.costPrice != null && item.unitPrice < product.costPrice) {
+            emitEvent(db, {
+              storeId: actor.storeId,
+              type: 'audit.price_override',
+              severity: 'warn',
+              title: `Bán dưới giá vốn: ${item.productName}`,
+              body: `Sản phẩm ${item.productName} được bán ${item.unitPrice.toLocaleString('vi-VN')}đ, thấp hơn giá vốn ${product.costPrice.toLocaleString('vi-VN')}đ`,
+              context: {
+                orderId: createdId,
+                productName: item.productName,
+                originalPrice: item.originalPrice ?? null,
+                newPrice: item.unitPrice,
+                costPrice: product.costPrice,
+                userId: actor.userId,
+              },
+            })
+          }
+        }
+
+        let itemSku = product.sku ?? null
+        let itemCostPrice = product.costPrice != null ? Number(product.costPrice) : null
+        let variant = null
+        if (item.variantId) {
+          variant = await loadVariantForUpdate({
+            tx: txDb,
+            productId: item.productId,
+            variantId: item.variantId,
+          })
+          itemSku = variant.sku ?? product.sku ?? null
+          itemCostPrice = variant.costPrice != null ? Number(variant.costPrice) : itemCostPrice
+        }
+
+        processedItems.push({
+          id: insertedItem!.id,
           productId: item.productId,
           variantId: item.variantId ?? null,
           productName: item.productName,
@@ -287,304 +423,292 @@ export async function createOrder({
           discountValue: item.discountValue,
           discountAmount: item.discountAmount,
           lineTotal: item.lineTotal,
-          note: item.note ?? null,
           originalPrice: item.originalPrice ?? null,
           priceOverride: item.priceOverride,
-          priceOverrideReason: item.priceOverrideReason ?? null,
-          priceOverridePinUsed: item.priceOverridePinUsed,
+          sku: itemSku,
+          costPrice: itemCostPrice,
         })
-        .returning({ id: orderItems.id })
 
-      if (item.priceOverride) {
-        await logAction({
-          db: txDb,
-          storeId: actor.storeId,
-          actorId: actor.userId,
-          actorRole: actor.role,
-          action: 'order_item.price_overridden',
-          targetType: 'order_item',
-          targetId: createdId,
-          changes: {
-            orderId: createdId,
+        // Stock deduction
+        if (product.trackInventory) {
+          let deductQty = item.quantity
+
+          // M26: Unit conversion: multiply by conversionFactor & validate productId + storeId
+          if (item.unitConversionId) {
+            const convRows = await tx
+              .select({ conversionFactor: productUnitConversions.conversionFactor })
+              .from(productUnitConversions)
+              .where(
+                and(
+                  eq(productUnitConversions.id, item.unitConversionId),
+                  eq(productUnitConversions.productId, item.productId),
+                  eq(productUnitConversions.storeId, actor.storeId),
+                ),
+              )
+              .limit(1)
+            const conv = convRows[0]
+            if (!conv) {
+              throw new ApiError(
+                'VALIDATION_ERROR',
+                'Đơn vị quy đổi không hợp lệ hoặc không thuộc sản phẩm/cửa hàng này',
+              )
+            }
+            deductQty = item.quantity * conv.conversionFactor
+          }
+
+          let newStock: number
+
+          if (item.variantId) {
+            const v =
+              variant ??
+              (await loadVariantForUpdate({
+                tx: txDb,
+                productId: item.productId,
+                variantId: item.variantId,
+              }))
+            newStock = v.stockQuantity - deductQty
+            await tx
+              .update(productVariants)
+              .set({ stockQuantity: newStock })
+              .where(eq(productVariants.id, item.variantId))
+
+            // Aggregate variant stock to product level
+            const aggStock = await aggregateVariantStock({ tx: txDb, productId: item.productId })
+            await tx
+              .update(products)
+              .set({ currentStock: aggStock })
+              .where(eq(products.id, item.productId))
+          } else {
+            // Use relative update to avoid race condition when same product
+            // appears in multiple line items
+            await tx
+              .update(products)
+              .set({ currentStock: sql`${products.currentStock} - ${deductQty}` })
+              .where(eq(products.id, item.productId))
+
+            // Re-read current stock for inventory transaction record
+            const [updated] = await tx
+              .select({ currentStock: products.currentStock })
+              .from(products)
+              .where(eq(products.id, item.productId))
+              .limit(1)
+            newStock = updated?.currentStock ?? product.currentStock - deductQty
+          }
+
+          // Insert inventory transaction
+          const inventoryNote =
+            source === 'offline_sync' ? `${orderNumber} (offline sync)` : orderNumber
+
+          await tx.insert(inventoryTransactions).values({
+            storeId: actor.storeId,
             productId: item.productId,
             variantId: item.variantId ?? null,
-            originalPrice: item.originalPrice ?? null,
-            unitPrice: item.unitPrice,
-            reason: item.priceOverrideReason ?? null,
-            pinUsed: item.priceOverridePinUsed,
-          },
-          ipAddress: meta?.ipAddress,
-          userAgent: meta?.userAgent,
-        })
-
-        // audit.price_override: warn when selling below cost
-        if (product.costPrice != null && item.unitPrice < product.costPrice) {
-          emitEvent(db, {
-            storeId: actor.storeId,
-            type: 'audit.price_override',
-            severity: 'warn',
-            title: `Bán dưới giá vốn: ${item.productName}`,
-            body: `Sản phẩm ${item.productName} được bán ${item.unitPrice.toLocaleString('vi-VN')}đ, thấp hơn giá vốn ${product.costPrice.toLocaleString('vi-VN')}đ`,
-            context: {
-              orderId: createdId,
-              productName: item.productName,
-              originalPrice: item.originalPrice ?? null,
-              newPrice: item.unitPrice,
-              costPrice: product.costPrice,
-              userId: actor.userId,
-            },
+            type: 'sale',
+            quantity: -deductQty,
+            stockAfter: newStock,
+            note: inventoryNote,
+            createdBy: actor.userId,
           })
+
+          // stock.negative: emit when stock goes below 0
+          if (newStock < 0) {
+            emitEvent(db, {
+              storeId: actor.storeId,
+              type: 'stock.negative',
+              severity: 'error',
+              title: `Tồn kho âm: ${item.productName}`,
+              body: `Tồn kho ${item.productName} bị âm (${newStock}) sau ${source === 'offline_sync' ? 'đồng bộ đơn offline' : 'bán hàng'}. Cần nhập thêm hoặc kiểm kho.`,
+              context: {
+                productId: item.productId,
+                productName: item.productName,
+                currentStock: newStock,
+                previousStock: newStock + deductQty,
+              },
+            })
+          }
         }
       }
 
-      let itemSku = product.sku ?? null
-      let itemCostPrice = product.costPrice != null ? Number(product.costPrice) : null
-      let variant = null
-      if (item.variantId) {
-        variant = await loadVariantForUpdate({
-          tx: txDb,
-          productId: item.productId,
-          variantId: item.variantId,
-        })
-        itemSku = variant.sku ?? product.sku ?? null
-        itemCostPrice = variant.costPrice != null ? Number(variant.costPrice) : itemCostPrice
-      }
+      let oldDebt: number | null = null
+      let customerCurrentDebt: number | null = null
 
-      processedItems.push({
-        id: insertedItem!.id,
-        productId: item.productId,
-        variantId: item.variantId ?? null,
-        productName: item.productName,
-        variantName: item.variantName ?? null,
-        unit: item.unit ?? null,
-        unitPrice: item.unitPrice,
-        quantity: item.quantity,
-        discountType: item.discountType ?? null,
-        discountValue: item.discountValue,
-        discountAmount: item.discountAmount,
-        lineTotal: item.lineTotal,
-        originalPrice: item.originalPrice ?? null,
-        priceOverride: item.priceOverride,
-        sku: itemSku,
-        costPrice: itemCostPrice,
-      })
+      // Debt creation
+      if (debtAmount > 0) {
+        // Defense in depth: Zod refine đã enforce, vẫn check lại
+        if (!input.customerId) {
+          throw new ApiError('VALIDATION_ERROR', 'Phải chọn khách hàng khi ghi nợ')
+        }
 
-      // Stock deduction
-      if (product.trackInventory) {
-        let deductQty = item.quantity
+        // SF-2: LEFT JOIN customer_groups trong cùng query lock customer
+        // FOR UPDATE OF customers chỉ lock customer row, đọc group debtLimit cùng snapshot
+        const customerRows = await tx
+          .select({
+            currentDebt: customers.currentDebt,
+            debtLimit: customers.debtLimit,
+            groupId: customers.groupId,
+            name: customers.name,
+            groupDebtLimit: customerGroups.debtLimit,
+          })
+          .from(customers)
+          .leftJoin(customerGroups, eq(customers.groupId, customerGroups.id))
+          .where(
+            and(
+              eq(customers.id, input.customerId),
+              eq(customers.storeId, actor.storeId),
+              isNull(customers.deletedAt),
+            ),
+          )
+          .for('update', { of: [customers] })
+          .limit(1)
 
-        // Unit conversion: multiply by conversionFactor
-        if (item.unitConversionId) {
-          const convRows = await tx
-            .select({ conversionFactor: productUnitConversions.conversionFactor })
-            .from(productUnitConversions)
-            .where(eq(productUnitConversions.id, item.unitConversionId))
-            .limit(1)
-          const conv = convRows[0]
-          if (conv) {
-            deductQty = item.quantity * conv.conversionFactor
-          } else {
-            logger.warn(
-              {
-                storeId: actor.storeId,
-                productId: item.productId,
-                unitConversionId: item.unitConversionId,
+        const customer = customerRows[0]
+        if (!customer) {
+          throw new ApiError('NOT_FOUND', 'Không tìm thấy khách hàng')
+        }
+
+        // Resolve effective debt limit: customer.debtLimit ?? group.debtLimit ?? null
+        const effectiveDebtLimit: number | null =
+          customer.debtLimit !== null ? customer.debtLimit : (customer.groupDebtLimit ?? null)
+
+        const debtBefore = customer.currentDebt
+        const debtAfter = debtBefore + debtAmount
+        oldDebt = debtBefore
+        customerCurrentDebt = debtAfter
+
+        // Check limit nếu không có skipDebtLimitCheck: null hoặc 0 = không giới hạn
+        if (!skipDebtLimitCheck) {
+          if (
+            effectiveDebtLimit !== null &&
+            effectiveDebtLimit > 0 &&
+            debtAfter > effectiveDebtLimit
+          ) {
+            if (!input.debtLimitOverridden) {
+              const maxAdditional = Math.max(0, effectiveDebtLimit - debtBefore)
+              throw new ApiError(
+                'BUSINESS_RULE_VIOLATION',
+                `Vượt hạn mức công nợ. Nợ hiện tại: ${formatVnd(debtBefore)}. Hạn mức: ${formatVnd(effectiveDebtLimit)}. Nợ thêm tối đa: ${formatVnd(maxAdditional)}`,
+                {
+                  currentDebt: debtBefore,
+                  debtLimit: effectiveDebtLimit,
+                  maxAdditional,
+                },
+              )
+            }
+
+            // Override: ghi audit riêng
+            // SF-3: lưu PIN actor (user đã nhập PIN để override)
+            await logAction({
+              db: txDb,
+              storeId: actor.storeId,
+              actorId: actor.userId,
+              actorRole: actor.role,
+              action: 'debt.limit_overridden',
+              targetType: 'customer',
+              targetId: input.customerId,
+              changes: {
+                customerId: input.customerId,
+                customerName: customer.name,
+                orderId: createdId,
+                amount: debtAmount,
+                debtBefore,
+                debtAfter,
+                debtLimit: effectiveDebtLimit,
+                overrideBy: actor.userId,
+                overrideByRole: actor.role,
+                pinVerified: true,
+                source,
               },
-              'order.unit_conversion_not_found: falling back to raw quantity',
-            )
+              ipAddress: meta?.ipAddress,
+              userAgent: meta?.userAgent,
+            })
           }
         }
 
-        let newStock: number
-
-        if (item.variantId) {
-          const v =
-            variant ??
-            (await loadVariantForUpdate({
-              tx: txDb,
-              productId: item.productId,
-              variantId: item.variantId,
-            }))
-          newStock = v.stockQuantity - deductQty
-          await tx
-            .update(productVariants)
-            .set({ stockQuantity: newStock })
-            .where(eq(productVariants.id, item.variantId))
-
-          // Aggregate variant stock to product level
-          const aggStock = await aggregateVariantStock({ tx: txDb, productId: item.productId })
-          await tx
-            .update(products)
-            .set({ currentStock: aggStock })
-            .where(eq(products.id, item.productId))
-        } else {
-          // Use relative update to avoid race condition when same product
-          // appears in multiple line items
-          await tx
-            .update(products)
-            .set({ currentStock: sql`${products.currentStock} - ${deductQty}` })
-            .where(eq(products.id, item.productId))
-
-          // Re-read current stock for inventory transaction record
-          const [updated] = await tx
-            .select({ currentStock: products.currentStock })
-            .from(products)
-            .where(eq(products.id, item.productId))
-            .limit(1)
-          newStock = updated?.currentStock ?? product.currentStock - deductQty
-        }
-
-        // Insert inventory transaction
-        await tx.insert(inventoryTransactions).values({
+        // Insert debt record
+        await tx.insert(debts).values({
           storeId: actor.storeId,
-          productId: item.productId,
-          variantId: item.variantId ?? null,
-          type: 'sale',
-          quantity: -deductQty,
-          stockAfter: newStock,
-          note: orderNumber,
-          createdBy: actor.userId,
+          orderId: createdId,
+          customerId: input.customerId,
+          amount: debtAmount,
+          paid: 0,
+          remaining: debtAmount,
         })
 
-        // stock.negative: emit when stock goes below 0
-        if (newStock < 0) {
-          emitEvent(db, {
-            storeId: actor.storeId,
-            type: 'stock.negative',
-            severity: 'error',
-            title: `Tồn kho âm: ${item.productName}`,
-            body: `Tồn kho ${item.productName} bị âm (${newStock}) sau bán hàng. Cần nhập thêm hoặc kiểm kho.`,
-            context: {
-              productId: item.productId,
-              productName: item.productName,
-              currentStock: newStock,
-              previousStock: newStock + deductQty,
-            },
-          })
-        }
-      }
-    }
+        // Update customer current_debt atomically
+        await tx
+          .update(customers)
+          .set({ currentDebt: sql`${customers.currentDebt} + ${debtAmount}` })
+          .where(eq(customers.id, input.customerId))
 
-    let oldDebt: number | null = null
-    let customerCurrentDebt: number | null = null
-
-    // Story 5.1: Debt creation
-    if (debtAmount > 0) {
-      // Defense in depth: Zod refine đã enforce, vẫn check lại
-      if (!input.customerId) {
-        throw new ApiError('VALIDATION_ERROR', 'Phải chọn khách hàng khi ghi nợ')
-      }
-
-      // SF-2: LEFT JOIN customer_groups trong cùng query lock customer
-      // FOR UPDATE OF customers chỉ lock customer row, đọc group debtLimit cùng snapshot
-      const customerRows = await tx
-        .select({
-          currentDebt: customers.currentDebt,
-          debtLimit: customers.debtLimit,
-          groupId: customers.groupId,
-          name: customers.name,
-          groupDebtLimit: customerGroups.debtLimit,
-        })
-        .from(customers)
-        .leftJoin(customerGroups, eq(customers.groupId, customerGroups.id))
-        .where(
-          and(
-            eq(customers.id, input.customerId),
-            eq(customers.storeId, actor.storeId),
-            isNull(customers.deletedAt),
-          ),
-        )
-        .for('update', { of: [customers] })
-        .limit(1)
-
-      const customer = customerRows[0]
-      if (!customer) {
-        throw new ApiError('NOT_FOUND', 'Không tìm thấy khách hàng')
-      }
-
-      // Resolve effective debt limit: customer.debtLimit ?? group.debtLimit ?? null
-      const effectiveDebtLimit: number | null =
-        customer.debtLimit !== null ? customer.debtLimit : (customer.groupDebtLimit ?? null)
-
-      const debtBefore = customer.currentDebt
-      const debtAfter = debtBefore + debtAmount
-      oldDebt = debtBefore
-      customerCurrentDebt = debtAfter
-
-      // Check limit: null hoặc 0 = không giới hạn
-      if (effectiveDebtLimit !== null && effectiveDebtLimit > 0 && debtAfter > effectiveDebtLimit) {
-        if (!input.debtLimitOverridden) {
-          const maxAdditional = Math.max(0, effectiveDebtLimit - debtBefore)
-          throw new ApiError(
-            'BUSINESS_RULE_VIOLATION',
-            `Vượt hạn mức công nợ. Nợ hiện tại: ${formatVnd(debtBefore)}. Hạn mức: ${formatVnd(effectiveDebtLimit)}. Nợ thêm tối đa: ${formatVnd(maxAdditional)}`,
-            {
-              currentDebt: debtBefore,
-              debtLimit: effectiveDebtLimit,
-              maxAdditional,
-            },
-          )
-        }
-
-        // Override: ghi audit riêng
-        // SF-3: lưu PIN actor (user đã nhập PIN để override)
+        // Audit debt.created
         await logAction({
           db: txDb,
           storeId: actor.storeId,
           actorId: actor.userId,
           actorRole: actor.role,
-          action: 'debt.limit_overridden',
-          targetType: 'customer',
-          targetId: input.customerId,
+          action: 'debt.created',
+          targetType: 'order',
+          targetId: createdId,
           changes: {
+            orderId: createdId,
             customerId: input.customerId,
             customerName: customer.name,
-            orderId: createdId,
             amount: debtAmount,
             debtBefore,
             debtAfter,
-            debtLimit: effectiveDebtLimit,
-            overrideBy: actor.userId,
-            overrideByRole: actor.role,
-            pinVerified: true,
+            source,
           },
           ipAddress: meta?.ipAddress,
           userAgent: meta?.userAgent,
         })
+
+        logger.info(
+          {
+            storeId: actor.storeId,
+            orderId: createdId,
+            customerId: input.customerId,
+            debtAmount,
+            debtBefore,
+            debtAfter,
+            source,
+          },
+          'debt.created',
+        )
+      } else if (input.customerId) {
+        const customerRows = await tx
+          .select({ currentDebt: customers.currentDebt })
+          .from(customers)
+          .where(
+            and(
+              eq(customers.id, input.customerId),
+              eq(customers.storeId, actor.storeId),
+              isNull(customers.deletedAt),
+            ),
+          )
+          .limit(1)
+        oldDebt = customerRows[0]?.currentDebt != null ? Number(customerRows[0].currentDebt) : 0
+        customerCurrentDebt = oldDebt
       }
 
-      // Insert debt record
-      await tx.insert(debts).values({
-        storeId: actor.storeId,
-        orderId: createdId,
-        customerId: input.customerId,
-        amount: debtAmount,
-        paid: 0,
-        remaining: debtAmount,
-      })
-
-      // Update customer current_debt atomically
-      await tx
-        .update(customers)
-        .set({ currentDebt: sql`${customers.currentDebt} + ${debtAmount}` })
-        .where(eq(customers.id, input.customerId))
-
-      // Audit debt.created
+      // Audit log
       await logAction({
         db: txDb,
         storeId: actor.storeId,
         actorId: actor.userId,
         actorRole: actor.role,
-        action: 'debt.created',
+        action: 'order.created',
         targetType: 'order',
         targetId: createdId,
         changes: {
-          orderId: createdId,
-          customerId: input.customerId,
-          customerName: customer.name,
-          amount: debtAmount,
-          debtBefore,
-          debtAfter,
+          orderNumber,
+          itemCount: input.items.length,
+          subtotal: input.subtotal,
+          discountAmount: input.discountAmount,
+          total: input.total,
+          paymentMethod: input.paymentMethod,
+          paymentStatus: input.paymentStatus,
+          source,
+          clientId,
         },
         ipAddress: meta?.ipAddress,
         userAgent: meta?.userAgent,
@@ -593,104 +717,107 @@ export async function createOrder({
       logger.info(
         {
           storeId: actor.storeId,
+          actorId: actor.userId,
           orderId: createdId,
-          customerId: input.customerId,
-          debtAmount,
-          debtBefore,
-          debtAfter,
+          orderNumber,
+          itemCount: input.items.length,
+          total: input.total,
+          paymentMethod: input.paymentMethod,
+          source,
+          clientId,
         },
-        'debt.created',
+        'order.created',
       )
-    } else if (input.customerId) {
-      const customerRows = await tx
-        .select({ currentDebt: customers.currentDebt })
-        .from(customers)
-        .where(
-          and(
-            eq(customers.id, input.customerId),
-            eq(customers.storeId, actor.storeId),
-            isNull(customers.deletedAt),
-          ),
-        )
-        .limit(1)
-      oldDebt = customerRows[0]?.currentDebt != null ? Number(customerRows[0].currentDebt) : 0
-      customerCurrentDebt = oldDebt
-    }
 
-    // Audit log
-    await logAction({
-      db: txDb,
-      storeId: actor.storeId,
-      actorId: actor.userId,
-      actorRole: actor.role,
-      action: 'order.created',
-      targetType: 'order',
-      targetId: createdId,
-      changes: {
+      // order.high_value: notify when total exceeds threshold
+      if (input.total > env.highValueOrderThreshold) {
+        emitEvent(db, {
+          storeId: actor.storeId,
+          type: 'order.high_value',
+          severity: 'info',
+          title: `Đơn hàng giá trị cao: ${orderNumber}`,
+          body: `Đơn hàng ${orderNumber} có tổng ${input.total.toLocaleString('vi-VN')}đ vượt ngưỡng ${env.highValueOrderThreshold.toLocaleString('vi-VN')}đ`,
+          context: {
+            orderId: createdId,
+            total: input.total,
+            customerId: input.customerId ?? null,
+          },
+        })
+      }
+
+      return {
+        id: createdId,
         orderNumber,
-        itemCount: input.items.length,
+        customerId: input.customerId ?? null,
         subtotal: input.subtotal,
         discountAmount: input.discountAmount,
         total: input.total,
         paymentMethod: input.paymentMethod,
         paymentStatus: input.paymentStatus,
-      },
-      ipAddress: meta?.ipAddress,
-      userAgent: meta?.userAgent,
+        cashAmount: input.cashAmount ?? null,
+        transferAmount: input.transferAmount ?? null,
+        debtAmount,
+        change,
+        note: input.note ?? null,
+        status: 'completed',
+        items: processedItems,
+        createdAt: new Date().toISOString(),
+        oldDebt,
+        customerCurrentDebt,
+      } satisfies OrderDetail
     })
 
-    logger.info(
-      {
-        storeId: actor.storeId,
-        actorId: actor.userId,
-        orderId: createdId,
-        orderNumber,
-        itemCount: input.items.length,
-        total: input.total,
-        paymentMethod: input.paymentMethod,
-      },
-      'order.created',
-    )
+    return result
+  } catch (err) {
+    // CRIT C1: hai request song song cùng clientId (client retry khi request đầu
+    // chưa commit) — unique (storeId, clientId) chặn tạo đôi, transaction đã
+    // rollback nên KHÔNG trừ kho/ghi nợ lần 2. Trả về đơn đã tồn tại.
+    if (isUniqueViolation(err, 'uniq_orders_store_client') && clientId) {
+      const [dup] = await db
+        .select({
+          id: orders.id,
+          orderNumber: orders.orderNumber,
+          customerId: orders.customerId,
+          subtotal: orders.subtotal,
+          discountAmount: orders.discountAmount,
+          total: orders.total,
+          paymentMethod: orders.paymentMethod,
+          paymentStatus: orders.paymentStatus,
+          cashAmount: orders.cashAmount,
+          transferAmount: orders.transferAmount,
+          change: orders.change,
+          note: orders.note,
+          status: orders.status,
+          createdAt: orders.createdAt,
+        })
+        .from(orders)
+        .where(and(eq(orders.storeId, actor.storeId), eq(orders.clientId, clientId)))
+        .limit(1)
 
-    // order.high_value: notify when total exceeds threshold
-    if (input.total > env.highValueOrderThreshold) {
-      emitEvent(db, {
-        storeId: actor.storeId,
-        type: 'order.high_value',
-        severity: 'info',
-        title: `Đơn hàng giá trị cao: ${orderNumber}`,
-        body: `Đơn hàng ${orderNumber} có tổng ${input.total.toLocaleString('vi-VN')}đ vượt ngưỡng ${env.highValueOrderThreshold.toLocaleString('vi-VN')}đ`,
-        context: {
-          orderId: createdId,
-          total: input.total,
-          customerId: input.customerId ?? null,
-        },
-      })
+      if (dup) {
+        return {
+          id: dup.id,
+          orderNumber: dup.orderNumber,
+          customerId: dup.customerId,
+          subtotal: dup.subtotal,
+          discountAmount: dup.discountAmount,
+          total: dup.total,
+          paymentMethod: dup.paymentMethod,
+          paymentStatus: dup.paymentStatus,
+          cashAmount: dup.cashAmount,
+          transferAmount: dup.transferAmount,
+          debtAmount: input.debtAmount ?? 0,
+          change: dup.change,
+          note: dup.note,
+          status: dup.status,
+          items: [],
+          createdAt: dup.createdAt.toISOString(),
+          isDuplicate: true,
+        }
+      }
     }
-
-    return {
-      id: createdId,
-      orderNumber,
-      customerId: input.customerId ?? null,
-      subtotal: input.subtotal,
-      discountAmount: input.discountAmount,
-      total: input.total,
-      paymentMethod: input.paymentMethod,
-      paymentStatus: input.paymentStatus,
-      cashAmount: input.cashAmount ?? null,
-      transferAmount: input.transferAmount ?? null,
-      debtAmount,
-      change,
-      note: input.note ?? null,
-      status: 'completed',
-      items: processedItems,
-      createdAt: new Date().toISOString(),
-      oldDebt,
-      customerCurrentDebt,
-    } satisfies OrderDetail
-  })
-
-  return result
+    throw err
+  }
 }
 
 // ---------------------------------------------------------------------------

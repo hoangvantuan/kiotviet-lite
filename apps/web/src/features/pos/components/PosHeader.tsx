@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowLeft, Zap } from 'lucide-react'
 
+import { OfflineIndicator } from '@/components/shared/OfflineIndicator'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useCartStore } from '@/stores/use-cart-store'
@@ -21,7 +22,8 @@ export function PosHeader() {
 
       <h1 className="text-base font-semibold text-foreground">Bán hàng</h1>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-3">
+        <OfflineIndicator />
         <div className="flex items-center gap-2">
           <Zap
             className={`h-4 w-4 ${mode === 'quick' ? 'text-primary' : 'text-muted-foreground'}`}
