@@ -263,7 +263,7 @@ export async function createOrder({
     }
   }
 
-  const debtAmount = input.debtAmount ?? 0
+  let debtAmount = input.debtAmount ?? 0
 
   // Calculate change amount before insert
   let change = 0
@@ -412,21 +412,24 @@ export async function createOrder({
           quantity: item.quantity,
         })
 
-        if (item.priceOverride) {
+        let effectivePriceOverride = item.priceOverride ?? false
+        let effectivePriceOverridePinUsed = item.priceOverridePinUsed ?? false
+
+        if (effectivePriceOverride) {
           if (verifiedPriceOverridePin) {
-            item.priceOverridePinUsed = true
+            effectivePriceOverridePinUsed = true
           } else if (source === 'offline_sync') {
-            item.priceOverride = false
-            item.priceOverridePinUsed = false
+            effectivePriceOverride = false
+            effectivePriceOverridePinUsed = false
           }
         } else {
-          item.priceOverridePinUsed = false
+          effectivePriceOverridePinUsed = false
         }
 
         let effectiveUnitPrice = item.unitPrice
         let effectiveLineTotal = item.lineTotal
 
-        if (!item.priceOverride) {
+        if (!effectivePriceOverride) {
           const expectedSysPrice = resolvedPrice.price
           if (effectiveUnitPrice !== expectedSysPrice) {
             if (source === 'pos') {
@@ -473,13 +476,13 @@ export async function createOrder({
             lineTotal: effectiveLineTotal,
             note: item.note ?? null,
             originalPrice: item.originalPrice ?? null,
-            priceOverride: item.priceOverride,
+            priceOverride: effectivePriceOverride,
             priceOverrideReason: item.priceOverrideReason ?? null,
-            priceOverridePinUsed: item.priceOverridePinUsed,
+            priceOverridePinUsed: effectivePriceOverridePinUsed,
           })
           .returning({ id: orderItems.id })
 
-        if (item.priceOverride) {
+        if (effectivePriceOverride) {
           await logAction({
             db: txDb,
             storeId: actor.storeId,
@@ -495,7 +498,7 @@ export async function createOrder({
               originalPrice: item.originalPrice ?? null,
               unitPrice: effectiveUnitPrice,
               reason: item.priceOverrideReason ?? null,
-              pinUsed: item.priceOverridePinUsed,
+              pinUsed: effectivePriceOverridePinUsed,
             },
             ipAddress: meta?.ipAddress,
             userAgent: meta?.userAgent,
@@ -535,7 +538,7 @@ export async function createOrder({
           discountAmount: item.discountAmount,
           lineTotal: effectiveLineTotal,
           originalPrice: item.originalPrice ?? null,
-          priceOverride: item.priceOverride,
+          priceOverride: effectivePriceOverride,
           sku: itemSku,
           costPrice: itemCostPrice,
         })
@@ -680,9 +683,12 @@ export async function createOrder({
           },
         })
 
-        input.subtotal = adjustedSubtotal
-        input.total = newTotal
+        // Dùng biến cục bộ lưu tổng kết quả thay vì gán vào input.* (tránh lỗi retry)
+        // Mình sẽ truyền adjustedSubtotal ra ngoài qua một cơ chế hoặc biến đã định nghĩa
         change = newChange
+        if (input.paymentMethod === 'debt') {
+          debtAmount = Math.max(0, newTotal - (input.cashAmount ?? 0) - (input.transferAmount ?? 0))
+        }
       }
 
       let oldDebt: number | null = null
@@ -968,9 +974,11 @@ export async function createOrder({
         id: createdId,
         orderNumber,
         customerId: input.customerId ?? null,
-        subtotal: input.subtotal,
+        subtotal: isPriceMismatchAdjusted ? adjustedSubtotal : input.subtotal,
         discountAmount: input.discountAmount,
-        total: input.total,
+        total: isPriceMismatchAdjusted
+          ? Math.max(0, adjustedSubtotal - input.discountAmount)
+          : input.total,
         paymentMethod: input.paymentMethod,
         paymentStatus: input.paymentStatus,
         cashAmount: input.cashAmount ?? null,
