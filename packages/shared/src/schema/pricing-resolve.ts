@@ -7,6 +7,7 @@ export const priceSourceSchema = z.enum(PRICE_SOURCES)
 export const resolvePriceItemSchema = z.object({
   productId: z.string().uuid(),
   variantId: z.string().uuid().nullable().optional(),
+  unitConversionId: z.string().uuid().nullable().optional(),
   quantity: z.number().int().min(1),
 })
 
@@ -28,6 +29,7 @@ export const tierBreakdownSchema = z.object({
 export const resolvedPriceItemSchema = z.object({
   productId: z.string().uuid(),
   variantId: z.string().uuid().nullable(),
+  unitConversionId: z.string().uuid().nullable().optional(),
   price: z.number().int().min(0),
   source: priceSourceSchema,
   sourceDetail: z.string().nullable(),

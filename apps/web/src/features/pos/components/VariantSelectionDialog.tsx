@@ -11,8 +11,8 @@ import {
 } from '@/components/ui/dialog'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { cn } from '@/lib/utils'
-import { useCartStore } from '@/stores/use-cart-store'
 
+import { useAddToCart } from '../hooks/use-add-to-cart'
 import type { PosProductItem, PosProductVariant, PosUnitConversion } from '../types'
 
 interface VariantSelectionDialogProps {
@@ -26,7 +26,7 @@ export function VariantSelectionDialog({
   open,
   onOpenChange,
 }: VariantSelectionDialogProps) {
-  const addItem = useCartStore((s) => s.addItem)
+  const addToCart = useAddToCart()
   const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({})
   const [quantity, setQuantity] = useState(1)
   const [notes, setNotes] = useState('')
@@ -68,7 +68,9 @@ export function VariantSelectionDialog({
     const rawPrice =
       product.hasVariants && selectedVariant ? selectedVariant.price : product.basePrice
     if (!selectedUnit) return rawPrice
-    return selectedUnit.sellingPrice ?? Math.round(rawPrice * selectedUnit.conversionFactor)
+    return selectedUnit.sellingPrice && selectedUnit.sellingPrice > 0
+      ? selectedUnit.sellingPrice
+      : Math.round(rawPrice * selectedUnit.conversionFactor)
   }, [product, selectedVariant, selectedUnit])
 
   const rawStock = useMemo(() => {
@@ -125,22 +127,13 @@ export function VariantSelectionDialog({
   function handleAdd() {
     if (!product) return
 
-    addItem(
-      {
-        productId: product.id,
-        variantId: selectedVariant?.id ?? null,
-        productName: product.name,
-        variantName: selectedVariant?.name ?? null,
-        sku: selectedVariant?.sku ?? product.sku,
-        unitPrice: displayPrice,
-        costPrice: selectedVariant?.costPrice ?? product.costPrice,
-        imageUrl: product.imageUrl,
-        notes: notes.trim() || null,
-        unitName: selectedUnit?.unit ?? null,
-        unitConversionId: selectedUnitId,
-      },
+    addToCart({
+      product,
+      variant: selectedVariant,
+      unitConversion: selectedUnit,
       quantity,
-    )
+      notes,
+    })
 
     onOpenChange(false)
     resetState()

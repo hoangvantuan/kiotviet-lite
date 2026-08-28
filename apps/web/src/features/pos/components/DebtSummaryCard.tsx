@@ -1,3 +1,4 @@
+import { useStoreQuery } from '@/features/settings/use-store-settings'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 
@@ -6,11 +7,12 @@ interface DebtSummaryCardProps {
   currentDebt: number
   effectiveDebtLimit: number | null
   debtAmount: number
+  warningPercent?: number
 }
 
-function getProgressColor(usage: number): string {
+function getProgressColor(usage: number, warnPercent: number): string {
   if (usage >= 100) return 'bg-red-500'
-  if (usage >= 80) return 'bg-yellow-500'
+  if (usage >= warnPercent) return 'bg-yellow-500'
   return 'bg-green-500'
 }
 
@@ -19,13 +21,17 @@ export function DebtSummaryCard({
   currentDebt,
   effectiveDebtLimit,
   debtAmount,
+  warningPercent: propWarningPercent,
 }: DebtSummaryCardProps) {
+  const storeQuery = useStoreQuery()
+  const warningPercent = propWarningPercent ?? storeQuery.data?.debtWarningPercent ?? 80
+
   const debtAfter = currentDebt + debtAmount
   // null hoặc 0 đều là không giới hạn
   const hasLimit = effectiveDebtLimit !== null && effectiveDebtLimit > 0
   const usage = hasLimit ? (debtAfter / (effectiveDebtLimit as number)) * 100 : 0
   const usageRounded = Math.round(usage)
-  const progressColor = getProgressColor(usage)
+  const progressColor = getProgressColor(usage, warningPercent)
 
   return (
     <div className="space-y-2 rounded-lg border border-border p-3">

@@ -12,6 +12,7 @@ import { apiClient } from '@/lib/api-client'
 import { showWarning } from '@/lib/toast'
 import { useCartStore } from '@/stores/use-cart-store'
 
+import { useAddToCart } from '../hooks/use-add-to-cart'
 import type { PosProductItem } from '../types'
 
 interface BarcodeScannerProps {
@@ -30,13 +31,13 @@ export function BarcodeScanner({ open, onOpenChange, onSelectProduct }: BarcodeS
   const scannerRef = useRef<import('html5-qrcode').Html5Qrcode | null>(null)
   const containerId = 'pos-barcode-reader'
   const mode = useCartStore((s) => s.mode)
-  const addItem = useCartStore((s) => s.addItem)
+  const addToCart = useAddToCart()
 
   const processingRef = useRef(false)
   const modeRef = useRef(mode)
-  const addItemRef = useRef(addItem)
+  const addToCartRef = useRef(addToCart)
   modeRef.current = mode
-  addItemRef.current = addItem
+  addToCartRef.current = addToCart
 
   const handleScan = useCallback(
     async (barcode: string) => {
@@ -77,19 +78,7 @@ export function BarcodeScanner({ open, onOpenChange, onSelectProduct }: BarcodeS
           onOpenChange(false)
           onSelectProduct(product)
         } else if (modeRef.current === 'quick') {
-          addItemRef.current({
-            productId: product.id,
-            variantId: null,
-            productName: product.name,
-            variantName: null,
-            sku: product.sku,
-            unitPrice: product.basePrice,
-            costPrice: product.costPrice,
-            imageUrl: product.imageUrl,
-            notes: null,
-            unitName: null,
-            unitConversionId: null,
-          })
+          addToCartRef.current({ product })
           onOpenChange(false)
         } else {
           onOpenChange(false)
