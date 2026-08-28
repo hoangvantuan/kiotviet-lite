@@ -1,10 +1,13 @@
 import { create } from 'zustand'
 
-import type { PriceSource } from '@kiotviet-lite/shared'
+import {
+  calculateLineTotal,
+  calculateOrderDiscount,
+  type DiscountType,
+  type PriceSource,
+} from '@kiotviet-lite/shared'
 
 import { MAX_CART_TABS } from '@/features/pos/constants'
-
-export type DiscountType = 'percent' | 'amount'
 
 export interface CartItem {
   id: string
@@ -131,44 +134,23 @@ function readModeFromStorage(): 'quick' | 'normal' {
   return 'normal'
 }
 
-function calcLineDiscount(
-  unitPrice: number,
-  qty: number,
-  type: DiscountType | null,
-  value: number,
-): number {
-  if (!type || value <= 0) return 0
-  const gross = unitPrice * qty
-  if (gross <= 0) return 0
-  if (type === 'percent') return Math.min(Math.round((gross * value) / 100), gross)
-  return Math.min(value, gross)
-}
-
-function calcOrderDiscount(subtotal: number, type: DiscountType | null, value: number): number {
-  if (!type || value <= 0) return 0
-  if (subtotal <= 0) return 0
-  if (type === 'percent') return Math.min(Math.round((subtotal * value) / 100), subtotal)
-  return Math.min(value, subtotal)
-}
-
 function recomputeLine(item: CartItem): CartItem {
-  const discountAmount = calcLineDiscount(
-    item.unitPrice,
-    item.quantity,
-    item.discountType,
-    item.discountValue,
-  )
-  const lineTotal = item.unitPrice * item.quantity - discountAmount
+  const { discountAmount, lineTotal } = calculateLineTotal({
+    unitPrice: item.unitPrice,
+    quantity: item.quantity,
+    discountType: item.discountType,
+    discountValue: item.discountValue,
+  })
   return { ...item, discountAmount, lineTotal }
 }
 
 function recomputeOrderDiscount(tab: TabState): TabState {
   const subtotal = tab.items.reduce((sum, i) => sum + i.lineTotal, 0)
-  const orderDiscountAmount = calcOrderDiscount(
+  const orderDiscountAmount = calculateOrderDiscount({
     subtotal,
-    tab.orderDiscountType,
-    tab.orderDiscountValue,
-  )
+    discountType: tab.orderDiscountType,
+    discountValue: tab.orderDiscountValue,
+  })
   return { ...tab, orderDiscountAmount }
 }
 
