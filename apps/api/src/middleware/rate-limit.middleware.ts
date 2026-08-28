@@ -16,10 +16,18 @@ const getClientIp = (c: Context): string => {
   )
 }
 
-const isRateLimitDisabled = () =>
-  process.env.NODE_ENV === 'test' ||
-  process.env.RATE_LIMIT_DISABLED === 'true' ||
-  process.env.E2E_TEST === '1'
+/**
+ * Chỉ cho phép tắt giới hạn tần suất ở môi trường kiểm thử.
+ * Trên production, mọi cờ tắt đều bị bỏ qua để không thủng lớp chống dò mật khẩu.
+ */
+const isRateLimitDisabled = () => {
+  if (process.env.NODE_ENV === 'production') return false
+  return (
+    process.env.NODE_ENV === 'test' ||
+    process.env.RATE_LIMIT_DISABLED === 'true' ||
+    process.env.E2E_TEST === '1'
+  )
+}
 
 /**
  * Rate limit cho endpoint login: 5 requests / phút / IP (bỏ qua khi chạy kiểm thử E2E/test)
