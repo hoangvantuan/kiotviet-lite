@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/table'
 import { useStoreQuery } from '@/features/settings/use-store-settings'
 import { formatVnd } from '@/lib/currency'
+import { formatDate } from '@/lib/date'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/use-auth-store'
 
@@ -24,18 +25,6 @@ import { DebtAdjustmentHistory } from './DebtAdjustmentHistory'
 interface CustomerDebtsTabProps {
   customerId: string
   customerName?: string
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  } catch {
-    return iso
-  }
 }
 
 function parseOverdueDays(raw: string): number[] {

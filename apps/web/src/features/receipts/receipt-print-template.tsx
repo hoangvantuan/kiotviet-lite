@@ -1,6 +1,7 @@
 import type { ReceiptDetail } from '@kiotviet-lite/shared'
 
 import { formatVnd } from '@/lib/currency'
+import { formatDateTime } from '@/lib/date'
 
 interface StoreInfo {
   name?: string | null
@@ -11,20 +12,6 @@ interface StoreInfo {
 interface ReceiptPrintTemplateProps {
   receipt: ReceiptDetail
   store?: StoreInfo
-}
-
-function formatDateTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return iso
-  }
 }
 
 export function ReceiptPrintTemplate({ receipt, store }: ReceiptPrintTemplateProps) {

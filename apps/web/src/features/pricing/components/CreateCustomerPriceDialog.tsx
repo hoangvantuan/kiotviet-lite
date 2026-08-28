@@ -24,9 +24,9 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { useCustomersQuery } from '@/features/customers/use-customers'
 import { useProductsQuery } from '@/features/products/use-products'
-import { ApiClientError } from '@/lib/api-client'
+import { handleApiError } from '@/lib/api-error'
 import { formatVnd } from '@/lib/currency'
-import { showError, showSuccess } from '@/lib/toast'
+import { showSuccess } from '@/lib/toast'
 
 import { useCreateCustomerPriceMutation } from '../use-customer-prices'
 
@@ -276,39 +276,4 @@ function PriceWarning({ price, sellingPrice, costPrice }: PriceWarningProps) {
     )
   }
   return null
-}
-
-function handleApiError(err: unknown, form: ReturnType<typeof useForm<FormShape>>) {
-  if (err instanceof ApiClientError) {
-    if (err.code === 'CONFLICT') {
-      const detail = err.details as { field?: string } | undefined
-      if (detail?.field === 'productId') {
-        form.setError('productId', {
-          message: 'Khách hàng đã có giá riêng cho sản phẩm này. Hãy sửa thay vì tạo mới.',
-        })
-      }
-      showError(err.message)
-      return
-    }
-    if (err.code === 'NOT_FOUND') {
-      showError(err.message)
-      return
-    }
-    if (err.code === 'VALIDATION_ERROR' && Array.isArray(err.details)) {
-      for (const issue of err.details as Array<{ path: string; message: string }>) {
-        if (
-          issue.path === 'price' ||
-          issue.path === 'note' ||
-          issue.path === 'customerId' ||
-          issue.path === 'productId'
-        ) {
-          form.setError(issue.path as keyof FormShape, { message: issue.message })
-        }
-      }
-      return
-    }
-    showError(err.message)
-    return
-  }
-  showError('Đã xảy ra lỗi không xác định')
 }

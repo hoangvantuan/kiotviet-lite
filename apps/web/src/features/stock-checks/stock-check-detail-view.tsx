@@ -21,6 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { ApiClientError } from '@/lib/api-client'
+import { formatDateTime } from '@/lib/date'
 import { showError, showSuccess } from '@/lib/toast'
 
 import { getProductApi } from '../products/products-api'
@@ -34,21 +35,6 @@ import {
 
 interface StockCheckDetailViewProps {
   stockCheckId: string
-}
-
-function formatDateTime(iso: string | null): string {
-  if (!iso) return '—'
-  try {
-    return new Date(iso).toLocaleString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return iso
-  }
 }
 
 export function StockCheckDetailView({ stockCheckId }: StockCheckDetailViewProps) {

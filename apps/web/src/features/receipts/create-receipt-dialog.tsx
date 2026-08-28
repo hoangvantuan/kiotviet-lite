@@ -20,9 +20,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { useCustomersQuery } from '@/features/customers/use-customers'
 import { useDebounced } from '@/hooks/use-debounced'
-import { ApiClientError } from '@/lib/api-client'
+import { handleApiError } from '@/lib/api-error'
 import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
-import { showError } from '@/lib/toast'
 
 import { useCreateReceiptMutation, useCustomerOpenDebtsQuery } from './use-receipts'
 import { computeFifoAllocation } from './utils'
@@ -38,14 +37,6 @@ interface CreateReceiptDialogProps {
   open: boolean
   onOpenChange: (v: boolean) => void
   onCreated?: (receipt: ReceiptDetail) => void
-}
-
-function handleApiError(err: unknown) {
-  if (err instanceof ApiClientError) {
-    showError(err.message)
-    return
-  }
-  showError('Đã có lỗi xảy ra, vui lòng thử lại')
 }
 
 type Mode = 'fifo' | 'manual'

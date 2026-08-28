@@ -15,9 +15,9 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { ApiClientError } from '@/lib/api-client'
+import { handleApiError } from '@/lib/api-error'
 import { formatVnd } from '@/lib/currency'
-import { showError, showSuccess } from '@/lib/toast'
+import { showSuccess } from '@/lib/toast'
 
 import { useUpdateCustomerPriceMutation } from '../use-customer-prices'
 
@@ -137,19 +137,4 @@ export function EditCustomerPriceDialog({ open, onOpenChange, customerPrice }: P
       </DialogContent>
     </Dialog>
   )
-}
-
-function handleApiError(err: unknown, form: ReturnType<typeof useForm<FormShape>>) {
-  if (err instanceof ApiClientError) {
-    if (err.code === 'VALIDATION_ERROR' && Array.isArray(err.details)) {
-      for (const issue of err.details as Array<{ path: string; message: string }>) {
-        if (issue.path === 'price' || issue.path === 'note') {
-          form.setError(issue.path as keyof FormShape, { message: issue.message })
-        }
-      }
-    }
-    showError(err.message)
-    return
-  }
-  showError('Đã xảy ra lỗi không xác định')
 }

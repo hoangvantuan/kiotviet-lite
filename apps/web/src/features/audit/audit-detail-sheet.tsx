@@ -8,6 +8,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { RoleBadge } from '@/features/users/role-badge'
+import { formatDateTime } from '@/lib/date'
 
 import { getActionLabel } from './action-labels'
 
@@ -77,15 +78,4 @@ function ChangesView({ changes }: { changes: unknown }) {
       {json}
     </pre>
   )
-}
-
-function formatDateTime(value: string): string {
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return ''
-  const dd = String(d.getDate()).padStart(2, '0')
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const yyyy = d.getFullYear()
-  const hh = String(d.getHours()).padStart(2, '0')
-  const min = String(d.getMinutes()).padStart(2, '0')
-  return `${hh}:${min} ${dd}/${mm}/${yyyy}`
 }

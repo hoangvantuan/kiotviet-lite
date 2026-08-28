@@ -20,6 +20,7 @@ const queryClient = new QueryClient({
   mutationCache: new MutationCache({
     onError: (error, _variables, _context, mutation) => {
       if (mutation.meta?.skipGlobalError) return
+      if (mutation.options.onError) return
       showError(error.message || 'Đã xảy ra lỗi')
     },
   }),

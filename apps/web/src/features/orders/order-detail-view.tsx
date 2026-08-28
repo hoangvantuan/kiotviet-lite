@@ -18,6 +18,7 @@ import {
 import { usePrintSettingsQuery } from '@/features/settings/use-print-settings'
 import { PAYMENT_METHOD_LABELS } from '@/lib/constants'
 import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
+import { formatDateTime } from '@/lib/date'
 import { useAuthStore } from '@/stores/use-auth-store'
 
 import { OrderInvoiceA4, OrderInvoiceA5, OrderInvoiceThermal } from './order-invoice-template'
@@ -31,21 +32,6 @@ interface OrderDetailViewProps {
 }
 
 import { OrderStatusBadge as StatusBadge, PaymentStatusBadge } from './order-status-badges'
-
-function formatDateTime(iso: string): string {
-  try {
-    const d = new Date(iso)
-    return d.toLocaleString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return iso
-  }
-}
 
 export function OrderDetailView({ orderId }: OrderDetailViewProps) {
   const navigate = useNavigate()

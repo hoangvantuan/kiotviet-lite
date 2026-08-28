@@ -26,6 +26,7 @@ import {
 import { useCustomersQuery } from '@/features/customers/use-customers'
 import { useDebounced } from '@/hooks/use-debounced'
 import { formatVndWithSuffix } from '@/lib/currency'
+import { formatDateTime } from '@/lib/date'
 
 import type { OrderListItem } from './orders-api'
 import { useOrdersQuery } from './use-orders'
@@ -35,20 +36,6 @@ const PAGE_SIZE = 20
 type DatePreset = 'today' | '7days' | '30days' | 'all' | 'custom'
 
 import { OrderStatusBadge as StatusBadge, PaymentStatusBadge } from './order-status-badges'
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return iso
-  }
-}
 
 function toLocalDateString(date: Date): string {
   const y = date.getFullYear()
@@ -438,7 +425,7 @@ function OrderTable({
                     )}
                   </div>
                 </TableCell>
-                <TableCell>{formatDate(it.createdAt)}</TableCell>
+                <TableCell>{formatDateTime(it.createdAt)}</TableCell>
                 <TableCell>{it.customerName ?? 'Khách lẻ'}</TableCell>
                 <TableCell className="text-right font-medium">
                   {formatVndWithSuffix(it.total)}
@@ -488,7 +475,7 @@ function OrderTable({
               {it.customerName ?? 'Khách lẻ'}
             </div>
             <div className="flex justify-between text-sm mt-2">
-              <span className="text-muted-foreground">{formatDate(it.createdAt)}</span>
+              <span className="text-muted-foreground">{formatDateTime(it.createdAt)}</span>
               <span className="font-medium">{formatVndWithSuffix(it.total)}</span>
             </div>
             <div className="flex justify-between items-center mt-1">

@@ -24,40 +24,13 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useSuppliersQuery } from '@/features/suppliers/use-suppliers'
-import { ApiClientError } from '@/lib/api-client'
+import { asFormSetError, handleApiError } from '@/lib/api-error'
 import { formatVndWithSuffix } from '@/lib/currency'
-import { showError, showSuccess } from '@/lib/toast'
+import { showSuccess } from '@/lib/toast'
 
 import { useCreateSupplierPaymentMutation } from './use-supplier-payments'
 
 const KNOWN_FIELDS = ['supplierId', 'amount', 'note']
-
-interface FormSetError {
-  setError: (name: string, error: { message: string }) => void
-}
-
-function asFormSetError(form: { setError: (...args: never[]) => void }): FormSetError {
-  return {
-    setError: (name, error) => {
-      ;(form.setError as unknown as (n: string, e: { message: string }) => void)(name, error)
-    },
-  }
-}
-
-function handleApiError(err: unknown, form: FormSetError, knownFields: string[]) {
-  if (err instanceof ApiClientError) {
-    if (err.code === 'VALIDATION_ERROR' && err.details && Array.isArray(err.details)) {
-      for (const issue of err.details as Array<{ path: string; message: string }>) {
-        if (knownFields.includes(issue.path)) {
-          form.setError(issue.path, { message: issue.message })
-        }
-      }
-    }
-    showError(err.message)
-    return
-  }
-  showError('Đã có lỗi xảy ra, vui lòng thử lại')
-}
 
 interface CreateSupplierPaymentDialogProps {
   open: boolean

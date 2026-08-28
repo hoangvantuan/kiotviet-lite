@@ -1,13 +1,7 @@
 import type { PriceListListItem } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
-
-function formatDate(iso: string | null): string {
-  if (!iso) return ''
-  const [y, m, d] = iso.split('-')
-  if (!y || !m || !d) return iso
-  return `${d}/${m}/${y}`
-}
+import { formatDate } from '@/lib/date'
 
 interface Props {
   priceList: PriceListListItem

@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ApiClientError } from '@/lib/api-client'
+import { handleApiError } from '@/lib/api-error'
 import { formatVnd } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
 
@@ -357,22 +357,4 @@ function validateTiers(tiers: FormTier[]): string[] {
     }
   }
   return issues
-}
-
-function handleApiError(err: unknown) {
-  if (err instanceof ApiClientError) {
-    if (err.code === 'NOT_FOUND') {
-      showError(err.message)
-      return
-    }
-    if (err.code === 'VALIDATION_ERROR' && Array.isArray(err.details)) {
-      const details = err.details as Array<{ path: string; message: string }>
-      const first = details[0]
-      showError(first?.message ?? err.message)
-      return
-    }
-    showError(err.message)
-    return
-  }
-  showError('Đã xảy ra lỗi không xác định')
 }

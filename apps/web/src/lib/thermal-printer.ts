@@ -1,5 +1,6 @@
 import { PAYMENT_METHOD_LABELS } from './constants'
 import { formatVnd } from './currency'
+import { formatDateTimeForReceipt } from './date'
 
 /**
  * ESC/POS command constants for thermal printers.
@@ -150,21 +151,6 @@ function twoColumns(left: string, right: string, totalWidth: number): string {
 
 function separatorLine(width: number, char = '-'): string {
   return char.repeat(width)
-}
-
-function formatDateTimeForReceipt(iso: string): string {
-  try {
-    const d = new Date(iso)
-    return d.toLocaleString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return iso
-  }
 }
 
 // ---- Main builder ----

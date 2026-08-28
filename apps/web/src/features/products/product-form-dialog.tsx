@@ -41,7 +41,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { ApiClientError } from '@/lib/api-client'
+import { asFormSetError, handleApiError } from '@/lib/api-error'
 import { showError, showSuccess } from '@/lib/toast'
 
 import { buildCategoryTree } from '../categories/utils'
@@ -958,62 +958,4 @@ function InventorySection<T extends FieldValues & ProductFormFields>({
       )}
     </section>
   )
-}
-
-interface FormSetError {
-  setError: (name: string, error: { message: string }) => void
-}
-
-function asFormSetError(form: { setError: (...args: never[]) => void }): FormSetError {
-  return {
-    setError: (name, error) => {
-      ;(form.setError as unknown as (n: string, e: { message: string }) => void)(name, error)
-    },
-  }
-}
-
-const KNOWN_FIELDS = [
-  'name',
-  'sku',
-  'barcode',
-  'categoryId',
-  'sellingPrice',
-  'costPrice',
-  'unit',
-  'imageUrl',
-]
-
-function handleApiError(err: unknown, form: FormSetError) {
-  if (err instanceof ApiClientError) {
-    if (err.code === 'CONFLICT') {
-      const detail = err.details as { field?: string; variantIndex?: number } | undefined
-      if (detail?.field === 'sku' && detail.variantIndex === undefined) {
-        form.setError('sku', { message: err.message })
-        showError(err.message)
-        return
-      }
-      if (detail?.field === 'barcode' && detail.variantIndex === undefined) {
-        form.setError('barcode', { message: err.message })
-        showError(err.message)
-        return
-      }
-      // Variant-level conflict: just toast (highlight UI extension future)
-      showError(err.message)
-      return
-    }
-    if (err.code === 'BUSINESS_RULE_VIOLATION') {
-      showError(err.message)
-      return
-    }
-    if (err.code === 'VALIDATION_ERROR' && Array.isArray(err.details)) {
-      for (const issue of err.details as Array<{ path: string; message: string }>) {
-        if (KNOWN_FIELDS.includes(issue.path)) {
-          form.setError(issue.path, { message: issue.message })
-        }
-      }
-    }
-    showError(err.message)
-    return
-  }
-  showError('Đã xảy ra lỗi không xác định')
 }

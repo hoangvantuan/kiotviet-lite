@@ -29,8 +29,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ApiClientError } from '@/lib/api-client'
-import { showError, showSuccess } from '@/lib/toast'
+import { asFormSetError, handleApiError } from '@/lib/api-error'
+import { showSuccess } from '@/lib/toast'
 
 import { useCreateUserMutation, useUpdateUserMutation } from './use-users'
 
@@ -219,11 +219,16 @@ function EditStaffDialog({
   const form = useForm<EditFormValues>({
     resolver: zodResolver(updateUserSchema),
     mode: 'onTouched',
-    defaultValues: { name: user.name, role: user.role === 'owner' ? undefined : user.role, pin: '' },
+    defaultValues: {
+      name: user.name,
+      role: user.role === 'owner' ? undefined : user.role,
+      pin: '',
+    },
   })
 
   useEffect(() => {
-    if (open) form.reset({ name: user.name, role: user.role === 'owner' ? undefined : user.role, pin: '' })
+    if (open)
+      form.reset({ name: user.name, role: user.role === 'owner' ? undefined : user.role, pin: '' })
   }, [open, user, form])
 
   const submit = form.handleSubmit(async (values) => {
@@ -311,39 +316,4 @@ function EditStaffDialog({
       </DialogContent>
     </Dialog>
   )
-}
-
-interface FormSetError {
-  setError: (name: string, error: { message: string }) => void
-}
-
-function asFormSetError(form: { setError: (...args: never[]) => void }): FormSetError {
-  return {
-    setError: (name, error) => {
-      ;(form.setError as unknown as (n: string, e: { message: string }) => void)(name, error)
-    },
-  }
-}
-
-function handleApiError(err: unknown, form: FormSetError, knownFields: string[]) {
-  if (err instanceof ApiClientError) {
-    if (err.code === 'CONFLICT') {
-      const detail = err.details as { field?: string } | undefined
-      if (detail?.field === 'phone' && knownFields.includes('phone')) {
-        form.setError('phone', { message: err.message })
-        showError(err.message)
-        return
-      }
-    }
-    if (err.code === 'VALIDATION_ERROR' && Array.isArray(err.details)) {
-      for (const issue of err.details as Array<{ path: string; message: string }>) {
-        if (knownFields.includes(issue.path)) {
-          form.setError(issue.path, { message: issue.message })
-        }
-      }
-    }
-    showError(err.message)
-    return
-  }
-  showError('Đã xảy ra lỗi không xác định')
 }

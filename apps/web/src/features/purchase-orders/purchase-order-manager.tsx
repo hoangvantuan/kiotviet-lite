@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/table'
 import { useDebounced } from '@/hooks/use-debounced'
 import { formatVndWithSuffix } from '@/lib/currency'
+import { formatDate } from '@/lib/date'
 
 import { useSuppliersQuery } from '../suppliers/use-suppliers'
 import { usePurchaseOrdersQuery } from './use-purchase-orders'
@@ -62,18 +63,6 @@ function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
 
 function toLocalIsoString(localDateTime: string): string {
   return new Date(localDateTime).toISOString()
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  } catch {
-    return iso
-  }
 }
 
 export function PurchaseOrderManager() {

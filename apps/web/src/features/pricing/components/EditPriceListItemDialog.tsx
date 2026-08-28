@@ -18,12 +18,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { ApiClientError } from '@/lib/api-client'
-import { showError, showSuccess } from '@/lib/toast'
+import { handleApiError } from '@/lib/api-error'
+import { formatVnd } from '@/lib/currency'
+import { showSuccess } from '@/lib/toast'
 
 import { useUpdatePriceListItemMutation } from '../use-price-lists'
-
-const VND_FORMATTER = new Intl.NumberFormat('vi-VN')
 
 interface FormShape {
   price: number | null
@@ -104,12 +103,13 @@ export function EditPriceListItemDialog({ open, onOpenChange, priceList, item }:
               onChange={(v) => form.setValue('price', v, { shouldValidate: true })}
             />
             <p className="text-xs text-muted-foreground">
-              Sau làm tròn: {VND_FORMATTER.format(previewRounded)}đ
+              Sau làm tròn: {formatVnd(previewRounded)}đ
             </p>
             {form.formState.errors.price && (
               <p className="text-sm text-destructive">{form.formState.errors.price.message}</p>
             )}
           </div>
+
           <DialogFooter>
             <Button
               type="button"
@@ -127,19 +127,4 @@ export function EditPriceListItemDialog({ open, onOpenChange, priceList, item }:
       </DialogContent>
     </Dialog>
   )
-}
-
-function handleApiError(err: unknown, form: ReturnType<typeof useForm<FormShape>>) {
-  if (err instanceof ApiClientError) {
-    if (err.code === 'VALIDATION_ERROR' && Array.isArray(err.details)) {
-      for (const issue of err.details as Array<{ path: string; message: string }>) {
-        if (issue.path === 'price') {
-          form.setError('price', { message: issue.message })
-        }
-      }
-    }
-    showError(err.message)
-    return
-  }
-  showError('Đã xảy ra lỗi không xác định')
 }
