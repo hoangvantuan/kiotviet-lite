@@ -216,6 +216,7 @@ export function createSyncRoutes({ db }: { db: Db }) {
           meta,
           source: 'offline_sync',
           clientId: offlineOrder.clientId,
+          offlineCreatedAt: offlineOrder.createdAt,
         })
 
         results.push({

@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm'
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { auditLogs, debts, orders, products } from '@kiotviet-lite/shared'
+import { auditLogs, customers, debts, orders, products } from '@kiotviet-lite/shared'
 
 import { createSyncRoutes } from '../routes/sync.routes.js'
 import {
@@ -176,15 +176,16 @@ describe('H8 + M26: Refactor createOrder và Offline Sync Push', () => {
     expect(debtRows[0]!.amount).toBe(100_000)
   })
 
-  it('Đơn tạo qua sync CÓ kiểm hạn mức nợ (chặn khi vượt hạn mức mà không có PIN)', async () => {
+  it('Đơn ngoại tuyến vượt hạn mức nợ không có PIN: sync THÀNH CÔNG, đơn được tạo, nợ ghi đúng, có audit log order.debt_limit_exceeded và cờ debtLimitExceeded = true', async () => {
     const customer = await createCustomer(base, { currentDebt: 400_000, debtLimit: 500_000 })
     const product = await createProduct(base, { sellingPrice: 200_000 })
     const clientId = 'c3333333-3333-3333-3333-333333333333'
+    const offlineCreatedAt = '2026-08-28T10:00:00.000Z'
 
-    // Nợ thêm 200k -> tổng nợ 600k > 500k (vượt hạn mức)
+    // Nợ thêm 200k -> tổng nợ 600k > 500k (vượt hạn mức), KHÔNG có PIN override
     const orderPayload = {
       clientId,
-      createdAt: new Date().toISOString(),
+      createdAt: offlineCreatedAt,
       orderData: {
         customerId: customer.id,
         subtotal: 200_000,
@@ -211,10 +212,105 @@ describe('H8 + M26: Refactor createOrder và Offline Sync Push', () => {
     const res = await pushOrders([orderPayload])
     expect(res.status).toBe(200)
     const body = (await res.json()) as {
-      data: { results: Array<{ status: string; error?: { code: string } }> }
+      data: { results: Array<{ status: string; serverId?: string }> }
     }
-    expect(body.data.results[0]!.status).toBe('error')
-    expect(body.data.results[0]!.error?.code).toBe('BUSINESS_RULE_VIOLATION')
+    expect(body.data.results[0]!.status).toBe('synced')
+    const orderId = body.data.results[0]!.serverId
+    expect(orderId).toBeDefined()
+
+    // 1. Kiểm tra đơn hàng trong DB có cờ debtLimitExceeded = true
+    const [orderRow] = await base.db.select().from(orders).where(eq(orders.id, orderId!))
+    expect(orderRow).toBeDefined()
+    expect(orderRow!.debtLimitExceeded).toBe(true)
+
+    // 2. Kiểm tra nợ ghi đúng số tiền
+    const debtRows = await base.db.select().from(debts).where(eq(debts.orderId, orderId!))
+    expect(debtRows.length).toBe(1)
+    expect(debtRows[0]!.amount).toBe(200_000)
+
+    // 3. Kiểm tra công nợ khách hàng được cập nhật đúng: 400k + 200k = 600k
+    const [updatedCust] = await base.db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, customer.id))
+    expect(updatedCust!.currentDebt).toBe(600_000)
+
+    // 4. Kiểm tra có audit log order.debt_limit_exceeded
+    const exceededAudits = await base.db
+      .select()
+      .from(auditLogs)
+      .where(
+        and(
+          eq(auditLogs.storeId, base.storeId),
+          eq(auditLogs.action, 'order.debt_limit_exceeded'),
+          eq(auditLogs.targetId, orderId!),
+        ),
+      )
+    expect(exceededAudits.length).toBe(1)
+    const exceededAudit = exceededAudits[0]!
+    const changes = exceededAudit.changes as Record<string, unknown>
+    expect(changes.orderNumber).toBe(orderRow!.orderNumber)
+    expect(changes.customerId).toBe(customer.id)
+    expect(changes.debtLimit).toBe(500_000)
+    expect(changes.debtBefore).toBe(400_000)
+    expect(changes.debtAfter).toBe(600_000)
+    expect(changes.exceededAmount).toBe(100_000)
+    expect(changes.sellerId).toBe(base.owner.id)
+    expect(changes.source).toBe('offline_sync')
+    expect(changes.offlineCreatedAt).toBe(offlineCreatedAt)
+  })
+
+  it('Đơn ngoại tuyến trong hạn mức nợ: sync THÀNH CÔNG, không sinh audit log vượt hạn mức, cờ debtLimitExceeded = false', async () => {
+    const customer = await createCustomer(base, { currentDebt: 100_000, debtLimit: 500_000 })
+    const product = await createProduct(base, { sellingPrice: 200_000 })
+    const clientId = 'c3333333-3333-3333-3333-333333333334'
+
+    // Nợ thêm 200k -> tổng nợ 300k <= 500k (trong hạn mức)
+    const orderPayload = {
+      clientId,
+      createdAt: new Date().toISOString(),
+      orderData: {
+        customerId: customer.id,
+        subtotal: 200_000,
+        discountAmount: 0,
+        total: 200_000,
+        paymentMethod: 'debt',
+        paymentStatus: 'unpaid',
+        debtAmount: 200_000,
+        items: [
+          {
+            productId: product.id,
+            productName: product.name,
+            unit: 'cái',
+            unitPrice: 200_000,
+            quantity: 1,
+            discountAmount: 0,
+            lineTotal: 200_000,
+          },
+        ],
+      },
+    }
+
+    const res = await pushOrders([orderPayload])
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      data: { results: Array<{ status: string; serverId?: string }> }
+    }
+    expect(body.data.results[0]!.status).toBe('synced')
+    const orderId = body.data.results[0]!.serverId
+
+    // Cờ debtLimitExceeded là false
+    const [orderRow] = await base.db.select().from(orders).where(eq(orders.id, orderId!))
+    expect(orderRow!.debtLimitExceeded).toBe(false)
+
+    // Không có audit log order.debt_limit_exceeded
+    const exceededAudits = await base.db
+      .select()
+      .from(auditLogs)
+      .where(
+        and(eq(auditLogs.storeId, base.storeId), eq(auditLogs.action, 'order.debt_limit_exceeded')),
+      )
+    expect(exceededAudits.length).toBe(0)
   })
 
   it('Đơn tạo qua sync vượt hạn mức nợ nhưng CÓ PIN override hợp lệ -> sync thành công', async () => {

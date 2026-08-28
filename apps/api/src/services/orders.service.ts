@@ -80,6 +80,7 @@ export interface OrderDetail {
   oldDebt?: number | null
   customerCurrentDebt?: number | null
   isDuplicate?: boolean
+  debtLimitExceeded?: boolean
 }
 
 export interface StockInfoVariant {
@@ -159,6 +160,7 @@ export interface CreateOrderDeps {
   meta?: RequestMeta
   source?: 'pos' | 'offline_sync'
   clientId?: string | null
+  offlineCreatedAt?: string
   skipDebtLimitCheck?: boolean
 }
 
@@ -173,6 +175,7 @@ export async function createOrder({
   meta,
   source = 'pos',
   clientId: explicitClientId,
+  offlineCreatedAt,
   skipDebtLimitCheck = false,
 }: CreateOrderDeps): Promise<OrderDetail> {
   if (input.items.length === 0) {
@@ -201,6 +204,7 @@ export async function createOrder({
         change: orders.change,
         note: orders.note,
         status: orders.status,
+        debtLimitExceeded: orders.debtLimitExceeded,
         createdAt: orders.createdAt,
       })
       .from(orders)
@@ -226,6 +230,7 @@ export async function createOrder({
         items: [],
         createdAt: existing.createdAt.toISOString(),
         isDuplicate: true,
+        debtLimitExceeded: Boolean(existing.debtLimitExceeded),
       }
     }
   }
@@ -531,6 +536,7 @@ export async function createOrder({
 
       let oldDebt: number | null = null
       let customerCurrentDebt: number | null = null
+      let isDebtLimitExceeded = false
 
       // Debt creation
       if (debtAmount > 0) {
@@ -582,7 +588,35 @@ export async function createOrder({
             effectiveDebtLimit > 0 &&
             debtAfter > effectiveDebtLimit
           ) {
-            if (!input.debtLimitOverridden) {
+            if (input.debtLimitOverridden) {
+              // Override bằng PIN: ghi audit riêng (áp dụng cho POS hoặc offline sync khi có PIN)
+              // SF-3: lưu PIN actor (user đã nhập PIN để override)
+              await logAction({
+                db: txDb,
+                storeId: actor.storeId,
+                actorId: actor.userId,
+                actorRole: actor.role,
+                action: 'debt.limit_overridden',
+                targetType: 'customer',
+                targetId: input.customerId,
+                changes: {
+                  customerId: input.customerId,
+                  customerName: customer.name,
+                  orderId: createdId,
+                  amount: debtAmount,
+                  debtBefore,
+                  debtAfter,
+                  debtLimit: effectiveDebtLimit,
+                  overrideBy: actor.userId,
+                  overrideByRole: actor.role,
+                  pinVerified: true,
+                  source,
+                },
+                ipAddress: meta?.ipAddress,
+                userAgent: meta?.userAgent,
+              })
+            } else if (source === 'pos') {
+              // POS trực tiếp mà không có PIN override: BỊ TỪ CHỐI
               const maxAdditional = Math.max(0, effectiveDebtLimit - debtBefore)
               throw new ApiError(
                 'BUSINESS_RULE_VIOLATION',
@@ -593,34 +627,68 @@ export async function createOrder({
                   maxAdditional,
                 },
               )
-            }
+            } else if (source === 'offline_sync') {
+              // Đơn ngoại tuyến vượt hạn mức nợ KHÔNG có PIN: KHÔNG từ chối, đánh dấu đơn là vượt hạn mức
+              isDebtLimitExceeded = true
 
-            // Override: ghi audit riêng
-            // SF-3: lưu PIN actor (user đã nhập PIN để override)
-            await logAction({
-              db: txDb,
-              storeId: actor.storeId,
-              actorId: actor.userId,
-              actorRole: actor.role,
-              action: 'debt.limit_overridden',
-              targetType: 'customer',
-              targetId: input.customerId,
-              changes: {
-                customerId: input.customerId,
-                customerName: customer.name,
-                orderId: createdId,
-                amount: debtAmount,
-                debtBefore,
-                debtAfter,
-                debtLimit: effectiveDebtLimit,
-                overrideBy: actor.userId,
-                overrideByRole: actor.role,
-                pinVerified: true,
-                source,
-              },
-              ipAddress: meta?.ipAddress,
-              userAgent: meta?.userAgent,
-            })
+              await tx
+                .update(orders)
+                .set({ debtLimitExceeded: true })
+                .where(eq(orders.id, createdId))
+
+              await logAction({
+                db: txDb,
+                storeId: actor.storeId,
+                actorId: actor.userId,
+                actorRole: actor.role,
+                action: 'order.debt_limit_exceeded',
+                targetType: 'order',
+                targetId: createdId,
+                changes: {
+                  orderId: createdId,
+                  orderNumber,
+                  customerId: input.customerId,
+                  customerName: customer.name,
+                  debtLimit: effectiveDebtLimit,
+                  debtBefore,
+                  debtAfter,
+                  exceededAmount: debtAfter - effectiveDebtLimit,
+                  debtAmount,
+                  sellerId: actor.userId,
+                  sellerRole: actor.role,
+                  source,
+                  offlineCreatedAt:
+                    offlineCreatedAt ??
+                    ('createdAt' in input &&
+                    typeof (input as { createdAt?: string }).createdAt === 'string'
+                      ? (input as { createdAt?: string }).createdAt
+                      : undefined),
+                },
+                ipAddress: meta?.ipAddress,
+                userAgent: meta?.userAgent,
+              })
+
+              emitEvent(db, {
+                storeId: actor.storeId,
+                type: 'order.debt_limit_exceeded',
+                severity: 'warn',
+                title: `Đơn ngoại tuyến vượt hạn mức nợ: ${orderNumber}`,
+                body: `Khách hàng ${customer.name} vượt hạn mức nợ ${formatVnd(debtAfter - effectiveDebtLimit)} (nợ sau đơn: ${formatVnd(debtAfter)}, hạn mức: ${formatVnd(effectiveDebtLimit)}) từ đơn ngoại tuyến ${orderNumber}`,
+                context: {
+                  orderId: createdId,
+                  orderNumber,
+                  customerId: input.customerId,
+                  customerName: customer.name,
+                  debtLimit: effectiveDebtLimit,
+                  debtBefore,
+                  debtAfter,
+                  exceededAmount: debtAfter - effectiveDebtLimit,
+                  userId: actor.userId,
+                  sellerId: actor.userId,
+                  source,
+                },
+              })
+            }
           }
         }
 
@@ -764,6 +832,7 @@ export async function createOrder({
         createdAt: new Date().toISOString(),
         oldDebt,
         customerCurrentDebt,
+        debtLimitExceeded: isDebtLimitExceeded,
       } satisfies OrderDetail
     })
 
@@ -788,6 +857,7 @@ export async function createOrder({
           change: orders.change,
           note: orders.note,
           status: orders.status,
+          debtLimitExceeded: orders.debtLimitExceeded,
           createdAt: orders.createdAt,
         })
         .from(orders)
@@ -813,6 +883,7 @@ export async function createOrder({
           items: [],
           createdAt: dup.createdAt.toISOString(),
           isDuplicate: true,
+          debtLimitExceeded: Boolean(dup.debtLimitExceeded),
         }
       }
     }
@@ -975,6 +1046,7 @@ export interface OrderListItem {
   paidAmount: number
   debtAmount: number
   status: string
+  debtLimitExceeded: boolean
   note: string | null
   createdAt: string
 }
@@ -1060,6 +1132,7 @@ export async function listOrders({
       cashAmount: orders.cashAmount,
       transferAmount: orders.transferAmount,
       status: orders.status,
+      debtLimitExceeded: orders.debtLimitExceeded,
       note: orders.note,
       createdAt: orders.createdAt,
       debtRemaining: debts.remaining,
@@ -1105,6 +1178,7 @@ export async function listOrders({
       paidAmount,
       debtAmount,
       status: r.status,
+      debtLimitExceeded: Boolean(r.debtLimitExceeded),
       note: r.note ?? null,
       createdAt: r.createdAt.toISOString(),
     }
@@ -1141,6 +1215,7 @@ export interface OrderDetailFull {
   debtAmount: number
   note: string | null
   status: string
+  debtLimitExceeded: boolean
   items: OrderDetailItem[]
   createdAt: string
   updatedAt: string
@@ -1179,6 +1254,7 @@ export async function getOrderDetail({
       change: orders.change,
       note: orders.note,
       status: orders.status,
+      debtLimitExceeded: orders.debtLimitExceeded,
       createdAt: orders.createdAt,
       updatedAt: orders.updatedAt,
       debtRemaining: debts.remaining,
@@ -1273,6 +1349,7 @@ export async function getOrderDetail({
     debtAmount,
     note: row.note ?? null,
     status: row.status,
+    debtLimitExceeded: Boolean(row.debtLimitExceeded),
     items,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

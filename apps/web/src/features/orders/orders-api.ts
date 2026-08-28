@@ -17,6 +17,7 @@ interface OrderListItem {
   paidAmount: number
   debtAmount: number
   status: string
+  debtLimitExceeded?: boolean
   note: string | null
   createdAt: string
 }
@@ -45,6 +46,7 @@ interface OrderDetailResponse {
   debtAmount: number
   note: string | null
   status: string
+  debtLimitExceeded?: boolean
   createdAt: string
   updatedAt: string
   items: OrderDetailItem[]

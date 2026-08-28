@@ -4,6 +4,7 @@ import { Receipt, SearchX, Users, X } from 'lucide-react'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -424,7 +425,19 @@ function OrderTable({
                 className="cursor-pointer hover:bg-muted/50"
                 onClick={() => onRowClick(it.id)}
               >
-                <TableCell className="font-mono font-medium">{it.orderNumber}</TableCell>
+                <TableCell className="font-mono font-medium">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span>{it.orderNumber}</span>
+                    {it.debtLimitExceeded && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] px-1.5 py-0 border-amber-500 bg-amber-50 text-amber-700 font-normal"
+                      >
+                        Vượt hạn mức
+                      </Badge>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>{formatDate(it.createdAt)}</TableCell>
                 <TableCell>{it.customerName ?? 'Khách lẻ'}</TableCell>
                 <TableCell className="text-right font-medium">
@@ -458,7 +471,17 @@ function OrderTable({
             onClick={() => onRowClick(it.id)}
           >
             <div className="flex items-center justify-between">
-              <span className="font-mono font-medium">{it.orderNumber}</span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-mono font-medium">{it.orderNumber}</span>
+                {it.debtLimitExceeded && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0 border-amber-500 bg-amber-50 text-amber-700 font-normal"
+                  >
+                    Vượt hạn mức
+                  </Badge>
+                )}
+              </div>
               <StatusBadge status={it.status} />
             </div>
             <div className="text-sm text-muted-foreground mt-1">
