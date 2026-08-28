@@ -504,7 +504,7 @@ export async function createOrder({
           })
 
           if (!effectivePriceOverridePinUsed && source === 'offline_sync') {
-            emitEvent(txDb, {
+            emitEvent(db, {
               storeId: actor.storeId,
               type: 'audit.price_override',
               severity: 'warn',
@@ -523,7 +523,7 @@ export async function createOrder({
 
           // audit.price_override: warn when selling below cost
           if (product.costPrice != null && effectiveUnitPrice < product.costPrice) {
-            emitEvent(txDb, {
+            emitEvent(db, {
               storeId: actor.storeId,
               type: 'audit.price_override',
               severity: 'warn',
