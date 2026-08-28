@@ -8,7 +8,9 @@ import { defineConfig, devices } from '@playwright/test'
  * - Không sử dụng PGlite trong bộ nhớ cho bộ kiểm thử này.
  * - Đảm bảo máy chủ backend API (cổng 3000) đang chạy hoặc đã được khởi động trước khi kiểm thử.
  */
-const PORT = process.env.PORT || 5173
+// Không dùng biến PORT chung: trong CI, PORT được cấp cho máy chủ API (3000).
+// Cổng của web dev server khai báo riêng qua WEB_PORT.
+const PORT = process.env.WEB_PORT || 5173
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${PORT}`
 
 export default defineConfig({
