@@ -194,7 +194,13 @@ export async function resolveProductPrice(ctx: ResolveContext): Promise<Resolved
   let rawRetailPrice = Number(product.sellingPrice)
   if (variantId) {
     const variantResult = await db.query.productVariants.findFirst({
-      where: (vt, { eq, and }) => and(eq(vt.id, variantId), eq(vt.productId, productId)),
+      where: (vt, { eq, and, isNull }) =>
+        and(
+          eq(vt.id, variantId),
+          eq(vt.productId, productId),
+          eq(vt.storeId, storeId),
+          isNull(vt.deletedAt),
+        ),
       columns: { sellingPrice: true },
     })
     const variantSellingPrice = variantResult?.sellingPrice
