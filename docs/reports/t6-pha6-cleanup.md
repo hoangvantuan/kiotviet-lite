@@ -99,6 +99,19 @@ Pha 6 tập trung vào các mục tiêu kỹ thuật cốt lõi:
 
 ---
 
+### 3.7. Chuẩn hoá chuỗi tiếng Việt có dấu trong giao diện người dùng (Yêu cầu bổ sung từ Coordinator)
+
+- **Hiện tượng**: Một số thành phần trên màn hình POS chứa chuỗi tiếng Việt không dấu (ví dụ: `Gio hang trong`, `Thanh toan (F2)`, `Tim kiem san pham`...).
+- **Giải pháp**: Rà soát toàn bộ `apps/web/src` và chuẩn hoá toàn bộ chuỗi hiển thị sang tiếng Việt có dấu chuẩn ngữ pháp:
+  - [apps/web/src/features/pos/components/PosScreen.tsx](file:///Users/tuanhv/orca/workspaces/kiotviet-lite/t6-pha6-cleanup/apps/web/src/features/pos/components/PosScreen.tsx): **6 chuỗi** (`Mở giỏ hàng: ...`, `Mở giỏ hàng trống`, `Giỏ hàng trống`, `Tổng: ...`, `Giỏ hàng`, `Danh sách sản phẩm trong giỏ hàng`).
+  - [apps/web/src/features/pos/components/CartPanel.tsx](file:///Users/tuanhv/orca/workspaces/kiotviet-lite/t6-pha6-cleanup/apps/web/src/features/pos/components/CartPanel.tsx): **12 chuỗi** (`Giỏ hàng`, `Huỷ đơn` (aria-label + button text), `Giỏ hàng trống`, `Chọn sản phẩm để thêm vào giỏ hàng`, `Tổng tiền hàng (...)`, `Tổng thanh toán`, `Thanh toán (F2)`, `Huỷ đơn hàng` (title), `Bạn có chắc muốn huỷ đơn hàng này? Toàn bộ sản phẩm trong tab hiện tại sẽ bị xoá.`, `Quay lại`, `Huỷ đơn` (action)).
+  - [apps/web/src/features/pos/components/KeyboardShortcutsTooltip.tsx](file:///Users/tuanhv/orca/workspaces/kiotviet-lite/t6-pha6-cleanup/apps/web/src/features/pos/components/KeyboardShortcutsTooltip.tsx): **7 chuỗi** (`Thanh toán`, `Ghi nợ (chưa kích hoạt)`, `Đơn hàng mới`, `Đóng hộp thoại`, `Tìm kiếm sản phẩm`, `Phím tắt` (aria-label + header)).
+  - [apps/web/src/features/pos/components/StockInfoPopover.tsx](file:///Users/tuanhv/orca/workspaces/kiotviet-lite/t6-pha6-cleanup/apps/web/src/features/pos/components/StockInfoPopover.tsx): **7 chuỗi** (`Xem tồn kho`, `Tồn kho`, `Định mức tối thiểu`, `Trạng thái`, `Biến thể`, `Sản phẩm này không theo dõi tồn kho`, `Không tìm thấy thông tin`).
+- **Tổng số lượng đã chuẩn hoá**: **32 chuỗi** trên **4 file** component giao diện POS.
+- **Commit**: `29bd8c9` (`fix(web): chuẩn hoá chuỗi tiếng Việt có dấu trong giao diện POS`).
+
+---
+
 ## 4. Kết Quả Kiểm Tra Chất Lượng (Verification Results)
 
 ### 4.1. Lệnh kiểm tra kiểu dữ liệu (`pnpm -r typecheck`)
@@ -118,7 +131,7 @@ apps/api typecheck: Done
 
 ```bash
 $ pnpm -r build
-apps/web build: ✓ built in 677ms (PWA v1.2.0, 16 precache entries)
+apps/web build: ✓ built in 730ms (PWA v1.2.0, 16 precache entries)
 apps/web build: Done
 apps/api build: Done
 ```
@@ -157,3 +170,5 @@ $ pnpm lint
 5. `3c03b5d`: `refactor(web): hợp nhất formatDate, handleApiError và sửa toast lỗi lặp đôi (L27)`
 6. `d9daf23`: `feat(shared): mô đun định giá dùng chung và máy chủ tự tính lại giá đơn hàng`
 7. `18d4ca6`: `fix(shared): đồng bộ DiscountType export và null safety trong pricing utils`
+8. `29bd8c9`: `fix(web): chuẩn hoá chuỗi tiếng Việt có dấu trong giao diện POS`
+9. `4c0ecc0`: `docs(reports): hoàn thành báo cáo dọn dẹp mã nguồn và sửa lỗi tồn đọng Pha 6`
