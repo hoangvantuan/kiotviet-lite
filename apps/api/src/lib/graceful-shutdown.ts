@@ -4,41 +4,74 @@ export interface GracefulShutdownOptions {
   server: { close: (cb?: (err?: Error) => void) => void }
   logger: pino.Logger
   cleanup?: () => Promise<void>
+  timeoutMs?: number
+  exitFn?: (code: number) => void
 }
 
-export function setupGracefulShutdown({ server, logger, cleanup }: GracefulShutdownOptions): void {
+export function setupGracefulShutdown({
+  server,
+  logger,
+  cleanup,
+  timeoutMs = 10_000,
+  exitFn = (code) => process.exit(code),
+}: GracefulShutdownOptions): { shutdown: (signal: string) => Promise<void> } {
   let isShuttingDown = false
+  let cleanupPromise: Promise<void> | null = null
 
-  const shutdown = async (signal: string) => {
-    if (isShuttingDown) return
-    isShuttingDown = true
-
-    logger.info({ signal }, 'Shutdown signal received, closing server...')
-
-    const forceTimeout = setTimeout(() => {
-      logger.error('Graceful shutdown timed out after 10s, forcing exit')
-      process.exit(1)
-    }, 10_000)
-    forceTimeout.unref()
-
-    server.close(async () => {
-      if (cleanup) {
+  const executeCleanup = async () => {
+    if (!cleanup) return
+    if (!cleanupPromise) {
+      cleanupPromise = (async () => {
         try {
           await cleanup()
           logger.info('Cleanup completed')
         } catch (err) {
           logger.error({ err }, 'Cleanup failed during shutdown')
         }
-      }
+      })()
+    }
+    return cleanupPromise
+  }
 
-      logger.info('Server shutdown complete')
-      logger.flush()
+  const shutdown = (signal: string): Promise<void> => {
+    if (isShuttingDown) return Promise.resolve()
+    isShuttingDown = true
 
-      clearTimeout(forceTimeout)
-      process.exit(0)
+    logger.info({ signal }, 'Shutdown signal received, closing server...')
+
+    return new Promise<void>((resolve) => {
+      let forceTimeout: NodeJS.Timeout | null = null
+
+      forceTimeout = setTimeout(async () => {
+        logger.error(`Graceful shutdown timed out after ${timeoutMs}ms, forcing exit`)
+        await executeCleanup()
+        logger.flush?.()
+        exitFn(1)
+        resolve()
+      }, timeoutMs)
+      forceTimeout.unref?.()
+
+      server.close(async () => {
+        await executeCleanup()
+
+        logger.info('Server shutdown complete')
+        logger.flush?.()
+
+        if (forceTimeout) {
+          clearTimeout(forceTimeout)
+        }
+        exitFn(0)
+        resolve()
+      })
     })
   }
 
-  process.on('SIGTERM', () => shutdown('SIGTERM'))
-  process.on('SIGINT', () => shutdown('SIGINT'))
+  process.on('SIGTERM', () => {
+    void shutdown('SIGTERM')
+  })
+  process.on('SIGINT', () => {
+    void shutdown('SIGINT')
+  })
+
+  return { shutdown }
 }
