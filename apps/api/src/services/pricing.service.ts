@@ -184,14 +184,27 @@ async function getCustomerGroupId(
 }
 
 export async function resolveProductPrice(ctx: ResolveContext): Promise<ResolvedPrice> {
-  const { db, storeId, customerId, productId, unitConversionId, quantity } = ctx
+  const { db, storeId, customerId, productId, variantId, unitConversionId, quantity } = ctx
 
   const product = await getProduct(db, storeId, productId)
   if (!product) {
     return { price: 0, source: 'retail_price', sourceDetail: null, breakdown: [] }
   }
 
-  const rawRetailPrice = Number(product.sellingPrice)
+  let rawRetailPrice = Number(product.sellingPrice)
+  if (variantId) {
+    const variantResult = await db.query.productVariants.findFirst({
+      where: (vt, { eq, and }) => and(eq(vt.id, variantId), eq(vt.productId, productId)),
+      columns: { sellingPrice: true },
+    })
+    const variantSellingPrice = variantResult?.sellingPrice
+      ? Number(variantResult.sellingPrice)
+      : null
+    if (variantSellingPrice !== null && variantSellingPrice > 0) {
+      rawRetailPrice = variantSellingPrice
+    }
+  }
+
   let unitConv: { conversionFactor: number; sellingPrice: number | null } | null = null
   if (unitConversionId) {
     unitConv = await findUnitConversion(db, storeId, productId, unitConversionId)

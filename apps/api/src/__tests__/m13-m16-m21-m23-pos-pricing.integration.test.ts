@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import {
@@ -12,7 +13,12 @@ import {
 
 import { createPosRoutes } from '../routes/pos.routes.js'
 import { createStoreRoutes } from '../routes/store.routes.js'
-import { createCustomer, createProduct, createUnitConversion } from './helpers/factories.js'
+import {
+  createCustomer,
+  createProduct,
+  createUnitConversion,
+  createVariant,
+} from './helpers/factories.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 beforeAll(() => {
@@ -38,8 +44,32 @@ async function setup(): Promise<Env> {
 }
 
 describe('PHA 4 POS Integration Tests (M13, M16, M21, M23)', () => {
+  describe('Lỗi 1 (Variant Pricing)', () => {
+    it('Lấy giá của biến thể nếu có (chứ không phải của sản phẩm gốc)', async () => {
+      const { base, posApp } = await setup()
+      const product = await createProduct(base, { sellingPrice: 80_000, withVariants: true })
+      const variant = await createVariant(base, product.id, { sellingPrice: 90_000 })
+
+      const res = await posApp.request('/resolve-prices', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...base.owner.authHeader,
+        },
+        body: JSON.stringify({
+          items: [{ productId: product.id, variantId: variant.id, quantity: 1 }],
+        }),
+      })
+
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as any
+      expect(body.data[0].price).toBe(90_000)
+    })
+  })
+
   // ---------------------------------------------------------------------------
   // M13: Giá 0đ hợp lệ không bị bỏ qua
+
   // ---------------------------------------------------------------------------
   describe('M13: Giá 0đ hợp lệ được tôn trọng trong engine pricing', () => {
     it('Tier 1: Giá riêng KH = 0đ được match, không bị fallback về giá bán lẻ', async () => {
