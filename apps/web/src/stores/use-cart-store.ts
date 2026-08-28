@@ -7,6 +7,8 @@ import {
   type PriceSource,
 } from '@kiotviet-lite/shared'
 
+export type { DiscountType }
+
 import { MAX_CART_TABS } from '@/features/pos/constants'
 
 export interface CartItem {

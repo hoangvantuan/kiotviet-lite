@@ -1,10 +1,6 @@
-/**
- * Mô đun định giá và tính toán tiền đơn hàng dùng chung (Shared Pricing Module).
- * Thống nhất logic tính chiết khấu dòng, chiết khấu đơn, đơn vị quy đổi,
- * và làm tròn dồn phần dư tiền tệ (VND) giữa Máy khách (Client) và Máy chủ (Server).
- */
+import type { DiscountType } from '../schema/purchase-order-management.js'
 
-export type DiscountType = 'percent' | 'amount'
+export type { DiscountType }
 
 export interface LineDiscountInput {
   unitPrice: number
@@ -154,11 +150,13 @@ export function allocateOrderDiscount(
   const results: number[] = []
 
   for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    if (!item) continue
     if (i === items.length - 1) {
       // Dòng cuối cùng nhận toàn bộ phần dư còn lại
       results.push(Math.max(0, orderDiscountAmount - allocatedSum))
     } else {
-      const portion = Math.floor((items[i].lineTotal / subtotal) * orderDiscountAmount)
+      const portion = Math.floor((item.lineTotal / subtotal) * orderDiscountAmount)
       allocatedSum += portion
       results.push(portion)
     }
