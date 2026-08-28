@@ -8,6 +8,7 @@ import {
   priceLists,
   type PriceSource,
   products,
+  productUnitConversions,
   type ResolvedPriceItem,
   type ResolvePricesInput,
   type TierBreakdown,
@@ -22,6 +23,8 @@ interface ResolveContext {
   storeId: string
   customerId: string | null
   productId: string
+  variantId?: string | null
+  unitConversionId?: string | null
   quantity: number
 }
 
@@ -34,6 +37,37 @@ interface ResolvedPrice {
 
 function toIsoDate(d: Date): string {
   return d.toISOString().slice(0, 10)
+}
+
+async function findUnitConversion(
+  db: Db,
+  storeId: string,
+  productId: string,
+  unitConversionId: string,
+): Promise<{ conversionFactor: number; sellingPrice: number | null } | null> {
+  const rows = await db
+    .select({
+      conversionFactor: productUnitConversions.conversionFactor,
+      sellingPrice: productUnitConversions.sellingPrice,
+    })
+    .from(productUnitConversions)
+    .where(
+      and(
+        eq(productUnitConversions.id, unitConversionId),
+        eq(productUnitConversions.productId, productId),
+        eq(productUnitConversions.storeId, storeId),
+      ),
+    )
+    .limit(1)
+  if (!rows[0]) return null
+  const sp =
+    rows[0].sellingPrice != null && Number(rows[0].sellingPrice) > 0
+      ? Number(rows[0].sellingPrice)
+      : null
+  return {
+    conversionFactor: Number(rows[0].conversionFactor),
+    sellingPrice: sp,
+  }
 }
 
 async function findCustomerPrice(
@@ -150,20 +184,30 @@ async function getCustomerGroupId(
 }
 
 export async function resolveProductPrice(ctx: ResolveContext): Promise<ResolvedPrice> {
-  const { db, storeId, customerId, productId, quantity } = ctx
+  const { db, storeId, customerId, productId, unitConversionId, quantity } = ctx
 
   const product = await getProduct(db, storeId, productId)
   if (!product) {
     return { price: 0, source: 'retail_price', sourceDetail: null, breakdown: [] }
   }
 
-  const retailPrice = Number(product.sellingPrice)
+  const rawRetailPrice = Number(product.sellingPrice)
+  let unitConv: { conversionFactor: number; sellingPrice: number | null } | null = null
+  if (unitConversionId) {
+    unitConv = await findUnitConversion(db, storeId, productId, unitConversionId)
+  }
+
+  const conversionFactor = unitConv?.conversionFactor ?? 1
+  const retailPrice = unitConv?.sellingPrice ?? Math.round(rawRetailPrice * conversionFactor)
+
   const breakdown: TierBreakdown[] = []
   let winner: { price: number; source: PriceSource; sourceDetail: string | null } | null = null
 
   if (customerId) {
-    const cp = await findCustomerPrice(db, storeId, customerId, productId)
-    const t1Hit = !winner && cp !== null && cp > 0
+    const rawCp = await findCustomerPrice(db, storeId, customerId, productId)
+    const cp =
+      rawCp !== null ? (unitConv?.sellingPrice ?? Math.round(rawCp * conversionFactor)) : null
+    const t1Hit = !winner && cp !== null && cp >= 0
     breakdown.push({
       tier: 1,
       name: 'Giá riêng KH',
@@ -188,7 +232,7 @@ export async function resolveProductPrice(ctx: ResolveContext): Promise<Resolved
         ? `Giảm ${catDiscount.discountValue}%`
         : `Giảm ${catDiscount.discountValue.toLocaleString('vi-VN')}đ`
       : null
-    const t2Hit = !winner && catDiscount !== null && catDiscount.finalPrice > 0
+    const t2Hit = !winner && catDiscount !== null && catDiscount.finalPrice >= 0
     breakdown.push({
       tier: 2,
       name: 'CK danh mục',
@@ -227,33 +271,39 @@ export async function resolveProductPrice(ctx: ResolveContext): Promise<Resolved
     reason: 'Client state',
   })
 
-  const vp = await findVolumePrice(db, storeId, productId, quantity)
-  const t4Hit = !winner && vp !== null && vp.price > 0
+  const rawVp = await findVolumePrice(db, storeId, productId, quantity)
+  const vpPrice =
+    rawVp !== null ? (unitConv?.sellingPrice ?? Math.round(rawVp.price * conversionFactor)) : null
+  const t4Hit = !winner && vpPrice !== null && vpPrice >= 0
   breakdown.push({
     tier: 4,
     name: 'Giá theo SL',
-    price: vp?.price ?? null,
+    price: vpPrice,
     matched: t4Hit,
     reason:
-      vp !== null
-        ? `SL >= ${vp.minQty}: ${vp.price.toLocaleString('vi-VN')}đ`
+      rawVp !== null
+        ? `SL >= ${rawVp.minQty}: ${vpPrice?.toLocaleString('vi-VN')}đ`
         : 'Không có giá SL phù hợp',
   })
   if (t4Hit)
-    winner = { price: vp!.price, source: 'volume_price', sourceDetail: `SL >= ${vp!.minQty}` }
+    winner = { price: vpPrice!, source: 'volume_price', sourceDetail: `SL >= ${rawVp!.minQty}` }
 
   if (customerId) {
-    const plp = await findPriceListPrice(db, storeId, customerId, productId)
-    const t5Hit = !winner && plp !== null && plp.price > 0
+    const rawPlp = await findPriceListPrice(db, storeId, customerId, productId)
+    const plpPrice =
+      rawPlp !== null
+        ? (unitConv?.sellingPrice ?? Math.round(rawPlp.price * conversionFactor))
+        : null
+    const t5Hit = !winner && plpPrice !== null && plpPrice >= 0
     breakdown.push({
       tier: 5,
       name: 'Bảng giá nhóm KH',
-      price: plp?.price ?? null,
+      price: plpPrice,
       matched: t5Hit,
-      reason: plp ? `Bảng giá: ${plp.priceListName}` : 'Không có bảng giá nhóm',
+      reason: rawPlp ? `Bảng giá: ${rawPlp.priceListName}` : 'Không có bảng giá nhóm',
     })
     if (t5Hit)
-      winner = { price: plp!.price, source: 'price_list', sourceDetail: plp!.priceListName }
+      winner = { price: plpPrice!, source: 'price_list', sourceDetail: rawPlp!.priceListName }
   } else {
     breakdown.push({
       tier: 5,
@@ -296,11 +346,14 @@ export async function resolvePrices({
       storeId,
       customerId,
       productId: item.productId,
+      variantId: item.variantId ?? null,
+      unitConversionId: item.unitConversionId ?? null,
       quantity: item.quantity,
     })
     results.push({
       productId: item.productId,
       variantId: item.variantId ?? null,
+      unitConversionId: item.unitConversionId ?? null,
       price: resolved.price,
       source: resolved.source,
       sourceDetail: resolved.sourceDetail,

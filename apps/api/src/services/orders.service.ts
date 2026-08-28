@@ -331,6 +331,68 @@ export async function createOrder({
           productId: item.productId,
         })
 
+        let itemSku = product.sku ?? null
+        let itemCostPrice = product.costPrice != null ? Number(product.costPrice) : null
+        let variant = null
+        if (item.variantId) {
+          variant = await loadVariantForUpdate({
+            tx: txDb,
+            productId: item.productId,
+            variantId: item.variantId,
+          })
+          itemSku = variant.sku ?? product.sku ?? null
+          itemCostPrice = variant.costPrice != null ? Number(variant.costPrice) : itemCostPrice
+        }
+
+        let conv: { conversionFactor: number; sellingPrice: number | null } | null = null
+        if (item.unitConversionId) {
+          const convRows = await tx
+            .select({
+              conversionFactor: productUnitConversions.conversionFactor,
+              sellingPrice: productUnitConversions.sellingPrice,
+            })
+            .from(productUnitConversions)
+            .where(
+              and(
+                eq(productUnitConversions.id, item.unitConversionId),
+                eq(productUnitConversions.productId, item.productId),
+                eq(productUnitConversions.storeId, actor.storeId),
+              ),
+            )
+            .limit(1)
+          const foundConv = convRows[0]
+          if (!foundConv) {
+            throw new ApiError(
+              'VALIDATION_ERROR',
+              'Đơn vị quy đổi không hợp lệ hoặc không thuộc sản phẩm/cửa hàng này',
+            )
+          }
+          conv = {
+            conversionFactor: foundConv.conversionFactor,
+            sellingPrice:
+              foundConv.sellingPrice != null && Number(foundConv.sellingPrice) > 0
+                ? Number(foundConv.sellingPrice)
+                : null,
+          }
+        }
+
+        let effectiveUnitPrice = item.unitPrice
+        let effectiveLineTotal = item.lineTotal
+
+        // M16: Đơn vị quy đổi có giá 0 dẫn tới bán 0đ: BE tự tính lại giá thay vì tin client
+        if (conv && !item.priceOverride) {
+          const basePrice = variant ? Number(variant.sellingPrice) : Number(product.sellingPrice)
+          const expectedConvPrice =
+            conv.sellingPrice ?? Math.round(basePrice * conv.conversionFactor)
+          if (effectiveUnitPrice <= 0 && expectedConvPrice > 0) {
+            effectiveUnitPrice = expectedConvPrice
+            effectiveLineTotal = Math.max(
+              0,
+              effectiveUnitPrice * item.quantity - item.discountAmount,
+            )
+          }
+        }
+
         // Insert order_item
         const [insertedItem] = await tx
           .insert(orderItems)
@@ -341,12 +403,12 @@ export async function createOrder({
             productName: item.productName,
             variantName: item.variantName ?? null,
             unit: item.unit ?? null,
-            unitPrice: item.unitPrice,
+            unitPrice: effectiveUnitPrice,
             quantity: item.quantity,
             discountType: item.discountType ?? null,
             discountValue: item.discountValue,
             discountAmount: item.discountAmount,
-            lineTotal: item.lineTotal,
+            lineTotal: effectiveLineTotal,
             note: item.note ?? null,
             originalPrice: item.originalPrice ?? null,
             priceOverride: item.priceOverride,
@@ -369,7 +431,7 @@ export async function createOrder({
               productId: item.productId,
               variantId: item.variantId ?? null,
               originalPrice: item.originalPrice ?? null,
-              unitPrice: item.unitPrice,
+              unitPrice: effectiveUnitPrice,
               reason: item.priceOverrideReason ?? null,
               pinUsed: item.priceOverridePinUsed,
             },
@@ -378,36 +440,23 @@ export async function createOrder({
           })
 
           // audit.price_override: warn when selling below cost
-          if (product.costPrice != null && item.unitPrice < product.costPrice) {
+          if (product.costPrice != null && effectiveUnitPrice < product.costPrice) {
             emitEvent(db, {
               storeId: actor.storeId,
               type: 'audit.price_override',
               severity: 'warn',
               title: `Bán dưới giá vốn: ${item.productName}`,
-              body: `Sản phẩm ${item.productName} được bán ${item.unitPrice.toLocaleString('vi-VN')}đ, thấp hơn giá vốn ${product.costPrice.toLocaleString('vi-VN')}đ`,
+              body: `Sản phẩm ${item.productName} được bán ${effectiveUnitPrice.toLocaleString('vi-VN')}đ, thấp hơn giá vốn ${product.costPrice.toLocaleString('vi-VN')}đ`,
               context: {
                 orderId: createdId,
                 productName: item.productName,
                 originalPrice: item.originalPrice ?? null,
-                newPrice: item.unitPrice,
+                newPrice: effectiveUnitPrice,
                 costPrice: product.costPrice,
                 userId: actor.userId,
               },
             })
           }
-        }
-
-        let itemSku = product.sku ?? null
-        let itemCostPrice = product.costPrice != null ? Number(product.costPrice) : null
-        let variant = null
-        if (item.variantId) {
-          variant = await loadVariantForUpdate({
-            tx: txDb,
-            productId: item.productId,
-            variantId: item.variantId,
-          })
-          itemSku = variant.sku ?? product.sku ?? null
-          itemCostPrice = variant.costPrice != null ? Number(variant.costPrice) : itemCostPrice
         }
 
         processedItems.push({
@@ -417,12 +466,12 @@ export async function createOrder({
           productName: item.productName,
           variantName: item.variantName ?? null,
           unit: item.unit ?? null,
-          unitPrice: item.unitPrice,
+          unitPrice: effectiveUnitPrice,
           quantity: item.quantity,
           discountType: item.discountType ?? null,
           discountValue: item.discountValue,
           discountAmount: item.discountAmount,
-          lineTotal: item.lineTotal,
+          lineTotal: effectiveLineTotal,
           originalPrice: item.originalPrice ?? null,
           priceOverride: item.priceOverride,
           sku: itemSku,
@@ -433,26 +482,8 @@ export async function createOrder({
         if (product.trackInventory) {
           let deductQty = item.quantity
 
-          // M26: Unit conversion: multiply by conversionFactor & validate productId + storeId
-          if (item.unitConversionId) {
-            const convRows = await tx
-              .select({ conversionFactor: productUnitConversions.conversionFactor })
-              .from(productUnitConversions)
-              .where(
-                and(
-                  eq(productUnitConversions.id, item.unitConversionId),
-                  eq(productUnitConversions.productId, item.productId),
-                  eq(productUnitConversions.storeId, actor.storeId),
-                ),
-              )
-              .limit(1)
-            const conv = convRows[0]
-            if (!conv) {
-              throw new ApiError(
-                'VALIDATION_ERROR',
-                'Đơn vị quy đổi không hợp lệ hoặc không thuộc sản phẩm/cửa hàng này',
-              )
-            }
+          // M26: Unit conversion: multiply by conversionFactor
+          if (conv) {
             deductQty = item.quantity * conv.conversionFactor
           }
 

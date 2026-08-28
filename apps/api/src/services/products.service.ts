@@ -2024,7 +2024,8 @@ export async function searchProductsForPos({
         id: uc.id,
         unit: uc.unit,
         conversionFactor: uc.conversionFactor,
-        sellingPrice: Number(uc.sellingPrice),
+        sellingPrice:
+          uc.sellingPrice && Number(uc.sellingPrice) > 0 ? Number(uc.sellingPrice) : null,
       }
       const list = unitConversionsMap.get(uc.productId) ?? []
       list.push(item)
