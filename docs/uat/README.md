@@ -30,13 +30,13 @@ Dữ liệu thử nghiệm đã được nạp sẵn thông qua kịch bản kh�
 
 Các kịch bản được sắp xếp theo đúng chu trình nghiệp vụ thực tế của một cửa hàng bán lẻ:
 
-1. **[`01-ban-hang-pos.md`](file:///Users/tuanhv/orca/workspaces/kiotviet-lite/t9a-e2e-uat/docs/uat/01-ban-hang-pos.md)**: Mở ca bán hàng, bán thu tiền mặt, chuyển khoản qua mã QR, bán ghi nợ có kiểm tra hạn mức tín dụng.
-2. **[`02-tra-hang.md`](file:///Users/tuanhv/orca/workspaces/kiotviet-lite/t9a-e2e-uat/docs/uat/02-tra-hang.md)**: Tìm kiếm hóa đơn, trả hàng một phần, trả hàng toàn phần, kiểm tra hoàn tiền và hoàn tồn kho.
-3. **[`03-cong-no.md`](file:///Users/tuanhv/orca/workspaces/kiotviet-lite/t9a-e2e-uat/docs/uat/03-cong-no.md)**: Tra cứu sổ nợ khách hàng, lập phiếu thu tiền nợ, điều chỉnh tăng giảm nợ thủ công.
-4. **[`04-nhap-hang-ton-kho.md`](file:///Users/tuanhv/orca/workspaces/kiotviet-lite/t9a-e2e-uat/docs/uat/04-nhap-hang-ton-kho.md)**: Tạo phiếu nhập hàng từ nhà cung cấp, kiểm kê kho thực tế, cân bằng kho và theo dõi cảnh báo tồn kho.
-5. **[`05-bao-cao-cuoi-ngay.md`](file:///Users/tuanhv/orca/workspaces/kiotviet-lite/t9a-e2e-uat/docs/uat/05-bao-cao-cuoi-ngay.md)**: Xem báo cáo doanh thu, lợi nhuận gộp theo mặt hàng, phân tích tuổi nợ khách hàng, xuất dữ liệu ra file bảng tính (CSV/Excel).
-6. **[`06-in-hoa-don.md`](file:///Users/tuanhv/orca/workspaces/kiotviet-lite/t9a-e2e-uat/docs/uat/06-in-hoa-don.md)**: Cấu hình bật/tắt các trường thông tin mẫu in (tên cửa hàng, địa chỉ, ghi chú, mã QR) và kiểm tra mẫu in hóa đơn.
-7. **[`07-ngoai-tuyen.md`](file:///Users/tuanhv/orca/workspaces/kiotviet-lite/t9a-e2e-uat/docs/uat/07-ngoai-tuyen.md)**: Mô phỏng mất mạng, bán hàng trong chế độ ngoại tuyến (offline), kết nối lại mạng và xác thực tự động đồng bộ không trùng đơn.
+1. **[`01-ban-hang-pos.md`](./01-ban-hang-pos.md)**: Mở ca bán hàng, bán thu tiền mặt, chuyển khoản qua mã QR, bán ghi nợ có kiểm tra hạn mức tín dụng.
+2. **[`02-tra-hang.md`](./02-tra-hang.md)**: Tìm kiếm hóa đơn, trả hàng một phần, trả hàng toàn phần, kiểm tra hoàn tiền và hoàn tồn kho.
+3. **[`03-cong-no.md`](./03-cong-no.md)**: Tra cứu sổ nợ khách hàng, lập phiếu thu tiền nợ, điều chỉnh tăng giảm nợ thủ công.
+4. **[`04-nhap-hang-ton-kho.md`](./04-nhap-hang-ton-kho.md)**: Tạo phiếu nhập hàng từ nhà cung cấp, kiểm kê kho thực tế, cân bằng kho và theo dõi cảnh báo tồn kho.
+5. **[`05-bao-cao-cuoi-ngay.md`](./05-bao-cao-cuoi-ngay.md)**: Xem báo cáo doanh thu, lợi nhuận gộp theo mặt hàng, phân tích tuổi nợ khách hàng, xuất dữ liệu ra file bảng tính (CSV/Excel).
+6. **[`06-in-hoa-don.md`](./06-in-hoa-don.md)**: Cấu hình bật/tắt các trường thông tin mẫu in (tên cửa hàng, địa chỉ, ghi chú, mã QR) và kiểm tra mẫu in hóa đơn.
+7. **[`07-ngoai-tuyen.md`](./07-ngoai-tuyen.md)**: Mô phỏng mất mạng, bán hàng trong chế độ ngoại tuyến (offline), kết nối lại mạng và xác thực tự động đồng bộ không trùng đơn.
 
 ---
 

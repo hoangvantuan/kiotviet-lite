@@ -16,35 +16,43 @@ const getClientIp = (c: Context): string => {
   )
 }
 
+const isRateLimitDisabled = () =>
+  process.env.NODE_ENV === 'test' ||
+  process.env.RATE_LIMIT_DISABLED === 'true' ||
+  process.env.E2E_TEST === '1'
+
 /**
- * Rate limit cho endpoint login: 5 requests / phút / IP
+ * Rate limit cho endpoint login: 5 requests / phút / IP (bỏ qua khi chạy kiểm thử E2E/test)
  */
 export const authRateLimit = rateLimiter({
   windowMs: 60_000,
   limit: 5,
   keyGenerator: (c) => getClientIp(c),
+  skip: isRateLimitDisabled,
   message: { error: { code: 'RATE_LIMITED', message: 'Quá nhiều yêu cầu, vui lòng thử lại sau' } },
 })
 
 /**
- * Rate limit cho endpoint register: 3 requests / giờ / IP
+ * Rate limit cho endpoint register: 3 requests / giờ / IP (bỏ qua khi chạy kiểm thử E2E/test)
  */
 export const registerRateLimit = rateLimiter({
   windowMs: 3_600_000,
   limit: 3,
   keyGenerator: (c) => getClientIp(c),
+  skip: isRateLimitDisabled,
   message: {
     error: { code: 'RATE_LIMITED', message: 'Quá nhiều yêu cầu đăng ký, vui lòng thử lại sau' },
   },
 })
 
 /**
- * Rate limit cho endpoint refresh token: 30 requests / phút / IP
+ * Rate limit cho endpoint refresh token: 30 requests / phút / IP (bỏ qua khi chạy kiểm thử E2E/test)
  */
 export const refreshRateLimit = rateLimiter({
   windowMs: 60_000,
   limit: 30,
   keyGenerator: (c) => getClientIp(c),
+  skip: isRateLimitDisabled,
   message: {
     error: {
       code: 'RATE_LIMITED',
