@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, ilike, lte, or, type SQL, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, ilike, isNull, lte, or, type SQL, sql } from 'drizzle-orm'
 
 import {
   type CreateSupplierPaymentInput,
@@ -205,11 +205,17 @@ export async function createSupplierPayment({
     const supplierRows = await tx
       .select()
       .from(suppliers)
-      .where(eq(suppliers.id, input.supplierId))
+      .where(
+        and(
+          eq(suppliers.id, input.supplierId),
+          eq(suppliers.storeId, actor.storeId),
+          isNull(suppliers.deletedAt),
+        ),
+      )
       .for('update')
       .limit(1)
     const supplier = supplierRows[0]
-    if (!supplier || supplier.storeId !== actor.storeId || supplier.deletedAt !== null) {
+    if (!supplier) {
       throw new ApiError('NOT_FOUND', 'Không tìm thấy nhà cung cấp')
     }
 
@@ -251,12 +257,12 @@ export async function createSupplierPayment({
       .set({
         currentDebt: sql`${suppliers.currentDebt} - ${input.amount}`,
       })
-      .where(eq(suppliers.id, input.supplierId))
+      .where(and(eq(suppliers.id, input.supplierId), eq(suppliers.storeId, actor.storeId)))
 
     const actorRows = await tx
       .select({ name: users.name })
       .from(users)
-      .where(eq(users.id, actor.userId))
+      .where(and(eq(users.id, actor.userId), eq(users.storeId, actor.storeId)))
       .limit(1)
 
     await logAction({

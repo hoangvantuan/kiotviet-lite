@@ -9,6 +9,7 @@ import type {
   InventorySlowRow,
 } from '@kiotviet-lite/shared'
 
+import { Pagination } from '@/components/shared/pagination'
 import { Card, CardContent } from '@/components/ui/card'
 import {
   Table,
@@ -30,11 +31,17 @@ function formatVND(n: number) {
 
 export function InventoryReport() {
   const [tab, setTab] = useState<InventoryReportTab>('current')
+  const [page, setPage] = useState<number>(1)
 
-  const { data, isLoading } = useInventoryReport(tab)
+  const { data, isLoading } = useInventoryReport(tab, page, 20)
 
   const handleExport = (format: ExportFormat) => {
     downloadReportExport('inventory', format, { tab })
+  }
+
+  const handleTabChange = (v: string) => {
+    setTab(v as InventoryReportTab)
+    setPage(1)
   }
 
   return (
@@ -44,7 +51,7 @@ export function InventoryReport() {
         <ReportExportButton onExport={handleExport} />
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as InventoryReportTab)}>
+      <Tabs value={tab} onValueChange={handleTabChange}>
         <TabsList>
           <TabsTrigger value="current">Tồn hiện tại</TabsTrigger>
           <TabsTrigger value="reorder">Cần nhập</TabsTrigger>
@@ -152,6 +159,19 @@ export function InventoryReport() {
                 ))}
               </TableBody>
             </Table>
+          )}
+
+          {data && 'pagination' in data && data.pagination && (
+            <div className="p-4">
+              <Pagination
+                page={data.pagination.page}
+                pageSize={data.pagination.pageSize}
+                total={data.pagination.total}
+                totalPages={data.pagination.totalPages}
+                onPageChange={setPage}
+                unitLabel="sản phẩm"
+              />
+            </div>
           )}
         </CardContent>
       </Card>

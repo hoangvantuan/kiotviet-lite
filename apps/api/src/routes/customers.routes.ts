@@ -39,9 +39,8 @@ export function createCustomersRoutes({ db }: CustomersRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
   app.use('*', requireAuth)
-  app.use('*', requirePermission('customers.manage'))
 
-  app.get('/', async (c) => {
+  app.get('/', requirePermission('customers.view'), async (c) => {
     const auth = c.get('auth')
     const query = listCustomersQuerySchema.parse(c.req.query())
     const result = await listCustomers({ db, storeId: auth.storeId, query })
@@ -56,12 +55,15 @@ export function createCustomersRoutes({ db }: CustomersRoutesDeps) {
     })
   })
 
-  app.get('/trashed', async (c) => {
+  app.get('/trashed', requirePermission('customers.manage'), async (c) => {
     const auth = c.get('auth')
     const pageRaw = c.req.query('page')
     const pageSizeRaw = c.req.query('pageSize')
-    const page = pageRaw ? Math.max(1, parseInt(pageRaw, 10)) : 1
-    const pageSize = pageSizeRaw ? Math.min(100, Math.max(1, parseInt(pageSizeRaw, 10))) : 20
+    const pageNum = pageRaw ? Number.parseInt(pageRaw, 10) : 1
+    const pageSizeNum = pageSizeRaw ? Number.parseInt(pageSizeRaw, 10) : 20
+    const page = Number.isInteger(pageNum) && pageNum > 0 ? pageNum : 1
+    const pageSize =
+      Number.isInteger(pageSizeNum) && pageSizeNum > 0 ? Math.min(100, pageSizeNum) : 20
     const result = await listTrashedCustomers({ db, storeId: auth.storeId, page, pageSize })
     return c.json({
       data: result.items,
@@ -74,7 +76,7 @@ export function createCustomersRoutes({ db }: CustomersRoutesDeps) {
     })
   })
 
-  app.post('/quick-create', async (c) => {
+  app.post('/quick-create', requirePermission('customers.view'), async (c) => {
     const auth = c.get('auth')
     const input = await parseJson(c, quickCreateCustomerSchema)
     const data = await quickCreateCustomer({
@@ -86,14 +88,14 @@ export function createCustomersRoutes({ db }: CustomersRoutesDeps) {
     return c.json({ data }, 201)
   })
 
-  app.get('/:id', async (c) => {
+  app.get('/:id', requirePermission('customers.view'), async (c) => {
     const auth = c.get('auth')
     const targetId = uuidParam.parse(c.req.param('id'))
     const data = await getCustomer({ db, storeId: auth.storeId, targetId })
     return c.json({ data })
   })
 
-  app.post('/', async (c) => {
+  app.post('/', requirePermission('customers.manage'), async (c) => {
     const auth = c.get('auth')
     const input = await parseJson(c, createCustomerSchema)
     const data = await createCustomer({
@@ -105,7 +107,7 @@ export function createCustomersRoutes({ db }: CustomersRoutesDeps) {
     return c.json({ data }, 201)
   })
 
-  app.patch('/:id', async (c) => {
+  app.patch('/:id', requirePermission('customers.manage'), async (c) => {
     const auth = c.get('auth')
     const targetId = uuidParam.parse(c.req.param('id'))
     const input = await parseJson(c, updateCustomerSchema)
@@ -119,7 +121,7 @@ export function createCustomersRoutes({ db }: CustomersRoutesDeps) {
     return c.json({ data })
   })
 
-  app.delete('/:id', async (c) => {
+  app.delete('/:id', requirePermission('customers.manage'), async (c) => {
     const auth = c.get('auth')
     const targetId = uuidParam.parse(c.req.param('id'))
     const data = await deleteCustomer({
@@ -131,7 +133,7 @@ export function createCustomersRoutes({ db }: CustomersRoutesDeps) {
     return c.json({ data })
   })
 
-  app.post('/:id/restore', async (c) => {
+  app.post('/:id/restore', requirePermission('customers.manage'), async (c) => {
     const auth = c.get('auth')
     const targetId = uuidParam.parse(c.req.param('id'))
     const data = await restoreCustomer({
@@ -143,7 +145,7 @@ export function createCustomersRoutes({ db }: CustomersRoutesDeps) {
     return c.json({ data })
   })
 
-  app.get('/:id/orders', async (c) => {
+  app.get('/:id/orders', requirePermission('customers.view'), async (c) => {
     const auth = c.get('auth')
     const targetId = uuidParam.parse(c.req.param('id'))
     const query = listCustomerOrdersQuerySchema.parse(c.req.query())
@@ -164,7 +166,7 @@ export function createCustomersRoutes({ db }: CustomersRoutesDeps) {
     })
   })
 
-  app.get('/:id/debts', async (c) => {
+  app.get('/:id/debts', requirePermission('customers.view'), async (c) => {
     const auth = c.get('auth')
     const targetId = uuidParam.parse(c.req.param('id'))
     const data = await getCustomerDebts({
@@ -175,7 +177,7 @@ export function createCustomersRoutes({ db }: CustomersRoutesDeps) {
     return c.json({ data })
   })
 
-  app.get('/:id/stats', async (c) => {
+  app.get('/:id/stats', requirePermission('customers.view'), async (c) => {
     const auth = c.get('auth')
     const targetId = uuidParam.parse(c.req.param('id'))
     const data = await getCustomerStats({

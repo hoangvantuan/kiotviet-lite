@@ -95,8 +95,11 @@ export function createProductsRoutes({ db }: ProductsRoutesDeps) {
     const auth = c.get('auth')
     const pageRaw = c.req.query('page')
     const pageSizeRaw = c.req.query('pageSize')
-    const page = pageRaw ? Math.max(1, parseInt(pageRaw, 10)) : 1
-    const pageSize = pageSizeRaw ? Math.min(100, Math.max(1, parseInt(pageSizeRaw, 10))) : 50
+    const pageNum = pageRaw ? Number.parseInt(pageRaw, 10) : 1
+    const pageSizeNum = pageSizeRaw ? Number.parseInt(pageSizeRaw, 10) : 50
+    const page = Number.isInteger(pageNum) && pageNum > 0 ? pageNum : 1
+    const pageSize =
+      Number.isInteger(pageSizeNum) && pageSizeNum > 0 ? Math.min(100, pageSizeNum) : 50
     const result = await listLowStockProducts({ db, storeId: auth.storeId, page, pageSize })
     return c.json({
       data: result.items,

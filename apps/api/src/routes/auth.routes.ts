@@ -12,7 +12,11 @@ import { clearRefreshCookie, getRefreshCookie, setRefreshCookie } from '../lib/c
 import { ApiError } from '../lib/errors.js'
 import { parseJson } from '../lib/http.js'
 import { errorHandler } from '../middleware/error-handler.js'
-import { authRateLimit, registerRateLimit } from '../middleware/rate-limit.middleware.js'
+import {
+  authRateLimit,
+  refreshRateLimit,
+  registerRateLimit,
+} from '../middleware/rate-limit.middleware.js'
 import {
   loginUser,
   logoutUser,
@@ -59,7 +63,7 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
     return c.json(body)
   })
 
-  app.post('/refresh', async (c) => {
+  app.post('/refresh', refreshRateLimit, async (c) => {
     const token = getRefreshCookie(c)
     if (!token) {
       throw new ApiError('UNAUTHORIZED', 'Thiếu refresh token')

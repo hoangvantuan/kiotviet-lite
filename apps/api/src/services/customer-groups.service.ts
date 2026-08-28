@@ -5,6 +5,7 @@ import {
   type CustomerGroupItem,
   customerGroups,
   customers,
+  priceLists,
   type UpdateCustomerGroupInput,
   type UserRole,
 } from '@kiotviet-lite/shared'
@@ -140,6 +141,27 @@ export async function getCustomerGroup({
   })
 }
 
+async function ensurePriceListBelongsToStore({
+  db,
+  storeId,
+  priceListId,
+}: {
+  db: Db
+  storeId: string
+  priceListId: string
+}): Promise<void> {
+  const pl = await db.query.priceLists.findFirst({
+    where: and(
+      eq(priceLists.id, priceListId),
+      eq(priceLists.storeId, storeId),
+      isNull(priceLists.deletedAt),
+    ),
+  })
+  if (!pl) {
+    throw new ApiError('NOT_FOUND', 'Không tìm thấy bảng giá mặc định')
+  }
+}
+
 export interface CreateCustomerGroupDeps {
   db: Db
   actor: CustomerGroupsActor
@@ -154,6 +176,14 @@ export async function createCustomerGroup({
   meta,
 }: CreateCustomerGroupDeps): Promise<CustomerGroupItem> {
   await ensureNameUnique({ db, storeId: actor.storeId, name: input.name })
+
+  if (input.defaultPriceListId) {
+    await ensurePriceListBelongsToStore({
+      db,
+      storeId: actor.storeId,
+      priceListId: input.defaultPriceListId,
+    })
+  }
 
   return db.transaction(async (tx) => {
     let created: typeof customerGroups.$inferSelect
@@ -221,9 +251,9 @@ export async function updateCustomerGroup({
   meta,
 }: UpdateCustomerGroupDeps): Promise<CustomerGroupItem> {
   const target = await db.query.customerGroups.findFirst({
-    where: eq(customerGroups.id, targetId),
+    where: and(eq(customerGroups.id, targetId), eq(customerGroups.storeId, actor.storeId)),
   })
-  if (!target || target.storeId !== actor.storeId || target.deletedAt !== null) {
+  if (!target || target.deletedAt !== null) {
     throw new ApiError('NOT_FOUND', 'Không tìm thấy nhóm khách hàng')
   }
 
@@ -244,6 +274,13 @@ export async function updateCustomerGroup({
     input.defaultPriceListId !== undefined &&
     input.defaultPriceListId !== target.defaultPriceListId
   ) {
+    if (input.defaultPriceListId !== null) {
+      await ensurePriceListBelongsToStore({
+        db,
+        storeId: actor.storeId,
+        priceListId: input.defaultPriceListId,
+      })
+    }
     updates.defaultPriceListId = input.defaultPriceListId
   }
   if (input.debtLimit !== undefined && input.debtLimit !== target.debtLimit) {
@@ -268,7 +305,7 @@ export async function updateCustomerGroup({
       const [row] = await tx
         .update(customerGroups)
         .set(updates)
-        .where(eq(customerGroups.id, targetId))
+        .where(and(eq(customerGroups.id, targetId), eq(customerGroups.storeId, actor.storeId)))
         .returning()
       if (!row) {
         throw new ApiError('INTERNAL_ERROR', 'Không cập nhật được nhóm khách hàng')
@@ -302,10 +339,11 @@ export async function updateCustomerGroup({
     }
 
     const countRows = await aliveGroupCount(tx as unknown as Db, targetId)
+    const customerCount = countRows[0]?.count ?? 0
 
     return toCustomerGroupItem({
       ...updated,
-      customerCount: countRows[0]?.count ?? 0,
+      customerCount,
     })
   })
 }
@@ -324,9 +362,9 @@ export async function deleteCustomerGroup({
   meta,
 }: DeleteCustomerGroupDeps): Promise<{ ok: true }> {
   const target = await db.query.customerGroups.findFirst({
-    where: eq(customerGroups.id, targetId),
+    where: and(eq(customerGroups.id, targetId), eq(customerGroups.storeId, actor.storeId)),
   })
-  if (!target || target.storeId !== actor.storeId || target.deletedAt !== null) {
+  if (!target || target.deletedAt !== null) {
     throw new ApiError('NOT_FOUND', 'Không tìm thấy nhóm khách hàng')
   }
 
@@ -343,7 +381,7 @@ export async function deleteCustomerGroup({
     const [row] = await tx
       .update(customerGroups)
       .set({ deletedAt: new Date() })
-      .where(eq(customerGroups.id, targetId))
+      .where(and(eq(customerGroups.id, targetId), eq(customerGroups.storeId, actor.storeId)))
       .returning({ id: customerGroups.id })
     if (!row) {
       throw new ApiError('INTERNAL_ERROR', 'Không xoá được nhóm khách hàng')

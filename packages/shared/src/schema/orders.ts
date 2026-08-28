@@ -57,5 +57,18 @@ export const orders = pgTable(
     index('idx_orders_store_status').on(table.storeId, table.status),
     index('idx_orders_store_customer').on(table.storeId, table.customerId),
     index('idx_orders_store_payment_status').on(table.storeId, table.paymentStatus),
+    index('idx_orders_store_status_created').on(table.storeId, table.status, table.createdAt),
+    index('idx_orders_store_cust_status_date').on(
+      table.storeId,
+      table.customerId,
+      table.status,
+      table.createdAt,
+    ),
+    index('idx_orders_store_user_status_date').on(
+      table.storeId,
+      table.userId,
+      table.status,
+      table.createdAt,
+    ),
   ],
 )

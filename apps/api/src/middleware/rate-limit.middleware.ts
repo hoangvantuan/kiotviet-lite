@@ -37,3 +37,18 @@ export const registerRateLimit = rateLimiter({
     error: { code: 'RATE_LIMITED', message: 'Quá nhiều yêu cầu đăng ký, vui lòng thử lại sau' },
   },
 })
+
+/**
+ * Rate limit cho endpoint refresh token: 30 requests / phút / IP
+ */
+export const refreshRateLimit = rateLimiter({
+  windowMs: 60_000,
+  limit: 30,
+  keyGenerator: (c) => getClientIp(c),
+  message: {
+    error: {
+      code: 'RATE_LIMITED',
+      message: 'Quá nhiều yêu cầu làm mới token, vui lòng thử lại sau',
+    },
+  },
+})

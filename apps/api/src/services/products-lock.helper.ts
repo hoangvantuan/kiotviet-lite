@@ -17,11 +17,13 @@ export async function loadProductForUpdate({
   const rows = await tx
     .select()
     .from(products)
-    .where(eq(products.id, productId))
+    .where(
+      and(eq(products.id, productId), eq(products.storeId, storeId), isNull(products.deletedAt)),
+    )
     .for('update')
     .limit(1)
   const target = rows[0]
-  if (!target || target.storeId !== storeId || target.deletedAt !== null) {
+  if (!target) {
     throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm')
   }
   return target
@@ -39,11 +41,17 @@ export async function loadVariantForUpdate({
   const rows = await tx
     .select()
     .from(productVariants)
-    .where(eq(productVariants.id, variantId))
+    .where(
+      and(
+        eq(productVariants.id, variantId),
+        eq(productVariants.productId, productId),
+        isNull(productVariants.deletedAt),
+      ),
+    )
     .for('update')
     .limit(1)
   const v = rows[0]
-  if (!v || v.productId !== productId || v.deletedAt !== null) {
+  if (!v) {
     throw new ApiError('NOT_FOUND', 'Không tìm thấy biến thể')
   }
   return v

@@ -57,10 +57,14 @@ export function useProfitReport(query: ReportDateQuery) {
   })
 }
 
-export function useInventoryReport(tab: InventoryReportTab) {
+export function useInventoryReport(
+  tab: InventoryReportTab,
+  page: number = 1,
+  pageSize: number = 20,
+) {
   return useQuery({
-    queryKey: ['reports', 'inventory', tab],
-    queryFn: async () => (await getInventoryReportApi(tab)).data,
+    queryKey: ['reports', 'inventory', tab, page, pageSize],
+    queryFn: async () => (await getInventoryReportApi(tab, page, pageSize)).data,
   })
 }
 

@@ -182,7 +182,11 @@ export async function updateUser({
   }
 
   return db.transaction(async (tx) => {
-    const [updated] = await tx.update(users).set(updates).where(eq(users.id, targetId)).returning()
+    const [updated] = await tx
+      .update(users)
+      .set(updates)
+      .where(and(eq(users.id, targetId), eq(users.storeId, actor.storeId)))
+      .returning()
 
     if (!updated) {
       throw new ApiError('INTERNAL_ERROR', 'Không cập nhật được nhân viên')
@@ -242,8 +246,10 @@ export async function lockUser({ db, actor, targetId, meta }: LockUserDeps): Pro
     throw new ApiError('BUSINESS_RULE_VIOLATION', 'Không thể tự khoá tài khoản của mình')
   }
 
-  const target = await db.query.users.findFirst({ where: eq(users.id, targetId) })
-  if (!target || target.storeId !== actor.storeId) {
+  const target = await db.query.users.findFirst({
+    where: and(eq(users.id, targetId), eq(users.storeId, actor.storeId)),
+  })
+  if (!target) {
     throw new ApiError('NOT_FOUND', 'Không tìm thấy nhân viên')
   }
 
@@ -256,7 +262,9 @@ export async function lockUser({ db, actor, targetId, meta }: LockUserDeps): Pro
     const [updated] = await tx
       .update(users)
       .set({ isActive: false })
-      .where(and(eq(users.id, targetId), ne(users.id, actor.userId)))
+      .where(
+        and(eq(users.id, targetId), eq(users.storeId, actor.storeId), ne(users.id, actor.userId)),
+      )
       .returning()
 
     if (!updated) {
@@ -291,8 +299,10 @@ export async function unlockUser({
   targetId,
   meta,
 }: LockUserDeps): Promise<UserListItem> {
-  const target = await db.query.users.findFirst({ where: eq(users.id, targetId) })
-  if (!target || target.storeId !== actor.storeId) {
+  const target = await db.query.users.findFirst({
+    where: and(eq(users.id, targetId), eq(users.storeId, actor.storeId)),
+  })
+  if (!target) {
     throw new ApiError('NOT_FOUND', 'Không tìm thấy nhân viên')
   }
 
@@ -300,7 +310,7 @@ export async function unlockUser({
     const [updated] = await tx
       .update(users)
       .set({ isActive: true, failedPinAttempts: 0, pinLockedUntil: null })
-      .where(eq(users.id, targetId))
+      .where(and(eq(users.id, targetId), eq(users.storeId, actor.storeId)))
       .returning()
 
     if (!updated) {

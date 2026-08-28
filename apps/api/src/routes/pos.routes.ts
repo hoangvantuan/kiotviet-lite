@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { createOrderSchema, resolvePricesSchema } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
@@ -39,8 +40,7 @@ export function createPosRoutes({ db }: PosRoutesDeps) {
   // Story 4.5 - Resolve prices (6-tier pricing engine)
   app.post('/resolve-prices', async (c) => {
     const auth = c.get('auth')
-    const body = await c.req.json()
-    const parsed = resolvePricesSchema.parse(body)
+    const parsed = await parseJson(c, resolvePricesSchema)
     const data = await resolvePrices({ db, storeId: auth.storeId, input: parsed })
     return c.json({ data })
   })
@@ -48,8 +48,7 @@ export function createPosRoutes({ db }: PosRoutesDeps) {
   // Story 3.3 - Create order (POST before parameterized routes)
   app.post('/orders', async (c) => {
     const auth = c.get('auth')
-    const body = await c.req.json()
-    const parsed = createOrderSchema.parse(body)
+    const parsed = await parseJson(c, createOrderSchema)
     const meta = getRequestMeta(c)
     const data = await createOrder({
       db,
