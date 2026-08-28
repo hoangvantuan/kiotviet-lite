@@ -60,6 +60,8 @@ jobs:
       PORT: 3000
       VITE_API_URL: http://localhost:3000
       ALLOWED_ORIGINS: http://localhost:5173
+      # Bộ E2E đăng nhập nhiều lần liên tiếp từ cùng một IP, vượt ngưỡng 5 lần/phút
+      RATE_LIMIT_DISABLED: 'true'
     steps:
       - uses: actions/checkout@v4
 
