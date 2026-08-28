@@ -159,6 +159,7 @@ export const customerOrderItemSchema = z.object({
   date: z.string(),
   total: z.number(),
   status: customerOrderStatusSchema,
+  debtLimitExceeded: z.boolean().default(false),
 })
 
 export const customerDebtItemSchema = z.object({

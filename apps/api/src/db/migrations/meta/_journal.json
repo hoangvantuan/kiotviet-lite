@@ -225,6 +225,13 @@
       "when": 1787855678919,
       "tag": "0031_long_human_cannonball",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788000000000,
+      "tag": "0032_order_debt_limit_exceeded",
+      "breakpoints": true
     }
   ]
 }

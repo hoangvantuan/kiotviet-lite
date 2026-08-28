@@ -1,5 +1,6 @@
 import {
   bigint,
+  boolean,
   index,
   pgTable,
   text,
@@ -44,6 +45,7 @@ export const orders = pgTable(
     // NULL trong unique index nên không xung đột).
     clientId: uuid(),
     status: varchar({ length: 16 }).notNull().default('completed'),
+    debtLimitExceeded: boolean().notNull().default(false),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })
       .notNull()
