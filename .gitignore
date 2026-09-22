@@ -12,3 +12,4 @@ coverage
 *.tsbuildinfo
 .gitnexus
 data
+*.xlsx
