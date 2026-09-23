@@ -14,6 +14,7 @@ import {
   products,
   productUnitConversions,
   productVariants,
+  stores,
   type UserRole,
   users,
 } from '@kiotviet-lite/shared'
@@ -348,6 +349,7 @@ export async function createOrder({
       const processedItems: OrderDetailItem[] = []
       let isPriceMismatchAdjusted = false
       let adjustedSubtotal = 0
+      let negativeStockAlertsEnabled: boolean | undefined
 
       for (const item of input.items) {
         const product = await loadProductForUpdate({
@@ -636,21 +638,31 @@ export async function createOrder({
             createdBy: actor.userId,
           })
 
-          // stock.negative: emit when stock goes below 0
+          // Chỉ đọc thiết lập khi cần cảnh báo; phần ghi sổ kho ở trên luôn chạy.
           if (newStock < 0) {
-            emitEvent(db, {
-              storeId: actor.storeId,
-              type: 'stock.negative',
-              severity: 'error',
-              title: `Tồn kho âm: ${item.productName}`,
-              body: `Tồn kho ${item.productName} bị âm (${newStock}) sau ${source === 'offline_sync' ? 'đồng bộ đơn offline' : 'bán hàng'}. Cần nhập thêm hoặc kiểm kho.`,
-              context: {
-                productId: item.productId,
-                productName: item.productName,
-                currentStock: newStock,
-                previousStock: newStock + deductQty,
-              },
-            })
+            if (negativeStockAlertsEnabled === undefined) {
+              const setting = await tx.query.stores.findFirst({
+                where: eq(stores.id, actor.storeId),
+                columns: { negativeStockAlertsEnabled: true },
+              })
+              if (!setting) throw new ApiError('NOT_FOUND', 'Không tìm thấy cửa hàng')
+              negativeStockAlertsEnabled = setting.negativeStockAlertsEnabled
+            }
+            if (negativeStockAlertsEnabled) {
+              emitEvent(db, {
+                storeId: actor.storeId,
+                type: 'stock.negative',
+                severity: 'error',
+                title: `Tồn kho âm: ${item.productName}`,
+                body: `Tồn kho ${item.productName} bị âm (${newStock}) sau ${source === 'offline_sync' ? 'đồng bộ đơn offline' : 'bán hàng'}. Cần nhập thêm hoặc kiểm kho.`,
+                context: {
+                  productId: item.productId,
+                  productName: item.productName,
+                  currentStock: newStock,
+                  previousStock: newStock + deductQty,
+                },
+              })
+            }
           }
         }
       }
