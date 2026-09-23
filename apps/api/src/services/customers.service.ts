@@ -44,6 +44,7 @@ import { escapeLikePattern } from '../lib/strings.js'
 import { parseDateRangeBoundary } from '../lib/timezone.js'
 import { diffObjects, logAction, type RequestMeta } from './audit.service.js'
 import { lockCodeStore, nextEntityCode } from './entity-codes.service.js'
+import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
 export interface CustomersActor {
   userId: string
@@ -349,14 +350,17 @@ export interface CreateCustomerDeps {
   actor: CustomersActor
   input: CreateCustomerInput
   meta?: RequestMeta
+  transaction?: ServiceTransaction
 }
 
 export async function createCustomer({
-  db,
+  db: rootDb,
   actor,
   input,
   meta,
+  transaction,
 }: CreateCustomerDeps): Promise<CustomerDetail> {
+  const db = serviceDb(rootDb, transaction)
   if (input.phone) {
     await ensurePhoneUnique({ db, storeId: actor.storeId, phone: input.phone })
   }
@@ -484,15 +488,18 @@ export interface UpdateCustomerDeps {
   targetId: string
   input: UpdateCustomerInput
   meta?: RequestMeta
+  transaction?: ServiceTransaction
 }
 
 export async function updateCustomer({
-  db,
+  db: rootDb,
   actor,
   targetId,
   input,
   meta,
+  transaction,
 }: UpdateCustomerDeps): Promise<CustomerDetail> {
+  const db = serviceDb(rootDb, transaction)
   const target = await db.query.customers.findFirst({
     where: eq(customers.id, targetId),
   })

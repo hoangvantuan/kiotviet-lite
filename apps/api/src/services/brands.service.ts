@@ -15,6 +15,7 @@ import { ApiError } from '../lib/errors.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
+import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
 const NAME_CONSTRAINT = 'uniq_brands_store_name_alive'
 const NAME_CONFLICT = 'Tên thương hiệu đã được sử dụng'
@@ -117,11 +118,16 @@ export async function listBrands({
 }
 
 export async function createBrand({
-  db,
+  db: rootDb,
   actor,
   input,
   meta,
-}: BrandMutationDeps & { input: CreateBrandInput }): Promise<BrandItem> {
+  transaction,
+}: BrandMutationDeps & {
+  input: CreateBrandInput
+  transaction?: ServiceTransaction
+}): Promise<BrandItem> {
+  const db = serviceDb(rootDb, transaction)
   await ensureNameAvailable(db, actor.storeId, input.name)
   return db.transaction(async (tx) => {
     let row: typeof brands.$inferSelect
@@ -152,12 +158,17 @@ export async function createBrand({
 }
 
 export async function updateBrand({
-  db,
+  db: rootDb,
   actor,
   targetId,
   input,
   meta,
-}: BrandTargetDeps & { input: UpdateBrandInput }): Promise<BrandItem> {
+  transaction,
+}: BrandTargetDeps & {
+  input: UpdateBrandInput
+  transaction?: ServiceTransaction
+}): Promise<BrandItem> {
+  const db = serviceDb(rootDb, transaction)
   const target = await db.query.brands.findFirst({
     where: and(
       eq(brands.id, targetId),

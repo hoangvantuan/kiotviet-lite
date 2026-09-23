@@ -17,6 +17,7 @@ import { isFkViolation, isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { diffObjects, logAction, type RequestMeta } from './audit.service.js'
 import { lockCodeStore, nextEntityCode } from './entity-codes.service.js'
+import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
 // Convert Date → ISO string để JSON serialize an toàn cho audit log.
 // Drizzle trả Date objects cho timestamp columns; nếu mở rộng audit fields
@@ -318,14 +319,17 @@ export interface CreateSupplierDeps {
   actor: SuppliersActor
   input: CreateSupplierInput
   meta?: RequestMeta
+  transaction?: ServiceTransaction
 }
 
 export async function createSupplier({
-  db,
+  db: rootDb,
   actor,
   input,
   meta,
+  transaction,
 }: CreateSupplierDeps): Promise<SupplierDetail> {
+  const db = serviceDb(rootDb, transaction)
   const phone = input.phone ?? null
 
   return db.transaction(async (tx) => {
@@ -434,15 +438,18 @@ export interface UpdateSupplierDeps {
   targetId: string
   input: UpdateSupplierInput
   meta?: RequestMeta
+  transaction?: ServiceTransaction
 }
 
 export async function updateSupplier({
-  db,
+  db: rootDb,
   actor,
   targetId,
   input,
   meta,
+  transaction,
 }: UpdateSupplierDeps): Promise<SupplierDetail> {
+  const db = serviceDb(rootDb, transaction)
   const target = await db.query.suppliers.findFirst({
     where: eq(suppliers.id, targetId),
   })
