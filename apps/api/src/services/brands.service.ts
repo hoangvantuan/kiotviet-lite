@@ -5,6 +5,7 @@ import {
   brands,
   type CreateBrandInput,
   type ListBrandsQuery,
+  products,
   type UpdateBrandInput,
   type UserRole,
 } from '@kiotviet-lite/shared'
@@ -205,6 +206,16 @@ export async function deleteBrand({
   meta,
 }: BrandTargetDeps): Promise<{ ok: true }> {
   return db.transaction(async (tx) => {
+    const productsUsingBrand = await tx
+      .select({ id: products.id })
+      .from(products)
+      .where(and(eq(products.brandId, targetId), isNull(products.deletedAt)))
+      .limit(1)
+
+    if (productsUsingBrand.length > 0) {
+      throw new ApiError('BUSINESS_RULE_VIOLATION', 'Không thể xoá thương hiệu đang có sản phẩm')
+    }
+
     const [row] = await tx
       .update(brands)
       .set({ deletedAt: new Date() })

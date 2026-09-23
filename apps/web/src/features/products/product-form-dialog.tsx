@@ -41,6 +41,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import { asFormSetError, handleApiError } from '@/lib/api-error'
 import { showError, showSuccess } from '@/lib/toast'
 
@@ -77,6 +78,7 @@ interface ProductFormDialogProps {
   mode: Mode
   product?: ProductDetail
   categories: CategoryItem[]
+  brands: { id: string; name: string }[]
 }
 
 export function ProductFormDialog(props: ProductFormDialogProps) {
@@ -92,9 +94,12 @@ interface BasicFormShape {
   sku: string
   barcode: string
   categoryId: string | null
+  brandId: string | null
   sellingPrice: number
   costPrice: number | null
   unit: string
+  weight: number | null
+  description: string | null
   imageUrl: string
   status: 'active' | 'inactive'
   trackInventory: boolean
@@ -109,9 +114,12 @@ const createDefaults: CreateFormShape = {
   sku: '',
   barcode: '',
   categoryId: null,
+  brandId: null,
   sellingPrice: 0,
   costPrice: null,
   unit: 'Cái',
+  weight: null,
+  description: null,
   imageUrl: '',
   status: 'active',
   trackInventory: false,
@@ -119,7 +127,7 @@ const createDefaults: CreateFormShape = {
   initialStock: 0,
 }
 
-function CreateDialog({ open, onOpenChange, categories }: ProductFormDialogProps) {
+function CreateDialog({ open, onOpenChange, categories, brands }: ProductFormDialogProps) {
   const mutation = useCreateProductMutation()
   const form = useForm<CreateFormShape>({
     resolver: zodResolver(createProductSchema) as never,
@@ -187,6 +195,10 @@ function CreateDialog({ open, onOpenChange, categories }: ProductFormDialogProps
       }
     }
     if (values.categoryId) payload.categoryId = values.categoryId
+    if (values.brandId) payload.brandId = values.brandId
+    if (values.weight !== null && values.weight !== undefined) payload.weight = values.weight
+    const descRaw = values.description || null
+    if (descRaw) payload.description = descRaw
     const imgTrim = values.imageUrl.trim()
     if (imgTrim) payload.imageUrl = imgTrim
 
@@ -230,6 +242,7 @@ function CreateDialog({ open, onOpenChange, categories }: ProductFormDialogProps
           <BasicSection<CreateFormShape>
             form={form}
             categories={categories}
+            brands={brands}
             hideBarcode={hasVariants}
           />
           {!hasVariants && <PriceSection<CreateFormShape> form={form} />}
@@ -327,6 +340,7 @@ function EditDialog({
   onOpenChange,
   product,
   categories,
+  brands,
 }: ProductFormDialogProps & { product: ProductDetail }) {
   const mutation = useUpdateProductMutation()
   const initial: EditFormShape = useMemo(
@@ -335,9 +349,12 @@ function EditDialog({
       sku: product.sku,
       barcode: product.barcode ?? '',
       categoryId: product.categoryId,
+      brandId: product.brandId,
       sellingPrice: product.sellingPrice,
       costPrice: product.costPrice,
       unit: product.unit,
+      weight: product.weight,
+      description: product.description,
       imageUrl: product.imageUrl ?? '',
       status: product.status,
       trackInventory: product.trackInventory,
@@ -410,7 +427,11 @@ function EditDialog({
       if (values.costPrice !== product.costPrice) payload.costPrice = values.costPrice
     }
     if (values.categoryId !== product.categoryId) payload.categoryId = values.categoryId
+    if (values.brandId !== product.brandId) payload.brandId = values.brandId
     if (values.unit !== product.unit) payload.unit = values.unit
+    if (values.weight !== product.weight) payload.weight = values.weight
+    const descRaw = values.description || null
+    if (descRaw !== product.description) payload.description = descRaw
     const newImg = values.imageUrl.trim() || null
     if (newImg !== product.imageUrl) payload.imageUrl = newImg
     if (values.status !== product.status) payload.status = values.status
@@ -499,6 +520,7 @@ function EditDialog({
           <BasicSection<EditFormShape>
             form={form}
             categories={categories}
+            brands={brands}
             hideBarcode={hasVariants}
           />
           {!hasVariants && <PriceSection<EditFormShape> form={form} />}
@@ -634,10 +656,12 @@ function getError<T extends FieldValues>(
 function BasicSection<T extends FieldValues & ProductFormFields>({
   form,
   categories,
+  brands,
   hideBarcode,
 }: {
   form: UseFormReturn<T>
   categories: CategoryItem[]
+  brands: { id: string; name: string }[]
   hideBarcode?: boolean
 }) {
   const tree = buildCategoryTree(categories)
@@ -746,6 +770,53 @@ function BasicSection<T extends FieldValues & ProductFormFields>({
             placeholder="VD: Cái, Ly, Hộp"
             maxLength={32}
             {...register('unit' as Path<ProductFormFields>)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="p-brand">Thương hiệu</Label>
+          <Select
+            value={(watch('brandId') as string | null) ?? NO_CATEGORY}
+            onValueChange={(v) =>
+              setValue('brandId', v === NO_CATEGORY ? null : v, {
+                shouldValidate: true,
+                shouldDirty: true,
+              })
+            }
+          >
+            <SelectTrigger id="p-brand">
+              <SelectValue placeholder="Chọn thương hiệu" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_CATEGORY}>Không có</SelectItem>
+              {brands.map((b) => (
+                <SelectItem key={b.id} value={b.id}>
+                  {b.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="p-weight">Khối lượng (gram)</Label>
+          <Input
+            id="p-weight"
+            type="number"
+            min={0}
+            step={1}
+            placeholder="VD: 500"
+            {...register('weight' as Path<ProductFormFields>, {
+              setValueAs: (v) => (v === '' || Number.isNaN(Number(v)) ? null : Number(v)),
+            })}
+          />
+        </div>
+        <div className="space-y-1 md:col-span-2">
+          <Label htmlFor="p-desc">Mô tả</Label>
+          <Textarea
+            id="p-desc"
+            placeholder="Mô tả sản phẩm"
+            className="resize-none"
+            rows={3}
+            {...register('description' as Path<ProductFormFields>)}
           />
         </div>
       </div>
