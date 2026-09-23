@@ -10,15 +10,17 @@ import {
   type UseFormReturn,
 } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 
 import {
   type CategoryItem,
   type CreateProductInput,
   createProductSchema,
+  productBarcodeSchema,
   type ProductDetail,
+  productSkuSchema,
   type UnitConversionInput,
   type UpdateProductInput,
-  updateProductSchema,
 } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
@@ -63,6 +65,12 @@ import {
 } from './variants-utils'
 
 const NO_CATEGORY = '__NONE__'
+// Form inputs use empty strings for optional fields; API payloads use null or omission.
+const productFormSchema = createProductSchema.extend({
+  sku: z.union([z.literal(''), productSkuSchema]),
+  barcode: z.union([z.literal(''), productBarcodeSchema]),
+  imageUrl: z.union([z.literal(''), z.string().url('URL ảnh không hợp lệ')]),
+})
 
 const emptyVariantsForm: VariantsForm = {
   attribute1: null,
@@ -130,7 +138,7 @@ const createDefaults: CreateFormShape = {
 function CreateDialog({ open, onOpenChange, categories, brands }: ProductFormDialogProps) {
   const mutation = useCreateProductMutation()
   const form = useForm<CreateFormShape>({
-    resolver: zodResolver(createProductSchema) as never,
+    resolver: zodResolver(productFormSchema) as never,
     mode: 'onTouched',
     defaultValues: createDefaults,
   })
@@ -363,7 +371,7 @@ function EditDialog({
     [product],
   )
   const form = useForm<EditFormShape>({
-    resolver: zodResolver(updateProductSchema) as never,
+    resolver: zodResolver(productFormSchema) as never,
     mode: 'onTouched',
     defaultValues: initial,
   })
