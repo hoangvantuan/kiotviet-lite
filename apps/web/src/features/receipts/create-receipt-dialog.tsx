@@ -29,6 +29,7 @@ import { computeFifoAllocation } from './utils'
 interface SelectedCustomer {
   id: string
   name: string
+  code: string
   phone: string | null
   currentDebt: number
 }
@@ -178,6 +179,7 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
               <div className="rounded-md border bg-muted/30 p-3 flex items-start justify-between gap-2">
                 <div>
                   <p className="font-medium">{selectedCustomer.name}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{selectedCustomer.code}</p>
                   {selectedCustomer.phone && (
                     <p className="text-xs text-muted-foreground font-mono">
                       {selectedCustomer.phone}
@@ -203,7 +205,7 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
                   <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                   <Input
                     className="pl-8"
-                    placeholder="Tìm theo tên hoặc số điện thoại"
+                    placeholder="Tìm theo tên, mã hoặc số điện thoại"
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                   />
@@ -225,6 +227,7 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
                           setSelectedCustomer({
                             id: c.id,
                             name: c.name,
+                            code: c.code,
                             phone: c.phone,
                             currentDebt: c.currentDebt,
                           })
@@ -232,6 +235,7 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
                       >
                         <div className="min-w-0">
                           <p className="font-medium truncate">{c.name}</p>
+                          <p className="text-xs text-muted-foreground font-mono">{c.code}</p>
                           {c.phone && (
                             <p className="text-xs text-muted-foreground font-mono">{c.phone}</p>
                           )}
