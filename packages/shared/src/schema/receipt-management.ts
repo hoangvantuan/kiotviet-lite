@@ -73,7 +73,7 @@ export const openDebtItemSchema = z.object({
 export const customerOpenDebtsResponseSchema = z.object({
   customerId: z.string().uuid(),
   customerName: z.string(),
-  customerPhone: z.string(),
+  customerPhone: z.string().nullable(),
   totalRemaining: z.number().int(),
   items: z.array(openDebtItemSchema),
 })

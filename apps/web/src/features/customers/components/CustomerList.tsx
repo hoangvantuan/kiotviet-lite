@@ -1,6 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { AlertTriangle, Archive, Pencil, Plus, RotateCcw, SearchX, Trash2, Users } from 'lucide-react'
+import {
+  AlertTriangle,
+  Archive,
+  Pencil,
+  Plus,
+  RotateCcw,
+  SearchX,
+  Trash2,
+  Users,
+} from 'lucide-react'
 
 import type { CustomerListItem, ListCustomersQuery } from '@kiotviet-lite/shared'
 
@@ -268,7 +277,7 @@ export function CustomerList() {
                       {customer.name}
                     </Link>
                   </TableCell>
-                  <TableCell className="font-mono text-sm">{customer.phone}</TableCell>
+                  <TableCell className="font-mono text-sm">{customer.phone ?? '—'}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {customer.email ?? '—'}
                   </TableCell>
@@ -451,7 +460,7 @@ function TrashedCustomersSheet({ open, onOpenChange }: TrashedCustomersSheetProp
               <div key={c.id} className="flex items-center justify-between rounded-md border p-3">
                 <div>
                   <p className="font-medium">{c.name}</p>
-                  <p className="text-sm text-muted-foreground">{c.phone}</p>
+                  <p className="text-sm text-muted-foreground">{c.phone ?? '—'}</p>
                 </div>
                 <Button
                   size="sm"

@@ -184,7 +184,7 @@ interface OpenDebtsResp {
   data: {
     customerId: string
     customerName: string
-    customerPhone: string
+    customerPhone: string | null
     totalRemaining: number
     items: Array<{
       id: string
@@ -767,6 +767,22 @@ describe('GET /receipts/customer-debts/:customerId (listCustomerOpenDebts)', () 
     expect(r.body.data.items[1]?.orderCode).toBe('ORD-B')
     expect(r.body.data.items[2]?.orderCode).toBe('ORD-C')
     expect(r.body.data.customerName).toBe('KH Có Nợ')
+  })
+  it('trả khách hàng còn nợ không có số điện thoại', async () => {
+    await env.base.db
+      .update(customers)
+      .set({ phone: null })
+      .where(eq(customers.id, env.customerWithDebtId))
+    const r = await jsonReq<OpenDebtsResp>(
+      env,
+      'GET',
+      `/customer-debts/${env.customerWithDebtId}`,
+      undefined,
+      env.base.owner.authHeader,
+    )
+    expect(r.status).toBe(200)
+    expect(r.body.data.customerPhone).toBeNull()
+    expect(r.body.data.totalRemaining).toBe(450_000)
   })
 
   it('Customer không có nợ → totalRemaining=0, items=[]', async () => {

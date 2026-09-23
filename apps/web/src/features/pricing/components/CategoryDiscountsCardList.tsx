@@ -43,7 +43,9 @@ export function CategoryDiscountsCardList({ items, onEdit, onDelete }: Props) {
                 {p.customerName ? (
                   <span>
                     KH: <span className="font-medium">{p.customerName}</span>
-                    <span className="ml-1 text-xs text-muted-foreground">{p.customerPhone}</span>
+                    {p.customerPhone && (
+                      <span className="ml-1 text-xs text-muted-foreground">{p.customerPhone}</span>
+                    )}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1">

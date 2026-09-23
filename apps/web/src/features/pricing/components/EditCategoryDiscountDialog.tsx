@@ -152,7 +152,7 @@ export function EditCategoryDiscountDialog({ open, onOpenChange, categoryDiscoun
   if (!categoryDiscount) return null
 
   const targetLabel = categoryDiscount.customerName
-    ? `${categoryDiscount.customerName} • ${categoryDiscount.customerPhone ?? ''}`
+    ? `${categoryDiscount.customerName}${categoryDiscount.customerPhone ? ` • ${categoryDiscount.customerPhone}` : ''}`
     : (categoryDiscount.customerGroupName ?? '—')
 
   return (

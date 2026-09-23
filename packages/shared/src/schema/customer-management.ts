@@ -12,7 +12,7 @@ export const customerNameSchema = z
   .regex(NAME_REGEX, 'Tên khách hàng chứa ký tự không hợp lệ')
 
 export const customerPhoneSchema = z
-  .string({ required_error: 'Vui lòng nhập số điện thoại' })
+  .string()
   .trim()
   .min(8, 'Số điện thoại tối thiểu 8 ký tự')
   .max(15, 'Số điện thoại tối đa 15 ký tự')
@@ -79,7 +79,7 @@ export const customerGroupItemSchema = z.object({
 
 export const createCustomerSchema = z.object({
   name: customerNameSchema,
-  phone: customerPhoneSchema,
+  phone: customerPhoneSchema.nullable().optional(),
   email: customerEmailSchema.nullable().optional(),
   address: z.string().trim().max(500, 'Địa chỉ tối đa 500 ký tự').nullable().optional(),
   taxId: customerTaxIdSchema.nullable().optional(),
@@ -91,7 +91,7 @@ export const createCustomerSchema = z.object({
 export const updateCustomerSchema = z
   .object({
     name: customerNameSchema.optional(),
-    phone: customerPhoneSchema.optional(),
+    phone: customerPhoneSchema.nullable().optional(),
     email: customerEmailSchema.nullable().optional(),
     address: z.string().trim().max(500).nullable().optional(),
     taxId: customerTaxIdSchema.nullable().optional(),
@@ -105,7 +105,7 @@ export const updateCustomerSchema = z
 
 export const quickCreateCustomerSchema = z.object({
   name: customerNameSchema,
-  phone: customerPhoneSchema,
+  phone: customerPhoneSchema.nullable().optional(),
 })
 
 export const listCustomersQuerySchema = z.object({
@@ -119,7 +119,7 @@ export const listCustomersQuerySchema = z.object({
 export const customerListItemSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
-  phone: z.string(),
+  phone: z.string().nullable(),
   email: z.string().nullable(),
   address: z.string().nullable(),
   taxId: z.string().nullable(),

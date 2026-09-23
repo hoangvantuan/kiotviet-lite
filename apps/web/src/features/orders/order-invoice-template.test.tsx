@@ -147,6 +147,18 @@ describe('OrderInvoiceThermal template', () => {
     expect(html).toContain('Ghi chú: Giao hàng buổi sáng')
     expect(html).toContain('Cảm ơn và hẹn gặp lại!')
   })
+  it('in khách hàng không có số điện thoại mà không thêm dòng SĐT', () => {
+    const html = renderToStaticMarkup(
+      <OrderInvoiceThermal
+        order={{ ...mockOrder, customerPhone: null }}
+        store={mockStore}
+        printSettings={fullPrintSettings}
+      />,
+    )
+    expect(html).toContain('KH: Nguyễn Văn A')
+    expect(html).not.toContain('SĐT: 0987654321')
+    expect(html).not.toContain('SĐT: null')
+  })
 
   it('ẩn các trường khi cờ tắt', () => {
     const html = renderToStaticMarkup(

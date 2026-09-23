@@ -90,6 +90,10 @@ describe('createCustomerSchema', () => {
       createCustomerSchema.safeParse({ name: 'Nguyễn Văn A', phone: '0901234567' }).success,
     ).toBe(true)
   })
+  it('chấp nhận khách hàng chỉ có tên hoặc số điện thoại null', () => {
+    expect(createCustomerSchema.parse({ name: 'Khách quen' }).phone).toBeUndefined()
+    expect(createCustomerSchema.parse({ name: 'Khách quen', phone: null }).phone).toBeNull()
+  })
 
   it('chấp nhận đủ field', () => {
     const r = createCustomerSchema.safeParse({
@@ -221,6 +225,9 @@ describe('updateCustomerSchema', () => {
   it('chấp nhận groupId null (rời nhóm)', () => {
     expect(updateCustomerSchema.safeParse({ groupId: null }).success).toBe(true)
   })
+  it('cho phép xóa số điện thoại bằng null', () => {
+    expect(updateCustomerSchema.parse({ phone: null }).phone).toBeNull()
+  })
 
   it('từ chối object rỗng', () => {
     expect(updateCustomerSchema.safeParse({}).success).toBe(false)
@@ -234,8 +241,8 @@ describe('quickCreateCustomerSchema', () => {
     )
   })
 
-  it('từ chối thiếu phone', () => {
-    expect(quickCreateCustomerSchema.safeParse({ name: 'A' }).success).toBe(false)
+  it('chấp nhận chỉ tên để tạo nhanh khách hàng', () => {
+    expect(quickCreateCustomerSchema.parse({ name: 'A' }).phone).toBeUndefined()
   })
 
   it('từ chối thiếu name', () => {

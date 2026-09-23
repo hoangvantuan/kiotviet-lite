@@ -20,7 +20,7 @@ interface CustomerResponse {
   id: string
   storeId: string
   name: string
-  phone: string
+  phone: string | null
 }
 
 interface ApiError {
@@ -100,6 +100,58 @@ describe('customers HTTP routes', () => {
     )
     expect(read.status).toBe(200)
     expect(read.body.data.phone).toBe('0912345678')
+  })
+  it('lưu nhiều khách không có số và cho phép xoá số khi sửa', async () => {
+    const first = await request<{ data: CustomerResponse }>(
+      env,
+      'POST',
+      '/',
+      { name: 'Khách hàng A' },
+      env.owner.authHeader,
+    )
+    const second = await request<{ data: CustomerResponse }>(
+      env,
+      'POST',
+      '/',
+      { name: 'Khách hàng B', phone: null },
+      env.owner.authHeader,
+    )
+    expect(first.status).toBe(201)
+    expect(second.status).toBe(201)
+    expect(first.body.data.phone).toBeNull()
+    expect(second.body.data.phone).toBeNull()
+
+    const withPhone = await create(env, 'Khách hàng C', '0912345678')
+    const cleared = await request<{ data: CustomerResponse }>(
+      env,
+      'PATCH',
+      `/${withPhone.body.data.id}`,
+      { phone: null },
+      env.owner.authHeader,
+    )
+    expect(cleared.status).toBe(200)
+    expect(cleared.body.data.phone).toBeNull()
+    const renamed = await request<{ data: CustomerResponse }>(
+      env,
+      'PATCH',
+      `/${first.body.data.id}`,
+      { name: 'Tên mới' },
+      env.owner.authHeader,
+    )
+    expect(renamed.status).toBe(200)
+    expect(renamed.body.data.phone).toBeNull()
+  })
+
+  it('nhân viên tạo nhanh khách hàng chỉ với tên', async () => {
+    const result = await request<{ data: CustomerResponse }>(
+      env,
+      'POST',
+      '/quick-create',
+      { name: 'Khách tại quầy' },
+      env.staff.authHeader,
+    )
+    expect(result.status).toBe(201)
+    expect(result.body.data).toMatchObject({ name: 'Khách tại quầy', phone: null })
   })
 
   it('từ chối tạo khách hàng trùng số điện thoại trong cùng cửa hàng', async () => {

@@ -124,10 +124,13 @@ export function CustomerSearchCombobox() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{c.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {c.phone}
-                    {c.groupName && ` · ${c.groupName}`}
-                  </p>
+                  {(c.phone || c.groupName) && (
+                    <p className="truncate text-xs text-muted-foreground">
+                      {c.phone}
+                      {c.phone && c.groupName && ' · '}
+                      {c.groupName}
+                    </p>
+                  )}
                 </div>
               </button>
             ))}
