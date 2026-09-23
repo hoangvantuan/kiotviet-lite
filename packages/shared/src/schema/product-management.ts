@@ -2,28 +2,42 @@ import { z } from 'zod'
 
 import { unitConversionInputSchema, unitConversionItemSchema } from './unit-conversions.js'
 
-const NAME_REGEX = /^[\p{L}\p{N}\s\-_&()'./,]+$/u
-const SKU_REGEX = /^[A-Za-z0-9_\-./]+$/
+const NAME_REGEX = /^[\p{L}\p{N}\p{Zs}\-_&()'./,+*:%=;#?–]+$/u
+const SKU_REGEX = /^[\p{L}\p{M}\p{N}\p{Zs}_\-./+*,@=]+$/u
 const BARCODE_REGEX = /^[A-Za-z0-9]+$/
 const ATTR_NAME_REGEX = /^[\p{L}\p{N}\s\-_/]+$/u
 const ATTR_VALUE_REGEX = /^[\p{L}\p{N}\s\-_/.]+$/u
+// Check raw input before trimming, so trailing newlines and other controls cannot disappear.
+const NO_CONTROLS_REGEX = /^[^\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*$/u
 
 export const productStatusSchema = z.enum(['active', 'inactive'])
 export type ProductStatus = z.infer<typeof productStatusSchema>
 
 export const productNameSchema = z
   .string({ required_error: 'Vui lòng nhập tên sản phẩm' })
-  .trim()
-  .min(1, 'Vui lòng nhập tên sản phẩm')
-  .max(255, 'Tên sản phẩm tối đa 255 ký tự')
-  .regex(NAME_REGEX, 'Tên sản phẩm chứa ký tự không hợp lệ')
+  .regex(NO_CONTROLS_REGEX, 'Tên sản phẩm chứa ký tự không hợp lệ')
+  .transform((value) => value.trim().replace(/[\p{Zs}]+/gu, ' '))
+  .pipe(
+    z
+      .string()
+      .min(1, 'Vui lòng nhập tên sản phẩm')
+      .max(255, 'Tên sản phẩm tối đa 255 ký tự')
+      .regex(NAME_REGEX, 'Tên sản phẩm chứa ký tự không hợp lệ')
+      .refine((value) => !value.startsWith('='), 'Tên sản phẩm không được bắt đầu bằng dấu ='),
+  )
 
 export const productSkuSchema = z
   .string()
-  .trim()
-  .min(1, 'Mã SKU không được trống')
-  .max(64, 'SKU tối đa 64 ký tự')
-  .regex(SKU_REGEX, 'SKU chỉ chấp nhận chữ, số và - _ . /')
+  .regex(NO_CONTROLS_REGEX, 'SKU chứa ký tự không hợp lệ')
+  .transform((value) => value.trim().replace(/[\p{Zs}]+/gu, ' '))
+  .pipe(
+    z
+      .string()
+      .min(1, 'Mã SKU không được trống')
+      .max(64, 'SKU tối đa 64 ký tự')
+      .regex(SKU_REGEX, 'SKU chứa ký tự không hợp lệ')
+      .refine((value) => !value.startsWith('='), 'SKU không được bắt đầu bằng dấu ='),
+  )
 
 export const productBarcodeSchema = z
   .string()
