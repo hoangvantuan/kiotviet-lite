@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { unitConversionInputSchema, unitConversionItemSchema } from './unit-conversions.js'
 
 const NAME_REGEX = /^[\p{L}\p{N}\p{Zs}\-_&()'./,+*:%=;#?–]+$/u
-const SKU_REGEX = /^[\p{L}\p{M}\p{N}\p{Zs}_\-./+*,@=]+$/u
+const SKU_REGEX = /^[\p{L}\p{M}0-9\p{Zs}_\-./+*,@=]+$/u
 const BARCODE_REGEX = /^[A-Za-z0-9]+$/
 const ATTR_NAME_REGEX = /^[\p{L}\p{N}\s\-_/]+$/u
 const ATTR_VALUE_REGEX = /^[\p{L}\p{N}\s\-_/.]+$/u
@@ -28,15 +28,15 @@ export const productNameSchema = z
 
 export const productSkuSchema = z
   .string()
-  .regex(NO_CONTROLS_REGEX, 'SKU chứa ký tự không hợp lệ')
+  .regex(NO_CONTROLS_REGEX, 'Mã hàng chứa ký tự không hợp lệ')
   .transform((value) => value.trim().replace(/[\p{Zs}]+/gu, ' '))
   .pipe(
     z
       .string()
-      .min(1, 'Mã SKU không được trống')
-      .max(64, 'SKU tối đa 64 ký tự')
-      .regex(SKU_REGEX, 'SKU chứa ký tự không hợp lệ')
-      .refine((value) => !value.startsWith('='), 'SKU không được bắt đầu bằng dấu ='),
+      .min(1, 'Mã hàng không được trống')
+      .max(64, 'Mã hàng tối đa 64 ký tự')
+      .regex(SKU_REGEX, 'Mã hàng chứa ký tự không hợp lệ')
+      .refine((value) => !value.startsWith('='), 'Mã hàng không được bắt đầu bằng dấu ='),
   )
 
 export const productBarcodeSchema = z
