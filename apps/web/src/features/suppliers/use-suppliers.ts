@@ -93,7 +93,6 @@ export function useSupplierDebtAdjustments(supplierId: string | undefined, page 
     queryKey: [...SUPPLIERS_KEY, 'adjustments', supplierId, page],
     queryFn: () => listSupplierDebtAdjustmentsApi(supplierId as string, page),
     enabled: Boolean(supplierId),
-    placeholderData: keepPreviousData,
   })
 }
 

@@ -4,7 +4,8 @@
 - Ngày: 2026-09-22
 - Phạm vi: `packages/shared/src/schema/debts.ts`, `apps/api/src/services/customers.service.ts`,
   `apps/api/src/services/receipts.service.ts`, `apps/api/src/services/reports.service.ts`,
-  `apps/api/src/services/supplier-payments.service.ts`
+  `apps/api/src/services/supplier-payments.service.ts`,
+  `apps/api/src/services/supplier-debt-adjustments.service.ts`
 
 ## Bối cảnh
 
@@ -59,3 +60,7 @@ với thực tế.
   sẽ báo còn tiền để thu mà không tìm ra khoản nào để trừ, hoặc ngược lại.
 - Ngày phát sinh gõ tay là số liệu do người nhập chịu trách nhiệm. Sai ngày thì báo cáo
   tuổi nợ sai theo, hệ thống không có cách nào tự phát hiện.
+- Phía nhà cung cấp hiện chưa có bảng khoản nợ để phân bổ: nợ đầu kỳ là một bản ghi
+  điều chỉnh có loại `opening` và ngày phát sinh, đồng thời cập nhật tổng công nợ trên
+  hồ sơ nhà cung cấp. Phiếu chi sau đó trừ trực tiếp vào tổng này như trước; không có
+  phân bổ FIFO hoặc báo cáo tuổi nợ nhà cung cấp trong phạm vi quyết định này.

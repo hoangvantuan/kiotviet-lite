@@ -224,7 +224,11 @@ export function SupplierManager() {
         />
       )}
       <DeleteSupplierDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} />
-      <SupplierDebtPanel target={debtTarget} onClose={() => setDebtTarget(null)} />
+      <SupplierDebtPanel
+        key={debtTarget?.id ?? 'closed'}
+        target={debtTarget}
+        onClose={() => setDebtTarget(null)}
+      />
       <TrashedSuppliersSheet open={trashedOpen} onOpenChange={setTrashedOpen} />
     </div>
   )
