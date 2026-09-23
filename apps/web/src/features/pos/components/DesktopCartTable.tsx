@@ -29,7 +29,7 @@ import {
 import { DISCOUNT_TYPE } from '../constants'
 import {
   buildCartItemId,
-  repriceOnAddAction,
+  repriceOnQuantityAction,
   useRepriceOnQuantity,
 } from '../hooks/use-auto-reprice'
 import { EditUnitPriceDialog } from './EditUnitPriceDialog'
@@ -188,13 +188,7 @@ function DesktopCartRow({ item, index }: DesktopCartRowProps) {
               const targetId = buildCartItemId(item.productId, item.variantId, nextUnitConversionId)
               const updatedItem = updatedTab?.items.find((i) => i.id === targetId)
               const effectiveQty = updatedItem ? updatedItem.quantity : item.quantity
-              repriceOnAddAction(
-                item.productId,
-                item.variantId,
-                nextUnitConversionId,
-                effectiveQty,
-                currentTab,
-              )
+              repriceOnQuantityAction(targetId, effectiveQty)
             }}
             className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             aria-label="Chọn đơn vị tính"
