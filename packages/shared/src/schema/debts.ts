@@ -1,10 +1,12 @@
 import { sql } from 'drizzle-orm'
-import { bigint, index, pgTable, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { bigint, index, pgEnum, pgTable, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
 import { customers } from './customers.js'
 import { orders } from './orders.js'
 import { stores } from './stores.js'
+
+export const debtTypeEnum = pgEnum('debt_type', ['sale', 'opening'])
 
 export const debts = pgTable(
   'debts',
@@ -15,12 +17,11 @@ export const debts = pgTable(
     storeId: uuid()
       .notNull()
       .references(() => stores.id, { onDelete: 'restrict' }),
-    orderId: uuid()
-      .notNull()
-      .references(() => orders.id, { onDelete: 'restrict' }),
+    orderId: uuid().references(() => orders.id, { onDelete: 'restrict' }),
     customerId: uuid()
       .notNull()
       .references(() => customers.id, { onDelete: 'restrict' }),
+    type: debtTypeEnum().notNull().default('sale'),
     amount: bigint({ mode: 'number' }).notNull(),
     paid: bigint({ mode: 'number' }).notNull().default(0),
     remaining: bigint({ mode: 'number' }).notNull(),

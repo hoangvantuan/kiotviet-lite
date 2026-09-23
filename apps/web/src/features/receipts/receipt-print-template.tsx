@@ -45,7 +45,7 @@ export function ReceiptPrintTemplate({ receipt, store }: ReceiptPrintTemplatePro
             const before = a.amount + after
             return (
               <tr key={a.id}>
-                <td className="border p-1">{a.orderCode}</td>
+                <td className="border p-1">{a.orderCode ?? 'Nợ đầu kỳ'}</td>
                 <td className="border p-1 text-right">{formatVnd(before)}</td>
                 <td className="border p-1 text-right">{formatVnd(a.amount)}</td>
                 <td className="border p-1 text-right">{formatVnd(after)}</td>

@@ -143,10 +143,10 @@ describe('toOpenDebtItem', () => {
     expect(item.remaining).toBe(400_000)
   })
 
-  it('handles null orderCode', () => {
-    const row = { ...baseRow, orderCode: null }
-    const item = toOpenDebtItem(row)
-    expect(item.orderCode).toBe('')
+  it('preserves an orderless opening debt in the receipt selection', () => {
+    const item = toOpenDebtItem({ ...baseRow, orderId: null, orderCode: null })
+    expect(item.orderId).toBeNull()
+    expect(item.orderCode).toBeNull()
   })
 
   it('converts createdAt to ISO string', () => {
