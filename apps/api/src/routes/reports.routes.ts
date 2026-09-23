@@ -42,6 +42,7 @@ import {
 } from '../services/reports.service.js'
 import {
   getRevenueByCustomer,
+  getRevenueByDimension,
   getRevenueByEmployee,
   getRevenueByProduct,
   getRevenueByTime,
@@ -151,6 +152,10 @@ export function createReportsRoutes({ db }: { db: Db }) {
       case 'employee':
         data = await getRevenueByEmployee(db, auth.storeId, query.from, query.to)
         break
+      case 'thuong-hieu':
+      case 'danh-muc':
+        data = await getRevenueByDimension(db, auth.storeId, query.from, query.to, query.tab)
+        break
     }
     return c.json({ data })
   })
@@ -199,6 +204,13 @@ export function createReportsRoutes({ db }: { db: Db }) {
         const data = await getRevenueByEmployee(db, auth.storeId, query.from, query.to)
         headers = ['Nhân viên', 'Số đơn', 'Doanh thu', '% Tổng']
         rows = data.rows.map((r) => [r.userName, r.orderCount, r.revenue, r.percentage])
+        break
+      }
+      case 'thuong-hieu':
+      case 'danh-muc': {
+        const data = await getRevenueByDimension(db, auth.storeId, query.from, query.to, query.tab)
+        headers = [query.tab === 'thuong-hieu' ? 'Thương hiệu' : 'Danh mục', 'Doanh thu', '% Tổng']
+        rows = data.rows.map((r) => [r.name, r.revenue, r.percentage])
         break
       }
     }

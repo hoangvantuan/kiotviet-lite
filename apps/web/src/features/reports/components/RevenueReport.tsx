@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type {
   ExportFormat,
   RevenueByCustomerRow,
+  RevenueByDimensionRow,
   RevenueByEmployeeRow,
   RevenueByProductRow,
   RevenueByTimeRow,
@@ -59,38 +60,36 @@ export function RevenueReport() {
       />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as RevenueReportTab)}>
-        <TabsList>
+        <TabsList className="h-auto flex-wrap">
           <TabsTrigger value="time">Theo thời gian</TabsTrigger>
           <TabsTrigger value="product">Theo SP</TabsTrigger>
           <TabsTrigger value="customer">Theo KH</TabsTrigger>
           <TabsTrigger value="employee">Theo NV</TabsTrigger>
+          <TabsTrigger value="thuong-hieu">Theo thương hiệu</TabsTrigger>
+          <TabsTrigger value="danh-muc">Theo danh mục</TabsTrigger>
         </TabsList>
       </Tabs>
 
       {data && 'summary' in data && (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           {'totalOrders' in data.summary && (
-            <>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-muted-foreground">Tổng đơn</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold font-mono">{data.summary.totalOrders}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-muted-foreground">Tổng doanh thu</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold font-mono">
-                    {formatVND(data.summary.totalRevenue)}
-                  </p>
-                </CardContent>
-              </Card>
-            </>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">Tổng đơn</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold font-mono">{data.summary.totalOrders}</p>
+              </CardContent>
+            </Card>
           )}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">Tổng doanh thu</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold font-mono">{formatVND(data.summary.totalRevenue)}</p>
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -163,6 +162,25 @@ export function RevenueReport() {
                     <TableCell className="text-right font-mono">
                       {formatVND(r.currentDebt)}
                     </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : tab === 'thuong-hieu' || tab === 'danh-muc' ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{tab === 'thuong-hieu' ? 'Thương hiệu' : 'Danh mục'}</TableHead>
+                  <TableHead className="text-right">Doanh thu</TableHead>
+                  <TableHead className="text-right">%</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(data.rows as RevenueByDimensionRow[]).map((r) => (
+                  <TableRow key={r.dimensionId ?? 'unclassified'}>
+                    <TableCell>{r.name}</TableCell>
+                    <TableCell className="text-right font-mono">{formatVND(r.revenue)}</TableCell>
+                    <TableCell className="text-right">{r.percentage}%</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
