@@ -1,6 +1,10 @@
 import type {
+  CreateOpeningDebtInput,
+  CreateSupplierDebtAdjustmentInput,
   CreateSupplierInput,
   ListSuppliersQuery,
+  SupplierDebtAdjustmentDetail,
+  SupplierDebtAdjustmentListItem,
   SupplierDetail,
   SupplierListItem,
   UpdateSupplierInput,
@@ -55,4 +59,25 @@ export function deleteSupplierApi(id: string) {
 
 export function restoreSupplierApi(id: string) {
   return apiClient.post<Envelope<SupplierDetail>>(`/api/v1/suppliers/${id}/restore`)
+}
+
+export function createSupplierDebtAdjustmentApi(input: CreateSupplierDebtAdjustmentInput) {
+  return apiClient.post<Envelope<SupplierDebtAdjustmentDetail>>(
+    '/api/v1/supplier-debt-adjustments',
+    input,
+  )
+}
+
+export function listSupplierDebtAdjustmentsApi(supplierId: string, page = 1) {
+  const params = new URLSearchParams({ supplierId, page: String(page) })
+  return apiClient.get<ListEnvelope<SupplierDebtAdjustmentListItem[]>>(
+    `/api/v1/supplier-debt-adjustments?${params.toString()}`,
+  )
+}
+
+export function createSupplierOpeningDebtApi(supplierId: string, input: CreateOpeningDebtInput) {
+  return apiClient.post<Envelope<SupplierDebtAdjustmentDetail>>(
+    `/api/v1/supplier-debt-adjustments/${supplierId}/opening-debt`,
+    input,
+  )
 }

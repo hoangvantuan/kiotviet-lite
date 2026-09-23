@@ -51,6 +51,7 @@ import { ApiClientError } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
 
+import { SupplierDebtPanel } from './supplier-debt-panel'
 import { SupplierFormDialog } from './supplier-form-dialog'
 import {
   useDeleteSupplierMutation,
@@ -86,6 +87,7 @@ export function SupplierManager() {
   const [editTarget, setEditTarget] = useState<SupplierListItem | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<SupplierListItem | null>(null)
   const [trashedOpen, setTrashedOpen] = useState(false)
+  const [debtTarget, setDebtTarget] = useState<SupplierListItem | null>(null)
 
   const editTargetDetail = useSupplierQuery(editTarget?.id)
 
@@ -185,6 +187,7 @@ export function SupplierManager() {
               items={items}
               onEdit={(s) => setEditTarget(s)}
               onDelete={(s) => setDeleteTarget(s)}
+              onDebt={setDebtTarget}
             />
           </div>
           <div className="md:hidden">
@@ -192,6 +195,7 @@ export function SupplierManager() {
               items={items}
               onEdit={(s) => setEditTarget(s)}
               onDelete={(s) => setDeleteTarget(s)}
+              onDebt={setDebtTarget}
             />
           </div>
         </>
@@ -220,6 +224,7 @@ export function SupplierManager() {
         />
       )}
       <DeleteSupplierDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} />
+      <SupplierDebtPanel target={debtTarget} onClose={() => setDebtTarget(null)} />
       <TrashedSuppliersSheet open={trashedOpen} onOpenChange={setTrashedOpen} />
     </div>
   )
@@ -229,9 +234,10 @@ interface SupplierTableProps {
   items: SupplierListItem[]
   onEdit: (s: SupplierListItem) => void
   onDelete: (s: SupplierListItem) => void
+  onDebt: (supplier: SupplierListItem) => void
 }
 
-function SupplierTable({ items, onEdit, onDelete }: SupplierTableProps) {
+function SupplierTable({ items, onEdit, onDelete, onDebt }: SupplierTableProps) {
   return (
     <div className="rounded-md border">
       <Table>
@@ -255,13 +261,18 @@ function SupplierTable({ items, onEdit, onDelete }: SupplierTableProps) {
                 {it.email ?? '—'}
               </TableCell>
               <TableCell>
-                <DebtBadge currentDebt={it.currentDebt} />
+                <button type="button" onClick={() => onDebt(it)} aria-label={`Công nợ ${it.name}`}>
+                  <DebtBadge currentDebt={it.currentDebt} />
+                </button>
               </TableCell>
               <TableCell className="hidden md:table-cell text-right">{it.purchaseCount}</TableCell>
               <TableCell className="hidden lg:table-cell text-right">
                 {formatVndWithSuffix(it.totalPurchased)}
               </TableCell>
               <TableCell className="text-right">
+                <Button size="sm" variant="ghost" onClick={() => onDebt(it)}>
+                  Công nợ
+                </Button>
                 <Button size="icon" variant="ghost" onClick={() => onEdit(it)} aria-label="Sửa">
                   <Pencil className="size-4" />
                 </Button>
@@ -281,6 +292,7 @@ interface SupplierCardListProps {
   items: SupplierListItem[]
   onEdit: (s: SupplierListItem) => void
   onDelete: (s: SupplierListItem) => void
+  onDebt: (supplier: SupplierListItem) => void
 }
 
 const AVATAR_PALETTE = [
@@ -308,7 +320,7 @@ function getInitial(name: string): string {
   return trimmed.charAt(0).toUpperCase()
 }
 
-function SupplierCardList({ items, onEdit, onDelete }: SupplierCardListProps) {
+function SupplierCardList({ items, onEdit, onDelete, onDebt }: SupplierCardListProps) {
   return (
     <div className="flex flex-col gap-3">
       {items.map((s) => (
@@ -347,6 +359,7 @@ function SupplierCardList({ items, onEdit, onDelete }: SupplierCardListProps) {
                 <Pencil className="mr-2 h-4 w-4" />
                 Sửa
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onDebt(s)}>Công nợ</DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => onDelete(s)}
                 className="text-destructive focus:text-destructive"

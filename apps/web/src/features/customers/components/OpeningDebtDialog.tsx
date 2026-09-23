@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useCreateSupplierOpeningDebtMutation } from '@/features/suppliers/use-suppliers'
 import { ApiClientError } from '@/lib/api-client'
 import { formatVnd } from '@/lib/currency'
 import { showSuccess } from '@/lib/toast'
@@ -23,20 +24,16 @@ import { useCreateOpeningDebtMutation } from '../hooks/use-customer-detail'
 interface OpeningDebtDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  customerId: string
-  customerName: string
+  target: { kind: 'customer' | 'supplier'; id: string; name: string }
 }
 
-export function OpeningDebtDialog({
-  open,
-  onOpenChange,
-  customerId,
-  customerName,
-}: OpeningDebtDialogProps) {
+export function OpeningDebtDialog({ open, onOpenChange, target }: OpeningDebtDialogProps) {
   const [amount, setAmount] = useState<number | null>(null)
   const [incurredAt, setIncurredAt] = useState('')
   const [error, setError] = useState('')
-  const mutation = useCreateOpeningDebtMutation(customerId)
+  const customerMutation = useCreateOpeningDebtMutation(target.id)
+  const supplierMutation = useCreateSupplierOpeningDebtMutation(target.id)
+  const mutation = target.kind === 'customer' ? customerMutation : supplierMutation
 
   const handleOpenChange = (next: boolean) => {
     if (next) {
@@ -60,7 +57,7 @@ export function OpeningDebtDialog({
     }
     try {
       await mutation.mutateAsync(parsed.data)
-      showSuccess(`Đã nạp nợ đầu kỳ ${formatVnd(parsed.data.amount)} ₫ cho ${customerName}`)
+      showSuccess(`Đã nạp nợ đầu kỳ ${formatVnd(parsed.data.amount)} ₫ cho ${target.name}`)
       onOpenChange(false)
     } catch (cause) {
       setError(cause instanceof ApiClientError ? cause.message : 'Không nạp được nợ đầu kỳ')
@@ -73,7 +70,7 @@ export function OpeningDebtDialog({
         <DialogHeader>
           <DialogTitle>Nạp nợ đầu kỳ</DialogTitle>
           <DialogDescription>
-            Nhập số tiền và ngày nợ thực sự phát sinh cho {customerName}. Chỉ nạp khi công nợ hiện
+            Nhập số tiền và ngày nợ thực sự phát sinh cho {target.name}. Chỉ nạp khi công nợ hiện
             tại bằng 0.
           </DialogDescription>
         </DialogHeader>
@@ -101,9 +98,11 @@ export function OpeningDebtDialog({
                 setError('')
               }}
             />
-            <p className="text-xs text-muted-foreground">
-              Ngày này quyết định thứ tự trừ nợ và tuổi nợ.
-            </p>
+            {target.kind === 'customer' && (
+              <p className="text-xs text-muted-foreground">
+                Ngày này quyết định thứ tự trừ nợ và tuổi nợ.
+              </p>
+            )}
           </div>
           {error && (
             <p role="alert" className="text-sm text-destructive">

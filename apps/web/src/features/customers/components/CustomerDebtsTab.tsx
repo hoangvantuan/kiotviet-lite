@@ -252,8 +252,7 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
         <OpeningDebtDialog
           open={openingDialogOpen}
           onOpenChange={setOpeningDialogOpen}
-          customerId={customerId}
-          customerName={customerName ?? ''}
+          target={{ kind: 'customer', id: customerId, name: customerName ?? '' }}
         />
       )}
     </div>

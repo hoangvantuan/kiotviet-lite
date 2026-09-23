@@ -61,6 +61,8 @@ export const auditActionSchema = z.enum([
   'supplier.restored',
   'supplier.debt_changed',
   'supplier_payment.created',
+  'supplier_debt_adjustment.created',
+  'supplier_debt.opening_created',
   'purchase_order.created',
   'stock_check.created',
   'stock_check.updated',
