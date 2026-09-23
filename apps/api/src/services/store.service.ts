@@ -18,6 +18,7 @@ function toStoreSettings(row: typeof stores.$inferSelect): StoreSettings {
     logoUrl: row.logoUrl,
     debtWarningPercent: row.debtWarningPercent,
     debtOverdueDays: row.debtOverdueDays,
+    negativeStockAlertsEnabled: row.negativeStockAlertsEnabled,
     updatedAt: row.updatedAt.toISOString(),
   }
 }
@@ -79,6 +80,8 @@ export async function updateStore({
   if (input.logoUrl !== undefined) updates.logoUrl = input.logoUrl
   if (input.debtWarningPercent !== undefined) updates.debtWarningPercent = input.debtWarningPercent
   if (input.debtOverdueDays !== undefined) updates.debtOverdueDays = input.debtOverdueDays
+  if (input.negativeStockAlertsEnabled !== undefined)
+    updates.negativeStockAlertsEnabled = input.negativeStockAlertsEnabled
 
   return db.transaction(async (tx) => {
     const [updated] = await tx
@@ -98,6 +101,7 @@ export async function updateStore({
       logoUrl: before.logoUrl ? '<base64>' : null,
       debtWarningPercent: before.debtWarningPercent,
       debtOverdueDays: before.debtOverdueDays,
+      negativeStockAlertsEnabled: before.negativeStockAlertsEnabled,
     }
     const afterFields = {
       name: updated.name,
@@ -106,6 +110,7 @@ export async function updateStore({
       logoUrl: updated.logoUrl ? '<base64>' : null,
       debtWarningPercent: updated.debtWarningPercent,
       debtOverdueDays: updated.debtOverdueDays,
+      negativeStockAlertsEnabled: updated.negativeStockAlertsEnabled,
     }
     const fieldDiff = diffObjects(beforeFields, afterFields)
 

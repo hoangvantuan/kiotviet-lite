@@ -1,12 +1,38 @@
-import { Outlet } from '@tanstack/react-router'
+import { Link, Outlet } from '@tanstack/react-router'
 
+import { useStoreQuery } from '@/features/settings/use-store-settings'
 import { useMediaQuery } from '@/hooks/use-media-query'
+import { usePermission } from '@/hooks/use-permission'
 import { useSidebarAutoClose, useSidebarStore } from '@/hooks/use-sidebar'
 
 import { BottomTabBar } from './bottom-tab-bar'
 import { ErrorBoundary } from './error-boundary'
 import { Header } from './header'
 import { MobileDrawer, Sidebar } from './sidebar'
+
+function NegativeStockAlertsReminder() {
+  const { data: store } = useStoreQuery()
+  const canManageStore = usePermission('store.manage')
+  if (store?.negativeStockAlertsEnabled !== false) return null
+
+  return (
+    <div
+      role="status"
+      className="mb-4 rounded-md border border-amber-500 bg-amber-50 p-3 text-sm text-amber-950"
+    >
+      <strong>Cảnh báo tồn kho âm đang tắt.</strong> Tồn kho vẫn được ghi âm khi bán; hãy bật lại
+      sau khi kiểm kê xong.
+      {canManageStore && (
+        <>
+          {' '}
+          <Link to="/settings/store" className="font-semibold underline">
+            Bật lại cảnh báo
+          </Link>
+        </>
+      )}
+    </div>
+  )
+}
 
 export function AppLayout() {
   const isCollapsed = useSidebarStore((s) => s.isCollapsed)
@@ -31,6 +57,7 @@ export function AppLayout() {
       >
         <Header />
         <main className="flex-1 p-4 pb-20 md:pb-4">
+          <NegativeStockAlertsReminder />
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>

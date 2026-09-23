@@ -2,6 +2,7 @@ import type {
   CreateCustomerGroupInput,
   CreateCustomerInput,
   CreateDebtAdjustmentInput,
+  CreateOpeningDebtInput,
   CustomerDebtsResponse,
   CustomerDetail,
   CustomerGroupItem,
@@ -12,6 +13,7 @@ import type {
   DebtAdjustmentListItem,
   ListCustomerOrdersQuery,
   ListCustomersQuery,
+  OpeningDebt,
   QuickCreateCustomerInput,
   UpdateCustomerGroupInput,
   UpdateCustomerInput,
@@ -114,6 +116,13 @@ export function getCustomerOrdersApi(id: string, query: Partial<ListCustomerOrde
 
 export function getCustomerDebtsApi(id: string) {
   return apiClient.get<Envelope<CustomerDebtsResponse>>(`/api/v1/customers/${id}/debts`)
+}
+
+export function createOpeningDebtApi(customerId: string, input: CreateOpeningDebtInput) {
+  return apiClient.post<Envelope<OpeningDebt>>(
+    `/api/v1/customers/${customerId}/opening-debt`,
+    input,
+  )
 }
 
 export function getCustomerStatsApi(id: string) {

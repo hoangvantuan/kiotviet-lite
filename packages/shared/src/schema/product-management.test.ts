@@ -65,16 +65,87 @@ describe('createProductSchema', () => {
     )
   })
 
-  it('từ chối SKU regex sai (có space)', () => {
-    expect(
-      createProductSchema.safeParse({ name: 'X', sellingPrice: 0, sku: 'SP 001' }).success,
-    ).toBe(false)
+  it('chấp nhận mã hàng chứa khoảng trắng, thay vì từ chối', () => {
+    const r = createProductSchema.safeParse({ name: 'X', sellingPrice: 0, sku: 'SP 001' })
+    expect(r.success).toBe(true)
+    if (r.success) expect(r.data.sku).toBe('SP 001')
   })
 
   it('chấp nhận SKU regex đúng (chữ số _ - . /)', () => {
     expect(
       createProductSchema.safeParse({ name: 'X', sellingPrice: 0, sku: 'SP-001_a.b/c' }).success,
     ).toBe(true)
+  })
+
+  it('chấp nhận dấu câu mới trong tên và chữ mọi ngôn ngữ trong mã hàng', () => {
+    const r = createProductSchema.safeParse({
+      name: 'Lốc + * : % = ; # ? – 1',
+      sku: 'Hàng 日本語 + * , @ = 1',
+      sellingPrice: 0,
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('chấp nhận mã hàng có dấu tổ hợp Unicode ở chữ tiếng Việt và chữ Hindi', () => {
+    const r = createProductSchema.safeParse({
+      name: 'X',
+      sku: 'Vie\u0302\u0323t अक्षर',
+      sellingPrice: 0,
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('chuẩn hóa khoảng trắng tên và mã hàng trước khi trả về', () => {
+    const r = createProductSchema.safeParse({
+      name: '  Cà  phê\u00a0\u00a0sữa  ',
+      sku: '  Mã  hàng\u00a0\u00a0mới  ',
+      sellingPrice: 0,
+    })
+    expect(r.success).toBe(true)
+    if (r.success) {
+      expect(r.data.name).toBe('Cà phê sữa')
+      expect(r.data.sku).toBe('Mã hàng mới')
+    }
+  })
+
+  it('từ chối dấu bằng đầu chuỗi và ký tự điều khiển cả ở đầu cuối', () => {
+    for (const field of ['name', 'sku'] as const) {
+      for (const value of [
+        ' =A',
+        'A\nB',
+        'A\tB',
+        'A\r',
+        '\u0000A',
+        'A\u007f',
+        'A\u0085',
+        '\u2028A',
+        'A\uFEFF',
+      ]) {
+        const r = createProductSchema.safeParse({
+          name: 'Tên hợp lệ',
+          sku: 'MA-1',
+          sellingPrice: 0,
+          [field]: value,
+        })
+        expect(r.success, `${field}: ${JSON.stringify(value)}`).toBe(false)
+      }
+      const r = createProductSchema.safeParse({
+        name: 'Tên hợp lệ',
+        sku: 'MA-1',
+        sellingPrice: 0,
+        [field]: 'A=B',
+      })
+      expect(r.success).toBe(true)
+    }
+  })
+
+  it('không nới quy tắc mã vạch khi nới mã hàng', () => {
+    for (const barcode of ['ABC DEF', 'Hàng', 'AB+CD', 'AB=CD']) {
+      expect(
+        createProductSchema.safeParse({ name: 'X', sku: 'Mã hàng +1', barcode, sellingPrice: 0 })
+          .success,
+      ).toBe(false)
+    }
   })
 
   it('từ chối barcode regex sai (có dash)', () => {
@@ -132,6 +203,24 @@ describe('updateProductSchema', () => {
 
   it('chấp nhận trackInventory = false', () => {
     expect(updateProductSchema.safeParse({ trackInventory: false }).success).toBe(true)
+  })
+
+  it('áp dụng cùng quy tắc và chuẩn hóa khi sửa sản phẩm lẫn biến thể', () => {
+    const r = updateProductSchema.safeParse({
+      name: '  Gói  1+1 = 2 – Mới ',
+      sku: '  Mã  hàng + 日本語 ',
+      variantsConfig: {
+        attribute1Name: 'Màu',
+        variants: [{ sku: '  Đỏ  +1 ', attribute1Value: 'Đỏ', sellingPrice: 100 }],
+      },
+    })
+    expect(r.success).toBe(true)
+    if (r.success) {
+      expect(r.data.name).toBe('Gói 1+1 = 2 – Mới')
+      expect(r.data.sku).toBe('Mã hàng + 日本語')
+      expect(r.data.variantsConfig?.variants[0]?.sku).toBe('Đỏ +1')
+    }
+    expect(updateProductSchema.safeParse({ sku: ' =SAI' }).success).toBe(false)
   })
 })
 

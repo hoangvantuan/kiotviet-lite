@@ -18,10 +18,14 @@
 import bcrypt from 'bcryptjs'
 import { sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
+import { pathToFileURL } from 'node:url'
 import postgres from 'postgres'
 import { uuidv7 } from 'uuidv7'
 
 import * as schema from '@kiotviet-lite/shared/schema'
+
+import type { Db } from './index.js'
+import { assertSeedSafe } from './seed-guard.js'
 
 import 'dotenv/config'
 
@@ -42,17 +46,12 @@ const {
   inventoryTransactions,
 } = schema
 
-const DATABASE_URL = process.env.DATABASE_URL
-if (!DATABASE_URL) throw new Error('DATABASE_URL required')
-
-const client = postgres(DATABASE_URL)
-const db = drizzle(client, { schema, casing: 'snake_case' })
-
 async function hash(plain: string) {
   return bcrypt.hash(plain, 10)
 }
 
-async function seed() {
+export async function seed(db: Db) {
+  await assertSeedSafe(db)
   console.log('🌱 Bắt đầu seed dữ liệu...\n')
 
   // Xoá toàn bộ dữ liệu cũ (thứ tự ngược quan hệ FK)
@@ -1197,9 +1196,16 @@ async function seed() {
   console.log(`  Staff:   0901000003 / matkhau123 (PIN: 333333)`)
 }
 
-seed()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error('❌ Seed thất bại:', err)
-    process.exit(1)
-  })
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const databaseUrl = process.env.DATABASE_URL
+  if (!databaseUrl) throw new Error('DATABASE_URL required')
+  const client = postgres(databaseUrl)
+  const db = drizzle(client, { schema, casing: 'snake_case' })
+
+  seed(db)
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error('❌ Seed thất bại:', err)
+      process.exit(1)
+    })
+}

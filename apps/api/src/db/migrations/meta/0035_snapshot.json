@@ -1,6 +1,6 @@
 {
-  "id": "6f41c890-4eac-496a-96a9-f0d06786cdf4",
-  "prevId": "f7286015-fa23-4472-964a-7c86946a6b7f",
+  "id": "3ab807cd-a173-485a-bf1f-ac088a638222",
+  "prevId": "6f41c890-4eac-496a-96a9-f0d06786cdf4",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1200,13 +1200,21 @@
           "name": "order_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "customer_id": {
           "name": "customer_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "debt_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'sale'"
         },
         "amount": {
           "name": "amount",
@@ -6089,6 +6097,11 @@
     }
   },
   "enums": {
+    "public.debt_type": {
+      "name": "debt_type",
+      "schema": "public",
+      "values": ["sale", "opening"]
+    },
     "public.delivery_status": {
       "name": "delivery_status",
       "schema": "public",

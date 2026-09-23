@@ -661,7 +661,6 @@ function BasicSection<T extends FieldValues & ProductFormFields>({
           <Input
             id="p-name"
             autoFocus
-            maxLength={255}
             placeholder="VD: Cà phê đen đá"
             {...register('name' as Path<ProductFormFields>)}
           />
@@ -675,7 +674,6 @@ function BasicSection<T extends FieldValues & ProductFormFields>({
             <Input
               id="p-sku"
               placeholder="Để trống để tự sinh"
-              maxLength={64}
               {...register('sku' as Path<ProductFormFields>)}
             />
             <Button

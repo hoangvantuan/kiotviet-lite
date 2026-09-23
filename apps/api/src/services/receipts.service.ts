@@ -75,7 +75,7 @@ export function toReceiptListItem(row: ReceiptRow): ReceiptListItem {
 
 export function toOpenDebtItem(row: {
   id: string
-  orderId: string
+  orderId: string | null
   orderCode: string | null
   amount: number
   paid: number
@@ -85,7 +85,7 @@ export function toOpenDebtItem(row: {
   return {
     id: row.id,
     orderId: row.orderId,
-    orderCode: row.orderCode ?? '',
+    orderCode: row.orderCode,
     amount: Number(row.amount),
     paid: Number(row.paid),
     remaining: Number(row.remaining),
@@ -226,7 +226,7 @@ async function loadReceiptAllocations(
     id: row.id,
     debtId: row.debtId,
     orderId: row.orderId,
-    orderCode: row.orderCode ?? '',
+    orderCode: row.orderCode,
     amount: Number(row.amount),
     debtRemainingAfter: debtAfterMap?.get(row.debtId) ?? null,
   }))

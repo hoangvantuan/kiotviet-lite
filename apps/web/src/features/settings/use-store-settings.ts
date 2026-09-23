@@ -2,14 +2,18 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type { UpdateStoreInput } from '@kiotviet-lite/shared'
 
+import { useAuthStore } from '@/stores/use-auth-store'
+
 import { getStoreApi, updateStoreApi } from './store-settings-api'
 
 const STORE_KEY = ['store'] as const
 
 export function useStoreQuery() {
+  const storeId = useAuthStore((state) => state.user?.storeId)
   return useQuery({
-    queryKey: STORE_KEY,
+    queryKey: [...STORE_KEY, storeId],
     queryFn: async () => (await getStoreApi()).data,
+    enabled: !!storeId,
   })
 }
 
