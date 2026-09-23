@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Download, FileDown, Package, Plus, SearchX, Trash2 } from 'lucide-react'
+import { Download, FileDown, FileUp, Package, Plus, SearchX, Trash2 } from 'lucide-react'
 
 import type { ListProductsQuery, ProductListItem, StockFilter } from '@kiotviet-lite/shared'
 
@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
 import { Button } from '@/components/ui/button'
 import { useBulkExportDownload } from '@/features/bulk-export/use-bulk-export-download'
+import { BulkImportDialog } from '@/features/bulk-import/BulkImportDialog'
 import { useDebounced } from '@/hooks/use-debounced'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { useAuthStore } from '@/stores/use-auth-store'
@@ -39,6 +40,7 @@ export function ProductsManager() {
   const [filters, setFilters] = useState<ProductFiltersValue>(DEFAULT_FILTERS)
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editTargetId, setEditTargetId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ProductListItem | null>(null)
   const [trashedOpen, setTrashedOpen] = useState(false)
@@ -123,6 +125,12 @@ export function ProductsManager() {
                 <span>{downloading === 'export' ? 'Đang xuất…' : 'Xuất Excel'}</span>
               </Button>
             </>
+          )}
+          {role === 'owner' && (
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <FileUp className="h-4 w-4" />
+              <span>Nhập Excel</span>
+            </Button>
           )}
           <Button variant="outline" size="sm" onClick={() => setTrashedOpen(true)}>
             <Trash2 className="h-4 w-4" />
@@ -212,6 +220,9 @@ export function ProductsManager() {
         product={deleteTarget}
       />
       <TrashedProductsSheet open={trashedOpen} onOpenChange={setTrashedOpen} />
+      {role === 'owner' && (
+        <BulkImportDialog kind="products" open={importOpen} onOpenChange={setImportOpen} />
+      )}
     </div>
   )
 }

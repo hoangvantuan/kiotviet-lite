@@ -5,6 +5,7 @@ import {
   Archive,
   Download,
   FileDown,
+  FileUp,
   Pencil,
   Plus,
   RotateCcw,
@@ -53,6 +54,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useBulkExportDownload } from '@/features/bulk-export/use-bulk-export-download'
+import { BulkImportDialog } from '@/features/bulk-import/BulkImportDialog'
 import { useStoreQuery } from '@/features/settings/use-store-settings'
 import { useDebounced } from '@/hooks/use-debounced'
 import { ApiClientError } from '@/lib/api-client'
@@ -136,6 +138,7 @@ export function CustomerList() {
   const [debtFilter, setDebtFilter] = useState<'all' | 'yes' | 'no'>('all')
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editTargetId, setEditTargetId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<CustomerListItem | null>(null)
   const [trashedOpen, setTrashedOpen] = useState(false)
@@ -202,6 +205,12 @@ export function CustomerList() {
                 <span>{downloading === 'export' ? 'Đang xuất…' : 'Xuất Excel'}</span>
               </Button>
             </>
+          )}
+          {role === 'owner' && (
+            <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+              <FileUp className="h-4 w-4" />
+              <span>Nhập Excel</span>
+            </Button>
           )}
           <Button size="sm" variant="outline" onClick={() => setTrashedOpen(true)}>
             <Archive className="h-4 w-4" />
@@ -396,6 +405,9 @@ export function CustomerList() {
         customer={deleteTarget}
       />
       <TrashedCustomersSheet open={trashedOpen} onOpenChange={setTrashedOpen} />
+      {role === 'owner' && (
+        <BulkImportDialog kind="customers" open={importOpen} onOpenChange={setImportOpen} />
+      )}
     </div>
   )
 }

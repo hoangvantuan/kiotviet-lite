@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   Download,
   FileDown,
+  FileUp,
   MoreVertical,
   Pencil,
   Plus,
@@ -57,6 +58,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useBulkExportDownload } from '@/features/bulk-export/use-bulk-export-download'
+import { BulkImportDialog } from '@/features/bulk-import/BulkImportDialog'
 import { useDebounced } from '@/hooks/use-debounced'
 import { ApiClientError } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
@@ -99,6 +101,7 @@ export function SupplierManager() {
   const [hasDebt, setHasDebt] = useState<SupplierHasDebt>('all')
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<SupplierListItem | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<SupplierListItem | null>(null)
   const [trashedOpen, setTrashedOpen] = useState(false)
@@ -152,6 +155,11 @@ export function SupplierManager() {
                 {downloading === 'export' ? 'Đang xuất…' : 'Xuất Excel'}
               </Button>
             </>
+          )}
+          {role === 'owner' && (
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <FileUp className="size-4 mr-1" /> Nhập Excel
+            </Button>
           )}
           <Button variant="outline" onClick={() => setTrashedOpen(true)}>
             <Trash2 className="size-4 mr-1" /> NCC đã xoá
@@ -270,6 +278,9 @@ export function SupplierManager() {
         onClose={() => setDebtTarget(null)}
       />
       <TrashedSuppliersSheet open={trashedOpen} onOpenChange={setTrashedOpen} />
+      {role === 'owner' && (
+        <BulkImportDialog kind="suppliers" open={importOpen} onOpenChange={setImportOpen} />
+      )}
     </div>
   )
 }
