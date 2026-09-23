@@ -197,7 +197,8 @@ function CreateDialog({ open, onOpenChange, categories, brands }: ProductFormDia
     if (values.categoryId) payload.categoryId = values.categoryId
     if (values.brandId) payload.brandId = values.brandId
     if (values.weight !== null && values.weight !== undefined) payload.weight = values.weight
-    if (values.description?.trim()) payload.description = values.description.trim()
+    const descRaw = values.description || null
+    if (descRaw) payload.description = descRaw
     const imgTrim = values.imageUrl.trim()
     if (imgTrim) payload.imageUrl = imgTrim
 
@@ -429,8 +430,8 @@ function EditDialog({
     if (values.brandId !== product.brandId) payload.brandId = values.brandId
     if (values.unit !== product.unit) payload.unit = values.unit
     if (values.weight !== product.weight) payload.weight = values.weight
-    const descTrim = values.description?.trim() || null
-    if (descTrim !== product.description) payload.description = descTrim
+    const descRaw = values.description || null
+    if (descRaw !== product.description) payload.description = descRaw
     const newImg = values.imageUrl.trim() || null
     if (newImg !== product.imageUrl) payload.imageUrl = newImg
     if (values.status !== product.status) payload.status = values.status

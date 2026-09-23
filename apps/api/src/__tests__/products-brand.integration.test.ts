@@ -113,6 +113,18 @@ describe('Products - Brand Constraints', () => {
     expect(patchRes.status).toBe(200)
     expect(patchRes.body.data.description).toBe(multilineDesc)
 
+    // 2.2 No-op edit: change only name, verify description preserved
+    const noopRes = await jsonRequest(
+      env.app,
+      'PATCH',
+      `/${productId}`,
+      { name: 'iPhone 15 Pro' },
+      env.base.owner.authHeader,
+    )
+    expect(noopRes.status).toBe(200)
+    expect(noopRes.body.data.name).toBe('iPhone 15 Pro')
+    expect(noopRes.body.data.description).toBe(multilineDesc)
+
     // 3. Fetch list and filter by brandId
     const listRes = await getRequest(env.app, `/?brandId=${brandId}`, env.base.owner.authHeader)
     expect(listRes.body.data).toHaveLength(1)
