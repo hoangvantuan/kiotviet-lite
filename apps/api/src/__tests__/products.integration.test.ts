@@ -124,6 +124,26 @@ describe('POST /products (createProduct)', () => {
     expect(r.body.data.currentStock).toBe(0)
   })
 
+  it('Lưu tên và mã hàng đã chuẩn hóa trên đường tạo', async () => {
+    const r = await jsonRequest<{ data: ProductResponse }>(
+      env.app,
+      'POST',
+      '/',
+      { name: '  Gói  1+1 = 2 – Mới  ', sku: '  Mã  hàng + 日本語  ', sellingPrice: 100 },
+      env.base.owner.authHeader,
+    )
+    expect(r.status).toBe(201)
+    expect(r.body.data.name).toBe('Gói 1+1 = 2 – Mới')
+    expect(r.body.data.sku).toBe('Mã hàng + 日本語')
+    const saved = await getRequest<{ data: ProductResponse }>(
+      env.app,
+      `/${r.body.data.id}`,
+      env.base.owner.authHeader,
+    )
+    expect(saved.body.data.name).toBe('Gói 1+1 = 2 – Mới')
+    expect(saved.body.data.sku).toBe('Mã hàng + 日本語')
+  })
+
   it('Manager tạo OK', async () => {
     const r = await jsonRequest<{ data: ProductResponse }>(
       env.app,
@@ -466,6 +486,41 @@ describe('PATCH /products/:id', () => {
     )
     expect(r.status).toBe(200)
     expect(r.body.data.name).toBe('Cà phê sữa')
+  })
+
+  it('Lưu tên và mã hàng đã chuẩn hóa trên đường sửa, từ chối mã bắt đầu bằng =', async () => {
+    const created = await jsonRequest<{ data: ProductResponse }>(
+      env.app,
+      'POST',
+      '/',
+      minimalCreate,
+      env.base.owner.authHeader,
+    )
+    const path = `/${created.body.data.id}`
+    const rejected = await jsonRequest<{ error: { code: string } }>(
+      env.app,
+      'PATCH',
+      path,
+      { sku: ' =SAI' },
+      env.base.owner.authHeader,
+    )
+    expect(rejected.status).toBe(400)
+    expect(rejected.body.error.code).toBe('VALIDATION_ERROR')
+    const changed = await jsonRequest<{ data: ProductResponse }>(
+      env.app,
+      'PATCH',
+      path,
+      { name: '  Mẫu  2*3 – Mới ', sku: '  Mã  hàng, + @ ' },
+      env.base.owner.authHeader,
+    )
+    expect(changed.status).toBe(200)
+    const saved = await getRequest<{ data: ProductResponse }>(
+      env.app,
+      path,
+      env.base.owner.authHeader,
+    )
+    expect(saved.body.data.name).toBe('Mẫu 2*3 – Mới')
+    expect(saved.body.data.sku).toBe('Mã hàng, + @')
   })
 
   it('Sửa SKU trùng → 409', async () => {
