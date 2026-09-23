@@ -3,6 +3,8 @@ import { Link } from '@tanstack/react-router'
 import {
   AlertTriangle,
   Archive,
+  Download,
+  FileDown,
   Pencil,
   Plus,
   RotateCcw,
@@ -50,10 +52,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useBulkExportDownload } from '@/features/bulk-export/use-bulk-export-download'
 import { useStoreQuery } from '@/features/settings/use-store-settings'
 import { useDebounced } from '@/hooks/use-debounced'
 import { ApiClientError } from '@/lib/api-client'
 import { showError, showSuccess } from '@/lib/toast'
+import { useAuthStore } from '@/stores/use-auth-store'
 
 import {
   useCustomerGroupsQuery,
@@ -124,6 +128,9 @@ function DebtBadge({
 }
 
 export function CustomerList() {
+  const role = useAuthStore((state) => state.user?.role)
+  const canExport = role === 'owner' || role === 'manager'
+  const { downloading, download } = useBulkExportDownload('customers', 'khach-hang')
   const [search, setSearch] = useState('')
   const [groupFilter, setGroupFilter] = useState<string>(ALL_GROUPS_VALUE)
   const [debtFilter, setDebtFilter] = useState<'all' | 'yes' | 'no'>('all')
@@ -167,7 +174,35 @@ export function CustomerList() {
             Quản lý danh sách khách hàng và phân nhóm.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {canExport && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={downloading !== null}
+                onClick={() => void download('template')}
+              >
+                <FileDown className="h-4 w-4" />
+                <span>{downloading === 'template' ? 'Đang tải mẫu…' : 'Tải tệp mẫu'}</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={downloading !== null}
+                onClick={() =>
+                  void download('export', {
+                    search: apiQuery.search,
+                    groupId: apiQuery.groupId,
+                    hasDebt: apiQuery.hasDebt,
+                  })
+                }
+              >
+                <Download className="h-4 w-4" />
+                <span>{downloading === 'export' ? 'Đang xuất…' : 'Xuất Excel'}</span>
+              </Button>
+            </>
+          )}
           <Button size="sm" variant="outline" onClick={() => setTrashedOpen(true)}>
             <Archive className="h-4 w-4" />
             <span>Đã xoá</span>
