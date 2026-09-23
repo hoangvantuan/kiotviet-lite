@@ -30,6 +30,7 @@ export type StockFilterValue = 'all' | 'in_stock' | 'out_of_stock' | 'below_min'
 export interface ProductFiltersValue {
   search: string
   categoryId: string // 'all' | 'none' | uuid
+  brandId: string // 'all' | 'none' | uuid
   status: StatusFilter
   stockFilter: StockFilterValue
 }
@@ -38,6 +39,7 @@ export interface ProductFiltersProps {
   value: ProductFiltersValue
   onChange: (partial: Partial<ProductFiltersValue>) => void
   categories: CategoryItem[]
+  brands: { id: string; name: string }[]
 }
 
 const ALL = 'all'
@@ -70,6 +72,33 @@ function CategorySelect({
               </SelectItem>
             ))}
           </div>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+function BrandSelect({
+  value,
+  onValueChange,
+  brands,
+}: {
+  value: string
+  onValueChange: (v: string) => void
+  brands: { id: string; name: string }[]
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className="md:w-56">
+        <SelectValue placeholder="Tất cả thương hiệu" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={ALL}>Tất cả thương hiệu</SelectItem>
+        <SelectItem value={NONE}>Chưa phân bổ</SelectItem>
+        {brands.map((b) => (
+          <SelectItem key={b.id} value={b.id}>
+            {b.name}
+          </SelectItem>
         ))}
       </SelectContent>
     </Select>
@@ -119,7 +148,7 @@ function StockSelect({
   )
 }
 
-export function ProductFilters({ value, onChange, categories }: ProductFiltersProps) {
+export function ProductFilters({ value, onChange, categories, brands }: ProductFiltersProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const [sheetOpen, setSheetOpen] = useState(false)
 
@@ -141,6 +170,11 @@ export function ProductFilters({ value, onChange, categories }: ProductFiltersPr
         value={value.categoryId}
         onValueChange={(v) => onChange({ categoryId: v })}
         categories={categories}
+      />
+      <BrandSelect
+        value={value.brandId}
+        onValueChange={(v) => onChange({ brandId: v })}
+        brands={brands}
       />
       <StatusSelect value={value.status} onValueChange={(v) => onChange({ status: v })} />
       <StockSelect value={value.stockFilter} onValueChange={(v) => onChange({ stockFilter: v })} />

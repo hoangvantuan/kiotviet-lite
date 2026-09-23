@@ -214,6 +214,7 @@ export const createProductSchema = z.object({
   sku: productSkuSchema.optional(),
   barcode: productBarcodeSchema.nullable().optional(),
   categoryId: z.string().uuid('Danh mục không hợp lệ').nullable().optional(),
+  brandId: z.string().uuid('Thương hiệu không hợp lệ').nullable().optional(),
   sellingPrice: z.number().int('Giá phải là số nguyên').min(0, 'Giá ≥ 0'),
   costPrice: z
     .number()
@@ -227,6 +228,13 @@ export const createProductSchema = z.object({
     .min(1, 'Đơn vị không được trống')
     .max(32, 'Đơn vị tối đa 32 ký tự')
     .default('Cái'),
+  weight: z
+    .number()
+    .int('Trọng lượng phải là số nguyên')
+    .min(0, 'Trọng lượng ≥ 0')
+    .nullable()
+    .optional(),
+  description: z.string().nullable().optional(),
   imageUrl: z.string().url('URL ảnh không hợp lệ').nullable().optional(),
   status: productStatusSchema.default('active'),
   trackInventory: z.boolean().default(false),
@@ -250,9 +258,17 @@ export const updateProductSchema = z
     sku: productSkuSchema.optional(),
     barcode: productBarcodeSchema.nullable().optional(),
     categoryId: z.string().uuid('Danh mục không hợp lệ').nullable().optional(),
+    brandId: z.string().uuid('Thương hiệu không hợp lệ').nullable().optional(),
     sellingPrice: z.number().int().min(0).optional(),
     costPrice: z.number().int().min(0).nullable().optional(),
     unit: z.string().trim().min(1).max(32).optional(),
+    weight: z
+      .number()
+      .int('Trọng lượng phải là số nguyên')
+      .min(0, 'Trọng lượng ≥ 0')
+      .nullable()
+      .optional(),
+    description: z.string().nullable().optional(),
     imageUrl: z.string().url('URL ảnh không hợp lệ').nullable().optional(),
     status: productStatusSchema.optional(),
     trackInventory: z.boolean().optional(),
@@ -270,6 +286,7 @@ export const listProductsQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().trim().optional(),
   categoryId: z.union([z.string().uuid(), z.literal('none')]).optional(),
+  brandId: z.union([z.string().uuid(), z.literal('none')]).optional(),
   status: z.enum(['active', 'inactive', 'all']).default('all'),
   stockFilter: stockFilterSchema.optional(),
 })
@@ -281,9 +298,13 @@ export const productListItemSchema = z.object({
   barcode: z.string().nullable(),
   categoryId: z.string().uuid().nullable(),
   categoryName: z.string().nullable(),
+  brandId: z.string().uuid().nullable(),
+  brandName: z.string().nullable(),
   sellingPrice: z.number(),
   costPrice: z.number().nullable(),
   unit: z.string(),
+  weight: z.number().nullable(),
+  description: z.string().nullable(),
   imageUrl: z.string().nullable(),
   status: productStatusSchema,
   trackInventory: z.boolean(),

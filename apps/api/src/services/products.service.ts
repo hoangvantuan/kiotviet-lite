@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, type SQL, sql } from 'drizzle-orm'
 
 import {
+  brands,
   categories,
   type CreateProductInput,
   inventoryTransactions,
@@ -51,9 +52,12 @@ interface ProductRow {
   sku: string
   barcode: string | null
   categoryId: string | null
+  brandId: string | null
   sellingPrice: number
   costPrice: number | null
   unit: string
+  weight: number | null
+  description: string | null
   imageUrl: string | null
   status: string
   hasVariants: boolean
@@ -68,6 +72,7 @@ interface ProductRow {
 function toProductDetail(
   row: ProductRow,
   categoryName: string | null = null,
+  brandName: string | null = null,
   variantsConfig: VariantsConfigResponse | null = null,
   effectiveStock?: number,
   unitConversions: UnitConversionItem[] = [],
@@ -80,9 +85,13 @@ function toProductDetail(
     barcode: row.barcode,
     categoryId: row.categoryId,
     categoryName,
+    brandId: row.brandId,
+    brandName,
     sellingPrice: Number(row.sellingPrice),
     costPrice: row.costPrice === null ? null : Number(row.costPrice),
     unit: row.unit,
+    weight: row.weight,
+    description: row.description,
     imageUrl: row.imageUrl,
     status: (row.status as ProductStatus) ?? 'active',
     hasVariants: row.hasVariants,
@@ -115,6 +124,7 @@ async function loadUnitConversionsForProduct({
 function toProductListItem(
   row: ProductRow,
   categoryName: string | null,
+  brandName: string | null,
   effectiveStock: number,
 ): ProductListItem {
   return {
@@ -124,9 +134,13 @@ function toProductListItem(
     barcode: row.barcode,
     categoryId: row.categoryId,
     categoryName,
+    brandId: row.brandId,
+    brandName,
     sellingPrice: Number(row.sellingPrice),
     costPrice: row.costPrice === null ? null : Number(row.costPrice),
     unit: row.unit,
+    weight: row.weight,
+    description: row.description,
     imageUrl: row.imageUrl,
     status: (row.status as ProductStatus) ?? 'active',
     trackInventory: row.trackInventory,
@@ -229,6 +243,23 @@ async function ensureCategoryInStore({
   }
 }
 
+async function ensureBrandInStore({
+  db,
+  storeId,
+  brandId,
+}: {
+  db: Db
+  storeId: string
+  brandId: string
+}): Promise<void> {
+  const brand = await db.query.brands.findFirst({
+    where: and(eq(brands.id, brandId), isNull(brands.deletedAt)),
+  })
+  if (!brand || brand.storeId !== storeId) {
+    throw new ApiError('NOT_FOUND', 'Không tìm thấy thương hiệu')
+  }
+}
+
 async function isSkuTaken({
   db,
   storeId,
@@ -314,6 +345,20 @@ async function fetchCategoryName({
     where: eq(categories.id, categoryId),
   })
   return cat?.name ?? null
+}
+
+async function fetchBrandName({
+  db,
+  brandId,
+}: {
+  db: Db
+  brandId: string | null
+}): Promise<string | null> {
+  if (!brandId) return null
+  const brand = await db.query.brands.findFirst({
+    where: eq(brands.id, brandId),
+  })
+  return brand?.name ?? null
 }
 
 async function aggregateVariantStock({
@@ -409,6 +454,14 @@ function buildListConditions({
     }
   }
 
+  if (query.brandId) {
+    if (query.brandId === 'none') {
+      conds.push(isNull(products.brandId))
+    } else {
+      conds.push(eq(products.brandId, query.brandId))
+    }
+  }
+
   if (query.status === 'active' || query.status === 'inactive') {
     conds.push(eq(products.status, query.status))
   }
@@ -453,9 +506,12 @@ async function queryProductsList({
       sku: products.sku,
       barcode: products.barcode,
       categoryId: products.categoryId,
+      brandId: products.brandId,
       sellingPrice: products.sellingPrice,
       costPrice: products.costPrice,
       unit: products.unit,
+      weight: products.weight,
+      description: products.description,
       imageUrl: products.imageUrl,
       status: products.status,
       hasVariants: products.hasVariants,
@@ -466,9 +522,11 @@ async function queryProductsList({
       createdAt: products.createdAt,
       updatedAt: products.updatedAt,
       categoryName: categories.name,
+      brandName: brands.name,
     })
     .from(products)
     .leftJoin(categories, eq(products.categoryId, categories.id))
+    .leftJoin(brands, eq(products.brandId, brands.id))
     .where(whereClause)
     .orderBy(desc(products.createdAt), asc(products.name))
     .limit(query.pageSize)
@@ -491,9 +549,12 @@ async function queryProductsList({
       sku: row.sku,
       barcode: row.barcode,
       categoryId: row.categoryId,
+      brandId: row.brandId,
       sellingPrice: row.sellingPrice,
       costPrice: row.costPrice,
       unit: row.unit,
+      weight: row.weight,
+      description: row.description,
       imageUrl: row.imageUrl,
       status: row.status,
       hasVariants: row.hasVariants,
@@ -505,7 +566,7 @@ async function queryProductsList({
       updatedAt: row.updatedAt,
     }
     const effectiveStock = row.hasVariants ? (stockMap.get(row.id) ?? 0) : row.currentStock
-    return toProductListItem(baseRow, row.categoryName, effectiveStock)
+    return toProductListItem(baseRow, row.categoryName, row.brandName, effectiveStock)
   })
 
   return { items, total }
@@ -550,6 +611,7 @@ export async function getProduct({
     throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm')
   }
   const categoryName = await fetchCategoryName({ db, categoryId: target.categoryId })
+  const brandName = await fetchBrandName({ db, brandId: target.brandId })
 
   let variantsConfig: VariantsConfigResponse | null = null
   let effectiveStock: number | undefined
@@ -564,6 +626,7 @@ export async function getProduct({
   return toProductDetail(
     target as ProductRow,
     categoryName,
+    brandName,
     variantsConfig,
     effectiveStock,
     unitConversions,
@@ -795,6 +858,9 @@ export async function createProduct({
   if (input.categoryId) {
     await ensureCategoryInStore({ db, storeId: actor.storeId, categoryId: input.categoryId })
   }
+  if (input.brandId) {
+    await ensureBrandInStore({ db, storeId: actor.storeId, brandId: input.brandId })
+  }
 
   let sku = input.sku?.trim()
   if (!sku) {
@@ -824,9 +890,12 @@ export async function createProduct({
           sku,
           barcode: productBarcode,
           categoryId: input.categoryId ?? null,
+          brandId: input.brandId ?? null,
           sellingPrice: hasVariantsConfig ? 0 : input.sellingPrice,
           costPrice: hasVariantsConfig ? null : (input.costPrice ?? null),
           unit: input.unit ?? 'Cái',
+          weight: input.weight ?? null,
+          description: input.description ?? null,
           imageUrl: input.imageUrl ?? null,
           status: input.status ?? 'active',
           hasVariants: hasVariantsConfig,
@@ -868,6 +937,9 @@ export async function createProduct({
         sku: created.sku,
         sellingPrice: Number(created.sellingPrice),
         categoryId: created.categoryId,
+        brandId: created.brandId,
+        weight: created.weight,
+        description: created.description,
         trackInventory: created.trackInventory,
         hasVariants: created.hasVariants,
         initialStock: hasVariantsConfig ? 0 : trackInventory ? initialStock : 0,
@@ -967,9 +1039,14 @@ export async function createProduct({
       db: tx as unknown as Db,
       categoryId: created.categoryId,
     })
+    const brandName = await fetchBrandName({
+      db: tx as unknown as Db,
+      brandId: created.brandId,
+    })
     return toProductDetail(
       created as ProductRow,
       categoryName,
+      brandName,
       variantsConfig,
       effectiveStock,
       unitConversionsResult,
@@ -1050,6 +1127,19 @@ export async function updateProduct({
     }
   }
 
+  if (input.brandId !== undefined) {
+    if (input.brandId === null) {
+      if (target.brandId !== null) updates.brandId = null
+    } else {
+      await ensureBrandInStore({
+        db,
+        storeId: actor.storeId,
+        brandId: input.brandId,
+      })
+      if (input.brandId !== target.brandId) updates.brandId = input.brandId
+    }
+  }
+
   if (input.name !== undefined && input.name !== target.name) updates.name = input.name
   if (input.sellingPrice !== undefined && input.sellingPrice !== Number(target.sellingPrice))
     updates.sellingPrice = input.sellingPrice
@@ -1074,6 +1164,12 @@ export async function updateProduct({
       )
     }
     updates.unit = input.unit
+  }
+  if (input.weight !== undefined && input.weight !== target.weight) {
+    updates.weight = input.weight
+  }
+  if (input.description !== undefined && input.description !== target.description) {
+    updates.description = input.description
   }
   if (input.imageUrl !== undefined && input.imageUrl !== target.imageUrl)
     updates.imageUrl = input.imageUrl
@@ -1203,9 +1299,12 @@ export async function updateProduct({
       sku: target.sku,
       barcode: target.barcode,
       categoryId: target.categoryId,
+      brandId: target.brandId,
       sellingPrice: Number(target.sellingPrice),
       costPrice: target.costPrice === null ? null : Number(target.costPrice),
       unit: target.unit,
+      weight: target.weight,
+      description: target.description,
       imageUrl: target.imageUrl,
       status: target.status,
       trackInventory: target.trackInventory,
@@ -1216,9 +1315,12 @@ export async function updateProduct({
       sku: updated.sku,
       barcode: updated.barcode,
       categoryId: updated.categoryId,
+      brandId: updated.brandId,
       sellingPrice: Number(updated.sellingPrice),
       costPrice: updated.costPrice === null ? null : Number(updated.costPrice),
       unit: updated.unit,
+      weight: updated.weight,
+      description: updated.description,
       imageUrl: updated.imageUrl,
       status: updated.status,
       trackInventory: updated.trackInventory,
@@ -1316,9 +1418,15 @@ export async function updateProduct({
       productId: updated.id,
     })
 
+    const brandName = await fetchBrandName({
+      db: tx as unknown as Db,
+      brandId: updated.brandId,
+    })
+
     return toProductDetail(
       updated as ProductRow,
       categoryName,
+      brandName,
       variantsConfigResp,
       effectiveStock,
       unitConversions,
@@ -1825,9 +1933,15 @@ export async function restoreProduct({
       productId: updated.id,
     })
 
+    const brandName = await fetchBrandName({
+      db: tx as unknown as Db,
+      brandId: updated.brandId,
+    })
+
     return toProductDetail(
       updated as ProductRow,
       categoryName,
+      brandName,
       variantsConfigResp,
       effectiveStock,
       unitConversions,

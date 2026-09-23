@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { useDebounced } from '@/hooks/use-debounced'
 import { useMediaQuery } from '@/hooks/use-media-query'
 
+import { useAllBrandsQuery } from '../brands/use-brands'
 import { useCategoriesQuery } from '../categories/use-categories'
 import { DeleteProductDialog } from './delete-product-dialog'
 import { ProductCardList } from './product-card-list'
@@ -21,6 +22,7 @@ import { useProductQuery, useProductsQuery } from './use-products'
 const DEFAULT_FILTERS: ProductFiltersValue = {
   search: '',
   categoryId: 'all',
+  brandId: 'all',
   status: 'all',
   stockFilter: 'all',
 }
@@ -38,20 +40,31 @@ export function ProductsManager() {
 
   const debouncedSearch = useDebounced(filters.search, 300)
 
-  const apiQuery: Partial<ListProductsQuery> = useMemo(() => {
-    const q: Partial<ListProductsQuery> = { page, pageSize: PAGE_SIZE }
+  const apiQuery: ListProductsQuery = useMemo(() => {
+    const q: ListProductsQuery = { page, pageSize: PAGE_SIZE, status: 'all' }
     const trimmed = debouncedSearch.trim()
     if (trimmed.length > 0) q.search = trimmed
     if (filters.categoryId !== 'all') {
       q.categoryId = filters.categoryId === 'none' ? 'none' : filters.categoryId
     }
+    if (filters.brandId !== 'all') {
+      q.brandId = filters.brandId === 'none' ? 'none' : filters.brandId
+    }
     if (filters.status !== 'all') q.status = filters.status
     if (filters.stockFilter !== 'all') q.stockFilter = filters.stockFilter as StockFilter
     return q
-  }, [page, debouncedSearch, filters.categoryId, filters.status, filters.stockFilter])
+  }, [
+    page,
+    debouncedSearch,
+    filters.categoryId,
+    filters.brandId,
+    filters.status,
+    filters.stockFilter,
+  ])
 
   const productsQuery = useProductsQuery(apiQuery)
   const categoriesQuery = useCategoriesQuery()
+  const allBrandsQuery = useAllBrandsQuery()
   const editProductQuery = useProductQuery(editTargetId ?? undefined)
 
   const handleFilterChange = (partial: Partial<ProductFiltersValue>) => {
@@ -64,6 +77,7 @@ export function ProductsManager() {
   const isFiltered =
     debouncedSearch.trim().length > 0 ||
     filters.categoryId !== 'all' ||
+    filters.brandId !== 'all' ||
     filters.status !== 'all' ||
     filters.stockFilter !== 'all'
 
@@ -90,6 +104,7 @@ export function ProductsManager() {
         value={filters}
         onChange={handleFilterChange}
         categories={categoriesQuery.data ?? []}
+        brands={allBrandsQuery.data ?? []}
       />
 
       {productsQuery.isLoading ? (
@@ -140,6 +155,7 @@ export function ProductsManager() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         categories={categoriesQuery.data ?? []}
+        brands={allBrandsQuery.data ?? []}
       />
       {editProductQuery.data && (
         <ProductFormDialog
@@ -150,6 +166,7 @@ export function ProductsManager() {
           }}
           product={editProductQuery.data}
           categories={categoriesQuery.data ?? []}
+          brands={allBrandsQuery.data ?? []}
         />
       )}
       <DeleteProductDialog

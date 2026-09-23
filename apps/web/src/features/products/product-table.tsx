@@ -31,6 +31,7 @@ export function ProductTable({ items, onEdit, onDelete }: ProductTableProps) {
             <TableHead>Tên</TableHead>
             <TableHead>SKU</TableHead>
             <TableHead>Danh mục</TableHead>
+            <TableHead>Thương hiệu</TableHead>
             <TableHead className="text-right">Giá bán</TableHead>
             <TableHead className="text-right">
               <span
@@ -77,6 +78,7 @@ export function ProductTable({ items, onEdit, onDelete }: ProductTableProps) {
               <TableCell className="text-sm text-muted-foreground">
                 {p.categoryName ?? '—'}
               </TableCell>
+              <TableCell className="text-sm text-muted-foreground">{p.brandName ?? '—'}</TableCell>
               <TableCell className="text-right font-medium tabular-nums">
                 {p.hasVariants ? (
                   <span className="text-xs italic text-muted-foreground">Theo biến thể</span>
