@@ -163,7 +163,8 @@ export const customerOrderItemSchema = z.object({
 
 export const customerDebtItemSchema = z.object({
   id: z.string().uuid(),
-  orderCode: z.string(),
+  orderCode: z.string().nullable(),
+  type: z.enum(['sale', 'opening']),
   date: z.string(),
   originalAmount: z.number(),
   paidAmount: z.number(),

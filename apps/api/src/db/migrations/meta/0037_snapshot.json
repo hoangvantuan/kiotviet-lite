@@ -1,6 +1,6 @@
 {
-  "id": "6f41c890-4eac-496a-96a9-f0d06786cdf4",
-  "prevId": "f7286015-fa23-4472-964a-7c86946a6b7f",
+  "id": "18333ba5-d482-4c5d-9e56-dc1dc202f2a5",
+  "prevId": "f7f5f723-26ec-4def-a5f0-61a840260c85",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -135,6 +135,111 @@
           "tableFrom": "audit_logs",
           "tableTo": "users",
           "columnsFrom": ["actor_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.brands": {
+      "name": "brands",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "store_id": {
+          "name": "store_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "uniq_brands_store_name_alive": {
+          "name": "uniq_brands_store_name_alive",
+          "columns": [
+            {
+              "expression": "store_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "LOWER(\"name\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"brands\".\"deleted_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_brands_store_created": {
+          "name": "idx_brands_store_created",
+          "columns": [
+            {
+              "expression": "store_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "brands_store_id_stores_id_fk": {
+          "name": "brands_store_id_stores_id_fk",
+          "tableFrom": "brands",
+          "tableTo": "stores",
+          "columnsFrom": ["store_id"],
           "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
@@ -827,7 +932,7 @@
           "name": "phone",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "email": {
           "name": "email",
@@ -925,7 +1030,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"customers\".\"deleted_at\" IS NULL",
+          "where": "\"customers\".\"deleted_at\" IS NULL AND \"customers\".\"phone\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -1200,13 +1305,21 @@
           "name": "order_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "customer_id": {
           "name": "customer_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "debt_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'sale'"
         },
         "amount": {
           "name": "amount",
@@ -6089,6 +6202,11 @@
     }
   },
   "enums": {
+    "public.debt_type": {
+      "name": "debt_type",
+      "schema": "public",
+      "values": ["sale", "opening"]
+    },
     "public.delivery_status": {
       "name": "delivery_status",
       "schema": "public",

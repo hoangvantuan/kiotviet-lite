@@ -341,7 +341,7 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
                                 />
                               </td>
                             )}
-                            <td className="p-2 font-mono text-xs">{d.orderCode}</td>
+                            <td className="p-2 font-mono text-xs">{d.orderCode ?? 'Nợ đầu kỳ'}</td>
                             <td className="p-2 text-xs text-muted-foreground">
                               {new Date(d.createdAt).toLocaleDateString('vi-VN')}
                             </td>

@@ -21,6 +21,7 @@ import { useAuthStore } from '@/stores/use-auth-store'
 import { useCustomerDebts } from '../hooks/use-customer-detail'
 import { DebtAdjustmentDialog } from './DebtAdjustmentDialog'
 import { DebtAdjustmentHistory } from './DebtAdjustmentHistory'
+import { OpeningDebtDialog } from './OpeningDebtDialog'
 
 interface CustomerDebtsTabProps {
   customerId: string
@@ -87,6 +88,7 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
   const user = useAuthStore((s) => s.user)
   const isOwner = user?.role === 'owner'
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false)
+  const [openingDialogOpen, setOpeningDialogOpen] = useState(false)
   const overdueDays = parseOverdueDays(storeQuery.data?.debtOverdueDays ?? '30,60,90')
 
   if (debtsQuery.isLoading) {
@@ -114,6 +116,11 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
                 <Button variant="outline" size="sm" onClick={() => setAdjustDialogOpen(true)}>
                   <PenLine className="mr-1 size-4" />
                   Điều chỉnh nợ
+                </Button>
+              )}
+              {isOwner && currentDebt === 0 && (
+                <Button variant="outline" size="sm" onClick={() => setOpeningDialogOpen(true)}>
+                  Nạp nợ đầu kỳ
                 </Button>
               )}
             </div>
@@ -189,7 +196,7 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
               <TableBody>
                 {items.map((debt) => (
                   <TableRow key={debt.id}>
-                    <TableCell className="font-mono text-sm">{debt.orderCode}</TableCell>
+                    <TableCell className="text-sm">{debt.orderCode ?? 'Nợ đầu kỳ'}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDate(debt.date)}
                     </TableCell>
@@ -239,6 +246,14 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
           customerId={customerId}
           customerName={customerName ?? ''}
           currentDebt={currentDebt}
+        />
+      )}
+      {isOwner && (
+        <OpeningDebtDialog
+          open={openingDialogOpen}
+          onOpenChange={setOpeningDialogOpen}
+          customerId={customerId}
+          customerName={customerName ?? ''}
         />
       )}
     </div>

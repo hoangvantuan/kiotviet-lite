@@ -13,6 +13,10 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'category.updated': 'Sửa danh mục',
   'category.deleted': 'Xoá danh mục',
   'category.reordered': 'Sắp xếp danh mục',
+  'brand.created': 'Tạo thương hiệu',
+  'brand.updated': 'Sửa thương hiệu',
+  'brand.deleted': 'Xoá thương hiệu',
+  'brand.restored': 'Khôi phục thương hiệu',
   'product.created': 'Tạo sản phẩm',
   'product.updated': 'Sửa sản phẩm',
   'product.deleted': 'Xoá sản phẩm',
@@ -66,6 +70,7 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'category_discount.deleted': 'Xoá chiết khấu danh mục',
   'order_item.price_overridden': 'Sửa giá trên đơn hàng',
   'debt.created': 'Tạo khoản nợ',
+  'debt.opening_created': 'Nạp nợ đầu kỳ khách hàng',
   'debt.limit_overridden': 'Vượt hạn mức công nợ (PIN)',
   'order.debt_limit_exceeded': 'Đơn ngoại tuyến vượt hạn mức nợ',
   'order.price_mismatch_adjusted': 'Đơn ngoại tuyến điều chỉnh giá',
@@ -97,6 +102,10 @@ export const ACTION_GROUPS: ActionGroup[] = [
   {
     label: 'Danh mục',
     actions: ['category.created', 'category.updated', 'category.deleted', 'category.reordered'],
+  },
+  {
+    label: 'Thương hiệu',
+    actions: ['brand.created', 'brand.updated', 'brand.deleted', 'brand.restored'],
   },
   {
     label: 'Sản phẩm',
@@ -192,6 +201,7 @@ export const ACTION_GROUPS: ActionGroup[] = [
     label: 'Công nợ',
     actions: [
       'debt.created',
+      'debt.opening_created',
       'debt.limit_overridden',
       'order.debt_limit_exceeded',
       'debt_adjustment.created',

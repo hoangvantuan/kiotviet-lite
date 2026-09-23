@@ -271,11 +271,13 @@ describe('M17 — 3 tab chi tiết khách hàng: đơn hàng, công nợ, thốn
       expect(debtData.items).toHaveLength(2)
       // Sắp xếp desc theo createdAt
       expect(debtData.items[0]?.orderCode).toBe('HD-NO-02')
+      expect(debtData.items[0]?.type).toBe('sale')
       expect(debtData.items[0]?.originalAmount).toBe(200_000)
       expect(debtData.items[0]?.paidAmount).toBe(0)
       expect(debtData.items[0]?.remainingAmount).toBe(200_000)
 
       expect(debtData.items[1]?.orderCode).toBe('HD-NO-01')
+      expect(debtData.items[1]?.type).toBe('sale')
       expect(debtData.items[1]?.originalAmount).toBe(500_000)
       expect(debtData.items[1]?.paidAmount).toBe(350_000)
       expect(debtData.items[1]?.remainingAmount).toBe(150_000)

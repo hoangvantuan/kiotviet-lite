@@ -16,6 +16,7 @@ import {
 
 import {
   type CreateCustomerInput,
+  type CreateOpeningDebtInput,
   type CustomerDebtsResponse,
   type CustomerDetail,
   customerGroups,
@@ -27,6 +28,7 @@ import {
   debts,
   type ListCustomerOrdersQuery,
   type ListCustomersQuery,
+  type OpeningDebt,
   orderItems,
   orders,
   type QuickCreateCustomerInput,
@@ -39,6 +41,7 @@ import { ApiError } from '../lib/errors.js'
 import { paginationMeta } from '../lib/pagination.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
+import { parseDateRangeBoundary } from '../lib/timezone.js'
 import { diffObjects, logAction, type RequestMeta } from './audit.service.js'
 
 export interface CustomersActor {
@@ -749,6 +752,91 @@ export async function listCustomerOrders({
   }
 }
 
+export async function createOpeningDebt({
+  db,
+  actor,
+  targetId,
+  input,
+  meta,
+}: {
+  db: Db
+  actor: CustomersActor
+  targetId: string
+  input: CreateOpeningDebtInput
+  meta?: RequestMeta
+}): Promise<OpeningDebt> {
+  if (actor.role !== 'owner') {
+    throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được nạp nợ đầu kỳ')
+  }
+  const incurredAt = parseDateRangeBoundary(input.incurredAt, 'start')!
+  if (incurredAt > new Date()) {
+    throw new ApiError('VALIDATION_ERROR', 'Ngày phát sinh không được ở tương lai')
+  }
+
+  return db.transaction(async (tx) => {
+    const [customer] = await tx
+      .select({ id: customers.id, name: customers.name, currentDebt: customers.currentDebt })
+      .from(customers)
+      .where(
+        and(
+          eq(customers.id, targetId),
+          eq(customers.storeId, actor.storeId),
+          isNull(customers.deletedAt),
+        ),
+      )
+      .for('update')
+      .limit(1)
+    if (!customer) {
+      throw new ApiError('NOT_FOUND', 'Không tìm thấy khách hàng')
+    }
+    if (Number(customer.currentDebt) !== 0) {
+      throw new ApiError('BUSINESS_RULE_VIOLATION', 'Khách hàng đã có công nợ')
+    }
+
+    const [debt] = await tx
+      .insert(debts)
+      .values({
+        storeId: actor.storeId,
+        customerId: targetId,
+        orderId: null,
+        type: 'opening',
+        amount: input.amount,
+        remaining: input.amount,
+        createdAt: incurredAt,
+      })
+      .returning({ id: debts.id })
+    if (!debt) {
+      throw new ApiError('INTERNAL_ERROR', 'Không tạo được nợ đầu kỳ')
+    }
+    await tx.update(customers).set({ currentDebt: input.amount }).where(eq(customers.id, targetId))
+    await logAction({
+      db: tx as unknown as Db,
+      storeId: actor.storeId,
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: 'debt.opening_created',
+      targetType: 'debt',
+      targetId: debt.id,
+      changes: {
+        customerId: targetId,
+        customerName: customer.name,
+        amount: input.amount,
+        incurredAt: input.incurredAt,
+      },
+      ipAddress: meta?.ipAddress,
+      userAgent: meta?.userAgent,
+    })
+    return {
+      id: debt.id,
+      orderId: null,
+      type: 'opening' as const,
+      amount: input.amount,
+      remaining: input.amount,
+      incurredAt: incurredAt.toISOString(),
+    }
+  })
+}
+
 export interface GetCustomerDebtsDeps {
   db: Db
   storeId: string
@@ -772,13 +860,14 @@ export async function getCustomerDebts({
     .select({
       id: debts.id,
       orderCode: orders.orderNumber,
+      type: debts.type,
       date: debts.createdAt,
       originalAmount: debts.amount,
       paidAmount: debts.paid,
       remainingAmount: debts.remaining,
     })
     .from(debts)
-    .innerJoin(orders, eq(debts.orderId, orders.id))
+    .leftJoin(orders, eq(debts.orderId, orders.id))
     .where(and(eq(debts.storeId, storeId), eq(debts.customerId, targetId)))
     .orderBy(desc(debts.createdAt))
 
@@ -789,6 +878,7 @@ export async function getCustomerDebts({
     items: rows.map((row) => ({
       id: row.id,
       orderCode: row.orderCode,
+      type: row.type,
       date: row.date.toISOString(),
       originalAmount: Number(row.originalAmount),
       paidAmount: Number(row.paidAmount),

@@ -17,6 +17,21 @@ function makeDebt(id: string, orderCode: string, remaining: number): OpenDebtIte
 }
 
 describe('computeFifoAllocation', () => {
+  it('allocates an old opening debt before a newer sale debt', () => {
+    const opening = {
+      ...makeDebt('opening', 'unused', 100_000),
+      orderId: null,
+      orderCode: null,
+      createdAt: '2024-01-01T00:00:00Z',
+    }
+    const sale = makeDebt('sale', 'ORD-1', 50_000)
+    const result = computeFifoAllocation([opening, sale], 120_000)
+    expect(result.allocations).toEqual([
+      { debtId: 'opening', orderCode: null, amount: 100_000 },
+      { debtId: 'sale', orderCode: 'ORD-1', amount: 20_000 },
+    ])
+  })
+
   it('debts rỗng: trả allocations rỗng và unallocated = amount', () => {
     const r = computeFifoAllocation([], 100_000)
     expect(r.allocations).toEqual([])

@@ -32,6 +32,7 @@ export const updateStoreSchema = z
       .string()
       .regex(DEBT_OVERDUE_DAYS_REGEX, 'Sai định dạng mốc quá hạn (VD: 30,60,90)')
       .optional(),
+    negativeStockAlertsEnabled: z.boolean().optional(),
   })
   .refine(
     (data) =>
@@ -40,7 +41,8 @@ export const updateStoreSchema = z
       data.phone !== undefined ||
       data.logoUrl !== undefined ||
       data.debtWarningPercent !== undefined ||
-      data.debtOverdueDays !== undefined,
+      data.debtOverdueDays !== undefined ||
+      data.negativeStockAlertsEnabled !== undefined,
     { message: 'Cần ít nhất một trường để cập nhật' },
   )
 
@@ -52,6 +54,7 @@ export const storeSettingsSchema = z.object({
   logoUrl: z.string().nullable(),
   debtWarningPercent: z.number().int(),
   debtOverdueDays: z.string(),
+  negativeStockAlertsEnabled: z.boolean(),
   updatedAt: z.string(),
 })
 

@@ -2,7 +2,7 @@ import type { OpenDebtItem } from '@kiotviet-lite/shared'
 
 export interface FifoAllocation {
   debtId: string
-  orderCode: string
+  orderCode: string | null
   amount: number
 }
 

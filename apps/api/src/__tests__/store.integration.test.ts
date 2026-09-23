@@ -4,6 +4,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { auditLogs, stores } from '@kiotviet-lite/shared'
 
 import { createStoreRoutes } from '../routes/store.routes.js'
+import { createStore, createUser } from './helpers/factories.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 beforeAll(() => {
@@ -171,5 +172,72 @@ describe('PATCH /store', () => {
       body: JSON.stringify({ phone: 'abc' }),
     })
     expect(res.status).toBe(400)
+  })
+})
+
+describe('Cảnh báo tồn kho âm của từng cửa hàng', () => {
+  let env: Env
+  beforeEach(async () => {
+    env = await setup()
+  })
+  afterEach(async () => {
+    await env.base.close()
+  })
+
+  it('mặc định bật; chỉ chủ cửa hàng tắt và bật lại, có audit thay đổi', async () => {
+    const getSettings = async () => {
+      const res = await env.app.request('/', { headers: env.base.staff.authHeader })
+      expect(res.status).toBe(200)
+      return (await res.json()) as { data: { negativeStockAlertsEnabled: boolean } }
+    }
+    expect((await getSettings()).data.negativeStockAlertsEnabled).toBe(true)
+
+    for (const user of [env.base.manager, env.base.staff]) {
+      const denied = await env.app.request('/', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...user.authHeader },
+        body: JSON.stringify({ negativeStockAlertsEnabled: false }),
+      })
+      expect(denied.status).toBe(403)
+    }
+    expect((await getSettings()).data.negativeStockAlertsEnabled).toBe(true)
+
+    for (const enabled of [false, true]) {
+      const res = await env.app.request('/', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...env.base.owner.authHeader },
+        body: JSON.stringify({ negativeStockAlertsEnabled: enabled }),
+      })
+      expect(res.status).toBe(200)
+      expect((await getSettings()).data.negativeStockAlertsEnabled).toBe(enabled)
+    }
+    const logs = await env.base.db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'store.updated'))
+    expect(
+      logs.map((log) => (log.changes as Record<string, unknown>).negativeStockAlertsEnabled),
+    ).toEqual([
+      { before: true, after: false },
+      { before: false, after: true },
+    ])
+  })
+
+  it('thay đổi cửa hàng A không thay đổi cửa hàng B', async () => {
+    const storeB = await createStore(env.base)
+    const ownerB = await createUser(env.base, { storeId: storeB.id, role: 'owner' })
+    const changed = await env.app.request('/', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...env.base.owner.authHeader },
+      body: JSON.stringify({ negativeStockAlertsEnabled: false }),
+    })
+    expect(changed.status).toBe(200)
+
+    const resB = await env.app.request('/', { headers: ownerB.authHeader })
+    expect(resB.status).toBe(200)
+    expect(
+      ((await resB.json()) as { data: { negativeStockAlertsEnabled: boolean } }).data
+        .negativeStockAlertsEnabled,
+    ).toBe(true)
   })
 })

@@ -62,8 +62,8 @@ export const listReceiptsQuerySchema = z
 
 export const openDebtItemSchema = z.object({
   id: z.string().uuid(),
-  orderId: z.string().uuid(),
-  orderCode: z.string(),
+  orderId: z.string().uuid().nullable(),
+  orderCode: z.string().nullable(),
   amount: z.number().int(),
   paid: z.number().int(),
   remaining: z.number().int(),
@@ -81,8 +81,8 @@ export const customerOpenDebtsResponseSchema = z.object({
 export const receiptAllocationItemSchema = z.object({
   id: z.string().uuid(),
   debtId: z.string().uuid(),
-  orderId: z.string().uuid(),
-  orderCode: z.string(),
+  orderId: z.string().uuid().nullable(),
+  orderCode: z.string().nullable(),
   amount: z.number().int(),
   debtRemainingAfter: z.number().int().nullable(),
 })
