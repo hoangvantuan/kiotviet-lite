@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { PriceSourceBadge } from '@/features/pos/components/PriceSourceBadge'
 import { usePrintSettingsQuery } from '@/features/settings/use-print-settings'
 import { PAYMENT_METHOD_LABELS } from '@/lib/constants'
 import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
@@ -176,6 +177,14 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
                     {it.variantName && (
                       <div className="text-xs text-muted-foreground">{it.variantName}</div>
                     )}
+                    {it.priceSource && (
+                      <div className="mt-0.5">
+                        <PriceSourceBadge
+                          source={it.priceSource}
+                          sourceDetail={it.priceSourceDetail ?? null}
+                        />
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell>{it.unit ?? ''}</TableCell>
                   <TableCell className="text-right">{it.quantity}</TableCell>
@@ -204,6 +213,14 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
               </div>
               {it.variantName && (
                 <div className="text-xs text-muted-foreground">{it.variantName}</div>
+              )}
+              {it.priceSource && (
+                <div className="mt-0.5">
+                  <PriceSourceBadge
+                    source={it.priceSource}
+                    sourceDetail={it.priceSourceDetail ?? null}
+                  />
+                </div>
               )}
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">SL x Đơn giá</span>

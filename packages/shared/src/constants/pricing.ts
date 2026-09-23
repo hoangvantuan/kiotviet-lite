@@ -12,7 +12,7 @@ export type PriceSource = (typeof PRICE_SOURCES)[number]
 export const PRICE_SOURCE_LABELS: Record<PriceSource, string> = {
   customer_price: 'Giá riêng KH',
   category_discount: 'CK danh mục',
-  manual_override: 'Giá chỉnh tay',
+  manual_override: 'Sửa giá',
   volume_price: 'Giá SL',
   price_list: 'Bảng giá',
   retail_price: 'Giá lẻ',

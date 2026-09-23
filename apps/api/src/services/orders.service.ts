@@ -11,6 +11,7 @@ import {
   type ListOrdersQuery,
   orderItems,
   orders,
+  type PriceSource,
   products,
   productUnitConversions,
   productVariants,
@@ -60,6 +61,8 @@ export interface OrderDetailItem {
   lineTotal: number
   originalPrice: number | null
   priceOverride: boolean
+  priceSource?: PriceSource | null
+  priceSourceDetail?: string | null
   sku?: string | null
   costPrice?: number | null
 }
@@ -475,6 +478,12 @@ export async function createOrder({
 
         adjustedSubtotal += effectiveLineTotal
 
+        // #32: Server determines price source; never trust client-sent labels.
+        const itemPriceSource = effectivePriceOverride ? 'manual_override' : resolvedPrice.source
+        const itemPriceSourceDetail = effectivePriceOverride
+          ? (item.priceOverrideReason ?? null)
+          : resolvedPrice.sourceDetail
+
         // Insert order_item
         const [insertedItem] = await tx
           .insert(orderItems)
@@ -496,6 +505,8 @@ export async function createOrder({
             priceOverride: effectivePriceOverride,
             priceOverrideReason: item.priceOverrideReason ?? null,
             priceOverridePinUsed: effectivePriceOverridePinUsed,
+            priceSource: itemPriceSource,
+            priceSourceDetail: itemPriceSourceDetail,
           })
           .returning({ id: orderItems.id })
 
@@ -574,6 +585,8 @@ export async function createOrder({
           lineTotal: effectiveLineTotal,
           originalPrice: item.originalPrice ?? null,
           priceOverride: effectivePriceOverride,
+          priceSource: itemPriceSource,
+          priceSourceDetail: itemPriceSourceDetail,
           sku: itemSku,
           costPrice: itemCostPrice,
         })
@@ -1507,6 +1520,8 @@ export async function getOrderDetail({
       lineTotal: orderItems.lineTotal,
       originalPrice: orderItems.originalPrice,
       priceOverride: orderItems.priceOverride,
+      priceSource: orderItems.priceSource,
+      priceSourceDetail: orderItems.priceSourceDetail,
       sku: sql<string | null>`COALESCE(${productVariants.sku}, ${products.sku})`.as('sku'),
       costPrice: sql<
         number | null
@@ -1533,6 +1548,8 @@ export async function getOrderDetail({
     lineTotal: Number(it.lineTotal),
     originalPrice: it.originalPrice != null ? Number(it.originalPrice) : null,
     priceOverride: it.priceOverride,
+    priceSource: it.priceSource ?? null,
+    priceSourceDetail: it.priceSourceDetail ?? null,
     sku: it.sku ?? null,
     costPrice: it.costPrice != null ? Number(it.costPrice) : null,
   }))

@@ -1,4 +1,4 @@
-import type { PosVariantItem } from '@kiotviet-lite/shared'
+import type { PosVariantItem, PriceSource } from '@kiotviet-lite/shared'
 
 export type { PosProductItem, PosUnitConversion, PosVariantItem } from '@kiotviet-lite/shared'
 export type PosProductVariant = PosVariantItem
@@ -15,6 +15,9 @@ export interface OrderDetailItem {
   lineTotal: number
   sku?: string | null
   costPrice?: number | null
+  priceOverride?: boolean
+  priceSource?: PriceSource | null
+  priceSourceDetail?: string | null
 }
 
 export interface OrderDetail {

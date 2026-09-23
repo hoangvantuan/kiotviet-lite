@@ -17,8 +17,27 @@ export function buildCartItemId(
   return parts.join('-')
 }
 
-export function applyResults(results: ResolvedPriceItem[]) {
-  const { updateItemPrice } = useCartStore.getState()
+/**
+ * Apply pricing results to a specific tab. Guards against:
+ * - Tab mismatch (response was for a different tab than current active)
+ * - Customer change (customer changed since request was fired)
+ * - Manual override (item was edited by user since request)
+ */
+export function applyResults(
+  results: ResolvedPriceItem[],
+  /** Context captured at request time */
+  ctx?: { tabIndex: number; customerId: string | null },
+) {
+  const state = useCartStore.getState()
+  const { updateItemPrice } = state
+
+  // If context provided, verify we're still on the same tab with the same customer
+  if (ctx) {
+    if (state.activeTab !== ctx.tabIndex) return // tab switched, discard
+    const tab = state.tabs[ctx.tabIndex]
+    if (tab && tab.customerId !== ctx.customerId) return // customer changed, discard
+  }
+
   for (const r of results) {
     const id = buildCartItemId(r.productId, r.variantId ?? null, r.unitConversionId ?? null)
     updateItemPrice(id, r.price, r.source, r.sourceDetail)
@@ -44,8 +63,9 @@ export function repriceOnAddAction(
   unitConversionId: string | null,
   quantity: number,
 ) {
-  const customerId =
-    useCartStore.getState().tabs[useCartStore.getState().activeTab]?.customerId ?? null
+  const state = useCartStore.getState()
+  const tabIndex = state.activeTab
+  const customerId = state.tabs[tabIndex]?.customerId ?? null
   const itemId = buildCartItemId(productId, variantId, unitConversionId)
   const seq = (itemSeqMap.get(itemId) ?? 0) + 1
   itemSeqMap.set(itemId, seq)
@@ -57,13 +77,15 @@ export function repriceOnAddAction(
   return resolvePricesApi(input)
     .then((res) => {
       if (itemSeqMap.get(itemId) !== seq) return
-      applyResults(res.data)
+      applyResults(res.data, { tabIndex, customerId })
     })
     .catch(() => {})
 }
 
 export function repriceOnQuantityAction(itemId: string, newQty: number) {
-  const tab = useCartStore.getState().tabs[useCartStore.getState().activeTab]
+  const state = useCartStore.getState()
+  const tabIndex = state.activeTab
+  const tab = state.tabs[tabIndex]
   const customerId = tab?.customerId ?? null
   const item = tab?.items.find((i) => i.id === itemId)
   if (!item || item.priceOverride) return
@@ -85,7 +107,7 @@ export function repriceOnQuantityAction(itemId: string, newQty: number) {
   return resolvePricesApi(input)
     .then((res) => {
       if (itemSeqMap.get(itemId) !== seq) return
-      applyResults(res.data)
+      applyResults(res.data, { tabIndex, customerId })
     })
     .catch(() => {})
 }
@@ -109,6 +131,7 @@ export function useAutoReprice() {
 
     if (debounceRef.current) clearTimeout(debounceRef.current)
     const currentSeq = ++autoRepriceSeq
+    const tabIndex = activeTab
 
     debounceRef.current = setTimeout(() => {
       const input: ResolvePricesInput = {
@@ -123,7 +146,7 @@ export function useAutoReprice() {
       resolvePricesApi(input)
         .then((res) => {
           if (currentSeq !== autoRepriceSeq) return
-          applyResults(res.data)
+          applyResults(res.data, { tabIndex, customerId })
         })
         .catch(() => {})
     }, 200)

@@ -17,6 +17,7 @@ vi.mock('../pos-pricing-api', () => ({
 describe('use-auto-reprice (M14 & M15)', () => {
   beforeEach(() => {
     resetRepriceSequence()
+    useCartStore.getState().setActiveTab(1)
     useCartStore.getState().clearCart()
     vi.clearAllMocks()
   })
@@ -136,6 +137,100 @@ describe('use-auto-reprice (M14 & M15)', () => {
       const currentItem = useCartStore.getState().tabs[1]?.items.find((i) => i.id === itemId)
       expect(currentItem?.unitPrice).toBe(80_000)
       expect(currentItem?.priceSource).toBe('volume_price')
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // #32 Regression: Tab-cross-contamination protection
+  // ---------------------------------------------------------------------------
+  describe('#32: Tab safety — applyResults guards against tab/customer mismatch', () => {
+    it('applyResults with tab context discards results when tab has switched', () => {
+      // Add same item to tab 1
+      useCartStore.getState().addItem({
+        productId: 'p1',
+        variantId: null,
+        productName: 'SP 1',
+        variantName: null,
+        sku: 'SKU1',
+        unitPrice: 100_000,
+        costPrice: 50_000,
+        imageUrl: null,
+        notes: null,
+        unitName: null,
+        unitConversionId: null,
+      })
+
+      // Switch to tab 2 and add same itemId pattern
+      useCartStore.getState().setActiveTab(2)
+      useCartStore.getState().addItem({
+        productId: 'p1',
+        variantId: null,
+        productName: 'SP 1',
+        variantName: null,
+        sku: 'SKU1',
+        unitPrice: 200_000,
+        costPrice: 50_000,
+        imageUrl: null,
+        notes: null,
+        unitName: null,
+        unitConversionId: null,
+      })
+
+      // Now simulate: results were for tab 1, but user is on tab 2
+      applyResults(
+        [
+          {
+            productId: 'p1',
+            variantId: null,
+            unitConversionId: null,
+            price: 50_000,
+            source: 'customer_price',
+            sourceDetail: 'Giá riêng',
+          },
+        ],
+        { tabIndex: 1, customerId: null },
+      )
+
+      // Tab 2's item should NOT be overwritten
+      const tab2Item = useCartStore.getState().tabs[2]?.items.find((i) => i.id === 'p1')
+      expect(tab2Item?.unitPrice).toBe(200_000)
+      expect(tab2Item?.priceSource).toBe('retail_price')
+
+      // Tab 1's item should also NOT be overwritten because activeTab is 2
+      const tab1Item = useCartStore.getState().tabs[1]?.items.find((i) => i.id === 'p1')
+      expect(tab1Item?.unitPrice).toBe(100_000)
+    })
+
+    it('applyResults without context still applies to active tab (backward compat)', () => {
+      useCartStore.getState().addItem({
+        productId: 'p1',
+        variantId: null,
+        productName: 'SP 1',
+        variantName: null,
+        sku: 'SKU1',
+        unitPrice: 100_000,
+        costPrice: 50_000,
+        imageUrl: null,
+        notes: null,
+        unitName: null,
+        unitConversionId: null,
+      })
+
+      // No context passed — backward compatible
+      applyResults([
+        {
+          productId: 'p1',
+          variantId: null,
+          unitConversionId: null,
+          price: 80_000,
+          source: 'volume_price',
+          sourceDetail: 'SL >= 5',
+        },
+      ])
+
+      const item = useCartStore.getState().tabs[1]?.items.find((i) => i.id === 'p1')
+      expect(item?.unitPrice).toBe(80_000)
+      expect(item?.priceSource).toBe('volume_price')
     })
   })
 })

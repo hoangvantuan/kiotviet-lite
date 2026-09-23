@@ -11,6 +11,7 @@ import {
 } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
+import type { PriceSource } from '../constants/pricing.js'
 import { orders } from './orders.js'
 import { productVariants } from './product-variants.js'
 import { products } from './products.js'
@@ -41,6 +42,10 @@ export const orderItems = pgTable(
     priceOverride: boolean().notNull().default(false),
     priceOverrideReason: varchar({ length: 255 }),
     priceOverridePinUsed: boolean().notNull().default(false),
+    // #32: Server-determined price provenance snapshot, immutable after order creation.
+    // Server populates from resolveProductPrice; client-sent labels are ignored.
+    priceSource: varchar({ length: 32 }).$type<PriceSource>(),
+    priceSourceDetail: varchar({ length: 255 }),
     note: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },

@@ -17,8 +17,6 @@ interface PriceSourceBadgeProps {
 }
 
 export function PriceSourceBadge({ source, sourceDetail }: PriceSourceBadgeProps) {
-  if (source === 'retail_price') return null
-
   return (
     <span
       className={cn(
