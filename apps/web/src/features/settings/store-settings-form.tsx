@@ -21,6 +21,7 @@ export function StoreSettingsForm() {
   const storeQuery = useStoreQuery()
   const updateMutation = useUpdateStoreMutation()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const formStoreIdRef = useRef<string | null>(null)
   const [logoError, setLogoError] = useState<string | null>(null)
 
   const form = useForm<UpdateStoreInput>({
@@ -35,14 +36,18 @@ export function StoreSettingsForm() {
   })
 
   useEffect(() => {
-    if (storeQuery.data) {
-      form.reset({
+    if (!storeQuery.data) return
+    const storeChanged = formStoreIdRef.current !== storeQuery.data.id
+    formStoreIdRef.current = storeQuery.data.id
+    form.reset(
+      {
         name: storeQuery.data.name ?? '',
         address: storeQuery.data.address ?? '',
         phone: storeQuery.data.phone ?? '',
         logoUrl: storeQuery.data.logoUrl ?? '',
-      })
-    }
+      },
+      storeChanged ? undefined : { keepDirtyValues: true },
+    )
   }, [storeQuery.data, form])
 
   const logoUrl = form.watch('logoUrl')
@@ -84,7 +89,13 @@ export function StoreSettingsForm() {
         phone: values.phone?.trim() ? values.phone : null,
         logoUrl: values.logoUrl ? values.logoUrl : null,
       }
-      await updateMutation.mutateAsync(payload)
+      const { data } = await updateMutation.mutateAsync(payload)
+      form.reset({
+        name: data.name,
+        address: data.address ?? '',
+        phone: data.phone ?? '',
+        logoUrl: data.logoUrl ?? '',
+      })
       showSuccess('Đã cập nhật cửa hàng')
     } catch (err) {
       handleApiError(err, form)
