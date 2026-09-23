@@ -53,6 +53,12 @@ export const NAV_ITEMS: NavItem[] = [
     icon: FolderTree,
     requiredPermission: 'products.manage',
   },
+  {
+    path: '/products/brands',
+    label: 'Thương hiệu',
+    icon: Tags,
+    requiredPermission: 'products.manage',
+  },
   { path: '/customers', label: 'Khách hàng', icon: Users, requiredPermission: 'customers.manage' },
   {
     path: '/receipts',

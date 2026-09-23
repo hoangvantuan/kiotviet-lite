@@ -14,6 +14,7 @@ import { requestLoggerMiddleware } from './middleware/request-logger.middleware.
 import { securityHeaders } from './middleware/security-headers.middleware.js'
 import { createAuditRoutes } from './routes/audit.routes.js'
 import { createAuthRoutes } from './routes/auth.routes.js'
+import { createBrandsRoutes } from './routes/brands.routes.js'
 import { createCategoriesRoutes } from './routes/categories.routes.js'
 import { createCategoryDiscountsRoutes } from './routes/category-discounts.routes.js'
 import { createCustomerGroupsRoutes } from './routes/customer-groups.routes.js'
@@ -71,6 +72,7 @@ app.get('/api/v1/health', (c) => {
 
 app.route('/api/v1/auth', createAuthRoutes({ db }))
 app.route('/api/v1/users', createUsersRoutes({ db }))
+app.route('/api/v1/brands', createBrandsRoutes({ db }))
 app.route('/api/v1/categories', createCategoriesRoutes({ db }))
 app.route('/api/v1/products', createProductsRoutes({ db }))
 app.route('/api/v1/products', createProductHistoryRoutes({ db }))
