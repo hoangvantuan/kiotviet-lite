@@ -8,8 +8,9 @@ import { type UpdateStoreInput, updateStoreSchema } from '@kiotviet-lite/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { handleApiError } from '@/lib/api-error'
-import { showSuccess } from '@/lib/toast'
+import { showError, showSuccess } from '@/lib/toast'
 
 import { useStoreQuery, useUpdateStoreMutation } from './use-store-settings'
 
@@ -100,81 +101,110 @@ export function StoreSettingsForm() {
   const isPending = updateMutation.isPending
 
   return (
-    <form onSubmit={submit} className="max-w-2xl space-y-6" noValidate>
-      <div className="space-y-2">
-        <h2 className="text-lg font-semibold text-foreground">Thông tin cửa hàng</h2>
-        <p className="text-sm text-muted-foreground">
-          Cập nhật tên, địa chỉ, liên hệ và logo của cửa hàng.
-        </p>
-      </div>
+    <div className="max-w-2xl space-y-8">
+      <form onSubmit={submit} className="space-y-6" noValidate>
+        <div className="space-y-2">
+          <h2 className="text-lg font-semibold text-foreground">Thông tin cửa hàng</h2>
+          <p className="text-sm text-muted-foreground">
+            Cập nhật tên, địa chỉ, liên hệ và logo của cửa hàng.
+          </p>
+        </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="store-name">Tên cửa hàng</Label>
-        <Input id="store-name" {...form.register('name')} />
-        {form.formState.errors.name && (
-          <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
-        )}
-      </div>
+        <div className="space-y-2">
+          <Label htmlFor="store-name">Tên cửa hàng</Label>
+          <Input id="store-name" {...form.register('name')} />
+          {form.formState.errors.name && (
+            <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
+          )}
+        </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="store-address">Địa chỉ</Label>
-        <Input id="store-address" {...form.register('address')} />
-        {form.formState.errors.address && (
-          <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>
-        )}
-      </div>
+        <div className="space-y-2">
+          <Label htmlFor="store-address">Địa chỉ</Label>
+          <Input id="store-address" {...form.register('address')} />
+          {form.formState.errors.address && (
+            <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>
+          )}
+        </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="store-phone">Số điện thoại</Label>
-        <Input id="store-phone" inputMode="tel" {...form.register('phone')} />
-        {form.formState.errors.phone && (
-          <p className="text-sm text-destructive">{form.formState.errors.phone.message}</p>
-        )}
-      </div>
+        <div className="space-y-2">
+          <Label htmlFor="store-phone">Số điện thoại</Label>
+          <Input id="store-phone" inputMode="tel" {...form.register('phone')} />
+          {form.formState.errors.phone && (
+            <p className="text-sm text-destructive">{form.formState.errors.phone.message}</p>
+          )}
+        </div>
 
-      <div className="space-y-2">
-        <Label>Logo cửa hàng</Label>
-        <div className="flex items-start gap-4">
-          <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-muted">
-            {logoUrl ? (
-              <img src={logoUrl} alt="Logo cửa hàng" className="h-full w-full object-cover" />
-            ) : (
-              <ImagePlus className="h-8 w-8 text-muted-foreground" />
-            )}
-          </div>
-          <div className="flex flex-col gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png"
-              className="hidden"
-              onChange={onLogoSelected}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {logoUrl ? 'Đổi logo' : 'Tải lên logo'}
-            </Button>
-            {logoUrl && (
-              <Button type="button" variant="ghost" size="sm" onClick={removeLogo}>
-                <X className="h-4 w-4" />
-                <span>Xoá logo</span>
+        <div className="space-y-2">
+          <Label>Logo cửa hàng</Label>
+          <div className="flex items-start gap-4">
+            <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-md border border-dashed border-border bg-muted">
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo cửa hàng" className="h-full w-full object-cover" />
+              ) : (
+                <ImagePlus className="h-8 w-8 text-muted-foreground" />
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png"
+                className="hidden"
+                onChange={onLogoSelected}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {logoUrl ? 'Đổi logo' : 'Tải lên logo'}
               </Button>
-            )}
-            <p className="text-xs text-muted-foreground">JPG hoặc PNG, tối đa 2MB.</p>
-            {logoError && <p className="text-sm text-destructive">{logoError}</p>}
+              {logoUrl && (
+                <Button type="button" variant="ghost" size="sm" onClick={removeLogo}>
+                  <X className="h-4 w-4" />
+                  <span>Xoá logo</span>
+                </Button>
+              )}
+              <p className="text-xs text-muted-foreground">JPG hoặc PNG, tối đa 2MB.</p>
+              {logoError && <p className="text-sm text-destructive">{logoError}</p>}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="flex justify-end">
-        <Button type="submit" disabled={isPending || !form.formState.isDirty}>
-          {isPending ? 'Đang lưu…' : 'Lưu thay đổi'}
-        </Button>
-      </div>
-    </form>
+        <div className="flex justify-end">
+          <Button type="submit" disabled={isPending || !form.formState.isDirty}>
+            {isPending ? 'Đang lưu…' : 'Lưu thay đổi'}
+          </Button>
+        </div>
+      </form>
+      <section className="space-y-3 rounded-lg border bg-card p-4">
+        <h2 className="text-lg font-semibold text-foreground">Cảnh báo tồn kho âm</h2>
+        <div className="flex items-center gap-3">
+          <Switch
+            id="negative-stock-alerts"
+            checked={storeQuery.data?.negativeStockAlertsEnabled ?? true}
+            disabled={isPending}
+            onCheckedChange={async (enabled) => {
+              try {
+                await updateMutation.mutateAsync({ negativeStockAlertsEnabled: enabled })
+                showSuccess(enabled ? 'Đã bật cảnh báo tồn kho âm' : 'Đã tắt cảnh báo tồn kho âm')
+              } catch {
+                showError('Không thể thay đổi cảnh báo tồn kho âm')
+              }
+            }}
+          />
+          <Label htmlFor="negative-stock-alerts">
+            {storeQuery.data?.negativeStockAlertsEnabled
+              ? 'Đang bật cảnh báo tồn kho âm'
+              : 'Đang tắt cảnh báo tồn kho âm'}
+          </Label>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Khi tắt, bán hàng vẫn trừ tồn kho và ghi sổ giao dịch kho nhưng không phát thông báo tồn
+          kho âm. Hãy bật lại sau khi kiểm kê xong.
+        </p>
+      </section>
+    </div>
   )
 }
