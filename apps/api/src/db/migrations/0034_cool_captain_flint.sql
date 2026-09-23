@@ -1,0 +1,1 @@
+ALTER TABLE "stores" ADD COLUMN "negative_stock_alerts_enabled" boolean DEFAULT true NOT NULL;
