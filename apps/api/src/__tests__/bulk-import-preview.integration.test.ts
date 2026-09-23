@@ -226,8 +226,7 @@ describe('bulk import preview over HTTP (PGlite)', () => {
     const { data } = await payload(update)
     expect(data.updates).toBe(1)
     expect(data.creates).toBe(1)
-    expect(data.sample[0]?.input).toEqual({ phone: null })
-    expect(data.sample[0]?.targetId).toBeTruthy()
+    expect(data.sample[0]?.['Điện thoại']).toBe('__XOA__ (xóa)')
     const unchanged = await upload(
       app,
       'suppliers',
@@ -313,7 +312,6 @@ describe('bulk import preview over HTTP (PGlite)', () => {
     expect(data.updates).toBe(0)
     expect(data.newCategories).toEqual(['Ống nhựa', 'Ống nhựa > PVC'])
     expect(data.newBrands).toEqual(['Bình Minh'])
-    expect(data.sample[0]?.targetId).toBeUndefined()
     expect(
       (
         await env.db
@@ -341,13 +339,23 @@ describe('bulk import preview over HTTP (PGlite)', () => {
       .insert(customerGroups)
       .values({ storeId: env.storeId, name: 'Khách sỉ' })
       .returning()
-    await env.db
-      .update(products)
-      .set({ categoryId: child!.id, brandId: brand!.id })
-      .where(eq(products.sku, 'SP-EXIST'))
-    await env.db.update(customers).set({ groupId: group!.id }).where(eq(customers.code, 'KH-EXIST'))
+    await env.db.insert(products).values({
+      storeId: env.storeId,
+      sku: 'SP-GROUP-ROUNDTRIP',
+      name: 'Thiết bị nhóm',
+      sellingPrice: 100,
+      categoryId: child!.id,
+      brandId: brand!.id,
+    })
+    await env.db.insert(customers).values({
+      storeId: env.storeId,
+      code: 'KH-GROUP-ROUNDTRIP',
+      name: 'Khách hàng nhóm',
+      groupId: group!.id,
+    })
     for (const kind of ['products', 'customers'] as const) {
-      const exported = await app.request(`/api/v1/bulk-export/${kind}/export`, {
+      const code = kind === 'products' ? 'SP-GROUP-ROUNDTRIP' : 'KH-GROUP-ROUNDTRIP'
+      const exported = await app.request(`/api/v1/bulk-export/${kind}/export?search=${code}`, {
         headers: env.owner.authHeader,
       })
       const result = await upload(
@@ -364,6 +372,14 @@ describe('bulk import preview over HTTP (PGlite)', () => {
       expect(data.newCategories).toEqual([])
       expect(data.newBrands).toEqual([])
     }
+    const grouped = await upload(
+      app,
+      'customers',
+      workbook('customers', [['KH-GROUP', 'Khách nhóm', '', '', '', '', '', 0, 'Khách sỉ']]),
+      'create-only',
+      env.owner.authHeader.Authorization,
+    )
+    expect((await payload(grouped)).data.sample[0]?.['Nhóm khách hàng']).toBe('Khách sỉ')
   })
 
   it('ignores extra columns but rejects formulas, forbidden clear tokens, and oversized row count', async () => {

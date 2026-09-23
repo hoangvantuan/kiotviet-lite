@@ -65,7 +65,7 @@ export interface BulkImportPreview {
   newCategories: string[]
   newBrands: string[]
   warnings: string[]
-  sample: BulkImportPreviewRow[]
+  sample: Record<string, unknown>[]
   digest: string
   // Internal validated plan: routes must omit rows from preview responses.
   rows: BulkImportPreviewRow[]
@@ -517,5 +517,34 @@ export async function previewBulkImport({
     .update(bytes)
     .update(JSON.stringify({ storeId: actor.storeId, ...plan }))
     .digest('hex')
-  return { ...plan, filename, warnings, sample: rows.slice(0, 10), digest }
+  const sample = rows.slice(0, 10).map((item) => {
+    const display: Record<string, unknown> = {
+      Dòng: item.row,
+      [expected[0]!]: item.key,
+      'Thao tác': {
+        create: 'Thêm mới',
+        update: 'Cập nhật',
+        'no-op': 'Không đổi',
+        error: 'Lỗi',
+      }[item.action],
+    }
+    for (const [field, value] of Object.entries(item.input)) {
+      const index = fields[kind].indexOf(field as never)
+      if (index < 0 || field === 'categoryId' || field === 'brandId') continue
+      display[expected[index]!] =
+        value === null
+          ? '__XOA__ (xóa)'
+          : field === 'groupId' && typeof value === 'string'
+            ? (groupRows.find((group) => group.id === value)?.name ?? value)
+            : value
+    }
+    if (kind === 'products') {
+      if (item.categoryPath !== undefined)
+        display[categoryColumn] = item.categoryPath === null ? '__XOA__ (xóa)' : item.categoryPath
+      if (item.brandName !== undefined)
+        display[brandColumn] = item.brandName === null ? '__XOA__ (xóa)' : item.brandName
+    }
+    return display
+  })
+  return { ...plan, filename, warnings, sample, digest }
 }

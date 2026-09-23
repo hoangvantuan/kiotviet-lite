@@ -99,7 +99,7 @@ function JobDetails({
         </p>
       )}
       {job.status === 'cancelled' && (
-        <p className="text-sm text-muted-foreground">Các dòng chưa xử lý đã được bỏ qua.</p>
+        <p className="text-sm text-muted-foreground">Không có bản ghi nào được nhập.</p>
       )}
       <div className="flex flex-wrap gap-2">
         <Button
@@ -234,6 +234,7 @@ export function BulkImportDialog({
       !file ||
       !preview ||
       pending ||
+      preview.errors.length > 0 ||
       ((preview.newCategories.length > 0 || preview.newBrands.length > 0) && !approved)
     )
       return
@@ -359,7 +360,7 @@ export function BulkImportDialog({
                     setMode('create-only')
                   }}
                 />
-                Chỉ thêm mới — bỏ qua bản ghi đã tồn tại
+                Chỉ thêm mới — mã đã tồn tại sẽ được báo lỗi, không ghi đè
               </label>
               <label className="flex items-start gap-2 text-sm">
                 <input
@@ -513,7 +514,8 @@ export function BulkImportDialog({
                 disabled={
                   !!pending ||
                   (!!needsApproval && !approved) ||
-                  preview.creates + preview.updates === 0
+                  preview.errors.length > 0 ||
+                  preview.totalRows === 0
                 }
                 onClick={() => void startImport()}
               >

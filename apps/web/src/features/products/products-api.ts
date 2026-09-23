@@ -29,6 +29,7 @@ function buildQuery(q: Partial<ListProductsQuery>): string {
   if (q.pageSize) params.set('pageSize', String(q.pageSize))
   if (q.search) params.set('search', q.search)
   if (q.categoryId) params.set('categoryId', q.categoryId)
+  if (q.brandId) params.set('brandId', q.brandId)
   if (q.status) params.set('status', q.status)
   if (q.stockFilter) params.set('stockFilter', q.stockFilter)
   const s = params.toString()

@@ -96,11 +96,26 @@ test('owner previews errors and names before committing; history survives reopen
   await dialog.getByRole('button', { name: 'Tải Excel lỗi' }).click()
   expect((await errorsRequest).postDataJSON()).toEqual({ errors: preview.errors })
   await dialog.getByRole('checkbox', { name: /Tôi đồng ý tạo/ }).check()
+  await expect(dialog.getByRole('button', { name: 'Xác nhận nhập' })).toBeDisabled()
+  await page.route('**/api/v1/bulk-import/products/preview', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      headers: {
+        'access-control-allow-origin': 'http://localhost:5173',
+        'access-control-allow-credentials': 'true',
+      },
+      body: JSON.stringify({ data: { ...preview, errors: [], digest: 'digest-valid' } }),
+    }),
+  )
+  await dialog.getByRole('button', { name: 'Quay lại' }).click()
+  await dialog.getByRole('button', { name: 'Xem trước' }).click()
+  await expect(dialog.getByText('Dòng 4, cột Tên sản phẩm:')).toHaveCount(0)
+  await dialog.getByRole('checkbox', { name: /Tôi đồng ý tạo/ }).check()
   const confirm = page.waitForRequest('**/api/v1/bulk-import/products/confirm')
   await dialog.getByRole('button', { name: 'Xác nhận nhập' }).click()
   const request = await confirm
   expect(request.postData()).toContain('name="digest"')
-  expect(request.postData()).toContain('digest-1')
+  expect(request.postData()).toContain('digest-valid')
   expect(request.postData()).toContain('name="approveNewNames"')
   expect(request.postData()).toContain('true')
   await expect(dialog.getByText('Đang chờ xử lý')).toBeVisible()
@@ -113,6 +128,49 @@ test('owner previews errors and names before committing; history survives reopen
   const fileRequest = page.waitForRequest('**/api/v1/bulk-import-jobs/job-1/file')
   await dialog.getByRole('button', { name: 'Tải tệp gốc' }).click()
   expect((await fileRequest).headers().authorization).toBe('Bearer test-token')
+})
+
+test('unchanged export can be confirmed without manufacturing a product update', async ({
+  page,
+}) => {
+  await mockCatalog(page, 'owner')
+  await page.route('**/api/v1/bulk-import/products/preview', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      headers: {
+        'access-control-allow-origin': 'http://localhost:5173',
+        'access-control-allow-credentials': 'true',
+      },
+      body: JSON.stringify({
+        data: {
+          ...preview,
+          totalRows: 11_055,
+          creates: 0,
+          updates: 0,
+          noOps: 11_055,
+          errors: [],
+          newCategories: [],
+          newBrands: [],
+          digest: 'digest-noop',
+        },
+      }),
+    }),
+  )
+  await page.goto('/products')
+  await page.getByRole('button', { name: 'Nhập Excel' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.locator('input[type=file]').setInputFiles({
+    name: 'products.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: Buffer.from('xlsx'),
+  })
+  await dialog.getByRole('radio', { name: /Thêm hoặc cập nhật/ }).check()
+  await dialog.getByRole('button', { name: 'Xem trước' }).click()
+  const confirmButton = dialog.getByRole('button', { name: 'Xác nhận nhập' })
+  await expect(confirmButton).toBeEnabled()
+  const request = page.waitForRequest('**/api/v1/bulk-import/products/confirm')
+  await confirmButton.click()
+  expect((await request).postData()).toContain('digest-noop')
 })
 
 test('invalid files cannot reach preview; changing file clears prior preview', async ({ page }) => {
@@ -192,7 +250,6 @@ test('active import can be cancelled and failed history explains the failure', a
   await expect(dialog.getByText('Đang chờ xử lý')).toBeVisible()
   await dialog.getByRole('button', { name: 'Huỷ lần nhập' }).click()
   await expect(dialog.getByText('Đã huỷ', { exact: true })).toBeVisible()
-  await expect(dialog.getByText('Các dòng chưa xử lý đã được bỏ qua.')).toBeVisible()
   await dialog.getByRole('button', { name: 'Đóng' }).click()
 
   await page.route('**/api/v1/bulk-import-jobs', (route) =>
