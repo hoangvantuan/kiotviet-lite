@@ -5,7 +5,14 @@ export const reportDateRangeSchema = z.object({
   to: z.string().date().optional(),
 })
 
-export const revenueReportTabSchema = z.enum(['time', 'product', 'customer', 'employee'])
+export const revenueReportTabSchema = z.enum([
+  'time',
+  'product',
+  'customer',
+  'employee',
+  'thuong-hieu',
+  'danh-muc',
+])
 export type RevenueReportTab = z.infer<typeof revenueReportTabSchema>
 
 export const revenueGroupBySchema = z.enum(['day', 'week', 'month'])
@@ -92,6 +99,13 @@ export const revenueByEmployeeRowSchema = z.object({
   percentage: z.number(),
 })
 export type RevenueByEmployeeRow = z.infer<typeof revenueByEmployeeRowSchema>
+export const revenueByDimensionRowSchema = z.object({
+  dimensionId: z.string().uuid().nullable(),
+  name: z.string(),
+  revenue: z.number().int(),
+  percentage: z.number(),
+})
+export type RevenueByDimensionRow = z.infer<typeof revenueByDimensionRowSchema>
 
 export const revenueSummarySchema = z.object({
   totalOrders: z.number().int(),
@@ -117,12 +131,17 @@ export interface RevenueByEmployeeResponse {
   rows: RevenueByEmployeeRow[]
   summary: { totalEmployees: number; totalRevenue: number }
 }
+export interface RevenueByDimensionResponse {
+  rows: RevenueByDimensionRow[]
+  summary: { totalRevenue: number }
+}
 
 export type RevenueReportResponse =
   | RevenueByTimeResponse
   | RevenueByProductResponse
   | RevenueByCustomerResponse
   | RevenueByEmployeeResponse
+  | RevenueByDimensionResponse
 
 // Profit report response types
 export const profitRowSchema = z.object({

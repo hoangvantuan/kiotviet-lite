@@ -1,12 +1,16 @@
 import { and, eq, gt, gte, lte, sql } from 'drizzle-orm'
 
 import {
+  brands,
+  categories,
   customers,
   debts,
   orderItems,
+  orderReturnItems,
   orders,
   products,
   type RevenueByCustomerResponse,
+  type RevenueByDimensionResponse,
   type RevenueByEmployeeResponse,
   type RevenueByProductResponse,
   type RevenueByTimeResponse,
@@ -240,4 +244,95 @@ export async function getRevenueByEmployee(
   }))
 
   return { rows, summary: { totalEmployees: rows.length, totalRevenue } }
+}
+
+export async function getRevenueByDimension(
+  db: Db,
+  storeId: string,
+  from: string | undefined,
+  to: string | undefined,
+  dimension: 'thuong-hieu' | 'danh-muc',
+): Promise<RevenueByDimensionResponse> {
+  const { start, end } = parseDateRangeLocal(from, to)
+  const dimensionId = dimension === 'thuong-hieu' ? brands.id : categories.id
+  const dimensionName = dimension === 'thuong-hieu' ? brands.name : categories.name
+
+  // Group first by order: order-level discounts must be allocated across the
+  // original line totals before subtracting the already-discounted refunds.
+  const result = await db
+    .select({
+      orderId: orders.id,
+      orderTotal: orders.total,
+      dimensionId,
+      name: dimensionName,
+      gross: sql<number>`coalesce(sum(${orderItems.lineTotal}), 0)`.as('gross'),
+      refunded: sql<number>`coalesce(sum(coalesce((
+        SELECT sum(${orderReturnItems.lineTotal})
+        FROM ${orderReturnItems}
+        WHERE ${orderReturnItems.orderItemId} = ${orderItems.id}
+      ), 0)), 0)`.as('refunded'),
+    })
+    .from(orders)
+    .leftJoin(orderItems, eq(orderItems.orderId, orders.id))
+    .leftJoin(products, and(eq(products.id, orderItems.productId), eq(products.storeId, storeId)))
+    .leftJoin(brands, and(eq(brands.id, products.brandId), eq(brands.storeId, storeId)))
+    .leftJoin(
+      categories,
+      and(eq(categories.id, products.categoryId), eq(categories.storeId, storeId)),
+    )
+    .where(
+      and(
+        eq(orders.storeId, storeId),
+        revenueStatusFilter(),
+        gte(orders.createdAt, start),
+        lte(orders.createdAt, end),
+      ),
+    )
+    .groupBy(orders.id, dimensionId, dimensionName)
+    .orderBy(orders.id, dimensionId)
+
+  const totals = new Map<
+    string | null,
+    { dimensionId: string | null; name: string; revenue: number }
+  >()
+  for (let i = 0; i < result.length; ) {
+    let endIndex = i + 1
+    let grossTotal = Number(result[i]!.gross)
+    while (endIndex < result.length && result[endIndex]!.orderId === result[i]!.orderId) {
+      grossTotal += Number(result[endIndex]!.gross)
+      endIndex++
+    }
+    const orderTotal = Number(result[i]!.orderTotal)
+    let allocated = 0
+    for (let j = i; j < endIndex; j++) {
+      const group = result[j]!
+      const grossShare =
+        j === endIndex - 1
+          ? orderTotal - allocated
+          : grossTotal > 0
+            ? Math.floor((Number(group.gross) * orderTotal) / grossTotal)
+            : 0
+      allocated += grossShare
+      const revenue = grossShare - Number(group.refunded)
+      const existing = totals.get(group.dimensionId)
+      if (existing) existing.revenue += revenue
+      else
+        totals.set(group.dimensionId, {
+          dimensionId: group.dimensionId,
+          name: group.name ?? 'Chưa phân loại',
+          revenue,
+        })
+    }
+    i = endIndex
+  }
+
+  const grouped = [...totals.values()]
+  const totalRevenue = grouped.reduce((sum, row) => sum + row.revenue, 0)
+  const rows = grouped
+    .sort((a, b) => b.revenue - a.revenue)
+    .map((row) => ({
+      ...row,
+      percentage: totalRevenue > 0 ? Math.round((row.revenue / totalRevenue) * 10000) / 100 : 0,
+    }))
+  return { rows, summary: { totalRevenue } }
 }
