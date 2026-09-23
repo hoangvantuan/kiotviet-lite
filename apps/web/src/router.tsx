@@ -29,6 +29,7 @@ import { PosPage } from '@/pages/pos-page'
 import { PricingDetailPage } from '@/pages/pricing-detail-page'
 import { PricingPage } from '@/pages/pricing-page'
 import { PricingReportPage } from '@/pages/pricing-report-page'
+import { ProductsBrandsPage } from '@/pages/products-brands-page'
 import { ProductsCategoriesPage } from '@/pages/products-categories-page'
 import { ProductsPage } from '@/pages/products-page'
 import { ProfitReportPage } from '@/pages/profit-report-page'
@@ -136,6 +137,13 @@ const productsCategoriesRoute = createRoute({
   path: '/products/categories',
   beforeLoad: requirePermissionGuard('products.manage'),
   component: ProductsCategoriesPage,
+})
+
+const productsBrandsRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/products/brands',
+  beforeLoad: requirePermissionGuard('products.manage'),
+  component: ProductsBrandsPage,
 })
 
 const customersRoute = createRoute({
@@ -409,6 +417,7 @@ const routeTree = rootRoute.addChildren([
       homeRoute,
       productsRoute,
       productsCategoriesRoute,
+      productsBrandsRoute,
       customersRoute,
       customersGroupsRoute,
       customerDetailRoute,
