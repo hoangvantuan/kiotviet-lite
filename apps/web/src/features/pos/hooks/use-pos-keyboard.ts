@@ -5,6 +5,7 @@ interface UsePosKeyboardOptions {
   onNewOrder: () => void
   onFocusSearch: () => void
   onDebtPayment: () => void
+  onToggleProductGrid?: () => void
   enabled?: boolean
 }
 
@@ -13,6 +14,7 @@ export function usePosKeyboard({
   onNewOrder,
   onFocusSearch,
   onDebtPayment,
+  onToggleProductGrid,
   enabled = true,
 }: UsePosKeyboardOptions) {
   useEffect(() => {
@@ -26,6 +28,10 @@ export function usePosKeyboard({
         case 'F2':
           e.preventDefault()
           onPayment()
+          break
+        case 'F3':
+          e.preventDefault()
+          onToggleProductGrid?.()
           break
         case 'F4':
           // Story 5.1: F4 mở payment dialog với tab Ghi nợ
@@ -50,5 +56,5 @@ export function usePosKeyboard({
 
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [onPayment, onNewOrder, onFocusSearch, onDebtPayment, enabled])
+  }, [onPayment, onNewOrder, onFocusSearch, onDebtPayment, onToggleProductGrid, enabled])
 }

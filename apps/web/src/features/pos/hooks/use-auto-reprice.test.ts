@@ -6,6 +6,7 @@ import * as pricingApi from '../pos-pricing-api'
 import {
   applyResults,
   buildCartItemId,
+  repriceOnAddAction,
   repriceOnQuantityAction,
   resetRepriceSequence,
 } from './use-auto-reprice'
@@ -136,6 +137,96 @@ describe('use-auto-reprice (M14 & M15)', () => {
       const currentItem = useCartStore.getState().tabs[1]?.items.find((i) => i.id === itemId)
       expect(currentItem?.unitPrice).toBe(80_000)
       expect(currentItem?.priceSource).toBe('volume_price')
+    })
+
+    it('Chuyển tab khi repricing đang chạy không gây race condition ghi nhầm tab (Tab safety)', async () => {
+      // Tab 1 có sản phẩm p1
+      useCartStore.getState().setActiveTab(1)
+      useCartStore.getState().addItem({
+        productId: 'p1',
+        variantId: null,
+        productName: 'Sản phẩm 1',
+        variantName: null,
+        sku: 'SKU1',
+        unitPrice: 100_000,
+        costPrice: 50_000,
+        imageUrl: null,
+        notes: null,
+        unitName: null,
+        unitConversionId: null,
+      })
+
+      // Giả lập API resolvePricesApi có độ trễ 50ms trả về giá ưu đãi 75_000đ
+      vi.mocked(pricingApi.resolvePricesApi).mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        return {
+          data: [
+            {
+              productId: 'p1',
+              variantId: null,
+              price: 75_000,
+              source: 'price_list' as const,
+              sourceDetail: 'Bảng giá đặc biệt',
+            },
+          ],
+        }
+      })
+
+      // Kích hoạt repricing trên Tab 1
+      const repricePromise = repriceOnQuantityAction('p1', 5)
+
+      // Người dùng ngay lập tức chuyển sang Tab 2
+      useCartStore.getState().setActiveTab(2)
+      expect(useCartStore.getState().activeTab).toBe(2)
+
+      // Đợi repricing hoàn thành
+      await repricePromise
+
+      // Tab 1 phải được cập nhật giá đúng 75_000đ
+      const tab1Item = useCartStore.getState().tabs[1]?.items.find((i) => i.id === 'p1')
+      expect(tab1Item?.unitPrice).toBe(75_000)
+      expect(tab1Item?.priceSource).toBe('price_list')
+      expect(tab1Item?.priceSourceDetail).toBe('Bảng giá đặc biệt')
+
+      // Tab 2 không bị ảnh hưởng hay chèn dữ liệu sai
+      expect(useCartStore.getState().tabs[2]?.items).toHaveLength(0)
+    })
+
+    it('repriceOnAddAction với unitConversionId yêu cầu authoritative repricing thành công', async () => {
+      useCartStore.getState().setActiveTab(1)
+      useCartStore.getState().addItem({
+        productId: 'p-milk',
+        variantId: null,
+        productName: 'Sữa tươi',
+        variantName: null,
+        sku: 'MILK01',
+        unitPrice: 7_000,
+        costPrice: 4_500,
+        imageUrl: null,
+        notes: null,
+        unitName: 'Thùng',
+        unitConversionId: 'uc-thung',
+      })
+
+      vi.mocked(pricingApi.resolvePricesApi).mockResolvedValueOnce({
+        data: [
+          {
+            productId: 'p-milk',
+            variantId: null,
+            unitConversionId: 'uc-thung',
+            price: 310_000,
+            source: 'customer_price' as const,
+            sourceDetail: 'Giá sỉ thùng cho đại lý',
+          },
+        ],
+      })
+
+      await repriceOnAddAction('p-milk', null, 'uc-thung', 2)
+
+      const item = useCartStore.getState().tabs[1]?.items.find((i) => i.id === 'p-milk-uc-thung')
+      expect(item?.unitPrice).toBe(310_000)
+      expect(item?.priceSource).toBe('customer_price')
+      expect(item?.priceSourceDetail).toBe('Giá sỉ thùng cho đại lý')
     })
   })
 })

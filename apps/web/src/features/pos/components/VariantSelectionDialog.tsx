@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 
 import { useAddToCart } from '../hooks/use-add-to-cart'
 import type { PosProductItem, PosProductVariant, PosUnitConversion } from '../types'
+import { computeUnitConversionPriceAndStock } from '../utils'
 
 interface VariantSelectionDialogProps {
   product: PosProductItem | null
@@ -67,10 +68,7 @@ export function VariantSelectionDialog({
     if (!product) return 0
     const rawPrice =
       product.hasVariants && selectedVariant ? selectedVariant.price : product.basePrice
-    if (!selectedUnit) return rawPrice
-    return selectedUnit.sellingPrice && selectedUnit.sellingPrice > 0
-      ? selectedUnit.sellingPrice
-      : Math.round(rawPrice * selectedUnit.conversionFactor)
+    return computeUnitConversionPriceAndStock(rawPrice, 0, selectedUnit).unitPrice
   }, [product, selectedVariant, selectedUnit])
 
   const rawStock = useMemo(() => {
@@ -81,8 +79,7 @@ export function VariantSelectionDialog({
 
   const maxStock = useMemo(() => {
     if (rawStock === Infinity) return Infinity
-    if (!selectedUnit) return rawStock
-    return Math.floor(rawStock / selectedUnit.conversionFactor)
+    return computeUnitConversionPriceAndStock(0, rawStock, selectedUnit).stockQuantity
   }, [rawStock, selectedUnit])
 
   useEffect(() => {

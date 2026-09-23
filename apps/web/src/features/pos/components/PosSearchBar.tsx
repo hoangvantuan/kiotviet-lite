@@ -2,7 +2,9 @@ import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 're
 import { Loader2, ScanBarcode, Search } from 'lucide-react'
 
 import { useMediaQuery } from '@/hooks/use-media-query'
+import { apiClient } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
+import { showWarning } from '@/lib/toast'
 import { useCartStore } from '@/stores/use-cart-store'
 
 import { useAddToCart } from '../hooks/use-add-to-cart'
@@ -80,25 +82,92 @@ export function PosSearchBar({ searchRef, onOpenScanner, onSelectProduct }: PosS
       setInputValue('')
       setDebouncedQuery('')
       setIsOpen(false)
-      inputRef.current?.focus()
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 0)
     },
     [mode, addToCart, onSelectProduct],
   )
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (!isOpen || !results) return
-
+  const handleKeyDown = async (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
+      if (!isOpen || !results || results.length === 0) return
       e.preventDefault()
       setHighlightIndex((prev) => (prev < results.length - 1 ? prev + 1 : 0))
-    } else if (e.key === 'ArrowUp') {
+      return
+    }
+
+    if (e.key === 'ArrowUp') {
+      if (!isOpen || !results || results.length === 0) return
       e.preventDefault()
       setHighlightIndex((prev) => (prev > 0 ? prev - 1 : results.length - 1))
-    } else if (e.key === 'Enter' && highlightIndex >= 0 && results[highlightIndex]) {
-      e.preventDefault()
-      handleSelect(results[highlightIndex])
-    } else if (e.key === 'Escape') {
+      return
+    }
+
+    if (e.key === 'Escape') {
       setIsOpen(false)
+      return
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const query = inputValue.trim()
+      if (!query) return
+
+      // 1. Nếu người dùng điều hướng dropdown bằng bàn phím
+      if (isOpen && highlightIndex >= 0 && results && results[highlightIndex]) {
+        handleSelect(results[highlightIndex])
+        return
+      }
+
+      // 2. Nếu kết quả debounced đã sẵn sàng và trùng query
+      if (results && results.length > 0 && debouncedQuery.toLowerCase() === query.toLowerCase()) {
+        const exact = results.find(
+          (p) =>
+            p.barcode?.toLowerCase() === query.toLowerCase() ||
+            p.sku.toLowerCase() === query.toLowerCase(),
+        )
+        if (exact) {
+          handleSelect(exact)
+          return
+        }
+        if (results.length === 1 && results[0]) {
+          handleSelect(results[0])
+          return
+        }
+      }
+
+      // 3. Máy quét mã vạch / SKU gửi Enter ngay lập tức trước khi timer debounce 150ms hoàn tất
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+
+      try {
+        const res = await apiClient.get<{ data: PosProductItem[] }>(
+          `/api/v1/pos/products/search?q=${encodeURIComponent(query)}`,
+        )
+        const items = res.data ?? []
+        if (items.length === 0) {
+          showWarning(`Không tìm thấy sản phẩm với mã: ${query}`)
+          return
+        }
+
+        const exact = items.find(
+          (p) =>
+            p.barcode?.toLowerCase() === query.toLowerCase() ||
+            p.sku.toLowerCase() === query.toLowerCase(),
+        )
+        const target = exact ?? (items.length === 1 ? items[0] : null)
+        if (target) {
+          handleSelect(target)
+        } else {
+          // Nhiều kết quả, không khớp chính xác mã: mở danh sách cho người dùng chọn
+          setDebouncedQuery(query)
+          setIsOpen(true)
+        }
+      } catch {
+        showWarning('Lỗi khi tìm sản phẩm. Vui lòng thử lại.')
+      }
     }
   }
 

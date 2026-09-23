@@ -5,6 +5,14 @@ import { expect, type Page, test } from './fixtures/auth.fixture'
  */
 async function addProductToCart(page: Page, productNameRegex: RegExp) {
   const productBtn = page.getByRole('button', { name: productNameRegex }).first()
+  const isVisible = await productBtn.isVisible().catch(() => false)
+  if (!isVisible) {
+    const gridToggle = page.getByRole('button', { name: /Lưới sản phẩm|Lưới ảnh/i })
+    if (await gridToggle.isVisible().catch(() => false)) {
+      await gridToggle.click()
+    }
+  }
+
   await expect(productBtn).toBeVisible({ timeout: 10000 })
   await productBtn.click()
 

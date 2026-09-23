@@ -30,3 +30,24 @@ export function getDenominations(total: number): number[] {
   // Deduplicate, sort ascending, max 5
   return [...new Set(result)].sort((a, b) => a - b).slice(0, 5)
 }
+
+import type { PosUnitConversion } from './types'
+
+/**
+ * Calculates display price and available stock based on unit conversion factor.
+ */
+export function computeUnitConversionPriceAndStock(
+  basePrice: number,
+  baseStock: number,
+  unitConversion: PosUnitConversion | null,
+): { unitPrice: number; stockQuantity: number } {
+  if (!unitConversion) {
+    return { unitPrice: basePrice, stockQuantity: baseStock }
+  }
+  const unitPrice =
+    unitConversion.sellingPrice && unitConversion.sellingPrice > 0
+      ? unitConversion.sellingPrice
+      : Math.round(basePrice * unitConversion.conversionFactor)
+  const stockQuantity = Math.floor(baseStock / unitConversion.conversionFactor)
+  return { unitPrice, stockQuantity }
+}

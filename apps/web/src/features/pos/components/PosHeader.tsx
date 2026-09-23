@@ -1,12 +1,18 @@
 import { Link } from '@tanstack/react-router'
-import { ArrowLeft, Zap } from 'lucide-react'
+import { ArrowLeft, LayoutGrid, Zap } from 'lucide-react'
 
 import { OfflineIndicator } from '@/components/shared/OfflineIndicator'
+import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useCartStore } from '@/stores/use-cart-store'
 
-export function PosHeader() {
+interface PosHeaderProps {
+  showProductGrid?: boolean
+  onToggleProductGrid?: () => void
+}
+
+export function PosHeader({ showProductGrid, onToggleProductGrid }: PosHeaderProps) {
   const mode = useCartStore((s) => s.mode)
   const setMode = useCartStore((s) => s.setMode)
 
@@ -24,6 +30,20 @@ export function PosHeader() {
 
       <div className="ml-auto flex items-center gap-3">
         <OfflineIndicator />
+
+        {onToggleProductGrid && (
+          <Button
+            type="button"
+            variant={showProductGrid ? 'default' : 'outline'}
+            size="sm"
+            onClick={onToggleProductGrid}
+            className="h-8 gap-1.5 text-xs font-medium"
+            aria-pressed={showProductGrid}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            <span>Lưới sản phẩm</span>
+          </Button>
+        )}
         <div className="flex items-center gap-2">
           <Zap
             className={`h-4 w-4 ${mode === 'quick' ? 'text-primary' : 'text-muted-foreground'}`}

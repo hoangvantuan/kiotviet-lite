@@ -3,6 +3,7 @@ import { useCallback } from 'react'
 import { useCartStore } from '@/stores/use-cart-store'
 
 import type { PosProductItem, PosProductVariant, PosUnitConversion } from '../types'
+import { computeUnitConversionPriceAndStock } from '../utils'
 import { buildCartItemId, repriceOnAddAction, useRepriceOnAdd } from './use-auto-reprice'
 
 export interface AddToCartOptions {
@@ -31,16 +32,12 @@ export function addToCartAction({
       : null)
 
   const rawPrice = variant ? variant.price : product.basePrice
-  const displayPrice = unitConversion
-    ? unitConversion.sellingPrice && unitConversion.sellingPrice > 0
-      ? unitConversion.sellingPrice
-      : Math.round(rawPrice * unitConversion.conversionFactor)
-    : rawPrice
-
   const rawStock = variant ? variant.stockQuantity : product.stockQuantity
-  const stockQuantity = unitConversion
-    ? Math.floor(rawStock / unitConversion.conversionFactor)
-    : rawStock
+  const { unitPrice: displayPrice, stockQuantity } = computeUnitConversionPriceAndStock(
+    rawPrice,
+    rawStock,
+    unitConversion,
+  )
 
   const effectiveUnitConversionId = unitConversion?.id ?? null
 
@@ -59,6 +56,10 @@ export function addToCartAction({
       unitConversionId: effectiveUnitConversionId,
       trackInventory: product.trackInventory,
       stockQuantity,
+      baseUnit: product.unit ?? null,
+      baseUnitPrice: rawPrice,
+      baseStockQuantity: rawStock,
+      unitConversions: product.unitConversions ?? [],
     },
     quantity,
   )
