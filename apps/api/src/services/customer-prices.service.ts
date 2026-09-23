@@ -28,7 +28,7 @@ interface CustomerPriceRow {
   id: string
   customerId: string
   customerName: string
-  customerPhone: string
+  customerPhone: string | null
   productId: string
   productName: string
   productSku: string

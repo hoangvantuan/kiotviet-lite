@@ -54,7 +54,7 @@ interface CustomerJoinRow {
   id: string
   storeId: string
   name: string
-  phone: string
+  phone: string | null
   email: string | null
   address: string | null
   taxId: string | null
@@ -332,7 +332,9 @@ export async function createCustomer({
   input,
   meta,
 }: CreateCustomerDeps): Promise<CustomerDetail> {
-  await ensurePhoneUnique({ db, storeId: actor.storeId, phone: input.phone })
+  if (input.phone) {
+    await ensurePhoneUnique({ db, storeId: actor.storeId, phone: input.phone })
+  }
 
   if (input.groupId) {
     await ensureGroupValid({ db, storeId: actor.storeId, groupId: input.groupId })
@@ -346,7 +348,7 @@ export async function createCustomer({
         .values({
           storeId: actor.storeId,
           name: input.name,
-          phone: input.phone,
+          phone: input.phone ?? null,
           email: input.email ?? null,
           address: input.address ?? null,
           taxId: input.taxId ?? null,
@@ -442,7 +444,7 @@ export async function updateCustomer({
     throw new ApiError('NOT_FOUND', 'Không tìm thấy khách hàng')
   }
 
-  if (input.phone !== undefined && input.phone !== target.phone) {
+  if (input.phone && input.phone !== target.phone) {
     await ensurePhoneUnique({
       db,
       storeId: actor.storeId,
@@ -602,7 +604,9 @@ export async function restoreCustomer({
     throw new ApiError('NOT_FOUND', 'Không tìm thấy khách hàng đã xoá')
   }
 
-  await ensurePhoneUnique({ db, storeId: actor.storeId, phone: target.phone })
+  if (target.phone) {
+    await ensurePhoneUnique({ db, storeId: actor.storeId, phone: target.phone })
+  }
 
   return db.transaction(async (tx) => {
     try {

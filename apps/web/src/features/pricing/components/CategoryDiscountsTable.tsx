@@ -71,7 +71,9 @@ export function CategoryDiscountsTable({ items, onEdit, onDelete }: Props) {
                 {p.customerName ? (
                   <>
                     <div className="font-medium">{p.customerName}</div>
-                    <div className="text-xs text-muted-foreground">{p.customerPhone}</div>
+                    {p.customerPhone && (
+                      <div className="text-xs text-muted-foreground">{p.customerPhone}</div>
+                    )}
                   </>
                 ) : (
                   <div className="flex items-center gap-1.5">

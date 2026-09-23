@@ -268,7 +268,7 @@ export interface ListCustomerOpenDebtsDeps {
 export interface CustomerOpenDebtsResult {
   customerId: string
   customerName: string
-  customerPhone: string
+  customerPhone: string | null
   totalRemaining: number
   items: OpenDebtItem[]
 }

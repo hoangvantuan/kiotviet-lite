@@ -91,10 +91,12 @@ export function CustomerDetailHeader({ customer, onEdit }: CustomerDetailHeaderP
           <div className="space-y-2">
             <h1 className="text-2xl font-semibold text-foreground">{customer.name}</h1>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Phone className="size-4" />
-                <span className="font-mono">{customer.phone}</span>
-              </span>
+              {customer.phone && (
+                <span className="flex items-center gap-1">
+                  <Phone className="size-4" />
+                  <span className="font-mono">{customer.phone}</span>
+                </span>
+              )}
               {customer.email && (
                 <span className="flex items-center gap-1">
                   <Mail className="size-4" />

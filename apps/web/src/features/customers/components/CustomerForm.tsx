@@ -62,7 +62,7 @@ function CreateCustomerDialog({ open, onOpenChange, groups }: CustomerFormDialog
     mode: 'onTouched',
     defaultValues: {
       name: '',
-      phone: '',
+      phone: null,
       email: null,
       address: null,
       taxId: null,
@@ -77,7 +77,7 @@ function CreateCustomerDialog({ open, onOpenChange, groups }: CustomerFormDialog
     if (open) {
       form.reset({
         name: '',
-        phone: '',
+        phone: null,
         email: null,
         address: null,
         taxId: null,
@@ -92,7 +92,7 @@ function CreateCustomerDialog({ open, onOpenChange, groups }: CustomerFormDialog
   const submit = form.handleSubmit(async (values) => {
     const payload: CreateCustomerInput = {
       name: values.name,
-      phone: values.phone,
+      phone: values.phone?.trim() || null,
       email: values.email?.trim() ? values.email.trim() : null,
       address: values.address?.trim() ? values.address.trim() : null,
       taxId: values.taxId?.trim() ? values.taxId.trim() : null,
@@ -175,7 +175,7 @@ function EditCustomerDialog({
     if (open && customer) {
       form.reset({
         name: customer.name,
-        phone: customer.phone,
+        phone: customer.phone ?? '',
         email: customer.email,
         address: customer.address,
         taxId: customer.taxId,
@@ -190,7 +190,8 @@ function EditCustomerDialog({
   const submit = form.handleSubmit(async (values) => {
     const payload: UpdateCustomerInput = {}
     if (values.name !== undefined && values.name !== customer.name) payload.name = values.name
-    if (values.phone !== undefined && values.phone !== customer.phone) payload.phone = values.phone
+    const phone = values.phone?.trim() || null
+    if (values.phone !== undefined && phone !== customer.phone) payload.phone = phone
     const normalizeOptional = (v: string | null | undefined) =>
       v === undefined ? undefined : v && v.trim() !== '' ? v.trim() : null
     const email = normalizeOptional(values.email)
@@ -289,7 +290,11 @@ function CustomerFields({ form, groups, groupSelectValue }: CustomerFieldsProps)
       </div>
       <div className="space-y-2">
         <Label htmlFor="cust-phone">Số điện thoại</Label>
-        <Input id="cust-phone" maxLength={15} {...form.register('phone')} />
+        <Input
+          id="cust-phone"
+          maxLength={15}
+          {...form.register('phone', { setValueAs: (v) => (v === '' ? null : v) })}
+        />
         {form.formState.errors.phone && (
           <p className="text-sm text-destructive">{form.formState.errors.phone.message}</p>
         )}

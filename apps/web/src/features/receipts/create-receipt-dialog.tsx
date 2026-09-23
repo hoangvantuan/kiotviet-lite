@@ -29,7 +29,7 @@ import { computeFifoAllocation } from './utils'
 interface SelectedCustomer {
   id: string
   name: string
-  phone: string
+  phone: string | null
   currentDebt: number
 }
 
@@ -178,9 +178,11 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
               <div className="rounded-md border bg-muted/30 p-3 flex items-start justify-between gap-2">
                 <div>
                   <p className="font-medium">{selectedCustomer.name}</p>
-                  <p className="text-xs text-muted-foreground font-mono">
-                    {selectedCustomer.phone}
-                  </p>
+                  {selectedCustomer.phone && (
+                    <p className="text-xs text-muted-foreground font-mono">
+                      {selectedCustomer.phone}
+                    </p>
+                  )}
                   <p className="text-sm mt-1">
                     Tổng nợ còn lại:{' '}
                     <span className="font-semibold">{formatVndWithSuffix(totalRemaining)}</span>
@@ -230,7 +232,9 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
                       >
                         <div className="min-w-0">
                           <p className="font-medium truncate">{c.name}</p>
-                          <p className="text-xs text-muted-foreground font-mono">{c.phone}</p>
+                          {c.phone && (
+                            <p className="text-xs text-muted-foreground font-mono">{c.phone}</p>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground shrink-0">
                           Nợ: {formatVndWithSuffix(c.currentDebt)}

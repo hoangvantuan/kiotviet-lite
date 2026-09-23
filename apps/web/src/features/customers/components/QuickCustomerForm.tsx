@@ -31,18 +31,21 @@ export function QuickCustomerForm({
   const form = useForm<QuickCreateCustomerInput>({
     resolver: zodResolver(quickCreateCustomerSchema),
     mode: 'onTouched',
-    defaultValues: { name: '', phone: '' },
+    defaultValues: { name: '', phone: null },
   })
 
   useEffect(() => {
-    form.reset({ name: '', phone: '' })
+    form.reset({ name: '', phone: null })
   }, [form])
 
   const submit = form.handleSubmit(async (values) => {
     try {
-      const result = await mutation.mutateAsync(values)
+      const result = await mutation.mutateAsync({
+        name: values.name,
+        phone: values.phone?.trim() || null,
+      })
       showSuccess('Đã tạo khách hàng')
-      form.reset({ name: '', phone: '' })
+      form.reset({ name: '', phone: null })
       onCreated?.(result.data)
     } catch (err) {
       if (err instanceof ApiClientError) {
@@ -87,7 +90,7 @@ export function QuickCustomerForm({
           id="quick-cust-phone"
           maxLength={15}
           placeholder="VD: 0901234567"
-          {...form.register('phone')}
+          {...form.register('phone', { setValueAs: (v) => (v === '' ? null : v) })}
         />
         {form.formState.errors.phone && (
           <p className="text-sm text-destructive">{form.formState.errors.phone.message}</p>

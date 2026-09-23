@@ -23,7 +23,9 @@ export function CustomerPricesCardList({ items, onEdit, onDelete }: Props) {
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <div className="font-medium">{p.customerName}</div>
-                <div className="text-xs text-muted-foreground">{p.customerPhone}</div>
+                {p.customerPhone && (
+                  <div className="text-xs text-muted-foreground">{p.customerPhone}</div>
+                )}
                 <div className="mt-2 text-sm">
                   <span className="font-medium">{p.productName}</span>
                   <span className="ml-2 text-xs text-muted-foreground">SKU {p.productSku}</span>

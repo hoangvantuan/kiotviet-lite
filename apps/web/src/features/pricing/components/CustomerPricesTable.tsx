@@ -48,7 +48,9 @@ export function CustomerPricesTable({ items, onEdit, onDelete }: Props) {
               <TableRow key={p.id}>
                 <TableCell className="align-top">
                   <div className="font-medium">{p.customerName}</div>
-                  <div className="text-xs text-muted-foreground">{p.customerPhone}</div>
+                  {p.customerPhone && (
+                    <div className="text-xs text-muted-foreground">{p.customerPhone}</div>
+                  )}
                 </TableCell>
                 <TableCell className="align-top">
                   <div className="font-medium">{p.productName}</div>

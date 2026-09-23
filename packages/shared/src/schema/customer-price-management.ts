@@ -40,7 +40,7 @@ export const customerPriceListItemSchema = z.object({
   id: z.string().uuid(),
   customerId: z.string().uuid(),
   customerName: z.string(),
-  customerPhone: z.string(),
+  customerPhone: z.string().nullable(),
   productId: z.string().uuid(),
   productName: z.string(),
   productSku: z.string(),

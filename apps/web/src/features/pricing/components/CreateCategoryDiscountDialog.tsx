@@ -228,7 +228,8 @@ export function CreateCategoryDiscountDialog({ open, onOpenChange }: Props) {
                   ) : (
                     customers.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
-                        {c.name} • {c.phone}
+                        {c.name}
+                        {c.phone && ` • ${c.phone}`}
                       </SelectItem>
                     ))
                   )}
