@@ -13,6 +13,7 @@ import {
 } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
+import { brands } from './brands.js'
 import { categories } from './categories.js'
 import { stores } from './stores.js'
 
@@ -29,9 +30,12 @@ export const products = pgTable(
     sku: varchar({ length: 64 }).notNull(),
     barcode: varchar({ length: 64 }),
     categoryId: uuid().references(() => categories.id, { onDelete: 'restrict' }),
+    brandId: uuid().references(() => brands.id, { onDelete: 'restrict' }),
     sellingPrice: bigint({ mode: 'number' }).notNull().default(0),
     costPrice: bigint({ mode: 'number' }),
     unit: varchar({ length: 32 }).notNull().default('Cái'),
+    weight: integer(),
+    description: text(),
     imageUrl: text(),
     status: varchar({ length: 16 }).notNull().default('active'),
     hasVariants: boolean().notNull().default(false),
