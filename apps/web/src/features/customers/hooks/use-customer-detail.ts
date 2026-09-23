@@ -1,9 +1,14 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import type { CreateDebtAdjustmentInput, ListCustomerOrdersQuery } from '@kiotviet-lite/shared'
+import type {
+  CreateDebtAdjustmentInput,
+  CreateOpeningDebtInput,
+  ListCustomerOrdersQuery,
+} from '@kiotviet-lite/shared'
 
 import {
   createDebtAdjustmentApi,
+  createOpeningDebtApi,
   getCustomerApi,
   getCustomerDebtsApi,
   getCustomerOrdersApi,
@@ -35,6 +40,18 @@ export function useCustomerDebts(id: string | undefined) {
     queryKey: [...CUSTOMER_DETAIL_KEY, id, 'debts'],
     queryFn: async () => (await getCustomerDebtsApi(id as string)).data,
     enabled: Boolean(id),
+  })
+}
+
+export function useCreateOpeningDebtMutation(customerId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CreateOpeningDebtInput) => createOpeningDebtApi(customerId, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] })
+      queryClient.invalidateQueries({ queryKey: ['customer-open-debts', customerId] })
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
+    },
   })
 }
 

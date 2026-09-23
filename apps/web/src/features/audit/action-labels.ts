@@ -66,6 +66,7 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'category_discount.deleted': 'Xoá chiết khấu danh mục',
   'order_item.price_overridden': 'Sửa giá trên đơn hàng',
   'debt.created': 'Tạo khoản nợ',
+  'debt.opening_created': 'Nạp nợ đầu kỳ khách hàng',
   'debt.limit_overridden': 'Vượt hạn mức công nợ (PIN)',
   'order.debt_limit_exceeded': 'Đơn ngoại tuyến vượt hạn mức nợ',
   'order.price_mismatch_adjusted': 'Đơn ngoại tuyến điều chỉnh giá',
@@ -192,6 +193,7 @@ export const ACTION_GROUPS: ActionGroup[] = [
     label: 'Công nợ',
     actions: [
       'debt.created',
+      'debt.opening_created',
       'debt.limit_overridden',
       'order.debt_limit_exceeded',
       'debt_adjustment.created',
