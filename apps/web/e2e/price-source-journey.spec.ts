@@ -1,22 +1,15 @@
 import { expect, type Page, test } from './fixtures/auth.fixture'
 
-/**
- * Issue #32 E2E: Price source journey
- * POS reprice -> create order -> view order detail (desktop + mobile)
- *
- * Prerequisites (seed data): product "Cà rốt" exists with retail price.
- * Coordinator runs this serially on integrated runtime (shared PostgreSQL + API :3000 + web :5173).
- */
+// Price provenance must survive POS checkout and remain visible in order detail.
+// Requires the seeded owner and product "Cà rốt" on a migrated PostgreSQL database.
 
-async function addProductToCart(page: Page, productNameRegex: RegExp) {
-  const productBtn = page.getByRole('button', { name: productNameRegex }).first()
-  await expect(productBtn).toBeVisible({ timeout: 10000 })
-  await productBtn.click()
-
-  const addToCartBtn = page.getByRole('button', { name: /Thêm vào giỏ|Them vao gio/i })
-  if (await addToCartBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-    await addToCartBtn.click()
-  }
+async function addProductToCart(page: Page) {
+  await page.getByRole('combobox', { name: /Tìm sản phẩm/i }).fill('Cà rốt')
+  await page
+    .getByRole('option', { name: /Cà rốt/i })
+    .getByRole('button')
+    .click()
+  await page.getByRole('button', { name: 'Thêm vào giỏ' }).click()
 }
 
 test.describe('#32 Price source: POS -> Order Detail', () => {
@@ -28,17 +21,9 @@ test.describe('#32 Price source: POS -> Order Detail', () => {
     await page.goto('/pos')
     await page.waitForURL('**/pos')
 
-    // Add product to cart
-    await addProductToCart(page, /Cà rốt|Ca rot/i)
-
-    // Cart should show a price source badge (Giá lẻ for retail_price)
-    const cartSection = page.locator('[data-testid="cart-items"], .cart-items, aside').first()
-    await expect(cartSection).toBeVisible({ timeout: 5000 })
-    // The PriceSourceBadge should now render for retail_price too
-    const badge = cartSection
-      .locator('text=/Giá lẻ|Giá SL|Giá riêng|CK danh mục|Bảng giá|Sửa giá/')
-      .first()
-    await expect(badge).toBeVisible({ timeout: 5000 })
+    await addProductToCart(page)
+    const cartRow = page.getByRole('row').filter({ hasText: 'Cà rốt' })
+    await expect(cartRow.getByText('Giá lẻ')).toBeVisible()
 
     // Checkout with cash
     const payBtn = page.getByRole('button', { name: /Thanh to[aá]n/i })
@@ -68,17 +53,15 @@ test.describe('#32 Price source: POS -> Order Detail', () => {
     // Navigate to order history
     await page.goto('/orders')
     await page.waitForURL('**/orders')
+    await page.getByRole('button', { name: 'Tất cả', exact: true }).click()
 
     // Click on the first (most recent) order
     const orderRow = page.locator('table tbody tr, [data-testid="order-item"]').first()
     await expect(orderRow).toBeVisible({ timeout: 10000 })
     await orderRow.click()
-
-    // Order detail page should show price source badge
-    const detailBadge = page
-      .locator('text=/Giá lẻ|Giá SL|Giá riêng|CK danh mục|Bảng giá|Sửa giá/')
-      .first()
-    await expect(detailBadge).toBeVisible({ timeout: 5000 })
+    await expect(
+      page.getByRole('row').filter({ hasText: 'Cà rốt' }).getByText('Giá lẻ'),
+    ).toBeVisible()
   })
 
   test('Mobile: price source badge visible in order detail', async ({ page, loginAs }) => {
@@ -89,12 +72,11 @@ test.describe('#32 Price source: POS -> Order Detail', () => {
     await page.goto('/pos')
     await page.waitForURL('**/pos')
 
-    // Add product
-    await addProductToCart(page, /Cà rốt|Ca rot/i)
-
-    // Checkout
+    await addProductToCart(page)
+    await page.getByRole('button', { name: /Mở giỏ hàng/i }).click()
+    await expect(page.getByText('Giá lẻ')).toBeVisible()
     const payBtn = page.getByRole('button', { name: /Thanh to[aá]n/i })
-    await expect(payBtn).toBeEnabled({ timeout: 5000 })
+    await expect(payBtn).toBeEnabled()
     await payBtn.click()
 
     const paymentDialog = page.getByRole('dialog')
@@ -119,18 +101,21 @@ test.describe('#32 Price source: POS -> Order Detail', () => {
     // Navigate to orders
     await page.goto('/orders')
     await page.waitForURL('**/orders')
+    await page.getByRole('button', { name: 'Tất cả', exact: true }).click()
 
-    // Click first order (mobile may use card layout)
-    const orderCard = page
-      .locator('table tbody tr, [data-testid="order-item"], a[href*="/orders/"]')
+    // Mobile list uses clickable cards, not links or visible table rows.
+    const orderNumber = page
+      .locator('main [class*="md:hidden"][class*="space-y-2"]')
+      .getByText(/^HD-\d+/)
       .first()
-    await expect(orderCard).toBeVisible({ timeout: 10000 })
-    await orderCard.click()
+    await expect(orderNumber).toBeVisible({ timeout: 10000 })
+    await orderNumber.click()
 
-    // Price source badge in mobile detail view
-    const detailBadge = page
-      .locator('text=/Giá lẻ|Giá SL|Giá riêng|CK danh mục|Bảng giá|Sửa giá/')
-      .first()
-    await expect(detailBadge).toBeVisible({ timeout: 5000 })
+    // Assert the visible item provenance, not a hidden navigation label.
+    await expect(
+      page.locator('main [class*="md:hidden"][class*="divide-y"]').getByText('Giá lẻ', {
+        exact: true,
+      }),
+    ).toBeVisible()
   })
 })
