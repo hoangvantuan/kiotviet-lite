@@ -21,6 +21,7 @@ interface CustomerResponse {
   storeId: string
   name: string
   phone: string | null
+  code: string
 }
 
 interface ApiError {
@@ -152,6 +153,90 @@ describe('customers HTTP routes', () => {
     )
     expect(result.status).toBe(201)
     expect(result.body.data).toMatchObject({ name: 'Khách tại quầy', phone: null })
+  })
+
+  it('sinh mã riêng từng cửa hàng, bỏ qua mã tự đặt và tìm khách không có số theo mã', async () => {
+    const other = await createOtherStoreOwner(env)
+    const manual = await request<{ data: CustomerResponse }>(
+      env,
+      'POST',
+      '/',
+      { name: 'Mã tự đặt', code: 'kh000001' },
+      env.owner.authHeader,
+    )
+    const generated = await request<{ data: CustomerResponse }>(
+      env,
+      'POST',
+      '/',
+      { name: 'Không có số' },
+      env.owner.authHeader,
+    )
+    const otherGenerated = await request<{ data: CustomerResponse }>(
+      env,
+      'POST',
+      '/',
+      { name: 'Cửa hàng B' },
+      other.authHeader,
+    )
+    expect(manual.status).toBe(201)
+    expect(generated.body.data.code).toBe('KH000002')
+    expect(otherGenerated.body.data.code).toBe('KH000001')
+    const found = await request<{ data: CustomerResponse[] }>(
+      env,
+      'GET',
+      '/?search=kh000002',
+      undefined,
+      env.staff.authHeader,
+    )
+    expect(found.body.data).toEqual([
+      expect.objectContaining({ id: generated.body.data.id, phone: null }),
+    ])
+  })
+
+  it('chặn trùng mã không phân biệt hoa thường khi tạo, sửa, khôi phục; mã xóa mềm được tái sử dụng', async () => {
+    const first = await request<{ data: CustomerResponse }>(
+      env,
+      'POST',
+      '/',
+      { name: 'A', code: 'MEMBER-7' },
+      env.owner.authHeader,
+    )
+    const second = await create(env, 'B', '0912345678')
+    const duplicate = await request<ApiError>(
+      env,
+      'POST',
+      '/',
+      { name: 'C', code: 'member-7' },
+      env.owner.authHeader,
+    )
+    expect(duplicate.status).toBe(409)
+    expect(duplicate.body.error.details?.field).toBe('code')
+    const edit = await request<ApiError>(
+      env,
+      'PATCH',
+      `/${second.body.data.id}`,
+      { code: 'member-7' },
+      env.owner.authHeader,
+    )
+    expect(edit.status).toBe(409)
+    await request(env, 'DELETE', `/${first.body.data.id}`, undefined, env.owner.authHeader)
+    const reused = await request<{ data: CustomerResponse }>(
+      env,
+      'POST',
+      '/',
+      { name: 'C', code: 'member-7' },
+      env.owner.authHeader,
+    )
+    expect(reused.status).toBe(201)
+    const restore = await request<ApiError>(
+      env,
+      'POST',
+      `/${first.body.data.id}/restore`,
+      undefined,
+      env.owner.authHeader,
+    )
+    expect(restore.status).toBe(409)
+    expect(restore.body.error.details?.field).toBe('code')
   })
 
   it('từ chối tạo khách hàng trùng số điện thoại trong cùng cửa hàng', async () => {

@@ -25,6 +25,7 @@ export const customers = pgTable(
       .notNull()
       .references(() => stores.id, { onDelete: 'restrict' }),
     name: varchar({ length: 100 }).notNull(),
+    code: varchar({ length: 64 }).notNull(),
     phone: varchar({ length: 20 }),
     email: varchar({ length: 255 }),
     address: text(),
@@ -43,6 +44,9 @@ export const customers = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    uniqueIndex('uniq_customers_store_code_alive')
+      .on(table.storeId, sql`LOWER(${table.code})`)
+      .where(sql`${table.deletedAt} IS NULL`),
     uniqueIndex('uniq_customers_store_phone_alive')
       .on(table.storeId, table.phone)
       .where(sql`${table.deletedAt} IS NULL AND ${table.phone} IS NOT NULL`),

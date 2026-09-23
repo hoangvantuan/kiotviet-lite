@@ -75,10 +75,13 @@ export const customerGroupItemSchema = z.object({
   updatedAt: z.string(),
 })
 
+export const customerCodeSchema = z.string().trim().min(1, 'Vui lòng nhập mã khách hàng').max(64)
+
 // ========== Customers ==========
 
 export const createCustomerSchema = z.object({
   name: customerNameSchema,
+  code: customerCodeSchema.optional(),
   phone: customerPhoneSchema.nullable().optional(),
   email: customerEmailSchema.nullable().optional(),
   address: z.string().trim().max(500, 'Địa chỉ tối đa 500 ký tự').nullable().optional(),
@@ -91,6 +94,7 @@ export const createCustomerSchema = z.object({
 export const updateCustomerSchema = z
   .object({
     name: customerNameSchema.optional(),
+    code: customerCodeSchema.optional(),
     phone: customerPhoneSchema.nullable().optional(),
     email: customerEmailSchema.nullable().optional(),
     address: z.string().trim().max(500).nullable().optional(),
@@ -118,6 +122,7 @@ export const listCustomersQuerySchema = z.object({
 
 export const customerListItemSchema = z.object({
   id: z.string().uuid(),
+  code: z.string(),
   name: z.string(),
   phone: z.string().nullable(),
   email: z.string().nullable(),

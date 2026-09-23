@@ -27,7 +27,12 @@ describe('nợ đầu kỳ khách hàng', () => {
     app = createCustomersRoutes({ db: env.db })
     const [customer] = await env.db
       .insert(customers)
-      .values({ storeId: env.storeId, name: 'Khách chuyển sang', phone: '0911111222' })
+      .values({
+        code: 'TEST-KH-24-1',
+        storeId: env.storeId,
+        name: 'Khách chuyển sang',
+        phone: '0911111222',
+      })
       .returning({ id: customers.id })
     customerId = customer!.id
   })

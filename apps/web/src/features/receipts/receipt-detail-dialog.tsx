@@ -53,6 +53,8 @@ export function ReceiptDetailDialog({ open, onOpenChange, receiptId }: ReceiptDe
 
                 <span className="text-muted-foreground">Khách hàng:</span>
                 <span className="font-medium">{receipt.customerName ?? '(đã xoá)'}</span>
+                <span className="text-muted-foreground">Mã KH:</span>
+                <span className="font-mono">{receipt.customerCode ?? '—'}</span>
 
                 <span className="text-muted-foreground">SĐT:</span>
                 <span className="font-mono">{receipt.customerPhone ?? '—'}</span>

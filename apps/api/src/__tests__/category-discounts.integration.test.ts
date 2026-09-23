@@ -51,8 +51,8 @@ async function setup(): Promise<Env> {
   const ctrs = await base.db
     .insert(customers)
     .values([
-      { storeId: base.storeId, name: 'Khách A', phone: '0911111111' },
-      { storeId: base.storeId, name: 'Khách B', phone: '0922222222' },
+      { code: 'TEST-KH-5-1', storeId: base.storeId, name: 'Khách A', phone: '0911111111' },
+      { code: 'TEST-KH-5-2', storeId: base.storeId, name: 'Khách B', phone: '0922222222' },
     ])
     .returning({ id: customers.id })
 

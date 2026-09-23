@@ -94,6 +94,7 @@ export function toThermalOrder(order: {
   orderNumber: string
   createdAt: string
   customerName?: string | null
+  customerCode?: string | null
   customerPhone?: string | null
   items: Array<{
     productName: string
@@ -123,6 +124,7 @@ export function toThermalOrder(order: {
     orderNumber: order.orderNumber,
     createdAt: order.createdAt,
     customerName: order.customerName,
+    customerCode: order.customerCode,
     customerPhone: order.customerPhone,
     items: order.items.map((it) => ({
       productName: it.productName,

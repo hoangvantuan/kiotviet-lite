@@ -70,6 +70,7 @@ describe('H5 — Đơn partial_return không biến mất khỏi báo cáo', () 
     const [customer] = await base.db
       .insert(customers)
       .values({
+        code: 'TEST-KH-28-1',
         storeId: base.storeId,
         name: 'KH H5',
         phone: '0900000555',
@@ -247,6 +248,7 @@ describe('H6 — Hoàn tiền tính đúng chiết khấu', () => {
     const [customer] = await base.db
       .insert(customers)
       .values({
+        code: 'TEST-KH-28-2',
         storeId: base.storeId,
         name: 'KH H6',
         phone: '0900000666',
@@ -330,6 +332,7 @@ describe('H6 — Hoàn tiền tính đúng chiết khấu', () => {
     const [customer] = await base.db
       .insert(customers)
       .values({
+        code: 'TEST-KH-28-3',
         storeId: base.storeId,
         name: 'KH H6B',
         phone: '0900000667',
@@ -434,6 +437,7 @@ describe('H6 — Hoàn tiền tính đúng chiết khấu', () => {
     const [customer] = await base.db
       .insert(customers)
       .values({
+        code: 'TEST-KH-28-4',
         storeId: base.storeId,
         name: 'KH H6 Combo',
         phone: '0900000668',
@@ -524,6 +528,7 @@ describe('H6 — Hoàn tiền tính đúng chiết khấu', () => {
     const [customer] = await base.db
       .insert(customers)
       .values({
+        code: 'TEST-KH-28-5',
         storeId: base.storeId,
         name: 'KH Chia 3',
         phone: '0900000333',
@@ -609,6 +614,7 @@ describe('H6 — Hoàn tiền tính đúng chiết khấu', () => {
     const [customer] = await base.db
       .insert(customers)
       .values({
+        code: 'TEST-KH-28-6',
         storeId: base.storeId,
         name: 'KH CK Full',
         phone: '0900000444',
@@ -699,6 +705,7 @@ describe('H6 — Hoàn tiền tính đúng chiết khấu', () => {
     const [customer] = await base.db
       .insert(customers)
       .values({
+        code: 'TEST-KH-28-7',
         storeId: base.storeId,
         name: 'KH 2 Lan',
         phone: '0900000555',
@@ -789,6 +796,7 @@ describe('H7 — Điều chỉnh nợ đồng bộ debts.remaining', () => {
     const [customer] = await base.db
       .insert(customers)
       .values({
+        code: 'TEST-KH-28-8',
         storeId: base.storeId,
         name: 'KH H7',
         phone: '0900000777',

@@ -28,7 +28,7 @@ describe('supplier debt adjustments and opening debt', () => {
     env = await createTestEnv()
     const [supplier] = await env.db
       .insert(suppliers)
-      .values({ storeId: env.storeId, name: 'Nhà cung cấp A' })
+      .values({ storeId: env.storeId, code: 'TEST-NCC-39-1', name: 'Nhà cung cấp A' })
       .returning()
     supplierId = supplier!.id
     adjustments = createSupplierDebtAdjustmentsRoutes({ db: env.db })
@@ -126,7 +126,7 @@ describe('supplier debt adjustments and opening debt', () => {
     const [other] = await env.db.insert(stores).values({ name: 'Cửa hàng B' }).returning()
     const [foreignSupplier] = await env.db
       .insert(suppliers)
-      .values({ storeId: other!.id, name: 'Nhà cung cấp B' })
+      .values({ storeId: other!.id, code: 'TEST-NCC-39-1', name: 'Nhà cung cấp B' })
       .returning()
     const [otherOwner] = await env.db
       .insert(users)

@@ -35,6 +35,7 @@ describe('Orders detail and print data fields', () => {
     const [customer] = await env.db
       .insert(customers)
       .values({
+        code: 'TEST-KH-26-1',
         storeId: env.storeId,
         name: 'Nguyễn Văn Test',
         phone: '0988888888',
@@ -154,6 +155,7 @@ describe('Orders detail and print data fields', () => {
     expect(createRes.status).toBe(201)
     interface CreatedOrderData {
       id: string
+      customerCode?: string | null
       oldDebt?: number | null
       customerCurrentDebt?: number | null
       items: Array<{
@@ -166,6 +168,7 @@ describe('Orders detail and print data fields', () => {
     const createdOrder = createBody.data
 
     // Kiểm tra thông tin trả về từ createOrder
+    expect(createdOrder.customerCode).toBe('TEST-KH-26-1')
     expect(createdOrder.oldDebt).toBe(150_000)
     expect(createdOrder.customerCurrentDebt).toBe(200_000)
     expect(createdOrder.items).toHaveLength(2)
@@ -185,6 +188,7 @@ describe('Orders detail and print data fields', () => {
     const orderDetail = getBody.data
 
     expect(orderDetail.id).toBe(createdOrder.id)
+    expect(orderDetail.customerCode).toBe('TEST-KH-26-1')
     expect(orderDetail.oldDebt).toBe(150_000)
     expect(orderDetail.customerCurrentDebt).toBe(200_000)
     expect(orderDetail.items).toHaveLength(2)

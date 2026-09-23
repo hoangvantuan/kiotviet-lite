@@ -131,6 +131,7 @@ export async function createCustomer(env: TestEnv, overrides: CustomerOverrides 
     .insert(customers)
     .values({
       storeId: overrides.storeId ?? env.storeId,
+      code: `TEST-KH-${n}`,
       name: `KH factory ${n}`,
       phone: `097${String(n).padStart(7, '0')}`,
       currentDebt: 0,

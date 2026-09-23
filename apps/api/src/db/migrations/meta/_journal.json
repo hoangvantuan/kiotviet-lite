@@ -281,6 +281,13 @@
       "when": 1790157174231,
       "tag": "0039_magical_nico_minoru",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790159881409,
+      "tag": "0040_overrated_the_hand",
+      "breakpoints": true
     }
   ]
 }

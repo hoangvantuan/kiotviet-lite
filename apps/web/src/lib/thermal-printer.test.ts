@@ -18,6 +18,7 @@ const mockOrder: ThermalOrder = {
   orderNumber: 'HD-260827-0001',
   createdAt: '2026-08-27T10:30:00.000Z',
   customerName: 'Nguyễn Văn A',
+  customerCode: 'KH000063',
   customerPhone: '0987654321',
   items: [
     {
@@ -82,6 +83,7 @@ describe('thermal-printer buildOrderReceipt', () => {
     expect(text).toContain('HĐ:')
     expect(text).toContain('HD-260827-0')
     expect(text).toContain('KH: Nguyễn Văn A')
+    expect(text).toContain('Mã KH: KH000063')
     expect(text).toContain('SĐT: 0987654321')
     expect(text).toContain('Chiết khấu:')
     expect(text).toContain('Còn nợ:')
@@ -110,6 +112,7 @@ describe('thermal-printer buildOrderReceipt', () => {
     const text = decodeBuffer(buf)
 
     expect(text).not.toContain('KH: Nguyễn Văn A')
+    expect(text).not.toContain('Mã KH: KH000063')
     expect(text).not.toContain('SĐT: 0987654321')
     expect(text).not.toContain('Chiết khấu:')
     expect(text).not.toContain('Còn nợ:')

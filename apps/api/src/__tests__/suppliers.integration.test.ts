@@ -29,6 +29,7 @@ interface SupplierResp {
   id: string
   storeId: string
   name: string
+  code: string
   phone: string | null
   email: string | null
   address: string | null
@@ -141,6 +142,58 @@ describe('POST /suppliers (createSupplier)', () => {
     )
     expect(r.status).toBe(409)
     expect(r.body.error.details?.field).toBe('phone')
+  })
+
+  it('sinh mã NCC và nhảy qua mã đã bị chiếm, dùng lại mã của bản ghi xóa mềm', async () => {
+    const manual = await jsonRequest<{ data: SupplierResp }>(
+      env,
+      'POST',
+      '/',
+      { name: 'NCC Mã tự đặt', code: 'ncc000001' },
+      env.base.owner.authHeader,
+    )
+    const generated = await jsonRequest<{ data: SupplierResp }>(
+      env,
+      'POST',
+      '/',
+      { name: 'NCC Tự động' },
+      env.base.owner.authHeader,
+    )
+    expect(manual.body.data.code).toBe('ncc000001')
+    expect(generated.body.data.code).toBe('NCC000002')
+    const duplicate = await jsonRequest<ApiError>(
+      env,
+      'POST',
+      '/',
+      { name: 'NCC Trùng', code: 'NCC000001' },
+      env.base.owner.authHeader,
+    )
+    expect(duplicate.status).toBe(409)
+    expect(duplicate.body.error.details?.field).toBe('code')
+    await jsonRequest(
+      env,
+      'DELETE',
+      `/${manual.body.data.id}`,
+      undefined,
+      env.base.owner.authHeader,
+    )
+    const reused = await jsonRequest<{ data: SupplierResp }>(
+      env,
+      'POST',
+      '/',
+      { name: 'NCC Mới', code: 'NCC000001' },
+      env.base.owner.authHeader,
+    )
+    expect(reused.status).toBe(201)
+    const restore = await jsonRequest<ApiError>(
+      env,
+      'POST',
+      `/${manual.body.data.id}/restore`,
+      undefined,
+      env.base.owner.authHeader,
+    )
+    expect(restore.status).toBe(409)
+    expect(restore.body.error.details?.field).toBe('code')
   })
 
   it('audit ghi supplier.created', async () => {
@@ -267,6 +320,39 @@ describe('PATCH /suppliers/:id', () => {
       env.base.owner.authHeader,
     )
     expect(r.status).toBe(400)
+  })
+  it('cho phép sửa mã, từ chối mã trùng khi sửa', async () => {
+    const first = await jsonRequest<{ data: SupplierResp }>(
+      env,
+      'POST',
+      '/',
+      { name: 'NCC A', code: 'N-1' },
+      env.base.owner.authHeader,
+    )
+    const second = await jsonRequest<{ data: SupplierResp }>(
+      env,
+      'POST',
+      '/',
+      { name: 'NCC B', code: 'N-2' },
+      env.base.owner.authHeader,
+    )
+    const changed = await jsonRequest<{ data: SupplierResp }>(
+      env,
+      'PATCH',
+      `/${first.body.data.id}`,
+      { code: 'N-3' },
+      env.base.owner.authHeader,
+    )
+    expect(changed.body.data.code).toBe('N-3')
+    const conflict = await jsonRequest<ApiError>(
+      env,
+      'PATCH',
+      `/${second.body.data.id}`,
+      { code: 'n-3' },
+      env.base.owner.authHeader,
+    )
+    expect(conflict.status).toBe(409)
+    expect(conflict.body.error.details?.field).toBe('code')
   })
 })
 
@@ -424,6 +510,15 @@ describe('Multi-tenant safety', () => {
       env.base.owner.authHeader,
     )
     const r = await jsonRequest<ApiError>(env, 'GET', `/${createdA.body.data.id}`, undefined, authB)
+    const createdB = await jsonRequest<{ data: SupplierResp }>(
+      env,
+      'POST',
+      '/',
+      { name: 'NCC Store B', code: createdA.body.data.code },
+      authB,
+    )
+    expect(createdB.status).toBe(201)
+    expect(createdB.body.data.code).toBe(createdA.body.data.code)
     expect(r.status).toBe(404)
   })
 })

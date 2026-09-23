@@ -43,6 +43,7 @@ describe('M17 — 3 tab chi tiết khách hàng: đơn hàng, công nợ, thốn
       const [customer] = await env.db
         .insert(customers)
         .values({
+          code: 'TEST-KH-18-1',
           storeId: env.storeId,
           name: 'Nguyễn Văn A',
           phone: '0901234567',
@@ -163,6 +164,7 @@ describe('M17 — 3 tab chi tiết khách hàng: đơn hàng, công nợ, thốn
       const [customer] = await env.db
         .insert(customers)
         .values({
+          code: 'TEST-KH-18-2',
           storeId: env.storeId,
           name: 'Khách Không Đơn',
           phone: '0909999888',
@@ -197,6 +199,7 @@ describe('M17 — 3 tab chi tiết khách hàng: đơn hàng, công nợ, thốn
       const [customer] = await env.db
         .insert(customers)
         .values({
+          code: 'TEST-KH-18-3',
           storeId: env.storeId,
           name: 'Trần Thị B',
           phone: '0912345678',
@@ -296,6 +299,7 @@ describe('M17 — 3 tab chi tiết khách hàng: đơn hàng, công nợ, thốn
       const [customer] = await env.db
         .insert(customers)
         .values({
+          code: 'TEST-KH-18-4',
           storeId: env.storeId,
           name: 'Khách Không Nợ',
           phone: '0919999111',
@@ -321,6 +325,7 @@ describe('M17 — 3 tab chi tiết khách hàng: đơn hàng, công nợ, thốn
       const [customer] = await env.db
         .insert(customers)
         .values({
+          code: 'TEST-KH-18-5',
           storeId: env.storeId,
           name: 'Lê Văn C',
           phone: '0922334455',
@@ -452,6 +457,7 @@ describe('M17 — 3 tab chi tiết khách hàng: đơn hàng, công nợ, thốn
       const [customer] = await env.db
         .insert(customers)
         .values({
+          code: 'TEST-KH-18-6',
           storeId: env.storeId,
           name: 'Khách Mới',
           phone: '0933333444',
@@ -475,6 +481,7 @@ describe('M17 — 3 tab chi tiết khách hàng: đơn hàng, công nợ, thốn
       const [customerStoreB] = await env.db
         .insert(customers)
         .values({
+          code: 'TEST-KH-18-7',
           storeId: storeB!.id,
           name: 'Khách Store B',
           phone: '0988888777',

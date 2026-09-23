@@ -42,16 +42,8 @@ async function setup(): Promise<Env> {
   const insertedCustomers = await base.db
     .insert(customers)
     .values([
-      {
-        storeId: base.storeId,
-        name: 'Nguyễn Văn A',
-        phone: '0911111111',
-      },
-      {
-        storeId: base.storeId,
-        name: 'Trần Thị B',
-        phone: '0922222222',
-      },
+      { code: 'TEST-KH-10-1', storeId: base.storeId, name: 'Nguyễn Văn A', phone: '0911111111' },
+      { code: 'TEST-KH-10-2', storeId: base.storeId, name: 'Trần Thị B', phone: '0922222222' },
     ])
     .returning({ id: customers.id })
 
@@ -153,7 +145,12 @@ describe('POST /customer-prices', () => {
       .returning()
     const [otherCustomer] = await env.base.db
       .insert(customers)
-      .values({ storeId: otherStore!.id, name: 'Khách khác', phone: '0933333333' })
+      .values({
+        code: 'TEST-KH-10-3',
+        storeId: otherStore!.id,
+        name: 'Khách khác',
+        phone: '0933333333',
+      })
       .returning()
     const r = await post<{ error: { code: string } }>(
       env,

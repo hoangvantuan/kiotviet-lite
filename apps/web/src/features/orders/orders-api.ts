@@ -27,6 +27,7 @@ interface OrderDetailResponse {
   orderNumber: string
   customerId: string | null
   customerName: string | null
+  customerCode: string | null
   customerPhone: string | null
   customerGroupName: string | null
   customerCurrentDebt?: number | null

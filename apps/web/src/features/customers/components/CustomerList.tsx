@@ -182,7 +182,7 @@ export function CustomerList() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center">
         <div className="flex-1">
           <Input
-            placeholder="Tìm theo tên hoặc số điện thoại…"
+            placeholder="Tìm theo tên, mã hoặc số điện thoại…"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value)
@@ -256,6 +256,7 @@ export function CustomerList() {
             <TableHeader>
               <TableRow>
                 <TableHead>Tên</TableHead>
+                <TableHead>Mã khách hàng</TableHead>
                 <TableHead>Số điện thoại</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Nhóm</TableHead>
@@ -277,6 +278,7 @@ export function CustomerList() {
                       {customer.name}
                     </Link>
                   </TableCell>
+                  <TableCell className="font-mono text-sm">{customer.code}</TableCell>
                   <TableCell className="font-mono text-sm">{customer.phone ?? '—'}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {customer.email ?? '—'}
@@ -460,6 +462,7 @@ function TrashedCustomersSheet({ open, onOpenChange }: TrashedCustomersSheetProp
               <div key={c.id} className="flex items-center justify-between rounded-md border p-3">
                 <div>
                   <p className="font-medium">{c.name}</p>
+                  <p className="font-mono text-xs text-muted-foreground">{c.code}</p>
                   <p className="text-sm text-muted-foreground">{c.phone ?? '—'}</p>
                 </div>
                 <Button

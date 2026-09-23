@@ -16,6 +16,7 @@ import { logger } from '../lib/logger.js'
 import { isFkViolation, isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { diffObjects, logAction, type RequestMeta } from './audit.service.js'
+import { lockCodeStore, nextEntityCode } from './entity-codes.service.js'
 
 // Convert Date → ISO string để JSON serialize an toàn cho audit log.
 // Drizzle trả Date objects cho timestamp columns; nếu mở rộng audit fields
@@ -37,6 +38,7 @@ interface SupplierRow {
   id: string
   storeId: string
   name: string
+  code: string
   phone: string | null
   email: string | null
   address: string | null
@@ -53,6 +55,7 @@ interface SupplierRow {
 function toSupplierListItem(row: SupplierRow): SupplierListItem {
   return {
     id: row.id,
+    code: row.code,
     name: row.name,
     phone: row.phone,
     email: row.email,
@@ -104,6 +107,26 @@ async function ensureNameUnique({
   }
 }
 
+async function ensureCodeUnique(
+  db: Db,
+  storeId: string,
+  code: string,
+  excludeId?: string,
+): Promise<void> {
+  const conditions = [
+    eq(suppliers.storeId, storeId),
+    isNull(suppliers.deletedAt),
+    sql`LOWER(${suppliers.code}) = LOWER(${code})`,
+  ]
+  if (excludeId) conditions.push(sql`${suppliers.id} != ${excludeId}`)
+  const [existing] = await db
+    .select({ id: suppliers.id })
+    .from(suppliers)
+    .where(and(...conditions))
+    .limit(1)
+  if (existing) throw new ApiError('CONFLICT', 'Mã nhà cung cấp đã được sử dụng', { field: 'code' })
+}
+
 async function ensurePhoneUnique({
   db,
   storeId,
@@ -136,6 +159,7 @@ async function ensurePhoneUnique({
 const supplierSelectColumns = {
   id: suppliers.id,
   storeId: suppliers.storeId,
+  code: suppliers.code,
   name: suppliers.name,
   phone: suppliers.phone,
   email: suppliers.email,
@@ -178,6 +202,7 @@ export async function listSuppliers({
     const pattern = `%${escaped}%`
     const searchClause = or(
       sql`LOWER(${suppliers.name}) LIKE LOWER(${pattern})`,
+      ilike(suppliers.code, pattern),
       ilike(suppliers.phone, pattern),
     )
     if (searchClause) conditions.push(searchClause)
@@ -305,6 +330,31 @@ export async function createSupplier({
 
   return db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
+    if (input.code) {
+      await lockCodeStore(txDb, actor.storeId)
+      await ensureCodeUnique(txDb, actor.storeId, input.code)
+    }
+    const code =
+      input.code ??
+      (await nextEntityCode({
+        db: txDb,
+        storeId: actor.storeId,
+        kind: 'supplier',
+        occupied: async (candidate) => {
+          const [row] = await tx
+            .select({ id: suppliers.id })
+            .from(suppliers)
+            .where(
+              and(
+                eq(suppliers.storeId, actor.storeId),
+                isNull(suppliers.deletedAt),
+                sql`LOWER(${suppliers.code}) = LOWER(${candidate})`,
+              ),
+            )
+            .limit(1)
+          return Boolean(row)
+        },
+      }))
 
     // Re-check unique TRONG transaction để tránh race với concurrent insert
     // (DB unique index vẫn là backstop chính qua catch 23505)
@@ -319,6 +369,7 @@ export async function createSupplier({
         .insert(suppliers)
         .values({
           storeId: actor.storeId,
+          code,
           name: input.name,
           phone,
           email: input.email ?? null,
@@ -339,6 +390,9 @@ export async function createSupplier({
       if (isUniqueViolation(err, 'uniq_suppliers_store_phone_alive')) {
         throw new ApiError('CONFLICT', 'Số điện thoại đã được sử dụng', { field: 'phone' })
       }
+      if (isUniqueViolation(err, 'uniq_suppliers_store_code_alive')) {
+        throw new ApiError('CONFLICT', 'Mã nhà cung cấp đã được sử dụng', { field: 'code' })
+      }
       throw err
     }
 
@@ -352,6 +406,7 @@ export async function createSupplier({
       targetId: createdId,
       changes: {
         name: input.name,
+        code,
         phone,
         email: input.email ?? null,
       },
@@ -413,12 +468,16 @@ export async function updateSupplier({
     })
   }
 
+  if (input.code !== undefined && input.code.toLowerCase() !== target.code.toLowerCase()) {
+    await ensureCodeUnique(db, actor.storeId, input.code, targetId)
+  }
   const updates: Partial<typeof suppliers.$inferInsert> = {}
   const before: Record<string, unknown> = {}
   const after: Record<string, unknown> = {}
 
   const fields: Array<keyof UpdateSupplierInput> = [
     'name',
+    'code',
     'phone',
     'email',
     'address',
@@ -442,6 +501,7 @@ export async function updateSupplier({
   }
 
   return db.transaction(async (tx) => {
+    if (updates.code !== undefined) await lockCodeStore(tx as unknown as Db, actor.storeId)
     try {
       const [row] = await tx
         .update(suppliers)
@@ -458,6 +518,9 @@ export async function updateSupplier({
       }
       if (isUniqueViolation(err, 'uniq_suppliers_store_phone_alive')) {
         throw new ApiError('CONFLICT', 'Số điện thoại đã được sử dụng', { field: 'phone' })
+      }
+      if (isUniqueViolation(err, 'uniq_suppliers_store_code_alive')) {
+        throw new ApiError('CONFLICT', 'Mã nhà cung cấp đã được sử dụng', { field: 'code' })
       }
       throw err
     }
@@ -604,6 +667,9 @@ export async function restoreSupplier({
   }
 
   return db.transaction(async (tx) => {
+    const txDb = tx as unknown as Db
+    await lockCodeStore(txDb, actor.storeId)
+    await ensureCodeUnique(txDb, actor.storeId, target.code)
     try {
       const [row] = await tx
         .update(suppliers)
@@ -628,6 +694,9 @@ export async function restoreSupplier({
           'Số điện thoại đã được dùng cho NCC khác, vui lòng đổi số điện thoại trước khi khôi phục',
           { field: 'phone' },
         )
+      }
+      if (isUniqueViolation(err, 'uniq_suppliers_store_code_alive')) {
+        throw new ApiError('CONFLICT', 'Mã nhà cung cấp đã được sử dụng', { field: 'code' })
       }
       throw err
     }

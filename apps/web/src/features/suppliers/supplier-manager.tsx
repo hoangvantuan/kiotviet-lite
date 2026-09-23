@@ -124,7 +124,7 @@ export function SupplierManager() {
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Input
-          placeholder="Tìm theo tên hoặc số điện thoại"
+          placeholder="Tìm theo tên, mã hoặc số điện thoại"
           value={searchInput}
           onChange={(e) => {
             setSearchInput(e.target.value)
@@ -248,6 +248,7 @@ function SupplierTable({ items, onEdit, onDelete, onDebt }: SupplierTableProps) 
         <TableHeader>
           <TableRow>
             <TableHead>Tên</TableHead>
+            <TableHead>Mã nhà cung cấp</TableHead>
             <TableHead>SĐT</TableHead>
             <TableHead className="hidden md:table-cell">Email</TableHead>
             <TableHead>Công nợ</TableHead>
@@ -260,6 +261,7 @@ function SupplierTable({ items, onEdit, onDelete, onDebt }: SupplierTableProps) 
           {items.map((it) => (
             <TableRow key={it.id}>
               <TableCell className="font-medium">{it.name}</TableCell>
+              <TableCell className="font-mono text-sm">{it.code}</TableCell>
               <TableCell className="font-mono text-sm">{it.phone ?? '—'}</TableCell>
               <TableCell className="hidden md:table-cell text-muted-foreground">
                 {it.email ?? '—'}
@@ -345,6 +347,7 @@ function SupplierCardList({ items, onEdit, onDelete, onDebt }: SupplierCardListP
             </div>
             <div className="min-w-0 flex-1 space-y-1">
               <p className="truncate font-medium text-foreground">{s.name}</p>
+              <p className="truncate font-mono text-xs text-muted-foreground">{s.code}</p>
               <p className="font-mono text-xs text-muted-foreground">{s.phone ?? '—'}</p>
               <div className="flex items-center gap-2">
                 <DebtBadge currentDebt={s.currentDebt} />
@@ -471,6 +474,7 @@ function TrashedSuppliersSheet({ open, onOpenChange }: TrashedSuppliersSheetProp
             >
               <div className="min-w-0">
                 <p className="font-medium truncate">{s.name}</p>
+                <p className="font-mono text-xs text-muted-foreground">{s.code}</p>
                 <p className="text-xs text-muted-foreground font-mono">{s.phone ?? '—'}</p>
               </div>
               <Button
