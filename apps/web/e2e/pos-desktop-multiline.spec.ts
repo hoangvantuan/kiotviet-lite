@@ -31,7 +31,7 @@ test.describe('Kiểm thử E2E: POS Desktop Multi-line Editor (Issue #33)', () 
     const row1 = tableRows.first()
 
     // Kiểm tra đầy đủ các cột trên cùng dòng: STT, mã SKU, tên, đơn vị, số lượng, đơn giá, thành tiền
-    await expect(row1.getByText('CR001')).toBeVisible()
+    await expect(row1.getByText('RC001')).toBeVisible()
     await expect(row1.getByText(/Cà rốt/i)).toBeVisible()
     await expect(row1.locator('input[aria-label="Số lượng"]')).toHaveValue('1')
     await expect(row1.getByLabel(/Sửa giá bán/i)).toBeVisible()
@@ -66,7 +66,7 @@ test.describe('Kiểm thử E2E: POS Desktop Multi-line Editor (Issue #33)', () 
       await modeSwitch.click()
     }
 
-    // Thêm sản phẩm Khoai tây (SKU KT001, đơn giá 20.000)
+    // Thêm Khoai tây (SKU KT001, giá seed 30.000đ/kg)
     const searchInput = page.getByPlaceholder(/Tìm sản phẩm, mã SKU, barcode/i)
     await searchInput.fill('Khoai tây')
     const option = page.locator('#pos-search-listbox button').first()
@@ -91,11 +91,9 @@ test.describe('Kiểm thử E2E: POS Desktop Multi-line Editor (Issue #33)', () 
     // Bấm ra ngoài hoặc phím Escape để đóng popover chiết khấu
     await page.keyboard.press('Escape')
 
-    // Kiểm tra dòng hiển thị chiết khấu 5.000đ
-    await expect(row.getByText(/5\.000/i)).toBeVisible()
-
-    // Kiểm tra thành tiền dòng được tính chính xác: 2 * 20.000 - 5.000 = 35.000đ
-    await expect(row.getByText(/35\.000/i)).toBeVisible()
+    // Two units at 30.000đ less the 5.000đ line discount.
+    await expect(discountBtn).toHaveText('-5.000 đ')
+    await expect(row.locator('td').nth(7)).toHaveText('55.000 đ')
 
     // Mở popover ghi chú dòng
     const noteBtn = row.getByLabel(/Ghi chú dòng/i)
@@ -168,6 +166,7 @@ test.describe('Kiểm thử E2E: POS Desktop Multi-line Editor (Issue #33)', () 
     const paymentDialog = page.getByRole('dialog')
     await expect(paymentDialog.getByRole('heading', { name: /Thanh to[aá]n/i })).toBeVisible()
 
+    await paymentDialog.getByRole('button', { name: '100.000 đ' }).click()
     // Hoàn thành đơn hàng
     const completeBtn = paymentDialog.getByRole('button', { name: /Hoàn thành|Hoan thanh/i })
     await expect(completeBtn).toBeEnabled({ timeout: 5000 })
@@ -203,7 +202,7 @@ test.describe('Kiểm thử E2E: POS Desktop Multi-line Editor (Issue #33)', () 
 
     const row = page.locator('table tbody tr').first()
     await expect(row).toBeVisible()
-    await expect(row.getByText(/7\.000/i)).toBeVisible()
+    await expect(row.getByRole('button', { name: 'Sửa giá bán' })).toContainText('7.000')
 
     // Kiểm tra dropdown đơn vị tính
     const unitSelect = row.getByLabel(/Chọn đơn vị tính/i)
@@ -213,7 +212,7 @@ test.describe('Kiểm thử E2E: POS Desktop Multi-line Editor (Issue #33)', () 
     await unitSelect.selectOption({ label: 'Thùng' })
 
     // Đơn giá và thành tiền lập tức cập nhật sang giá Thùng: 320.000đ
-    await expect(row.getByText(/320\.000/i)).toBeVisible()
+    await expect(row.getByRole('button', { name: 'Sửa giá bán' })).toContainText('320.000')
   })
 
   test('5. Desktop & Mobile: chế độ bán thường (normal mode) mở hộp thoại chọn số lượng và biến thể trước khi thêm', async ({

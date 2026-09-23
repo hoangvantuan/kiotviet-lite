@@ -15,11 +15,8 @@ export async function loginViaUI(page: Page, phone: string, pass: string) {
   await passwordInput.fill(pass)
 
   const submitBtn = page.getByRole('button', { name: /Đăng nhập|Dang nhap/i })
-  if (await submitBtn.isEnabled().catch(() => false)) {
-    await submitBtn.click()
-  } else {
-    await passwordInput.press('Enter')
-  }
+  await expect(submitBtn).toBeEnabled()
+  await submitBtn.click()
 }
 
 /**
