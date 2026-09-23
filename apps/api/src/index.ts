@@ -33,6 +33,7 @@ import { createReceiptsRoutes } from './routes/receipts.routes.js'
 import { createReportsRoutes } from './routes/reports.routes.js'
 import { createStockChecksRoutes } from './routes/stock-checks.routes.js'
 import { createStoreRoutes } from './routes/store.routes.js'
+import { createSupplierDebtAdjustmentsRoutes } from './routes/supplier-debt-adjustments.routes.js'
 import { createSupplierPaymentsRoutes } from './routes/supplier-payments.routes.js'
 import { createSuppliersRoutes } from './routes/suppliers.routes.js'
 import { createSyncRoutes } from './routes/sync.routes.js'
@@ -81,6 +82,7 @@ app.route('/api/v1/customer-groups', createCustomerGroupsRoutes({ db }))
 app.route('/api/v1/customers', createCustomersRoutes({ db }))
 app.route('/api/v1/debt-adjustments', createDebtAdjustmentsRoutes({ db }))
 app.route('/api/v1/suppliers', createSuppliersRoutes({ db }))
+app.route('/api/v1/supplier-debt-adjustments', createSupplierDebtAdjustmentsRoutes({ db }))
 app.route('/api/v1/purchase-orders', createPurchaseOrdersRoutes({ db }))
 app.route('/api/v1/receipts', createReceiptsRoutes({ db }))
 app.route('/api/v1/reports', createReportsRoutes({ db }))

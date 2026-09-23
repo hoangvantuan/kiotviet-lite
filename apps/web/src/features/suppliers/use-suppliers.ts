@@ -1,6 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type {
+  CreateOpeningDebtInput,
+  CreateSupplierDebtAdjustmentInput,
   CreateSupplierInput,
   ListSuppliersQuery,
   UpdateSupplierInput,
@@ -8,8 +10,11 @@ import type {
 
 import {
   createSupplierApi,
+  createSupplierDebtAdjustmentApi,
+  createSupplierOpeningDebtApi,
   deleteSupplierApi,
   getSupplierApi,
+  listSupplierDebtAdjustmentsApi,
   listSuppliersApi,
   listTrashedSuppliersApi,
   restoreSupplierApi,
@@ -79,6 +84,39 @@ export function useRestoreSupplierMutation() {
     mutationFn: (id: string) => restoreSupplierApi(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: SUPPLIERS_KEY })
+    },
+  })
+}
+
+export function useSupplierDebtAdjustments(supplierId: string | undefined, page = 1) {
+  return useQuery({
+    queryKey: [...SUPPLIERS_KEY, 'adjustments', supplierId, page],
+    queryFn: () => listSupplierDebtAdjustmentsApi(supplierId as string, page),
+    enabled: Boolean(supplierId),
+  })
+}
+
+export function useCreateSupplierDebtAdjustmentMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CreateSupplierDebtAdjustmentInput) =>
+      createSupplierDebtAdjustmentApi(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: SUPPLIERS_KEY })
+      qc.invalidateQueries({ queryKey: ['supplier-payments'] })
+      qc.invalidateQueries({ queryKey: ['reports'] })
+    },
+  })
+}
+
+export function useCreateSupplierOpeningDebtMutation(supplierId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CreateOpeningDebtInput) => createSupplierOpeningDebtApi(supplierId, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: SUPPLIERS_KEY })
+      qc.invalidateQueries({ queryKey: ['supplier-payments'] })
+      qc.invalidateQueries({ queryKey: ['reports'] })
     },
   })
 }
