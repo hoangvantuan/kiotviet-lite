@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import {
+  boolean,
   check,
   index,
   integer,
@@ -43,6 +44,8 @@ export const bulkImportJobs = pgTable(
     mode: varchar({ length: 16 }).$type<BulkImportMode>().notNull(),
     status: varchar({ length: 16 }).$type<BulkImportStatus>().notNull().default('queued'),
     originalFilename: varchar({ length: 255 }).notNull(),
+    confirmedDigest: varchar({ length: 64 }).notNull(),
+    approveNewNames: boolean().notNull().default(false),
     fileSizeBytes: integer().notNull(),
     totalRows: integer().notNull(),
     processedRows: integer().notNull().default(0),
@@ -63,6 +66,7 @@ export const bulkImportJobs = pgTable(
     index('idx_bulk_import_jobs_expires').on(table.expiresAt),
     check('chk_bulk_import_jobs_type', sql`${table.type} IN ('product', 'customer', 'supplier')`),
     check('chk_bulk_import_jobs_mode', sql`${table.mode} IN ('create-only', 'upsert')`),
+    check('chk_bulk_import_jobs_digest', sql`${table.confirmedDigest} ~ '^[0-9a-f]{64}$'`),
     check(
       'chk_bulk_import_jobs_status',
       sql`${table.status} IN ('queued', 'running', 'completed', 'failed', 'cancelled')`,

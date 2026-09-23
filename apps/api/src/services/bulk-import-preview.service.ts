@@ -1,9 +1,10 @@
 import { and, eq, isNull } from 'drizzle-orm'
+import { createHash } from 'node:crypto'
 import * as XLSX from 'xlsx'
 
 import {
-  brands,
   brandNameSchema,
+  brands,
   categories,
   categoryNameSchema,
   createCustomerSchema,
@@ -65,16 +66,39 @@ export interface BulkImportPreview {
   newBrands: string[]
   warnings: string[]
   sample: BulkImportPreviewRow[]
-  // Full validated plan for the confirmation executor; never persist this response as a job.
+  digest: string
+  // Internal validated plan: routes must omit rows from preview responses.
   rows: BulkImportPreviewRow[]
 }
 
 const fields = {
   products: [
-    'sku', 'name', 'barcode', 'categoryId', 'brandId', 'sellingPrice', 'costPrice',
-    'unit', 'weight', 'description', 'imageUrl', 'status', 'trackInventory', 'minStock',
+    'sku',
+    'name',
+    'barcode',
+    'categoryId',
+    'brandId',
+    'sellingPrice',
+    'costPrice',
+    'unit',
+    'weight',
+    'description',
+    'imageUrl',
+    'status',
+    'trackInventory',
+    'minStock',
   ],
-  customers: ['code', 'name', 'phone', 'email', 'address', 'taxId', 'notes', 'debtLimit', 'groupId'],
+  customers: [
+    'code',
+    'name',
+    'phone',
+    'email',
+    'address',
+    'taxId',
+    'notes',
+    'debtLimit',
+    'groupId',
+  ],
   suppliers: ['code', 'name', 'phone', 'email', 'address', 'taxId', 'notes'],
 } as const
 const keyField = { products: 'sku', customers: 'code', suppliers: 'code' } as const
@@ -95,7 +119,10 @@ function checkZipSize(bytes: Uint8Array): void {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   let end = -1
   for (let offset = bytes.length - 22; offset >= Math.max(0, bytes.length - 65_557); offset--) {
-    if (view.getUint32(offset, true) === 0x06054b50) { end = offset; break }
+    if (view.getUint32(offset, true) === 0x06054b50) {
+      end = offset
+      break
+    }
   }
   if (end < 0) throw new ApiError('VALIDATION_ERROR', 'Tệp XLSX bị hỏng hoặc không đúng định dạng')
   const entries = view.getUint16(end + 10, true)
@@ -113,8 +140,11 @@ function checkZipSize(bytes: Uint8Array): void {
     if (expanded > 64 * 1024 * 1024) {
       throw new ApiError('VALIDATION_ERROR', 'Nội dung XLSX sau giải nén vượt giới hạn 64 MB')
     }
-    cursor += 46 + view.getUint16(cursor + 28, true) +
-      view.getUint16(cursor + 30, true) + view.getUint16(cursor + 32, true)
+    cursor +=
+      46 +
+      view.getUint16(cursor + 28, true) +
+      view.getUint16(cursor + 30, true) +
+      view.getUint16(cursor + 32, true)
   }
   if (cursor !== view.getUint32(end + 16, true) + centralSize) {
     throw new ApiError('VALIDATION_ERROR', 'Tệp XLSX bị hỏng hoặc không đúng định dạng')
@@ -123,7 +153,10 @@ function checkZipSize(bytes: Uint8Array): void {
 
 function workbookData(bytes: Uint8Array, kind: BulkImportKind) {
   if (!bytes.length || bytes.length > BULK_IMPORT_MAX_BYTES) {
-    throw new ApiError('VALIDATION_ERROR', `Tệp XLSX phải có dung lượng từ 1 byte đến ${BULK_IMPORT_MAX_BYTES / 1024 / 1024} MB`)
+    throw new ApiError(
+      'VALIDATION_ERROR',
+      `Tệp XLSX phải có dung lượng từ 1 byte đến ${BULK_IMPORT_MAX_BYTES / 1024 / 1024} MB`,
+    )
   }
   // SheetJS otherwise accepts plain text/CSV as a workbook, even with an .xlsx name.
   if (bytes[0] !== 0x50 || bytes[1] !== 0x4b || bytes[2] !== 0x03 || bytes[3] !== 0x04) {
@@ -141,7 +174,8 @@ function workbookData(bytes: Uint8Array, kind: BulkImportKind) {
     throw new ApiError('VALIDATION_ERROR', 'Sheet đầu tiên phải là Dữ liệu')
   }
   const sheet = workbook.Sheets[workbook.SheetNames[0]!]
-  if (!sheet?.['!ref']) throw new ApiError('VALIDATION_ERROR', 'Sheet Dữ liệu không có hàng tiêu đề')
+  if (!sheet?.['!ref'])
+    throw new ApiError('VALIDATION_ERROR', 'Sheet Dữ liệu không có hàng tiêu đề')
   const range = XLSX.utils.decode_range(sheet['!ref'])
   if (range.e.r > BULK_IMPORT_MAX_ROWS) {
     throw new ApiError('VALIDATION_ERROR', `Tệp vượt quá ${BULK_IMPORT_MAX_ROWS} dòng dữ liệu`)
@@ -153,9 +187,11 @@ function workbookData(bytes: Uint8Array, kind: BulkImportKind) {
   }
   const expected = BULK_EXPORT_HEADERS[kind]
   const missing = expected.filter((name) => !header.includes(name))
-  if (missing.length) throw new ApiError('VALIDATION_ERROR', `Thiếu cột bắt buộc: ${missing.join(', ')}`)
+  if (missing.length)
+    throw new ApiError('VALIDATION_ERROR', `Thiếu cột bắt buộc: ${missing.join(', ')}`)
   const duplicates = expected.filter((name) => header.filter((item) => item === name).length > 1)
-  if (duplicates.length) throw new ApiError('VALIDATION_ERROR', `Cột bị trùng: ${duplicates.join(', ')}`)
+  if (duplicates.length)
+    throw new ApiError('VALIDATION_ERROR', `Cột bị trùng: ${duplicates.join(', ')}`)
   const columns = expected.map((name) => header.indexOf(name))
   return { sheet, range, columns, expected }
 }
@@ -168,24 +204,40 @@ function readCell(sheet: XLSX.WorkSheet, row: number, column: number): unknown {
   return cell.v
 }
 
-function fieldValue(value: unknown, field: string, column: string, row: number, errors: BulkImportRowError[]): unknown {
+function fieldValue(
+  value: unknown,
+  field: string,
+  column: string,
+  row: number,
+  errors: BulkImportRowError[],
+): unknown {
   if (value === undefined || value === null || value === '') return undefined
   if (typeof value === 'object') {
     errors.push({ row, column, message: 'Ô không được chứa công thức, lỗi hoặc ngày tháng' })
     return undefined
   }
   if (value === BULK_EXPORT_CLEAR_TOKEN) {
-    if (!(BULK_EXPORT_FORMAT.nullableColumns.products as readonly string[]).includes(column) &&
-        !(BULK_EXPORT_FORMAT.nullableColumns.customers as readonly string[]).includes(column) &&
-        !(BULK_EXPORT_FORMAT.nullableColumns.suppliers as readonly string[]).includes(column)) {
-      errors.push({ row, column, message: `${BULK_EXPORT_CLEAR_TOKEN} chỉ dùng cho cột có thể xóa` })
+    if (
+      !(BULK_EXPORT_FORMAT.nullableColumns.products as readonly string[]).includes(column) &&
+      !(BULK_EXPORT_FORMAT.nullableColumns.customers as readonly string[]).includes(column) &&
+      !(BULK_EXPORT_FORMAT.nullableColumns.suppliers as readonly string[]).includes(column)
+    ) {
+      errors.push({
+        row,
+        column,
+        message: `${BULK_EXPORT_CLEAR_TOKEN} chỉ dùng cho cột có thể xóa`,
+      })
       return undefined
     }
     return null
   }
   if (numericFields.has(field)) {
     if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
-      errors.push({ row, column, message: 'Phải là số nguyên XLSX, không có dấu phân cách hoặc công thức' })
+      errors.push({
+        row,
+        column,
+        message: 'Phải là số nguyên XLSX, không có dấu phân cách hoặc công thức',
+      })
       return undefined
     }
     return value
@@ -205,7 +257,14 @@ function fieldValue(value: unknown, field: string, column: string, row: number, 
 }
 
 /** Read-only, deterministic plan used unchanged by a later confirmation executor. */
-export async function previewBulkImport({ db, actor, kind, mode, bytes, filename }: {
+export async function previewBulkImport({
+  db,
+  actor,
+  kind,
+  mode,
+  bytes,
+  filename,
+}: {
   db: Db
   actor: AuthContext
   kind: BulkImportKind
@@ -217,13 +276,29 @@ export async function previewBulkImport({ db, actor, kind, mode, bytes, filename
   if (!BULK_EXPORT_HEADERS[kind] || !['create-only', 'upsert'].includes(mode)) {
     throw new ApiError('VALIDATION_ERROR', 'Loại dữ liệu hoặc chế độ nhập không hợp lệ')
   }
-  if (!filename.toLowerCase().endsWith('.xlsx')) throw new ApiError('VALIDATION_ERROR', 'Chỉ nhận tệp .xlsx')
+  if (!filename.toLowerCase().endsWith('.xlsx'))
+    throw new ApiError('VALIDATION_ERROR', 'Chỉ nhận tệp .xlsx')
   const { sheet, range, columns, expected } = workbookData(bytes, kind)
   const table = kind === 'products' ? products : kind === 'customers' ? customers : suppliers
-  const existing = await db.select().from(table).where(and(eq(table.storeId, actor.storeId), isNull(table.deletedAt)))
-  const existingByKey = new Map(existing.map((item) => [normalized(kind === 'products' ? (item as typeof products.$inferSelect).sku : (item as typeof customers.$inferSelect).code), item]))
+  const existing = await db
+    .select()
+    .from(table)
+    .where(and(eq(table.storeId, actor.storeId), isNull(table.deletedAt)))
+  const existingByKey = new Map(
+    existing.map((item) => [
+      normalized(
+        kind === 'products'
+          ? (item as typeof products.$inferSelect).sku
+          : (item as typeof customers.$inferSelect).code,
+      ),
+      item,
+    ]),
+  )
 
-  const categoryRows = kind === 'products' ? await db.select().from(categories).where(eq(categories.storeId, actor.storeId)) : []
+  const categoryRows =
+    kind === 'products'
+      ? await db.select().from(categories).where(eq(categories.storeId, actor.storeId))
+      : []
   const categoryById = new Map(categoryRows.map((item) => [item.id, item]))
   const categoryByPath = new Map<string, string>()
   for (const item of categoryRows) {
@@ -231,9 +306,18 @@ export async function previewBulkImport({ db, actor, kind, mode, bytes, filename
     const path = parent ? `${parent.name}${BULK_EXPORT_CATEGORY_SEPARATOR}${item.name}` : item.name
     categoryByPath.set(normalized(path), item.id)
   }
-  const brandRows = kind === 'products' ? await db.select().from(brands).where(and(eq(brands.storeId, actor.storeId), isNull(brands.deletedAt))) : []
+  const brandRows =
+    kind === 'products'
+      ? await db
+          .select()
+          .from(brands)
+          .where(and(eq(brands.storeId, actor.storeId), isNull(brands.deletedAt)))
+      : []
   const brandByName = new Map(brandRows.map((item) => [normalized(item.name), item.id]))
-  const groupRows = kind === 'customers' ? await db.select().from(customerGroups).where(eq(customerGroups.storeId, actor.storeId)) : []
+  const groupRows =
+    kind === 'customers'
+      ? await db.select().from(customerGroups).where(eq(customerGroups.storeId, actor.storeId))
+      : []
   const groupByName = new Map(groupRows.map((item) => [normalized(item.name), item.id]))
 
   const errors: BulkImportRowError[] = []
@@ -241,7 +325,10 @@ export async function previewBulkImport({ db, actor, kind, mode, bytes, filename
   const seenKeys = new Map<string, BulkImportPreviewRow>()
   const newCategories = new Map<string, string>()
   const newBrands = new Map<string, string>()
-  const warnings = kind === 'products' ? [`Cột ${stockColumn} chỉ để tham khảo; tồn kho luôn bị bỏ qua khi nhập.`] : []
+  const warnings =
+    kind === 'products'
+      ? [`Cột ${stockColumn} chỉ để tham khảo; tồn kho luôn bị bỏ qua khi nhập.`]
+      : []
   for (let index = 1; index <= range.e.r; index++) {
     const values = columns.map((column) => readCell(sheet, index, column))
     if (values.every((value) => value === undefined || value === null || value === '')) continue
@@ -258,11 +345,22 @@ export async function previewBulkImport({ db, actor, kind, mode, bytes, filename
       const value = fieldValue(values[i], field ?? '', column, row, rowErrors)
       if (value === undefined) continue
       if (column === categoryColumn) {
-        if (value === null) { input.categoryId = null; categoryPath = null }
-        else {
-          const parts = String(value).split(BULK_EXPORT_CATEGORY_SEPARATOR).map((part) => part.trim())
-          if (parts.length > 2 || parts.some((part) => !categoryNameSchema.safeParse(part).success)) {
-            rowErrors.push({ row, column, message: 'Danh mục phải là Tên hoặc Cha > Con, tối đa hai cấp, tên hợp lệ' })
+        if (value === null) {
+          input.categoryId = null
+          categoryPath = null
+        } else {
+          const parts = String(value)
+            .split(BULK_EXPORT_CATEGORY_SEPARATOR)
+            .map((part) => part.trim())
+          if (
+            parts.length > 2 ||
+            parts.some((part) => !categoryNameSchema.safeParse(part).success)
+          ) {
+            rowErrors.push({
+              row,
+              column,
+              message: 'Danh mục phải là Tên hoặc Cha > Con, tối đa hai cấp, tên hợp lệ',
+            })
           } else {
             categoryPath = parts.join(BULK_EXPORT_CATEGORY_SEPARATOR)
             const id = categoryByPath.get(normalized(categoryPath))
@@ -270,19 +368,27 @@ export async function previewBulkImport({ db, actor, kind, mode, bytes, filename
           }
         }
       } else if (column === brandColumn) {
-        if (value === null) { input.brandId = null; brandName = null }
-        else if (!brandNameSchema.safeParse(value).success) rowErrors.push({ row, column, message: 'Tên thương hiệu không hợp lệ' })
+        if (value === null) {
+          input.brandId = null
+          brandName = null
+        } else if (!brandNameSchema.safeParse(value).success)
+          rowErrors.push({ row, column, message: 'Tên thương hiệu không hợp lệ' })
         else {
           brandName = String(value)
           const id = brandByName.get(normalized(brandName))
           if (id) input.brandId = id
         }
       } else if (column === groupColumn) {
-        if (value === null) { input.groupId = null; groupId = null }
-        else {
+        if (value === null) {
+          input.groupId = null
+          groupId = null
+        } else {
           const id = groupByName.get(normalized(String(value)))
-          if (id) { input.groupId = id; groupId = id }
-          else rowErrors.push({ row, column, message: 'Nhóm khách hàng không tồn tại trong cửa hàng' })
+          if (id) {
+            input.groupId = id
+            groupId = id
+          } else
+            rowErrors.push({ row, column, message: 'Nhóm khách hàng không tồn tại trong cửa hàng' })
         }
       } else if (field) input[field] = value
     }
@@ -299,38 +405,81 @@ export async function previewBulkImport({ db, actor, kind, mode, bytes, filename
       }
     }
     const matched = existingByKey.get(normalized(key)) as Record<string, unknown> | undefined
-    if (matched && mode === 'create-only') rowErrors.push({ row, column: keyName, message: `Mã ${key} đã tồn tại; chế độ chỉ tạo mới không cập nhật` })
-    const schema = matched && mode === 'upsert'
-      ? kind === 'products' ? updateProductSchema : kind === 'customers' ? updateCustomerSchema : updateSupplierSchema
-      : kind === 'products' ? createProductSchema : kind === 'customers' ? createCustomerSchema : createSupplierSchema
+    if (matched && mode === 'create-only')
+      rowErrors.push({
+        row,
+        column: keyName,
+        message: `Mã ${key} đã tồn tại; chế độ chỉ tạo mới không cập nhật`,
+      })
+    const schema =
+      matched && mode === 'upsert'
+        ? kind === 'products'
+          ? updateProductSchema
+          : kind === 'customers'
+            ? updateCustomerSchema
+            : updateSupplierSchema
+        : kind === 'products'
+          ? createProductSchema
+          : kind === 'customers'
+            ? createCustomerSchema
+            : createSupplierSchema
     // Update schemas forbid an empty patch; a completely unchanged row is a valid no-op.
     const candidate: Record<string, unknown> = {}
     for (const [field, value] of Object.entries(input)) {
-      if (matched && mode === 'upsert' && field === keyField[kind] && normalized(String(value)) === normalized(String(matched[field]))) continue
-      if (!matched || mode !== 'upsert' || (matched[field] ?? null) !== (value ?? null)) candidate[field] = value
+      if (
+        matched &&
+        mode === 'upsert' &&
+        field === keyField[kind] &&
+        normalized(String(value)) === normalized(String(matched[field]))
+      )
+        continue
+      if (!matched || mode !== 'upsert' || (matched[field] ?? null) !== (value ?? null))
+        candidate[field] = value
     }
     if (!matched || mode !== 'upsert' || Object.keys(candidate).length) {
       const validated = schema.safeParse(candidate)
       if (validated.success) Object.assign(candidate, validated.data)
-      else for (const issue of validated.error.issues) {
-        const field = String(issue.path[0] ?? '')
-        const column = expected[fields[kind].indexOf(field as never)] ?? keyName
-        const message = issue.code === 'invalid_type'
-          ? issue.received === 'undefined' ? `Thiếu giá trị cột ${column}` : `Giá trị cột ${column} không đúng định dạng`
-          : issue.code === 'invalid_enum_value'
-            ? `Giá trị cột ${column} không hợp lệ; trạng thái chỉ nhận active hoặc inactive`
-            : /^[\x00-\x7F]*$/.test(issue.message)
-              ? `Giá trị cột ${column} không hợp lệ`
-              : issue.message
-        rowErrors.push({ row, column, message })
-      }
+      else
+        for (const issue of validated.error.issues) {
+          const field = String(issue.path[0] ?? '')
+          const column = expected[fields[kind].indexOf(field as never)] ?? keyName
+          const message =
+            issue.code === 'invalid_type'
+              ? issue.received === 'undefined'
+                ? `Thiếu giá trị cột ${column}`
+                : `Giá trị cột ${column} không đúng định dạng`
+              : issue.code === 'invalid_enum_value'
+                ? `Giá trị cột ${column} không hợp lệ; trạng thái chỉ nhận active hoặc inactive`
+                : /^[\x20-\x7e]*$/.test(issue.message)
+                  ? `Giá trị cột ${column} không hợp lệ`
+                  : issue.message
+          rowErrors.push({ row, column, message })
+        }
     }
     if (rowErrors.length) errors.push(...rowErrors)
-    const action = rowErrors.length ? 'error' : !matched ? 'create' : Object.keys(candidate).length ||
-      (categoryPath !== undefined && categoryPath !== null && !categoryByPath.has(normalized(categoryPath))) ||
-      (brandName !== undefined && brandName !== null && !brandByName.has(normalized(brandName))) ? 'update' : 'no-op'
-    rows.push({ row, key, action, ...(matched ? { targetId: matched.id as string } : {}), input: action === 'update' || action === 'create' ? candidate : {},
-      ...(categoryPath !== undefined ? { categoryPath } : {}), ...(brandName !== undefined ? { brandName } : {}), ...(groupId !== undefined ? { groupId } : {}) })
+    const action = rowErrors.length
+      ? 'error'
+      : !matched
+        ? 'create'
+        : Object.keys(candidate).length ||
+            (categoryPath !== undefined &&
+              categoryPath !== null &&
+              !categoryByPath.has(normalized(categoryPath))) ||
+            (brandName !== undefined &&
+              brandName !== null &&
+              !brandByName.has(normalized(brandName)))
+          ? 'update'
+          : 'no-op'
+    rows.push({
+      row,
+      key,
+      action,
+      ...(matched ? { targetId: matched.id as string } : {}),
+      input: action === 'update' || action === 'create' ? candidate : {},
+      ...(categoryPath !== undefined ? { categoryPath } : {}),
+      ...(brandName !== undefined ? { brandName } : {}),
+      ...(groupId !== undefined ? { groupId } : {}),
+    })
     if (key && !seenKeys.has(normalized(key))) seenKeys.set(normalized(key), rows[rows.length - 1]!)
   }
   let creates = 0
@@ -352,6 +501,21 @@ export async function previewBulkImport({ db, actor, kind, mode, bytes, filename
       newBrands.set(normalized(item.brandName), item.brandName)
     }
   }
-  return { kind, mode, filename, totalRows: rows.length, creates, updates, noOps, errors,
-    newCategories: [...newCategories.values()], newBrands: [...newBrands.values()], warnings, sample: rows.slice(0, 10), rows }
+  const plan = {
+    kind,
+    mode,
+    totalRows: rows.length,
+    creates,
+    updates,
+    noOps,
+    errors,
+    newCategories: [...newCategories.values()],
+    newBrands: [...newBrands.values()],
+    rows,
+  }
+  const digest = createHash('sha256')
+    .update(bytes)
+    .update(JSON.stringify({ storeId: actor.storeId, ...plan }))
+    .digest('hex')
+  return { ...plan, filename, warnings, sample: rows.slice(0, 10), digest }
 }

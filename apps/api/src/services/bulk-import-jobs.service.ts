@@ -24,6 +24,29 @@ export const MAX_IMPORT_ROWS = 100_000
 export const IMPORT_RETENTION_DAYS = 30
 const ACTIVE_INDEX = 'uniq_bulk_import_jobs_active_store_type'
 const retentionMs = IMPORT_RETENTION_DAYS * 24 * 60 * 60 * 1000
+// Uncommitted write progress is visible on the handling process without lying about
+// committed success. The DB transaction is still the sole source of durable counts.
+const liveProgress = new Map<string, { storeId: string; processedRows: number }>()
+
+export function publishBulkImportProgress(
+  storeId: string,
+  id: string,
+  processedRows: number,
+): void {
+  liveProgress.set(id, { storeId, processedRows })
+}
+
+export function clearBulkImportProgress(id: string): void {
+  liveProgress.delete(id)
+}
+
+function visibleJob(job: BulkImportJob): BulkImportJob {
+  const progress = liveProgress.get(job.id)
+  if (job.status !== 'running' || progress?.storeId !== job.storeId) return job
+  // Do not display 100% until the final CAS and the domain transaction commit.
+  return { ...job, processedRows: Math.min(job.totalRows - 1, progress.processedRows) }
+}
+
 export function importStorageRoot(): string {
   const configured = process.env.BULK_IMPORT_DIR
   if (!configured || !isAbsolute(configured)) {
@@ -116,8 +139,12 @@ export async function createBulkImportJob(args: {
   originalFilename: string
   totalRows: number
   file: Uint8Array
+  digest: string
+  approveNewNames: boolean
 }): Promise<BulkImportJob> {
   const { db, storageRoot, actor, type, mode, totalRows, file } = args
+  if (!/^[0-9a-f]{64}$/.test(args.digest))
+    throw new ApiError('VALIDATION_ERROR', 'Mã xác nhận không hợp lệ')
   assertOwner(actor)
   const originalFilename = fileName(args.originalFilename)
   if (
@@ -168,6 +195,8 @@ export async function createBulkImportJob(args: {
         type,
         mode,
         originalFilename,
+        confirmedDigest: args.digest,
+        approveNewNames: args.approveNewNames,
         fileSizeBytes: file.byteLength,
         totalRows,
         expiresAt: new Date(now.getTime() + retentionMs),
@@ -193,7 +222,7 @@ export async function listBulkImportJobs(args: {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
     throw new ApiError('VALIDATION_ERROR', 'Giới hạn danh sách không hợp lệ')
   }
-  return args.db
+  const jobs = await args.db
     .select()
     .from(bulkImportJobs)
     .where(
@@ -201,6 +230,7 @@ export async function listBulkImportJobs(args: {
     )
     .orderBy(desc(bulkImportJobs.createdAt), desc(bulkImportJobs.id))
     .limit(limit)
+  return jobs.map(visibleJob)
 }
 
 export async function getBulkImportJob(args: {
@@ -221,7 +251,7 @@ export async function getBulkImportJob(args: {
       ),
     )
   if (!job) throw new ApiError('NOT_FOUND', 'Không tìm thấy tác vụ nhập')
-  return job
+  return visibleJob(job)
 }
 
 async function readOriginalWorkbook(job: BulkImportJob, storageRoot: string): Promise<Buffer> {
@@ -393,7 +423,7 @@ export async function cancelBulkImportJob(args: {
   return job
 }
 
-// Run before accepting jobs after startup. Queued jobs also fail: this service has no parser scheduler.
+// Only running jobs were interrupted; queued jobs remain available for the next runner.
 export async function recoverInterruptedBulkImportJobs(
   db: BulkImportJobDb,
 ): Promise<BulkImportJob[]> {
@@ -406,7 +436,7 @@ export async function recoverInterruptedBulkImportJobs(
       finishedAt: now,
       updatedAt: now,
     })
-    .where(inArray(bulkImportJobs.status, ['queued', 'running']))
+    .where(eq(bulkImportJobs.status, 'running'))
     .returning()
 }
 
