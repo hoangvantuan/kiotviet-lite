@@ -56,10 +56,15 @@ describe('bảo vệ dữ liệu thật khi khởi tạo dữ liệu mẫu', () 
 
   it('chấp nhận cơ sở dữ liệu chỉ chứa dữ liệu mẫu', async () => {
     await env.db.insert(categories).values({ storeId: env.storeId, name: 'Danh mục mẫu' })
+    await env.db.insert(customers).values({
+      code: 'TEST-KH-41-1',
+      storeId: env.storeId,
+      name: 'Khách hàng mẫu',
+      phone: '0901234567',
+    })
     await env.db
-      .insert(customers)
-      .values({ storeId: env.storeId, name: 'Khách hàng mẫu', phone: '0901234567' })
-    await env.db.insert(suppliers).values({ storeId: env.storeId, name: 'Nhà cung cấp mẫu' })
+      .insert(suppliers)
+      .values({ code: 'TEST-NCC-41-2', storeId: env.storeId, name: 'Nhà cung cấp mẫu' })
     await seed(env.db)
     expect(await env.db.select({ id: stores.id }).from(stores)).toHaveLength(1)
   })
@@ -93,7 +98,7 @@ describe('bảo vệ dữ liệu thật khi khởi tạo dữ liệu mẫu', () 
   it('từ chối phiếu thu, giữ nguyên dữ liệu', async () => {
     const [customer] = await env.db
       .insert(customers)
-      .values({ storeId: env.storeId, name: 'Khách', phone: '0901234567' })
+      .values({ code: 'TEST-KH-41-3', storeId: env.storeId, name: 'Khách', phone: '0901234567' })
       .returning()
     await env.db.insert(receipts).values({
       storeId: env.storeId,
@@ -109,7 +114,7 @@ describe('bảo vệ dữ liệu thật khi khởi tạo dữ liệu mẫu', () 
   it('từ chối phiếu chi, giữ nguyên dữ liệu', async () => {
     const [supplier] = await env.db
       .insert(suppliers)
-      .values({ storeId: env.storeId, name: 'Nhà cung cấp' })
+      .values({ code: 'TEST-NCC-41-4', storeId: env.storeId, name: 'Nhà cung cấp' })
       .returning()
     await env.db.insert(supplierPayments).values({
       storeId: env.storeId,

@@ -37,7 +37,17 @@ import { useCreateCustomerMutation, useUpdateCustomerMutation } from '../use-cus
 
 const NO_GROUP_VALUE = '__NO_GROUP__'
 
-const KNOWN_FIELDS = ['name', 'phone', 'email', 'address', 'taxId', 'notes', 'debtLimit', 'groupId']
+const KNOWN_FIELDS = [
+  'name',
+  'code',
+  'phone',
+  'email',
+  'address',
+  'taxId',
+  'notes',
+  'debtLimit',
+  'groupId',
+]
 
 interface CustomerFormDialogProps {
   open: boolean
@@ -62,6 +72,7 @@ function CreateCustomerDialog({ open, onOpenChange, groups }: CustomerFormDialog
     mode: 'onTouched',
     defaultValues: {
       name: '',
+      code: undefined,
       phone: null,
       email: null,
       address: null,
@@ -77,6 +88,7 @@ function CreateCustomerDialog({ open, onOpenChange, groups }: CustomerFormDialog
     if (open) {
       form.reset({
         name: '',
+        code: undefined,
         phone: null,
         email: null,
         address: null,
@@ -92,6 +104,7 @@ function CreateCustomerDialog({ open, onOpenChange, groups }: CustomerFormDialog
   const submit = form.handleSubmit(async (values) => {
     const payload: CreateCustomerInput = {
       name: values.name,
+      code: values.code?.trim() || undefined,
       phone: values.phone?.trim() || null,
       email: values.email?.trim() ? values.email.trim() : null,
       address: values.address?.trim() ? values.address.trim() : null,
@@ -130,7 +143,12 @@ function CreateCustomerDialog({ open, onOpenChange, groups }: CustomerFormDialog
           <DialogDescription>Nhập thông tin khách hàng mới.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4" noValidate>
-          <CustomerFields form={form} groups={groups} groupSelectValue={groupSelectValue} />
+          <CustomerFields
+            form={form}
+            groups={groups}
+            groupSelectValue={groupSelectValue}
+            mode="create"
+          />
           <DebtLimitField
             id="cust-debt-limit"
             value={debtLimitText}
@@ -175,6 +193,7 @@ function EditCustomerDialog({
     if (open && customer) {
       form.reset({
         name: customer.name,
+        code: customer.code,
         phone: customer.phone ?? '',
         email: customer.email,
         address: customer.address,
@@ -190,6 +209,7 @@ function EditCustomerDialog({
   const submit = form.handleSubmit(async (values) => {
     const payload: UpdateCustomerInput = {}
     if (values.name !== undefined && values.name !== customer.name) payload.name = values.name
+    if (values.code !== undefined && values.code !== customer.code) payload.code = values.code
     const phone = values.phone?.trim() || null
     if (values.phone !== undefined && phone !== customer.phone) payload.phone = phone
     const normalizeOptional = (v: string | null | undefined) =>
@@ -242,7 +262,12 @@ function EditCustomerDialog({
           <DialogDescription>Cập nhật thông tin khách hàng.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4" noValidate>
-          <CustomerFields form={form} groups={groups} groupSelectValue={groupSelectValue} />
+          <CustomerFields
+            form={form}
+            groups={groups}
+            groupSelectValue={groupSelectValue}
+            mode="edit"
+          />
           <DebtLimitField
             id="edit-cust-debt-limit"
             value={debtLimitText}
@@ -276,9 +301,10 @@ interface CustomerFieldsProps {
     | ReturnType<typeof useForm<UpdateCustomerInput>>
   groups: CustomerGroupItem[]
   groupSelectValue: string
+  mode: 'create' | 'edit'
 }
 
-function CustomerFields({ form, groups, groupSelectValue }: CustomerFieldsProps) {
+function CustomerFields({ form, groups, groupSelectValue, mode }: CustomerFieldsProps) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <div className="space-y-2 md:col-span-2">
@@ -286,6 +312,23 @@ function CustomerFields({ form, groups, groupSelectValue }: CustomerFieldsProps)
         <Input id="cust-name" autoFocus maxLength={100} {...form.register('name')} />
         {form.formState.errors.name && (
           <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
+        )}
+      </div>
+      <div className="space-y-2 md:col-span-2">
+        <Label htmlFor="cust-code">Mã khách hàng</Label>
+        <Input
+          id="cust-code"
+          maxLength={64}
+          placeholder={mode === 'create' ? 'Tự sinh nếu để trống' : undefined}
+          {...form.register('code', {
+            setValueAs: (v) => (v === '' && mode === 'create' ? undefined : v),
+          })}
+        />
+        {form.formState.errors.code && (
+          <p className="text-sm text-destructive">{form.formState.errors.code.message}</p>
+        )}
+        {mode === 'create' && (
+          <p className="text-xs text-muted-foreground">Để trống để hệ thống tự sinh mã.</p>
         )}
       </div>
       <div className="space-y-2">

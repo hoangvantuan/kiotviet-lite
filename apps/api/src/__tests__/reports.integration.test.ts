@@ -47,6 +47,7 @@ async function setup(): Promise<Env> {
   const [customer1] = await base.db
     .insert(customers)
     .values({
+      code: 'TEST-KH-38-1',
       storeId: base.storeId,
       name: 'KH Nợ Nhiều',
       phone: '0900001111',
@@ -58,6 +59,7 @@ async function setup(): Promise<Env> {
   const [customer2] = await base.db
     .insert(customers)
     .values({
+      code: 'TEST-KH-38-2',
       storeId: base.storeId,
       name: 'KH Nợ Ít',
       phone: '0900002222',
@@ -156,6 +158,7 @@ async function setup(): Promise<Env> {
   const [supplier1] = await base.db
     .insert(suppliers)
     .values({
+      code: 'TEST-NCC-38-3',
       storeId: base.storeId,
       name: 'NCC Test',
       currentDebt: 300_000,
@@ -276,6 +279,7 @@ describe('GET /api/v1/reports/debt-aging', () => {
     const [cust] = await env.base.db
       .insert(customers)
       .values({
+        code: 'TEST-KH-38-4',
         storeId: env.base.storeId,
         name: 'KH Timezone Test',
         phone: '0977777777',

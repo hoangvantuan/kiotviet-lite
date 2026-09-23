@@ -28,6 +28,7 @@ export function ReceiptPrintTemplate({ receipt, store }: ReceiptPrintTemplatePro
         <p>Mã phiếu: {code}</p>
         <p>Ngày: {formatDateTime(receipt.createdAt)}</p>
         <p>Khách hàng: {receipt.customerName ?? '—'}</p>
+        {receipt.customerCode && <p>Mã KH: {receipt.customerCode}</p>}
         <p>SĐT: {receipt.customerPhone ?? '—'}</p>
       </div>
       <table className="my-4 w-full border-collapse text-sm">

@@ -46,12 +46,14 @@ async function setup(): Promise<Env> {
     .insert(customers)
     .values([
       {
+        code: 'TEST-KH-37-1',
         storeId: base.storeId,
         name: 'KH Có Nợ',
         phone: '0911111000',
         currentDebt: 450_000,
       },
       {
+        code: 'TEST-KH-37-2',
         storeId: base.storeId,
         name: 'KH Không Nợ',
         phone: '0911222000',
@@ -157,6 +159,7 @@ interface ReceiptResp {
   id: string
   customerId: string
   customerName: string | null
+  customerCode: string | null
   customerPhone: string | null
   amount: number
   note: string | null
@@ -248,6 +251,7 @@ describe('POST /receipts (createReceipt)', () => {
     expect(r.status).toBe(201)
     expect(r.body.data.amount).toBe(250_000)
     expect(r.body.data.customerName).toBe('KH Có Nợ')
+    expect(r.body.data.customerCode).toBe('TEST-KH-37-1')
     expect(r.body.data.debtAfter).toBe(200_000)
     expect(r.body.data.allocationCount).toBe(2)
     expect(r.body.data.allocations.length).toBe(2)
@@ -363,6 +367,7 @@ describe('POST /receipts (createReceipt)', () => {
     const otherCustomer = await env.base.db
       .insert(customers)
       .values({
+        code: 'TEST-KH-37-3',
         storeId: env.base.storeId,
         name: 'KH Khác',
         phone: '0919999999',
@@ -416,6 +421,7 @@ describe('POST /receipts (createReceipt)', () => {
     const [otherCustomer] = await otherEnv.db
       .insert(customers)
       .values({
+        code: 'TEST-KH-37-4',
         storeId: otherEnv.storeId,
         name: 'KH Store Khác',
         phone: '0918888888',
@@ -803,6 +809,7 @@ describe('GET /receipts/customer-debts/:customerId (listCustomerOpenDebts)', () 
     const [otherCustomer] = await otherEnv.db
       .insert(customers)
       .values({
+        code: 'TEST-KH-37-5',
         storeId: otherEnv.storeId,
         name: 'KH Store Khác',
         phone: '0917777777',

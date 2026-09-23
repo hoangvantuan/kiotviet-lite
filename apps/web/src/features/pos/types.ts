@@ -21,6 +21,7 @@ export interface OrderDetail {
   id: string
   orderNumber: string
   customerId: string | null
+  customerCode?: string | null
   customerName?: string | null
   customerPhone?: string | null
   subtotal: number

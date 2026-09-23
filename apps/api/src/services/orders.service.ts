@@ -68,6 +68,9 @@ export interface OrderDetail {
   id: string
   orderNumber: string
   customerId: string | null
+  customerCode?: string | null
+  customerName?: string | null
+  customerPhone?: string | null
   subtotal: number
   discountAmount: number
   total: number
@@ -735,6 +738,7 @@ export async function createOrder({
 
       let oldDebt: number | null = null
       let customerCurrentDebt: number | null = null
+      let printCustomer: { code: string; name: string; phone: string | null } | null = null
       let isDebtLimitExceeded = false
 
       // Debt creation
@@ -751,6 +755,8 @@ export async function createOrder({
             currentDebt: customers.currentDebt,
             debtLimit: customers.debtLimit,
             groupId: customers.groupId,
+            code: customers.code,
+            phone: customers.phone,
             name: customers.name,
             groupDebtLimit: customerGroups.debtLimit,
           })
@@ -771,6 +777,7 @@ export async function createOrder({
           throw new ApiError('NOT_FOUND', 'Không tìm thấy khách hàng')
         }
 
+        printCustomer = customer
         // Resolve effective debt limit: customer.debtLimit ?? group.debtLimit ?? null
         const effectiveDebtLimit: number | null =
           customer.debtLimit !== null ? customer.debtLimit : (customer.groupDebtLimit ?? null)
@@ -943,7 +950,12 @@ export async function createOrder({
         )
       } else if (input.customerId) {
         const customerRows = await tx
-          .select({ currentDebt: customers.currentDebt })
+          .select({
+            currentDebt: customers.currentDebt,
+            code: customers.code,
+            name: customers.name,
+            phone: customers.phone,
+          })
           .from(customers)
           .where(
             and(
@@ -953,6 +965,7 @@ export async function createOrder({
             ),
           )
           .limit(1)
+        printCustomer = customerRows[0] ?? null
         oldDebt = customerRows[0]?.currentDebt != null ? Number(customerRows[0].currentDebt) : 0
         customerCurrentDebt = oldDebt
       }
@@ -1016,6 +1029,9 @@ export async function createOrder({
         id: createdId,
         orderNumber,
         customerId: input.customerId ?? null,
+        customerCode: printCustomer?.code ?? null,
+        customerName: printCustomer?.name ?? null,
+        customerPhone: printCustomer?.phone ?? null,
         subtotal: isPriceMismatchAdjusted ? adjustedSubtotal : input.subtotal,
         discountAmount: input.discountAmount,
         total: isPriceMismatchAdjusted
@@ -1397,6 +1413,7 @@ export interface OrderDetailFull {
   orderNumber: string
   customerId: string | null
   customerName: string | null
+  customerCode: string | null
   customerPhone: string | null
   customerGroupName: string | null
   customerCurrentDebt?: number | null
@@ -1439,6 +1456,7 @@ export async function getOrderDetail({
       orderNumber: orders.orderNumber,
       customerId: orders.customerId,
       customerName: customers.name,
+      customerCode: customers.code,
       customerPhone: customers.phone,
       customerGroupName: customerGroups.name,
       customerCurrentDebt: customers.currentDebt,
@@ -1531,6 +1549,7 @@ export async function getOrderDetail({
     orderNumber: row.orderNumber,
     customerId: row.customerId,
     customerName: row.customerName ?? null,
+    customerCode: row.customerCode ?? null,
     customerPhone: row.customerPhone ?? null,
     customerGroupName: row.customerGroupName ?? null,
     customerCurrentDebt: currentDebt,

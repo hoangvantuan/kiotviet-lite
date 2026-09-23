@@ -97,7 +97,7 @@ export function CustomerSearchCombobox() {
               ref={inputRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm tên, SĐT..."
+              placeholder="Tìm tên, mã hoặc SĐT..."
               className="h-8 text-sm"
             />
           </div>
@@ -124,13 +124,11 @@ export function CustomerSearchCombobox() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{c.name}</p>
-                  {(c.phone || c.groupName) && (
-                    <p className="truncate text-xs text-muted-foreground">
-                      {c.phone}
-                      {c.phone && c.groupName && ' · '}
-                      {c.groupName}
-                    </p>
-                  )}
+                  <p className="truncate text-xs text-muted-foreground">
+                    {c.code}
+                    {c.phone && ` · ${c.phone}`}
+                    {c.groupName && ` · ${c.groupName}`}
+                  </p>
                 </div>
               </button>
             ))}

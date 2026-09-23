@@ -91,6 +91,7 @@ export const receiptListItemSchema = z.object({
   id: z.string().uuid(),
   customerId: z.string().uuid(),
   customerName: z.string().nullable(),
+  customerCode: z.string().nullable(),
   customerPhone: z.string().nullable(),
   amount: z.number(),
   note: z.string().nullable(),

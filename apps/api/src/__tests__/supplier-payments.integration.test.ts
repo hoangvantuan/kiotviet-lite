@@ -30,9 +30,27 @@ async function setup(): Promise<Env> {
   const inserted = await base.db
     .insert(suppliers)
     .values([
-      { storeId: base.storeId, name: 'NCC Có Nợ', phone: '0901111000', currentDebt: 1_000_000 },
-      { storeId: base.storeId, name: 'NCC Không Nợ', phone: '0901222000', currentDebt: 0 },
-      { storeId: base.storeId, name: 'NCC Nợ Lớn', phone: '0901333000', currentDebt: 5_000_000 },
+      {
+        code: 'TEST-NCC-44-1',
+        storeId: base.storeId,
+        name: 'NCC Có Nợ',
+        phone: '0901111000',
+        currentDebt: 1_000_000,
+      },
+      {
+        code: 'TEST-NCC-44-2',
+        storeId: base.storeId,
+        name: 'NCC Không Nợ',
+        phone: '0901222000',
+        currentDebt: 0,
+      },
+      {
+        code: 'TEST-NCC-44-3',
+        storeId: base.storeId,
+        name: 'NCC Nợ Lớn',
+        phone: '0901333000',
+        currentDebt: 5_000_000,
+      },
     ])
     .returning({ id: suppliers.id, name: suppliers.name })
 
@@ -211,6 +229,7 @@ describe('POST /supplier-payments (createSupplierPayment)', () => {
     const [otherSupplier] = await otherEnv.db
       .insert(suppliers)
       .values({
+        code: 'TEST-NCC-44-4',
         storeId: otherEnv.storeId,
         name: 'NCC Khác Store',
         currentDebt: 500_000,

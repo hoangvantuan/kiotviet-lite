@@ -78,6 +78,7 @@ async function setup(): Promise<Env> {
   const [customer] = await base.db
     .insert(customers)
     .values({
+      code: 'TEST-KH-39-1',
       storeId: base.storeId,
       name: 'KH Test',
       phone: '0911111000',

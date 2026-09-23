@@ -49,6 +49,7 @@ interface ReceiptRow {
   id: string
   customerId: string
   customerName: string | null
+  customerCode: string | null
   customerPhone: string | null
   amount: number
   note: string | null
@@ -63,6 +64,7 @@ export function toReceiptListItem(row: ReceiptRow): ReceiptListItem {
     id: row.id,
     customerId: row.customerId,
     customerName: row.customerName,
+    customerCode: row.customerCode,
     customerPhone: row.customerPhone,
     amount: Number(row.amount),
     note: row.note,
@@ -103,6 +105,7 @@ const receiptSelectColumns = {
   id: receipts.id,
   customerId: receipts.customerId,
   customerName: customers.name,
+  customerCode: customers.code,
   customerPhone: customers.phone,
   amount: receipts.amount,
   note: receipts.note,
@@ -521,6 +524,7 @@ export async function createReceipt({
       id: receiptRow.id,
       customerId: customer.id,
       customerName: customer.name,
+      customerCode: customer.code,
       customerPhone: customer.phone,
       amount: input.amount,
       note: noteNormalized,

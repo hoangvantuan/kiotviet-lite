@@ -11,6 +11,8 @@ export const stores = pgTable('stores', {
   logoUrl: text(),
   debtWarningPercent: integer().notNull().default(80),
   debtOverdueDays: varchar({ length: 50 }).notNull().default('30,60,90'),
+  customerCodeCounter: integer().notNull().default(0),
+  supplierCodeCounter: integer().notNull().default(0),
   negativeStockAlertsEnabled: boolean().notNull().default(true),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp({ withTimezone: true })

@@ -43,6 +43,7 @@ async function setup(): Promise<Env> {
     .insert(customers)
     .values([
       {
+        code: 'TEST-KH-29-1',
         storeId: base.storeId,
         name: 'KH Có Hạn Mức',
         phone: '0911111111',
@@ -50,6 +51,7 @@ async function setup(): Promise<Env> {
         currentDebt: 800_000,
       },
       {
+        code: 'TEST-KH-29-2',
         storeId: base.storeId,
         name: 'KH Không Giới Hạn',
         phone: '0922222222',
@@ -57,6 +59,7 @@ async function setup(): Promise<Env> {
         currentDebt: 0,
       },
       {
+        code: 'TEST-KH-29-3',
         storeId: base.storeId,
         name: 'KH Sát Hạn Mức',
         phone: '0933333333',
@@ -64,6 +67,7 @@ async function setup(): Promise<Env> {
         currentDebt: 900_000,
       },
       {
+        code: 'TEST-KH-29-4',
         storeId: base.storeId,
         name: 'KH Theo Group',
         phone: '0944444444',
@@ -72,6 +76,7 @@ async function setup(): Promise<Env> {
         currentDebt: 200_000,
       },
       {
+        code: 'TEST-KH-29-5',
         storeId: base.storeId,
         name: 'KH Limit 0',
         phone: '0955555555',
@@ -254,6 +259,7 @@ describe('GET /customer-debt/:customerId', () => {
     const [otherCustomer] = await otherEnv.db
       .insert(customers)
       .values({
+        code: 'TEST-KH-29-6',
         storeId: otherEnv.storeId,
         name: 'KH Khác Store',
         phone: '0999999999',

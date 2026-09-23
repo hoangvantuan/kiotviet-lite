@@ -30,6 +30,7 @@ const AUTO_CLOSE_MS = 3000
 function toOrderDetailResponse(order: OrderDetail): OrderDetailResponse {
   return {
     ...order,
+    customerCode: order.customerCode ?? null,
     customerName: order.customerName ?? null,
     customerPhone: order.customerPhone ?? null,
     customerGroupName: null,

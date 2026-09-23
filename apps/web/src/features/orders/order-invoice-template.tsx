@@ -100,6 +100,7 @@ export function OrderInvoiceThermal({ order, store, isReprint, printSettings }: 
         <span>{formatDateTime(order.createdAt)}</span>
       </div>
       {showCustomerName && order.customerName && <p>KH: {order.customerName}</p>}
+      {showCustomerName && order.customerCode && <p>Mã KH: {order.customerCode}</p>}
       {showCustomerPhone && order.customerPhone && <p>SĐT: {order.customerPhone}</p>}
 
       <ThermalSeparator />
@@ -259,6 +260,7 @@ export function OrderInvoiceA4({ order, store, isReprint, printSettings }: Invoi
             Khách hàng: <span className="font-medium">{order.customerName ?? 'Khách lẻ'}</span>
           </p>
         )}
+        {showCustomerName && order.customerCode && <p>Mã KH: {order.customerCode}</p>}
         {showCustomerPhone && order.customerPhone && <p>SĐT: {order.customerPhone}</p>}
         {order.customerGroupName && <p>Nhóm KH: {order.customerGroupName}</p>}
       </div>
@@ -444,6 +446,7 @@ export function OrderInvoiceA5({ order, store, isReprint, printSettings }: Invoi
         </p>
         <p>Ngày: {formatDateTime(order.createdAt)}</p>
         {showCustomerName && <p>KH: {order.customerName ?? 'Khách lẻ'}</p>}
+        {showCustomerName && order.customerCode && <p>Mã KH: {order.customerCode}</p>}
         {showCustomerPhone && order.customerPhone && <p>SĐT: {order.customerPhone}</p>}
       </div>
 

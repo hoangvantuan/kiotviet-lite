@@ -68,6 +68,7 @@ export interface ThermalOrder {
   orderNumber: string
   createdAt: string
   customerName?: string | null
+  customerCode?: string | null
   customerPhone?: string | null
   items: ThermalOrderItem[]
   subtotal: number
@@ -211,6 +212,9 @@ export function buildOrderReceipt(
   // Customer info
   if ((options.showCustomerName ?? true) && order.customerName) {
     buf.pushLine(`KH: ${order.customerName}`)
+  }
+  if ((options.showCustomerName ?? true) && order.customerCode) {
+    buf.pushLine(`Mã KH: ${order.customerCode}`)
   }
   if ((options.showCustomerPhone ?? true) && order.customerPhone) {
     buf.pushLine(`SĐT: ${order.customerPhone}`)

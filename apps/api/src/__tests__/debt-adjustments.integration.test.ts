@@ -39,18 +39,21 @@ async function setup(): Promise<Env> {
     .insert(customers)
     .values([
       {
+        code: 'TEST-KH-13-1',
         storeId: base.storeId,
         name: 'KH Có Nợ',
         phone: '0911111000',
         currentDebt: 500_000,
       },
       {
+        code: 'TEST-KH-13-2',
         storeId: base.storeId,
         name: 'KH Không Nợ',
         phone: '0911222000',
         currentDebt: 0,
       },
       {
+        code: 'TEST-KH-13-3',
         storeId: base.storeId,
         name: 'KH Đã Xoá',
         phone: '0911333000',
@@ -89,6 +92,7 @@ async function setup(): Promise<Env> {
   const [storeBCustomer] = await base.db
     .insert(customers)
     .values({
+      code: 'TEST-KH-13-4',
       storeId: storeB!.id,
       name: 'KH Store B',
       phone: '0900000001',

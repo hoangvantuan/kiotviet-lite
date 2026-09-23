@@ -28,7 +28,7 @@ import { showSuccess } from '@/lib/toast'
 
 import { useCreateSupplierMutation, useUpdateSupplierMutation } from './use-suppliers'
 
-const KNOWN_FIELDS = ['name', 'phone', 'email', 'address', 'taxId', 'notes']
+const KNOWN_FIELDS = ['name', 'code', 'phone', 'email', 'address', 'taxId', 'notes']
 
 interface SupplierFormDialogProps {
   open: boolean
@@ -49,6 +49,7 @@ export function SupplierFormDialog(props: SupplierFormDialogProps) {
 function emptyCreateValues(): CreateSupplierInput {
   return {
     name: '',
+    code: undefined,
     phone: null,
     email: null,
     address: null,
@@ -74,6 +75,7 @@ function CreateSupplierDialog({ open, onOpenChange, onSupplierCreated }: Supplie
   const submit = form.handleSubmit(async (values) => {
     const payload: CreateSupplierInput = {
       name: values.name,
+      code: values.code?.trim() || undefined,
       phone: values.phone?.toString().trim() ? values.phone.toString().trim() : null,
       email: values.email?.toString().trim() ? values.email.toString().trim() : null,
       address: values.address?.toString().trim() ? values.address.toString().trim() : null,
@@ -103,7 +105,7 @@ function CreateSupplierDialog({ open, onOpenChange, onSupplierCreated }: Supplie
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
-          <FormFields form={form as unknown as FormShape} />
+          <FormFields form={form as unknown as FormShape} mode="create" />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Hủy
@@ -129,6 +131,7 @@ function EditSupplierDialog({
     mode: 'onTouched',
     defaultValues: {
       name: supplier.name,
+      code: supplier.code,
       phone: supplier.phone ?? null,
       email: supplier.email ?? null,
       address: supplier.address ?? null,
@@ -141,6 +144,7 @@ function EditSupplierDialog({
     if (open) {
       form.reset({
         name: supplier.name,
+        code: supplier.code,
         phone: supplier.phone ?? null,
         email: supplier.email ?? null,
         address: supplier.address ?? null,
@@ -153,6 +157,7 @@ function EditSupplierDialog({
   const submit = form.handleSubmit(async (values) => {
     const payload: UpdateSupplierInput = {}
     if (values.name !== undefined && values.name !== supplier.name) payload.name = values.name
+    if (values.code !== undefined && values.code !== supplier.code) payload.code = values.code
     const phoneVal = values.phone === null ? null : values.phone?.toString().trim() || null
     if (phoneVal !== supplier.phone) payload.phone = phoneVal
     const emailVal = values.email === null ? null : values.email?.toString().trim() || null
@@ -189,7 +194,7 @@ function EditSupplierDialog({
           <DialogDescription>Cập nhật thông tin liên hệ và ghi chú.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
-          <FormFields form={form as unknown as FormShape} />
+          <FormFields form={form as unknown as FormShape} mode="edit" />
           <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Công nợ NCC</span>
@@ -222,11 +227,14 @@ function EditSupplierDialog({
 }
 
 interface FormShape {
-  register: (name: string) => Record<string, unknown>
+  register: (
+    name: string,
+    options?: { setValueAs: (value: string) => string | undefined },
+  ) => Record<string, unknown>
   formState: { errors: Record<string, { message?: string } | undefined> }
 }
 
-function FormFields({ form }: { form: FormShape }) {
+function FormFields({ form, mode }: { form: FormShape; mode: 'create' | 'edit' }) {
   const errors = form.formState.errors
   return (
     <div className="space-y-4">
@@ -236,6 +244,21 @@ function FormFields({ form }: { form: FormShape }) {
         </Label>
         <Input id="supplier-name" autoFocus {...form.register('name')} />
         {errors.name?.message && <p className="text-xs text-destructive">{errors.name.message}</p>}
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="supplier-code">Mã nhà cung cấp</Label>
+        <Input
+          id="supplier-code"
+          maxLength={64}
+          placeholder={mode === 'create' ? 'Tự sinh nếu để trống' : undefined}
+          {...form.register('code', {
+            setValueAs: (v) => (v === '' && mode === 'create' ? undefined : v),
+          })}
+        />
+        {errors.code?.message && <p className="text-xs text-destructive">{errors.code.message}</p>}
+        {mode === 'create' && (
+          <p className="text-xs text-muted-foreground">Để trống để hệ thống tự sinh mã.</p>
+        )}
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="grid gap-2">

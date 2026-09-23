@@ -28,10 +28,13 @@ export const supplierTaxIdSchema = z
   .max(32, 'Mã số thuế tối đa 32 ký tự')
   .regex(TAX_ID_REGEX, 'Mã số thuế chỉ chứa chữ, số và dấu gạch ngang')
 
+export const supplierCodeSchema = z.string().trim().min(1, 'Vui lòng nhập mã nhà cung cấp').max(64)
+
 export const supplierHasDebtSchema = z.enum(['yes', 'no', 'all'])
 
 export const createSupplierSchema = z.object({
   name: supplierNameSchema,
+  code: supplierCodeSchema.optional(),
   phone: supplierPhoneSchema.nullable().optional(),
   email: supplierEmailSchema.nullable().optional(),
   address: z.string().trim().max(500, 'Địa chỉ tối đa 500 ký tự').nullable().optional(),
@@ -42,6 +45,7 @@ export const createSupplierSchema = z.object({
 export const updateSupplierSchema = z
   .object({
     name: supplierNameSchema.optional(),
+    code: supplierCodeSchema.optional(),
     phone: supplierPhoneSchema.nullable().optional(),
     email: supplierEmailSchema.nullable().optional(),
     address: z.string().trim().max(500, 'Địa chỉ tối đa 500 ký tự').nullable().optional(),
@@ -67,6 +71,7 @@ export const listTrashedSuppliersQuerySchema = z.object({
 export const supplierListItemSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
+  code: z.string(),
   phone: z.string().nullable(),
   email: z.string().nullable(),
   address: z.string().nullable(),

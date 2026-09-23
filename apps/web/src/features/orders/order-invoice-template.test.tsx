@@ -23,6 +23,7 @@ const mockOrder: OrderDetailResponse = {
   orderNumber: 'HD-260827-0001',
   customerId: 'cust-123',
   customerName: 'Nguyễn Văn A',
+  customerCode: 'KH000063',
   customerPhone: '0987654321',
   customerGroupName: 'Khách VIP',
   createdByName: 'Thu ngân 1',
@@ -138,6 +139,7 @@ describe('OrderInvoiceThermal template', () => {
     expect(html).toContain('Slogan tuỳ chỉnh')
     expect(html).toContain('HĐ: HD-260827-0001')
     expect(html).toContain('KH: Nguyễn Văn A')
+    expect(html).toContain('Mã KH: KH000063')
     expect(html).toContain('SĐT: 0987654321')
     expect(html).toContain('[SUA-001]')
     expect(html).toContain('Chiết khấu')
@@ -156,6 +158,7 @@ describe('OrderInvoiceThermal template', () => {
       />,
     )
     expect(html).toContain('KH: Nguyễn Văn A')
+    expect(html).toContain('Mã KH: KH000063')
     expect(html).not.toContain('SĐT: 0987654321')
     expect(html).not.toContain('SĐT: null')
   })
@@ -170,6 +173,7 @@ describe('OrderInvoiceThermal template', () => {
     )
 
     expect(html).not.toContain('KH: Nguyễn Văn A')
+    expect(html).not.toContain('Mã KH: KH000063')
     expect(html).not.toContain('SĐT: 0987654321')
     expect(html).not.toContain('[SUA-001]')
     expect(html).not.toContain('Chiết khấu')
@@ -195,6 +199,7 @@ describe('OrderInvoiceA4 template', () => {
     expect(html).toContain('Cửa hàng Tạp Hóa Xanh')
     expect(html).toContain('Slogan tuỳ chỉnh')
     expect(html).toContain('Nguyễn Văn A')
+    expect(html).toContain('Mã KH: KH000063')
     expect(html).toContain('0987654321')
     expect(html).toContain('[SUA-001]')
     expect(html).toContain('[BM-002]')
@@ -212,6 +217,7 @@ describe('OrderInvoiceA4 template', () => {
     )
 
     expect(html).not.toContain('Khách hàng:')
+    expect(html).not.toContain('Mã KH: KH000063')
     expect(html).not.toContain('SĐT: 0987654321')
     expect(html).not.toContain('[SUA-001]')
     expect(html).not.toContain('Nợ cũ')
@@ -234,6 +240,7 @@ describe('OrderInvoiceA5 template', () => {
 
     expect(html).toContain('HÓA ĐƠN BÁN HÀNG')
     expect(html).toContain('Nguyễn Văn A')
+    expect(html).toContain('Mã KH: KH000063')
     expect(html).toContain('0987654321')
     expect(html).toContain('[SUA-001]')
     expect(html).toContain('Nợ cũ')

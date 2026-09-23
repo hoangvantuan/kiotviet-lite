@@ -91,6 +91,9 @@ export function CustomerDetailHeader({ customer, onEdit }: CustomerDetailHeaderP
           <div className="space-y-2">
             <h1 className="text-2xl font-semibold text-foreground">{customer.name}</h1>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+              <span className="font-mono text-sm text-muted-foreground">
+                Mã khách hàng: {customer.code}
+              </span>
               {customer.phone && (
                 <span className="flex items-center gap-1">
                   <Phone className="size-4" />

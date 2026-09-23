@@ -16,7 +16,7 @@
  */
 
 import bcrypt from 'bcryptjs'
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { pathToFileURL } from 'node:url'
 import postgres from 'postgres'
@@ -993,9 +993,10 @@ export async function seed(db: Db) {
     { name: 'Phan Văn Khánh', phone: '0911000010', total: 0, count: 0 },
   ]
 
-  for (const c of customerData) {
+  for (const [index, c] of customerData.entries()) {
     await db.insert(customers).values({
       storeId,
+      code: `KH${String(index + 1).padStart(6, '0')}`,
       name: c.name,
       phone: c.phone,
       groupId: (c as Record<string, unknown>).group as string | undefined,
@@ -1017,18 +1018,26 @@ export async function seed(db: Db) {
   ]
 
   const supplierIds: string[] = []
-  for (const s of supplierData) {
+  for (const [index, s] of supplierData.entries()) {
     const id = uuidv7()
     supplierIds.push(id)
     await db.insert(suppliers).values({
       id,
       storeId,
+      code: `NCC${String(index + 1).padStart(6, '0')}`,
       name: s.name,
       phone: s.phone,
       email: s.email,
       address: 'TP.HCM',
     })
   }
+  await db
+    .update(stores)
+    .set({
+      customerCodeCounter: customerData.length,
+      supplierCodeCounter: supplierData.length,
+    })
+    .where(eq(stores.id, storeId))
 
   // ─── 10. Price Lists ───
   console.log('💰 Tạo bảng giá...')

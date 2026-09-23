@@ -92,6 +92,7 @@ describe('Bảo mật & Hiệu năng (T8 Integration Tests)', () => {
       const [customer] = await env.db
         .insert(customers)
         .values({
+          code: 'TEST-KH-40-1',
           storeId: env.storeId,
           name: 'Khách hàng gốc',
           phone: '0911223355',

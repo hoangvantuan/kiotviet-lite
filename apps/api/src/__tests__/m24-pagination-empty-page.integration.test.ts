@@ -26,11 +26,7 @@ describe('M24 — COUNT(*) OVER() trả total đúng khi trang rỗng', () => {
     // Tạo dữ liệu: 1 customer, 1 product, 3 customer prices
     const [customer] = await env.db
       .insert(customers)
-      .values({
-        storeId: env.storeId,
-        name: 'KH Test',
-        phone: '0944444444',
-      })
+      .values({ code: 'TEST-KH-19-1', storeId: env.storeId, name: 'KH Test', phone: '0944444444' })
       .returning()
 
     await env.db.insert(products).values({
