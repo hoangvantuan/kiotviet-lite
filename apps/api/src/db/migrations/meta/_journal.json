@@ -274,6 +274,13 @@
       "when": 1790155813625,
       "tag": "0038_abnormal_rumiko_fujikawa",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790157174231,
+      "tag": "0039_magical_nico_minoru",
+      "breakpoints": true
     }
   ]
 }
