@@ -8,9 +8,10 @@ Thư mục này chứa bộ kiểm thử đầu-cuối (end-to-end) sử dụng 
 - **Chạy di chuyển lược đồ (migration) và nạp dữ liệu mẫu (seed)**:
   ```bash
   # Tại thư mục gốc của dự án
-  pnpm db:migrate
-  pnpm db:seed
+  pnpm --filter api db:migrate
+  pnpm --filter api db:seed
   ```
+  Lệnh nạp dữ liệu mẫu sẽ từ chối nếu cơ sở dữ liệu có đơn hàng, phiếu thu, phiếu chi hoặc phiếu kiểm kê ở **bất kỳ cửa hàng nào**; không có dữ liệu nào bị xóa khi từ chối. Chỉ trên cơ sở dữ liệu thử nghiệm có thể xóa bỏ, khi đã xác nhận muốn xóa toàn bộ dữ liệu cũ, dùng `FORCE_SEED=1 pnpm --filter api db:seed`.
 - **Khởi động máy chủ backend API**:
   ```bash
   # Chạy API server ở cổng 3000
