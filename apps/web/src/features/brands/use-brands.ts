@@ -37,14 +37,14 @@ export function useAllBrandsQuery() {
   return useQuery({
     queryKey: [...BRANDS_KEY, storeId, 'all'],
     queryFn: async () => {
-      let allItems: BrandItem[] = []
+      const allItems: BrandItem[] = []
       let page = 1
       let totalPages = 1
       while (page <= totalPages) {
         const res = await apiClient.get<BrandListResponse>(
           `/api/v1/brands?page=${page}&pageSize=100&status=active`,
         )
-        allItems = allItems.concat(res.data)
+        allItems.push(...res.data)
         totalPages = res.meta.totalPages
         page++
       }

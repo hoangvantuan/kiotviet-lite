@@ -99,6 +99,20 @@ describe('Products - Brand Constraints', () => {
     expect(createRes.body.data.weight).toBe(171)
     expect(createRes.body.data.description).toBe('Mới 100%')
 
+    const productId = createRes.body.data.id
+
+    // 2.1 Smoke edit: Update with multiline description
+    const multilineDesc = 'Dòng 1\nDòng 2\n\nDòng 4'
+    const patchRes = await jsonRequest(
+      env.app,
+      'PATCH',
+      `/${productId}`,
+      { description: multilineDesc },
+      env.base.owner.authHeader,
+    )
+    expect(patchRes.status).toBe(200)
+    expect(patchRes.body.data.description).toBe(multilineDesc)
+
     // 3. Fetch list and filter by brandId
     const listRes = await getRequest(env.app, `/?brandId=${brandId}`, env.base.owner.authHeader)
     expect(listRes.body.data).toHaveLength(1)

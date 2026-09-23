@@ -41,6 +41,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import { asFormSetError, handleApiError } from '@/lib/api-error'
 import { showError, showSuccess } from '@/lib/toast'
 
@@ -809,9 +810,11 @@ function BasicSection<T extends FieldValues & ProductFormFields>({
         </div>
         <div className="space-y-1 md:col-span-2">
           <Label htmlFor="p-desc">Mô tả</Label>
-          <Input
+          <Textarea
             id="p-desc"
             placeholder="Mô tả sản phẩm"
+            className="resize-none"
+            rows={3}
             {...register('description' as Path<ProductFormFields>)}
           />
         </div>
