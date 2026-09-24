@@ -11,7 +11,6 @@ import {
 import { useCartStore } from '@/stores/use-cart-store'
 import { useOfflineStore } from '@/stores/use-offline-store'
 
-import { repriceTabAction } from '../hooks/use-auto-reprice'
 import { usePosPriceLists } from '../pos-pricing-api'
 
 const CUSTOMER_DEFAULT_VALUE = '__customer_default__'
@@ -21,7 +20,6 @@ interface PriceListSelectProps {
 }
 
 export function PriceListSelect({ className }: PriceListSelectProps) {
-  const activeTab = useCartStore((s) => s.activeTab)
   const priceListId = useCartStore((s) => s.tabs[s.activeTab]?.priceListId ?? null)
   const setPriceList = useCartStore((s) => s.setPriceList)
 
@@ -41,10 +39,8 @@ export function PriceListSelect({ className }: PriceListSelectProps) {
           setPriceList({ id: found.id, name: found.name })
         }
       }
-      // Trigger instant reprice on active tab
-      repriceTabAction(activeTab)
     },
-    [activeTab, priceLists, setPriceList],
+    [priceLists, setPriceList],
   )
 
   const currentValue = priceListId ?? CUSTOMER_DEFAULT_VALUE
@@ -54,6 +50,14 @@ export function PriceListSelect({ className }: PriceListSelectProps) {
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
         <Tag className="h-3.5 w-3.5" />
         <span>Bảng giá</span>
+        {priceListId && (
+          <span
+            data-testid="pos-price-list-manual-badge"
+            className="text-[10px] bg-primary/10 text-primary font-medium px-1.5 py-0.5 rounded"
+          >
+            Đã chọn thủ công
+          </span>
+        )}
         {isOffline && (
           <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
             (Ngoại tuyến: khoá chọn)

@@ -45,46 +45,82 @@ export async function resolvePricesInBatches(
   return results.flatMap((r) => r.data)
 }
 
+export interface RepriceContext {
+  tabIndex: number
+  customerId: string | null
+  priceListId?: string | null
+  itemQuantities?: Map<string, number> | Record<string, number>
+}
+
 /**
  * Apply pricing results to a specific tab. Guards against:
- * - Tab mismatch (response was for a different tab than current active)
  * - Customer change (customer changed since request was fired)
  * - Price list change (price list changed since request was fired)
  * - Manual override (item was edited by user since request)
+ * - In-flight quantity change (item quantity changed, prevent overwriting newer volume price)
+ * Does NOT discard results when tab is switched: background updates tabIndex directly.
  */
 export function applyResults(
   results: ResolvedPriceItem[],
   /** Context captured at request time */
-  ctx?: { tabIndex: number; customerId: string | null; priceListId?: string | null },
+  ctx?: RepriceContext,
 ) {
   const state = useCartStore.getState()
   const { updateItemPrice } = state
 
-  // If context provided, verify we're still on the same tab with the same customer and price list
+  const targetTab = ctx?.tabIndex !== undefined ? ctx.tabIndex : state.activeTab
+  const currentTab = state.tabs[targetTab]
+  if (!currentTab) return
+
+  // If context provided, verify this tab's customer and price list have not changed
   if (ctx) {
-    if (state.activeTab !== ctx.tabIndex) return // tab switched, discard
-    const tab = state.tabs[ctx.tabIndex]
-    if (tab && tab.customerId !== ctx.customerId) return // customer changed, discard
-    if (tab && (tab.priceListId ?? null) !== (ctx.priceListId ?? null)) return // price list changed, discard
+    if (currentTab.customerId !== ctx.customerId) return // customer changed on this tab, discard
+    if ((currentTab.priceListId ?? null) !== (ctx.priceListId ?? null)) return // price list changed on this tab, discard
   }
 
   for (const r of results) {
     const id = buildCartItemId(r.productId, r.variantId ?? null, r.unitConversionId ?? null)
-    updateItemPrice(id, r.price, r.source, r.sourceDetail, ctx?.tabIndex, r.isFallback)
+    const currentItem = currentTab.items.find((i) => i.id === id)
+    if (!currentItem || currentItem.priceOverride) continue
+
+    // If quantity context provided, verify quantity has not changed since request
+    // This prevents older in-flight requests (e.g. qty=1) from overwriting newer tier prices (e.g. qty=20)
+    if (ctx?.itemQuantities) {
+      const requestedQty =
+        ctx.itemQuantities instanceof Map ? ctx.itemQuantities.get(id) : ctx.itemQuantities[id]
+      if (requestedQty !== undefined && currentItem.quantity !== requestedQty) {
+        continue
+      }
+    }
+
+    updateItemPrice(id, r.price, r.source, r.sourceDetail, targetTab, r.isFallback)
   }
 }
 
 // Sequence tracker per itemId to prevent race conditions on fast +/- (M15)
 const itemSeqMap = new Map<string, number>()
-let autoRepriceSeq = 0
+// Sequence tracker per tab to prevent cross-tab invalidation and stale overwrites (#35)
+const tabSeqMap = new Map<number, number>()
 
-export function resetRepriceSequence(itemId?: string) {
+export function resetRepriceSequence(itemId?: string, tabIndex?: number) {
   if (itemId) {
     itemSeqMap.delete(itemId)
+  } else if (tabIndex !== undefined) {
+    tabSeqMap.delete(tabIndex)
   } else {
     itemSeqMap.clear()
-    autoRepriceSeq = 0
+    tabSeqMap.clear()
   }
+}
+
+export function getNextTabSeq(tabIndex: number): number {
+  const next = (tabSeqMap.get(tabIndex) ?? 0) + 1
+  tabSeqMap.set(tabIndex, next)
+  return next
+}
+
+export function getTabSeq(tabIndex: number): number {
+  return tabSeqMap.get(tabIndex) ?? 0
 }
 
 export function repriceOnAddAction(
@@ -110,7 +146,11 @@ export function repriceOnAddAction(
   return resolvePricesApi(input)
     .then((res) => {
       if (itemSeqMap.get(itemId) !== seq) return
-      applyResults(res.data, { tabIndex, customerId, priceListId })
+      applyResults(res.data, {
+        tabIndex,
+        customerId,
+        priceListId,
+      })
     })
     .catch(() => {})
 }
@@ -142,7 +182,11 @@ export function repriceOnQuantityAction(itemId: string, newQty: number) {
   return resolvePricesApi(input)
     .then((res) => {
       if (itemSeqMap.get(itemId) !== seq) return
-      applyResults(res.data, { tabIndex, customerId, priceListId })
+      applyResults(res.data, {
+        tabIndex,
+        customerId,
+        priceListId,
+      })
     })
     .catch(() => {})
 }
@@ -158,7 +202,8 @@ export function repriceTabAction(tabIndex?: number) {
   const repriceItems = tab.items.filter((i) => !i.priceOverride)
   if (repriceItems.length === 0) return
 
-  const currentSeq = ++autoRepriceSeq
+  const currentSeq = getNextTabSeq(targetTab)
+  const itemQuantities = new Map(repriceItems.map((i) => [i.id, i.quantity]))
 
   const input: ResolvePricesInput = {
     customerId,
@@ -173,8 +218,8 @@ export function repriceTabAction(tabIndex?: number) {
 
   return resolvePricesInBatches(input)
     .then((data) => {
-      if (currentSeq !== autoRepriceSeq) return
-      applyResults(data, { tabIndex: targetTab, customerId, priceListId })
+      if (getTabSeq(targetTab) !== currentSeq) return
+      applyResults(data, { tabIndex: targetTab, customerId, priceListId, itemQuantities })
     })
     .catch(() => {})
 }
@@ -187,7 +232,7 @@ export function useAutoReprice() {
   const prevActiveTabRef = useRef<number>(activeTab)
   const prevCustomerIdRef = useRef<string | null>(customerId)
   const prevPriceListIdRef = useRef<string | null>(priceListId)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
+  const debounceTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
 
   useEffect(() => {
     const prevActiveTab = prevActiveTabRef.current
@@ -198,22 +243,27 @@ export function useAutoReprice() {
     prevCustomerIdRef.current = customerId
     prevPriceListIdRef.current = priceListId
 
-    const tabChanged = prevActiveTab !== activeTab
-    const customerChanged = prevCustomerId !== customerId
-    const priceListChanged = prevPriceListId !== priceListId
+    // Only trigger if customer or price list changed on the active tab
+    const isSameTab = prevActiveTab === activeTab
+    const customerChanged = isSameTab && prevCustomerId !== customerId
+    const priceListChanged = isSameTab && prevPriceListId !== priceListId
 
-    if (!tabChanged && !customerChanged && !priceListChanged) return
+    if (!customerChanged && !priceListChanged) return
 
-    const currentTabState = useCartStore.getState().tabs[activeTab]
+    const tabIndex = activeTab
+    const currentTabState = useCartStore.getState().tabs[tabIndex]
     const currentItems = currentTabState?.items ?? []
     const repriceItems = currentItems.filter((i) => !i.priceOverride)
     if (repriceItems.length === 0) return
 
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    const currentSeq = ++autoRepriceSeq
-    const tabIndex = activeTab
+    const existingTimer = debounceTimersRef.current.get(tabIndex)
+    if (existingTimer) clearTimeout(existingTimer)
 
-    debounceRef.current = setTimeout(() => {
+    const currentSeq = getNextTabSeq(tabIndex)
+    const itemQuantities = new Map(repriceItems.map((i) => [i.id, i.quantity]))
+
+    const timer = setTimeout(() => {
+      debounceTimersRef.current.delete(tabIndex)
       const input: ResolvePricesInput = {
         customerId,
         ...(priceListId ? { priceListId } : {}),
@@ -226,16 +276,24 @@ export function useAutoReprice() {
       }
       resolvePricesInBatches(input)
         .then((data) => {
-          if (currentSeq !== autoRepriceSeq) return
-          applyResults(data, { tabIndex, customerId, priceListId })
+          if (getTabSeq(tabIndex) !== currentSeq) return
+          applyResults(data, { tabIndex, customerId, priceListId, itemQuantities })
         })
         .catch(() => {})
     }, 200)
 
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
+    debounceTimersRef.current.set(tabIndex, timer)
   }, [activeTab, customerId, priceListId])
+
+  useEffect(() => {
+    const timers = debounceTimersRef.current
+    return () => {
+      for (const timer of timers.values()) {
+        clearTimeout(timer)
+      }
+      timers.clear()
+    }
+  }, [])
 }
 
 export function useRepriceOnAdd() {

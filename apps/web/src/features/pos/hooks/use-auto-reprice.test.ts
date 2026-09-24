@@ -144,7 +144,7 @@ describe('use-auto-reprice (M14 & M15)', () => {
   // #32 Regression: Tab-cross-contamination protection
   // ---------------------------------------------------------------------------
   describe('#32: Tab safety — applyResults guards against tab/customer mismatch', () => {
-    it('applyResults with tab context discards results when tab has switched', () => {
+    it('applyResults with tab context updates target tab in background without mutating active tab when tab has switched', () => {
       // Add same item to tab 1
       useCartStore.getState().addItem({
         productId: 'p1',
@@ -191,14 +191,14 @@ describe('use-auto-reprice (M14 & M15)', () => {
         { tabIndex: 1, customerId: null },
       )
 
-      // Tab 2's item should NOT be overwritten
+      // Tab 2's item should NOT be overwritten (tab isolation preserved)
       const tab2Item = useCartStore.getState().tabs[2]?.items.find((i) => i.id === 'p1')
       expect(tab2Item?.unitPrice).toBe(200_000)
       expect(tab2Item?.priceSource).toBe('retail_price')
 
-      // Tab 1's item should also NOT be overwritten because activeTab is 2
+      // Tab 1's item should be updated in background (not discarded)
       const tab1Item = useCartStore.getState().tabs[1]?.items.find((i) => i.id === 'p1')
-      expect(tab1Item?.unitPrice).toBe(100_000)
+      expect(tab1Item?.unitPrice).toBe(50_000)
     })
 
     it('applyResults without context still applies to active tab (backward compat)', () => {
