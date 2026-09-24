@@ -13,6 +13,8 @@ import type { OrderDetail, StockInfo } from '../types'
 
 interface CheckoutPayload {
   customerId?: string | null
+  priceListId?: string | null
+  priceListName?: string | null
   subtotal: number
   discountType: string | null
   discountValue: number
@@ -97,6 +99,8 @@ export function useCheckoutMutation() {
           id: clientId,
           orderNumber: `OFFLINE-${clientId.slice(0, 8).toUpperCase()}`,
           customerId: payload.customerId ?? null,
+          priceListId: payload.priceListId ?? null,
+          priceListName: payload.priceListName ?? null,
           subtotal: payload.subtotal,
           discountAmount: payload.discountAmount,
           total: payload.total,

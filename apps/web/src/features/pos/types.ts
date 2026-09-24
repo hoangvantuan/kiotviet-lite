@@ -27,6 +27,8 @@ export interface OrderDetail {
   customerCode?: string | null
   customerName?: string | null
   customerPhone?: string | null
+  priceListId?: string | null
+  priceListName?: string | null
   subtotal: number
   discountAmount: number
   total: number

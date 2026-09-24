@@ -8,6 +8,8 @@ interface OrderListItem {
   customerId: string | null
   customerName: string | null
   customerPhone: string | null
+  priceListId?: string | null
+  priceListName?: string | null
   createdByName: string | null
   subtotal: number
   discountAmount: number
@@ -34,6 +36,8 @@ interface OrderDetailResponse {
   customerGroupName: string | null
   customerCurrentDebt?: number | null
   oldDebt?: number | null
+  priceListId?: string | null
+  priceListName?: string | null
   createdByName: string | null
   subtotal: number
   discountType: string | null

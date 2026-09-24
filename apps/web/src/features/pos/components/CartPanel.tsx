@@ -20,6 +20,7 @@ import { CartItem } from './CartItem'
 import { CartTabBar } from './CartTabBar'
 import { CustomerSearchCombobox } from './CustomerSearchCombobox'
 import { OrderDiscountPopover } from './OrderDiscountPopover'
+import { PriceListSelect } from './PriceListSelect'
 
 interface CartPanelProps {
   onPayment?: () => void
@@ -53,6 +54,9 @@ export function CartPanel({ onPayment }: CartPanelProps) {
     <div className="flex h-full flex-col">
       <CartTabBar />
       <CustomerSearchCombobox />
+      <div className="px-3 py-1.5 border-b border-border bg-card/50">
+        <PriceListSelect />
+      </div>
 
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">

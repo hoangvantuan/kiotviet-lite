@@ -149,7 +149,11 @@ function DesktopCartRow({ item, index }: DesktopCartRowProps) {
                 {item.priceOverridePinUsed && <Shield className="h-3 w-3" aria-hidden="true" />}
               </span>
             ) : (
-              <PriceSourceBadge source={item.priceSource} sourceDetail={item.priceSourceDetail} />
+              <PriceSourceBadge
+                source={item.priceSource}
+                sourceDetail={item.priceSourceDetail}
+                isFallback={item.isFallback}
+              />
             )}
 
             {overStock && (

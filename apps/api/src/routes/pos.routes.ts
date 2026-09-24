@@ -1,7 +1,8 @@
+import { and, asc, eq, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 
-import { createOrderSchema, resolvePricesSchema } from '@kiotviet-lite/shared'
+import { createOrderSchema, priceLists, resolvePricesSchema } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { parseJson } from '../lib/http.js'
@@ -22,6 +23,29 @@ export function createPosRoutes({ db }: PosRoutesDeps) {
   app.onError(errorHandler)
   app.use('*', requireAuth)
   app.use('*', requirePermission('pos.sell'))
+
+  // Issue #35 - List active valid price lists for POS selection
+  app.get('/price-lists', async (c) => {
+    const auth = c.get('auth')
+    const today = new Date().toISOString().slice(0, 10)
+    const lists = await db
+      .select({
+        id: priceLists.id,
+        name: priceLists.name,
+      })
+      .from(priceLists)
+      .where(
+        and(
+          eq(priceLists.storeId, auth.storeId),
+          isNull(priceLists.deletedAt),
+          eq(priceLists.isActive, true),
+          sql`(${priceLists.effectiveFrom} IS NULL OR ${priceLists.effectiveFrom} <= ${today})`,
+          sql`(${priceLists.effectiveTo} IS NULL OR ${priceLists.effectiveTo} >= ${today})`,
+        ),
+      )
+      .orderBy(asc(priceLists.name))
+    return c.json({ data: lists })
+  })
 
   // Story 3.1 - POS product search
   app.get('/products/search', async (c) => {

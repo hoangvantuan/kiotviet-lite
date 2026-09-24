@@ -16,12 +16,14 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { ApiError } from '../lib/errors.js'
 import { findApplicableCategoryDiscount } from './category-discounts.service.js'
 
 interface ResolveContext {
   db: Db
   storeId: string
   customerId: string | null
+  priceListId?: string | null
   productId: string
   variantId?: string | null
   unitConversionId?: string | null
@@ -32,6 +34,7 @@ interface ResolvedPrice {
   price: number
   source: PriceSource
   sourceDetail: string | null
+  isFallback?: boolean
   breakdown: TierBreakdown[]
 }
 
@@ -152,6 +155,36 @@ async function findPriceListPrice(
   return { price: Number(rows[0].price), priceListName: rows[0].priceListName }
 }
 
+async function findManualPriceListItem(
+  db: Db,
+  storeId: string,
+  priceListId: string,
+  productId: string,
+): Promise<{ price: number; priceListName: string } | null> {
+  const rows = await db
+    .select({
+      price: priceListItems.price,
+      priceListName: priceLists.name,
+    })
+    .from(priceLists)
+    .innerJoin(
+      priceListItems,
+      and(eq(priceListItems.priceListId, priceLists.id), eq(priceListItems.productId, productId)),
+    )
+    .where(
+      and(
+        eq(priceLists.id, priceListId),
+        eq(priceLists.storeId, storeId),
+        isNull(priceLists.deletedAt),
+        eq(priceLists.isActive, true),
+      ),
+    )
+    .limit(1)
+
+  if (!rows[0]) return null
+  return { price: Number(rows[0].price), priceListName: rows[0].priceListName }
+}
+
 async function getProduct(db: Db, storeId: string, productId: string) {
   const row = await db.query.products.findFirst({
     where: and(
@@ -184,11 +217,18 @@ async function getCustomerGroupId(
 }
 
 export async function resolveProductPrice(ctx: ResolveContext): Promise<ResolvedPrice> {
-  const { db, storeId, customerId, productId, variantId, unitConversionId, quantity } = ctx
+  const { db, storeId, customerId, priceListId, productId, variantId, unitConversionId, quantity } =
+    ctx
 
   const product = await getProduct(db, storeId, productId)
   if (!product) {
-    return { price: 0, source: 'retail_price', sourceDetail: null, breakdown: [] }
+    return {
+      price: 0,
+      source: 'retail_price',
+      sourceDetail: null,
+      isFallback: false,
+      breakdown: [],
+    }
   }
 
   let rawRetailPrice = Number(product.sellingPrice)
@@ -221,6 +261,35 @@ export async function resolveProductPrice(ctx: ResolveContext): Promise<Resolved
 
   const breakdown: TierBreakdown[] = []
   let winner: { price: number; source: PriceSource; sourceDetail: string | null } | null = null
+  let isFallback = false
+
+  if (priceListId) {
+    const manualItem = await findManualPriceListItem(db, storeId, priceListId, productId)
+    if (manualItem) {
+      const manualPrice = unitConv?.sellingPrice ?? Math.round(manualItem.price * conversionFactor)
+      winner = {
+        price: manualPrice,
+        source: 'price_list',
+        sourceDetail: manualItem.priceListName,
+      }
+      breakdown.push({
+        tier: 1,
+        name: `Bảng giá (${manualItem.priceListName})`,
+        price: manualPrice,
+        matched: true,
+        reason: `Bảng giá: ${manualItem.priceListName}`,
+      })
+    } else {
+      isFallback = true
+      breakdown.push({
+        tier: 1,
+        name: 'Bảng giá thủ công',
+        price: null,
+        matched: false,
+        reason: 'Không có trong bảng giá đã chọn (dùng giá dự phòng)',
+      })
+    }
+  }
 
   if (customerId) {
     const rawCp = await findCustomerPrice(db, storeId, customerId, productId)
@@ -234,7 +303,13 @@ export async function resolveProductPrice(ctx: ResolveContext): Promise<Resolved
       matched: t1Hit,
       reason: cp !== null ? `Giá riêng: ${cp.toLocaleString('vi-VN')}đ` : 'Không có giá riêng',
     })
-    if (t1Hit) winner = { price: cp!, source: 'customer_price', sourceDetail: 'Giá riêng cho KH' }
+    if (t1Hit) {
+      winner = {
+        price: cp!,
+        source: 'customer_price',
+        sourceDetail: isFallback ? 'Giá dự phòng: Giá riêng cho KH' : 'Giá riêng cho KH',
+      }
+    }
 
     const customerGroupId = await getCustomerGroupId(db, storeId, customerId)
     const catDiscount = await findApplicableCategoryDiscount({
@@ -259,12 +334,13 @@ export async function resolveProductPrice(ctx: ResolveContext): Promise<Resolved
       matched: t2Hit,
       reason: catDetail ?? 'Không có CK danh mục',
     })
-    if (t2Hit)
+    if (t2Hit) {
       winner = {
         price: catDiscount!.finalPrice,
         source: 'category_discount',
-        sourceDetail: catDetail,
+        sourceDetail: isFallback ? `Giá dự phòng: ${catDetail}` : catDetail,
       }
+    }
   } else {
     breakdown.push({
       tier: 1,
@@ -304,8 +380,13 @@ export async function resolveProductPrice(ctx: ResolveContext): Promise<Resolved
         ? `SL >= ${rawVp.minQty}: ${vpPrice?.toLocaleString('vi-VN')}đ`
         : 'Không có giá SL phù hợp',
   })
-  if (t4Hit)
-    winner = { price: vpPrice!, source: 'volume_price', sourceDetail: `SL >= ${rawVp!.minQty}` }
+  if (t4Hit) {
+    winner = {
+      price: vpPrice!,
+      source: 'volume_price',
+      sourceDetail: isFallback ? `Giá dự phòng: SL >= ${rawVp!.minQty}` : `SL >= ${rawVp!.minQty}`,
+    }
+  }
 
   if (customerId) {
     const rawPlp = await findPriceListPrice(db, storeId, customerId, productId)
@@ -321,8 +402,13 @@ export async function resolveProductPrice(ctx: ResolveContext): Promise<Resolved
       matched: t5Hit,
       reason: rawPlp ? `Bảng giá: ${rawPlp.priceListName}` : 'Không có bảng giá nhóm',
     })
-    if (t5Hit)
-      winner = { price: plpPrice!, source: 'price_list', sourceDetail: rawPlp!.priceListName }
+    if (t5Hit) {
+      winner = {
+        price: plpPrice!,
+        source: 'price_list',
+        sourceDetail: isFallback ? `Giá dự phòng: ${rawPlp!.priceListName}` : rawPlp!.priceListName,
+      }
+    }
   } else {
     breakdown.push({
       tier: 5,
@@ -333,18 +419,25 @@ export async function resolveProductPrice(ctx: ResolveContext): Promise<Resolved
     })
   }
 
+  const t6Hit = !winner
   breakdown.push({
     tier: 6,
     name: 'Giá bán lẻ',
     price: retailPrice,
-    matched: !winner,
+    matched: t6Hit,
     reason: `Giá lẻ: ${retailPrice.toLocaleString('vi-VN')}đ`,
   })
 
   if (winner) {
-    return { ...winner, breakdown }
+    return { ...winner, isFallback, breakdown }
   }
-  return { price: retailPrice, source: 'retail_price', sourceDetail: null, breakdown }
+  return {
+    price: retailPrice,
+    source: 'retail_price',
+    sourceDetail: isFallback ? 'Giá dự phòng: Giá bán lẻ' : null,
+    isFallback,
+    breakdown,
+  }
 }
 
 export async function resolvePrices({
@@ -357,6 +450,36 @@ export async function resolvePrices({
   input: ResolvePricesInput
 }): Promise<ResolvedPriceItem[]> {
   const customerId = input.customerId ?? null
+  const priceListId = input.priceListId ?? null
+
+  if (priceListId) {
+    const [pl] = await db
+      .select({
+        id: priceLists.id,
+        name: priceLists.name,
+        isActive: priceLists.isActive,
+        effectiveFrom: priceLists.effectiveFrom,
+        effectiveTo: priceLists.effectiveTo,
+        deletedAt: priceLists.deletedAt,
+      })
+      .from(priceLists)
+      .where(and(eq(priceLists.id, priceListId), eq(priceLists.storeId, storeId)))
+      .limit(1)
+
+    if (!pl || pl.deletedAt !== null) {
+      throw new ApiError('VALIDATION_ERROR', 'Bảng giá không tồn tại hoặc không thuộc cửa hàng')
+    }
+    if (!pl.isActive) {
+      throw new ApiError('VALIDATION_ERROR', 'Bảng giá đang ngừng hoạt động')
+    }
+    const today = toIsoDate(new Date())
+    if (pl.effectiveFrom && today < pl.effectiveFrom) {
+      throw new ApiError('VALIDATION_ERROR', 'Bảng giá chưa đến ngày hiệu lực')
+    }
+    if (pl.effectiveTo && today > pl.effectiveTo) {
+      throw new ApiError('VALIDATION_ERROR', 'Bảng giá đã hết hiệu lực')
+    }
+  }
 
   const results: ResolvedPriceItem[] = []
   for (const item of input.items) {
@@ -364,6 +487,7 @@ export async function resolvePrices({
       db,
       storeId,
       customerId,
+      priceListId,
       productId: item.productId,
       variantId: item.variantId ?? null,
       unitConversionId: item.unitConversionId ?? null,
@@ -376,6 +500,7 @@ export async function resolvePrices({
       price: resolved.price,
       source: resolved.source,
       sourceDetail: resolved.sourceDetail,
+      isFallback: resolved.isFallback,
       breakdown: resolved.breakdown,
     })
   }

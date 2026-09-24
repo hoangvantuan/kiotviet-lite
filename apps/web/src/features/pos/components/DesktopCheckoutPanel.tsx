@@ -18,6 +18,7 @@ import { useCartStore } from '@/stores/use-cart-store'
 import { useAutoReprice } from '../hooks/use-auto-reprice'
 import { CustomerSearchCombobox } from './CustomerSearchCombobox'
 import { OrderDiscountPopover } from './OrderDiscountPopover'
+import { PriceListSelect } from './PriceListSelect'
 
 interface DesktopCheckoutPanelProps {
   onPayment?: () => void
@@ -49,9 +50,10 @@ export function DesktopCheckoutPanel({ onPayment }: DesktopCheckoutPanelProps) {
 
   return (
     <div className="flex h-full flex-col justify-between bg-card p-3">
-      {/* Top: Customer search */}
-      <div className="shrink-0 space-y-3">
+      {/* Top: Customer search & Price List selector */}
+      <div className="shrink-0 space-y-2.5">
         <CustomerSearchCombobox />
+        <PriceListSelect />
       </div>
 
       {/* Middle: Spacer / Future order metadata */}

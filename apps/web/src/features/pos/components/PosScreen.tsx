@@ -138,6 +138,8 @@ export function PosScreen() {
     checkoutMutation.mutate(
       {
         customerId: tab.customerId ?? null,
+        priceListId: tab.priceListId ?? null,
+        priceListName: tab.priceListName ?? null,
         subtotal,
         discountType: tab.orderDiscountType,
         discountValue: tab.orderDiscountValue,

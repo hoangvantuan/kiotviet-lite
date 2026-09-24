@@ -11,6 +11,7 @@ import {
   type ListOrdersQuery,
   orderItems,
   orders,
+  priceLists,
   type PriceSource,
   products,
   productUnitConversions,
@@ -74,6 +75,8 @@ export interface OrderDetail {
   customerCode?: string | null
   customerName?: string | null
   customerPhone?: string | null
+  priceListId?: string | null
+  priceListName?: string | null
   subtotal: number
   discountAmount: number
   total: number
@@ -124,6 +127,11 @@ const DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
 
 function formatDateForCode(date: Date): string {
   return DATE_FORMATTER.format(date).replace(/-/g, '')
+}
+
+function toIsoDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 async function generateOrderNumber({ tx, storeId }: { tx: Db; storeId: string }): Promise<string> {
@@ -200,6 +208,8 @@ export async function createOrder({
         id: orders.id,
         orderNumber: orders.orderNumber,
         customerId: orders.customerId,
+        priceListId: orders.priceListId,
+        priceListName: orders.priceListName,
         subtotal: orders.subtotal,
         discountAmount: orders.discountAmount,
         total: orders.total,
@@ -222,6 +232,8 @@ export async function createOrder({
         id: existing.id,
         orderNumber: existing.orderNumber,
         customerId: existing.customerId,
+        priceListId: existing.priceListId ?? null,
+        priceListName: existing.priceListName ?? null,
         subtotal: existing.subtotal,
         discountAmount: existing.discountAmount,
         total: existing.total,
@@ -285,6 +297,44 @@ export async function createOrder({
   }
   change = Math.max(0, change)
 
+  // Validate manual price list if selected
+  let snapshotPriceListName: string | null = null
+  if (input.priceListId) {
+    const [pl] = await db
+      .select({
+        id: priceLists.id,
+        name: priceLists.name,
+        isActive: priceLists.isActive,
+        effectiveFrom: priceLists.effectiveFrom,
+        effectiveTo: priceLists.effectiveTo,
+        deletedAt: priceLists.deletedAt,
+      })
+      .from(priceLists)
+      .where(and(eq(priceLists.id, input.priceListId), eq(priceLists.storeId, actor.storeId)))
+      .limit(1)
+
+    if (source === 'pos') {
+      if (!pl || pl.deletedAt !== null) {
+        throw new ApiError('VALIDATION_ERROR', 'Bảng giá không tồn tại hoặc không thuộc cửa hàng')
+      }
+      if (!pl.isActive) {
+        throw new ApiError('VALIDATION_ERROR', 'Bảng giá đang ngừng hoạt động')
+      }
+      const today = toIsoDate(new Date())
+      if (pl.effectiveFrom && today < pl.effectiveFrom) {
+        throw new ApiError('VALIDATION_ERROR', 'Bảng giá chưa đến ngày hiệu lực')
+      }
+      if (pl.effectiveTo && today > pl.effectiveTo) {
+        throw new ApiError('VALIDATION_ERROR', 'Bảng giá đã hết hiệu lực')
+      }
+      snapshotPriceListName = pl.name
+    } else {
+      snapshotPriceListName = pl?.name ?? input.priceListName ?? null
+    }
+  } else if (source === 'offline_sync') {
+    snapshotPriceListName = input.priceListName ?? null
+  }
+
   try {
     const result = await db.transaction(async (tx) => {
       const txDb = tx as unknown as Db
@@ -304,6 +354,8 @@ export async function createOrder({
               orderNumber,
               customerId: input.customerId ?? null,
               userId: actor.userId,
+              priceListId: input.priceListId ?? null,
+              priceListName: snapshotPriceListName,
               subtotal: input.subtotal,
               discountType: input.discountType ?? null,
               discountValue: input.discountValue,
@@ -426,6 +478,7 @@ export async function createOrder({
           db: txDb,
           storeId: actor.storeId,
           customerId: input.customerId ?? null,
+          priceListId: input.priceListId ?? null,
           productId: item.productId,
           variantId: item.variantId ?? null,
           unitConversionId: item.unitConversionId ?? null,
@@ -1015,6 +1068,8 @@ export async function createOrder({
         targetId: createdId,
         changes: {
           orderNumber,
+          priceListId: input.priceListId ?? null,
+          priceListName: snapshotPriceListName,
           itemCount: input.items.length,
           subtotal: input.subtotal,
           discountAmount: input.discountAmount,
@@ -1066,6 +1121,8 @@ export async function createOrder({
         customerCode: printCustomer?.code ?? null,
         customerName: printCustomer?.name ?? null,
         customerPhone: printCustomer?.phone ?? null,
+        priceListId: input.priceListId ?? null,
+        priceListName: snapshotPriceListName,
         subtotal: input.subtotal,
         discountAmount: input.discountAmount,
         total: input.total,
@@ -1096,6 +1153,8 @@ export async function createOrder({
           id: orders.id,
           orderNumber: orders.orderNumber,
           customerId: orders.customerId,
+          priceListId: orders.priceListId,
+          priceListName: orders.priceListName,
           subtotal: orders.subtotal,
           discountAmount: orders.discountAmount,
           total: orders.total,
@@ -1118,6 +1177,8 @@ export async function createOrder({
           id: dup.id,
           orderNumber: dup.orderNumber,
           customerId: dup.customerId,
+          priceListId: dup.priceListId ?? null,
+          priceListName: dup.priceListName ?? null,
           subtotal: dup.subtotal,
           discountAmount: dup.discountAmount,
           total: dup.total,
@@ -1284,6 +1345,8 @@ export interface OrderListItem {
   customerId: string | null
   customerName: string | null
   customerPhone: string | null
+  priceListId?: string | null
+  priceListName?: string | null
   createdByName: string | null
   subtotal: number
   discountAmount: number
@@ -1370,6 +1433,8 @@ export async function listOrders({
       id: orders.id,
       orderNumber: orders.orderNumber,
       customerId: orders.customerId,
+      priceListId: orders.priceListId,
+      priceListName: orders.priceListName,
       customerName: customers.name,
       customerPhone: customers.phone,
       createdByName: users.name,
@@ -1416,6 +1481,8 @@ export async function listOrders({
       customerId: r.customerId,
       customerName: r.customerName ?? null,
       customerPhone: r.customerPhone ?? null,
+      priceListId: r.priceListId ?? null,
+      priceListName: r.priceListName ?? null,
       createdByName: r.createdByName ?? null,
       subtotal: Number(r.subtotal),
       discountAmount: Number(r.discountAmount),
@@ -1450,6 +1517,8 @@ export interface OrderDetailFull {
   customerGroupName: string | null
   customerCurrentDebt?: number | null
   oldDebt?: number | null
+  priceListId?: string | null
+  priceListName?: string | null
   createdByName: string | null
   subtotal: number
   discountType: string | null
@@ -1487,6 +1556,8 @@ export async function getOrderDetail({
       id: orders.id,
       orderNumber: orders.orderNumber,
       customerId: orders.customerId,
+      priceListId: orders.priceListId,
+      priceListName: orders.priceListName,
       customerName: customers.name,
       customerCode: customers.code,
       customerPhone: customers.phone,
@@ -1590,6 +1661,8 @@ export async function getOrderDetail({
     customerGroupName: row.customerGroupName ?? null,
     customerCurrentDebt: currentDebt,
     oldDebt,
+    priceListId: row.priceListId ?? null,
+    priceListName: row.priceListName ?? null,
     createdByName: row.createdByName ?? null,
     subtotal: Number(row.subtotal),
     discountType: row.discountType ?? null,

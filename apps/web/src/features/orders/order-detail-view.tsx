@@ -141,6 +141,11 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
           {order.customerGroupName && (
             <p className="text-xs text-muted-foreground mt-1">Nhóm: {order.customerGroupName}</p>
           )}
+          {order.priceListName && (
+            <p className="text-xs text-muted-foreground mt-1" data-testid="order-detail-price-list">
+              Bảng giá: <span className="font-medium text-foreground">{order.priceListName}</span>
+            </p>
+          )}
         </div>
         <div className="rounded-md border p-3">
           <h2 className="text-sm font-medium text-muted-foreground">Phương thức thanh toán</h2>

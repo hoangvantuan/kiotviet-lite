@@ -99,6 +99,8 @@ export const createOrderSchema = z
     debtLimitOverridePin: z.string().trim().min(1).max(32).optional(),
     priceOverridePin: z.string().trim().min(1).max(32).optional(),
     note: z.string().trim().max(1000, 'Ghi chú đơn tối đa 1000 ký tự').nullable().default(null),
+    priceListId: z.string().uuid('Bảng giá không hợp lệ').nullable().optional(),
+    priceListName: z.string().trim().max(100).nullable().optional(),
     items: z
       .array(createOrderItemSchema)
       .min(1, 'Đơn hàng phải có ít nhất 1 sản phẩm')
