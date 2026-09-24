@@ -11,30 +11,12 @@ import { expect, type Page, test } from './fixtures/auth.fixture'
  */
 
 async function addProductToCart(page: Page, name: string) {
-  // Try quick search input on desktop
-  const searchInput = page.getByPlaceholder(/Tìm sản phẩm, mã SKU, barcode/i)
-  if (await searchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await searchInput.fill(name)
-    const option = page.locator('#pos-search-listbox button').first()
-    if (await option.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await option.click()
-      return
-    }
-  }
-
-  // Fallback: search combobox
-  const headerSearch = page.getByRole('combobox', { name: /Tìm sản phẩm/i })
-  if (await headerSearch.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await headerSearch.fill(name)
-    const opt = page.getByRole('option', { name: new RegExp(name, 'i') }).first()
-    if (await opt.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await opt.getByRole('button').click()
-      const addBtn = page.getByRole('button', { name: /Thêm vào giỏ/i })
-      if (await addBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await addBtn.click()
-      }
-    }
-  }
+  await page.getByRole('combobox', { name: /Tìm sản phẩm/i }).fill(name)
+  await page
+    .getByRole('option', { name: new RegExp(name, 'i') })
+    .getByRole('button')
+    .click()
+  await page.getByRole('button', { name: 'Thêm vào giỏ' }).click()
 }
 
 test.describe('Issue #35: POS Price List Selection (Desktop & Mobile)', () => {
@@ -67,13 +49,13 @@ test.describe('Issue #35: POS Price List Selection (Desktop & Mobile)', () => {
     await addProductToCart(page, 'Cà rốt')
     const carrotRow = page.getByRole('row').filter({ hasText: 'Cà rốt' })
     await expect(carrotRow).toBeVisible({ timeout: 5000 })
-    await expect(carrotRow.getByText(/25\.000/)).toBeVisible()
+    await expect(carrotRow.getByRole('button', { name: 'Sửa giá bán' })).toContainText('25.000')
 
-    // 3. Add product without price list item ("Thịt bò Úc", retail: 280.000)
-    await addProductToCart(page, 'Thịt bò Úc')
-    const beefRow = page.getByRole('row').filter({ hasText: 'Thịt bò Úc' })
-    await expect(beefRow).toBeVisible({ timeout: 5000 })
-    await expect(beefRow.getByText(/280\.000/)).toBeVisible()
+    // 3. Add product missing from the selected list ("Sườn non heo", retail: 150.000)
+    await addProductToCart(page, 'Sườn non heo')
+    const fallbackRow = page.getByRole('row').filter({ hasText: 'Sườn non heo' })
+    await expect(fallbackRow).toBeVisible({ timeout: 5000 })
+    await expect(fallbackRow.getByRole('button', { name: 'Sửa giá bán' })).toContainText('150.000')
 
     // 4. Actually select "Giá sỉ" from price list dropdown
     await priceListSelect.click()
@@ -88,14 +70,14 @@ test.describe('Issue #35: POS Price List Selection (Desktop & Mobile)', () => {
 
     // 5. Assert line prices after price list selection:
     // "Cà rốt" recalculated to wholesale price 21.250
-    await expect(carrotRow.getByText(/21\.250/)).toBeVisible({ timeout: 5000 })
+    await expect(carrotRow.getByRole('button', { name: 'Sửa giá bán' })).toContainText('21.250')
     const carrotBadge = carrotRow.locator('[data-testid="price-source-badge"]')
     await expect(carrotBadge).toContainText(/Giá sỉ|Bảng giá/)
 
-    // "Thịt bò Úc" is missing in "Giá sỉ", falls back to retail with fallback badge
-    await expect(beefRow.getByText(/280\.000/)).toBeVisible()
-    const beefBadge = beefRow.locator('[data-testid="price-source-badge"]')
-    await expect(beefBadge).toContainText(/dự phòng/i)
+    // Missing list item keeps retail price and displays the fallback source
+    await expect(fallbackRow.getByRole('button', { name: 'Sửa giá bán' })).toContainText('150.000')
+    const fallbackBadge = fallbackRow.locator('[data-testid="price-source-badge"]')
+    await expect(fallbackBadge).toContainText(/dự phòng/i)
 
     // 6. Independent tabs:
     // Switch to Tab 2
@@ -113,7 +95,7 @@ test.describe('Issue #35: POS Price List Selection (Desktop & Mobile)', () => {
     // Tab 1 must still have "Giá sỉ", manual badge, and recalculated prices
     await expect(priceListSelect).toContainText('Giá sỉ')
     await expect(manualBadge).toBeVisible()
-    await expect(carrotRow.getByText(/21\.250/)).toBeVisible()
+    await expect(carrotRow.getByRole('button', { name: 'Sửa giá bán' })).toContainText('21.250')
 
     // 7. Customer change preserves manual price list:
     const customerInput = page.getByPlaceholder(/Tìm khách hàng/i).first()
@@ -130,47 +112,39 @@ test.describe('Issue #35: POS Price List Selection (Desktop & Mobile)', () => {
     // Price list must remain "Giá sỉ" with "Đã chọn thủ công" badge
     await expect(priceListSelect).toContainText('Giá sỉ')
     await expect(manualBadge).toBeVisible()
-    await expect(carrotRow.getByText(/21\.250/)).toBeVisible()
+    await expect(carrotRow.getByRole('button', { name: 'Sửa giá bán' })).toContainText('21.250')
 
     // 8. Manual line price override:
     // Edit unit price of "Cà rốt"
-    const editPriceBtn = carrotRow.getByLabel(/Sửa giá bán/i)
-    if (await editPriceBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await editPriceBtn.click()
+    const editPriceBtn = carrotRow.getByRole('button', { name: 'Sửa giá bán' })
+    await editPriceBtn.click()
 
-      const editDialog = page.getByRole('dialog')
-      await expect(editDialog.getByRole('heading', { name: /Sửa đơn giá/i })).toBeVisible()
+    const editDialog = page.getByRole('dialog', { name: 'Sửa giá bán' })
+    await editDialog.getByRole('textbox', { name: 'Giá mới' }).fill('23000')
+    await editDialog.getByRole('textbox', { name: 'Lý do (tuỳ chọn)' }).fill('Khách quen')
+    await editDialog.getByRole('button', { name: 'Áp dụng' }).click()
+    const pinDialog = page.getByRole('dialog', { name: 'Xác thực PIN' })
+    await expect(pinDialog).toBeVisible()
+    await pinDialog.locator('input').first().pressSequentially('111111')
+    await expect(pinDialog).not.toBeVisible()
 
-      const newPriceInput = editDialog.locator('input[aria-label="Đơn giá mới"]')
-      await newPriceInput.fill('23000')
+    // Line price should now show 23.000 and "Sửa giá" badge
+    await expect(carrotRow.getByRole('button', { name: 'Sửa giá bán' })).toContainText('23.000')
+    await expect(carrotRow).toContainText('Đã sửa giá')
 
-      const reasonInput = editDialog.locator('input[aria-label="Lý do sửa giá"]')
-      await reasonInput.fill('Khách quen')
+    // Changing price list to "Theo khách hàng" must NOT overwrite manually overridden line
+    await priceListSelect.click()
+    await page.getByRole('option', { name: 'Theo khách hàng' }).click()
 
-      await editDialog.getByRole('button', { name: /Xác nhận/i }).click()
+    // Manual override price 23.000 must remain preserved
+    await expect(carrotRow.getByRole('button', { name: 'Sửa giá bán' })).toContainText('23.000')
+    await expect(carrotRow).toContainText('Đã sửa giá')
 
-      // Line price should now show 23.000 and "Sửa giá" badge
-      await expect(carrotRow.getByText(/23\.000/)).toBeVisible()
-      await expect(carrotRow.locator('[data-testid="price-source-badge"]')).toContainText(
-        /Sửa giá/i,
-      )
-
-      // Changing price list to "Theo khách hàng" must NOT overwrite manually overridden line
-      await priceListSelect.click()
-      await page.getByRole('option', { name: 'Theo khách hàng' }).click()
-
-      // Manual override price 23.000 must remain preserved
-      await expect(carrotRow.getByText(/23\.000/)).toBeVisible()
-      await expect(carrotRow.locator('[data-testid="price-source-badge"]')).toContainText(
-        /Sửa giá/i,
-      )
-
-      // Re-select "Giá sỉ" for order completion
-      await priceListSelect.click()
-      await page.getByRole('option', { name: 'Giá sỉ' }).click()
-      await expect(manualBadge).toBeVisible()
-      await expect(carrotRow.getByText(/23\.000/)).toBeVisible()
-    }
+    // Re-select "Giá sỉ" for order completion
+    await priceListSelect.click()
+    await page.getByRole('option', { name: 'Giá sỉ' }).click()
+    await expect(manualBadge).toBeVisible()
+    await expect(carrotRow.getByRole('button', { name: 'Sửa giá bán' })).toContainText('23.000')
 
     // 9. Checkout & verify recall snapshot in order detail:
     const payBtn = page.getByRole('button', { name: /Thanh to[aá]n/i })
@@ -180,6 +154,7 @@ test.describe('Issue #35: POS Price List Selection (Desktop & Mobile)', () => {
     const paymentDialog = page.getByRole('dialog')
     await expect(paymentDialog.getByRole('heading', { name: /Thanh to[aá]n/i })).toBeVisible()
 
+    await paymentDialog.getByRole('button', { name: '173.000 đ' }).click()
     const completeBtn = paymentDialog.getByRole('button', { name: /Hoàn thành|Hoan thanh/i })
     await expect(completeBtn).toBeEnabled({ timeout: 5000 })
     await completeBtn.click()
@@ -214,11 +189,8 @@ test.describe('Issue #35: POS Price List Selection (Desktop & Mobile)', () => {
     await page.goto('/pos')
     await page.waitForURL('**/pos')
 
-    // Open Cart sheet on mobile
-    const cartNavBtn = page.getByRole('button', { name: /Giỏ hàng|Xem giỏ|Mở giỏ hàng/i })
-    if (await cartNavBtn.isVisible().catch(() => false)) {
-      await cartNavBtn.click()
-    }
+    await addProductToCart(page, 'Cà rốt')
+    await page.getByRole('button', { name: /Mở giỏ hàng/i }).click()
 
     const priceListSelect = page.locator('[data-testid="pos-price-list-select"]')
     await expect(priceListSelect).toBeVisible({ timeout: 10000 })
