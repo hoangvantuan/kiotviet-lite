@@ -5,7 +5,7 @@ import type { CreateOrderInput, DebtInfo, PriceSource } from '@kiotviet-lite/sha
 
 import { apiClient } from '@/lib/api-client'
 import { saveOfflineOrder } from '@/lib/offline-orders'
-import { getPGliteClient } from '@/lib/pglite'
+import { getPGliteRaw, initializeOfflineDB } from '@/lib/pglite'
 import { useAuthStore } from '@/stores/use-auth-store'
 import { useOfflineStore } from '@/stores/use-offline-store'
 
@@ -65,14 +65,15 @@ interface CustomerDebtResponse {
 export function useCheckoutMutation() {
   const qc = useQueryClient()
   return useMutation({
+    networkMode: 'always',
     mutationFn: async (payload: CheckoutPayload) => {
       const isOffline =
         useOfflineStore.getState().status === 'offline' ||
         (typeof navigator !== 'undefined' && !navigator.onLine)
 
       if (isOffline) {
-        const pglite = getPGliteClient()
-        if (!pglite) throw new Error('PGlite chưa khởi tạo')
+        await initializeOfflineDB()
+        const pglite = getPGliteRaw()
 
         const storeId = useAuthStore.getState().user?.storeId
         if (!storeId) throw new Error('Chưa đăng nhập')

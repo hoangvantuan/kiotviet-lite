@@ -9,6 +9,7 @@ import { runPGliteMigrations } from './pglite-migrations'
 export type PGliteDB = ReturnType<typeof drizzle<typeof schema>>
 
 let instance: { pglite: PGlite; db: PGliteDB } | null = null
+let initialization: Promise<PGliteDB> | null = null
 
 export function createPGliteClient(dataDir?: string) {
   const pglite = new PGlite(dataDir ?? 'idb://kiotviet-lite')
@@ -25,18 +26,23 @@ export async function initPGliteSchema(pglite: PGlite, migrationSQL: string) {
   await pglite.exec(migrationSQL)
 }
 
-export async function initializeOfflineDB(): Promise<PGliteDB> {
-  if (instance) return instance.db
+export function initializeOfflineDB(): Promise<PGliteDB> {
+  if (instance) return Promise.resolve(instance.db)
 
-  const { pglite, db } = createPGliteClient('idb://kiotviet-lite')
+  initialization ??= (async () => {
+    const { pglite, db } = createPGliteClient('idb://kiotviet-lite')
+    const { needsResync } = await runPGliteMigrations(pglite, pgliteMigrations)
+    if (needsResync) {
+      console.warn('[PGlite] Schema gap > 3, needs full re-sync')
+    }
+    instance = { pglite, db }
+    return db
+  })().catch((error: unknown) => {
+    initialization = null
+    throw error
+  })
 
-  const { needsResync } = await runPGliteMigrations(pglite, pgliteMigrations)
-  if (needsResync) {
-    console.warn('[PGlite] Schema gap > 3, needs full re-sync')
-  }
-
-  instance = { pglite, db }
-  return db
+  return initialization
 }
 
 export function getPGliteDB(): PGliteDB {

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { LayoutGrid, ShoppingCart, WifiOff, X } from 'lucide-react'
 
 import {
@@ -11,6 +11,7 @@ import {
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { ApiClientError } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
+import { initializeOfflineDB } from '@/lib/pglite'
 import { showError, showSuccess } from '@/lib/toast'
 import { useCartStore } from '@/stores/use-cart-store'
 import { useOfflineStore } from '@/stores/use-offline-store'
@@ -53,6 +54,11 @@ export function PosScreen() {
   const [completionOrder, setCompletionOrder] = useState<OrderDetail | null>(null)
 
   const offlineStatus = useOfflineStore((s) => s.status)
+  useEffect(() => {
+    void initializeOfflineDB().catch((error: unknown) => {
+      console.error('Không thể chuẩn bị dữ liệu bán hàng ngoại tuyến', error)
+    })
+  }, [])
   const isOffline =
     offlineStatus === 'offline' || (typeof navigator !== 'undefined' && !navigator.onLine)
 
