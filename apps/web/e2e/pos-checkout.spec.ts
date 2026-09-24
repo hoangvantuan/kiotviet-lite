@@ -4,23 +4,10 @@ import { expect, type Page, test } from './fixtures/auth.fixture'
  * Trợ giúp thêm sản phẩm vào giỏ POS
  */
 async function addProductToCart(page: Page, productNameRegex: RegExp) {
-  const productBtn = page.getByRole('button', { name: productNameRegex }).first()
-  const isVisible = await productBtn.isVisible().catch(() => false)
-  if (!isVisible) {
-    const gridToggle = page.getByRole('button', { name: /Lưới sản phẩm|Lưới ảnh/i })
-    if (await gridToggle.isVisible().catch(() => false)) {
-      await gridToggle.click()
-    }
-  }
-
-  await expect(productBtn).toBeVisible({ timeout: 10000 })
-  await productBtn.click()
-
-  // Nếu có dialog chọn số lượng / biến thể thì bấm Thêm vào giỏ
-  const addToCartBtn = page.getByRole('button', { name: /Thêm vào giỏ|Them vao gio/i })
-  if (await addToCartBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-    await addToCartBtn.click()
-  }
+  const productName = productNameRegex.source.split('|')[0]
+  await page.getByRole('combobox', { name: /Tìm sản phẩm/i }).fill(productName)
+  await page.getByRole('option', { name: productNameRegex }).getByRole('button').click()
+  await page.getByRole('button', { name: 'Thêm vào giỏ' }).click()
 }
 
 test.describe('Kiểm thử E2E: POS Bán hàng (Tiền mặt, Chuyển khoản, Ghi nợ & PIN Override)', () => {
