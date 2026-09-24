@@ -17,10 +17,11 @@ import {
   volumePrices,
 } from '@kiotviet-lite/shared'
 
+import { toIsoDate } from '../lib/date.js'
 import { createOrdersRoutes } from '../routes/orders.routes.js'
 import { createPosRoutes } from '../routes/pos.routes.js'
 import { createSyncRoutes } from '../routes/sync.routes.js'
-import { createCustomer, createProduct } from './helpers/factories.js'
+import { createCustomer, createProduct, createUnitConversion } from './helpers/factories.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 beforeAll(() => {
@@ -748,6 +749,379 @@ describe('Issue #35: Price List Selection & Order Snapshot', () => {
 
       expect(dbOrder!.priceListId).toBe(pl!.id)
       expect(dbOrder!.priceListName).toBe('Bảng giá ngoại tuyến 2026')
+    })
+
+    it('handles missing non-existent priceListId in offline sync without FK 500 error, persists null ID and untrusted device name', async () => {
+      const p1 = await createProduct(env.base, { sellingPrice: 100_000 })
+      const nonExistentId = '99999999-9999-9999-9999-999999999999'
+
+      const res = await env.syncApp.request('/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...env.base.owner.authHeader },
+        body: JSON.stringify({
+          orders: [
+            {
+              clientId: '11111111-1111-1111-1111-111111111111',
+              createdAt: new Date().toISOString(),
+              orderData: {
+                subtotal: 55_000,
+                discountValue: 0,
+                discountAmount: 0,
+                total: 55_000,
+                paymentMethod: 'cash',
+                paymentStatus: 'paid',
+                cashAmount: 55_000,
+                debtLimitOverridden: false,
+                priceListId: nonExistentId,
+                priceListName: 'Bảng giá ảo không tồn tại',
+                items: [
+                  {
+                    productId: p1.id,
+                    productName: p1.name,
+                    unitPrice: 55_000,
+                    quantity: 1,
+                    lineTotal: 55_000,
+                    originalPrice: null,
+                    priceOverride: false,
+                    priceSource: 'price_list',
+                    priceSourceDetail: 'Bảng giá ảo không tồn tại',
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      })
+
+      expect(res.status).toBe(200)
+      const json = (await res.json()) as ApiDataResponse<SyncOrderResult>
+      expect(json.data.results[0]!.status).toBe('synced')
+      const serverId = json.data.results[0]!.serverId
+
+      const [dbOrder] = await env.base.db
+        .select({
+          priceListId: orders.priceListId,
+          priceListName: orders.priceListName,
+          total: orders.total,
+        })
+        .from(orders)
+        .where(eq(orders.id, serverId))
+
+      expect(dbOrder!.priceListId).toBeNull()
+      expect(dbOrder!.priceListName).toBe('Bảng giá ảo không tồn tại')
+      expect(dbOrder!.total).toBe(55_000)
+    })
+
+    it('handles foreign-store priceListId in offline sync by persisting null ID instead of cross-store pointer', async () => {
+      const p1 = await createProduct(env.base, { sellingPrice: 100_000 })
+      const [otherStore] = await env.base.db
+        .insert(stores)
+        .values({ name: 'Cửa hàng khác offline' })
+        .returning()
+      const [otherPl] = await env.base.db
+        .insert(priceLists)
+        .values({
+          storeId: otherStore!.id,
+          name: 'Bảng giá store khác',
+          method: 'direct',
+          isActive: true,
+        })
+        .returning()
+
+      const res = await env.syncApp.request('/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...env.base.owner.authHeader },
+        body: JSON.stringify({
+          orders: [
+            {
+              clientId: '22222222-2222-2222-2222-222222222222',
+              createdAt: new Date().toISOString(),
+              orderData: {
+                subtotal: 75_000,
+                discountValue: 0,
+                discountAmount: 0,
+                total: 75_000,
+                paymentMethod: 'cash',
+                paymentStatus: 'paid',
+                cashAmount: 75_000,
+                debtLimitOverridden: false,
+                priceListId: otherPl!.id,
+                priceListName: 'Bảng giá cửa hàng khác',
+                items: [
+                  {
+                    productId: p1.id,
+                    productName: p1.name,
+                    unitPrice: 75_000,
+                    quantity: 1,
+                    lineTotal: 75_000,
+                    originalPrice: null,
+                    priceOverride: false,
+                    priceSource: 'price_list',
+                    priceSourceDetail: 'Bảng giá cửa hàng khác',
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      })
+
+      expect(res.status).toBe(200)
+      const json = (await res.json()) as ApiDataResponse<SyncOrderResult>
+      expect(json.data.results[0]!.status).toBe('synced')
+      const serverId = json.data.results[0]!.serverId
+
+      const [dbOrder] = await env.base.db
+        .select({
+          priceListId: orders.priceListId,
+          priceListName: orders.priceListName,
+          total: orders.total,
+        })
+        .from(orders)
+        .where(eq(orders.id, serverId))
+
+      expect(dbOrder!.priceListId).toBeNull()
+      expect(dbOrder!.priceListName).toBe('Bảng giá cửa hàng khác')
+      expect(dbOrder!.total).toBe(75_000)
+    })
+  })
+
+  describe('5. Date Boundary Consistency across List, Preview, Checkout', () => {
+    it('rejects preview and checkout for expired price list (effectiveTo < today) and hides it from POS list', async () => {
+      const p1 = await createProduct(env.base, { sellingPrice: 100_000 })
+      const yesterday = new Date(Date.now() - 86_400_000)
+      const yesterdayStr = toIsoDate(yesterday)
+
+      const [plExpired] = await env.base.db
+        .insert(priceLists)
+        .values({
+          storeId: env.base.storeId,
+          name: `Bảng giá hết hạn hôm qua ${Date.now()}`,
+          method: 'direct',
+          isActive: true,
+          effectiveTo: yesterdayStr,
+        })
+        .returning()
+      await env.base.db.insert(priceListItems).values({
+        priceListId: plExpired!.id,
+        productId: p1.id,
+        price: 50_000,
+      })
+
+      // 1. Must NOT appear in GET /pos/price-lists
+      const listRes = await env.posApp.request('/price-lists', {
+        headers: env.base.staff.authHeader,
+      })
+      expect(listRes.status).toBe(200)
+      const listJson = (await listRes.json()) as ApiDataResponse<PriceListSummary[]>
+      const ids = listJson.data.map((l) => l.id)
+      expect(ids).not.toContain(plExpired!.id)
+
+      // 2. Preview POST /resolve-prices must throw 400
+      const previewRes = await env.posApp.request('/resolve-prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...env.base.staff.authHeader },
+        body: JSON.stringify({
+          priceListId: plExpired!.id,
+          items: [{ productId: p1.id, quantity: 1 }],
+        }),
+      })
+      expect(previewRes.status).toBe(400)
+      const previewErr = (await previewRes.json()) as { error: { message: string } }
+      expect(previewErr.error.message).toContain('hết hiệu lực')
+
+      // 3. Checkout POST /orders must throw 400
+      const orderRes = await env.posApp.request('/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...env.base.staff.authHeader },
+        body: JSON.stringify({
+          subtotal: 50_000,
+          discountValue: 0,
+          discountAmount: 0,
+          total: 50_000,
+          paymentMethod: 'cash',
+          paymentStatus: 'paid',
+          cashAmount: 50_000,
+          debtLimitOverridden: false,
+          priceListId: plExpired!.id,
+          items: [
+            {
+              productId: p1.id,
+              productName: p1.name,
+              unitPrice: 50_000,
+              quantity: 1,
+              lineTotal: 50_000,
+              originalPrice: null,
+              priceOverride: false,
+            },
+          ],
+        }),
+      })
+      expect(orderRes.status).toBe(400)
+      const orderErr = (await orderRes.json()) as { error: { message: string } }
+      expect(orderErr.error.message).toContain('hết hiệu lực')
+    })
+
+    it('rejects preview and checkout for future price list (effectiveFrom > today) and hides it from POS list', async () => {
+      const p1 = await createProduct(env.base, { sellingPrice: 100_000 })
+      const tomorrow = new Date(Date.now() + 86_400_000)
+      const tomorrowStr = toIsoDate(tomorrow)
+
+      const [plFuture] = await env.base.db
+        .insert(priceLists)
+        .values({
+          storeId: env.base.storeId,
+          name: `Bảng giá tương lai mai mới bắt đầu ${Date.now()}`,
+          method: 'direct',
+          isActive: true,
+          effectiveFrom: tomorrowStr,
+        })
+        .returning()
+      await env.base.db.insert(priceListItems).values({
+        priceListId: plFuture!.id,
+        productId: p1.id,
+        price: 50_000,
+      })
+
+      // 1. Must NOT appear in GET /pos/price-lists
+      const listRes = await env.posApp.request('/price-lists', {
+        headers: env.base.staff.authHeader,
+      })
+      expect(listRes.status).toBe(200)
+      const listJson = (await listRes.json()) as ApiDataResponse<PriceListSummary[]>
+      const ids = listJson.data.map((l) => l.id)
+      expect(ids).not.toContain(plFuture!.id)
+
+      // 2. Preview POST /resolve-prices must throw 400
+      const previewRes = await env.posApp.request('/resolve-prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...env.base.staff.authHeader },
+        body: JSON.stringify({
+          priceListId: plFuture!.id,
+          items: [{ productId: p1.id, quantity: 1 }],
+        }),
+      })
+      expect(previewRes.status).toBe(400)
+      const previewErr = (await previewRes.json()) as { error: { message: string } }
+      expect(previewErr.error.message).toContain('chưa đến ngày hiệu lực')
+
+      // 3. Checkout POST /orders must throw 400
+      const orderRes = await env.posApp.request('/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...env.base.staff.authHeader },
+        body: JSON.stringify({
+          subtotal: 50_000,
+          discountValue: 0,
+          discountAmount: 0,
+          total: 50_000,
+          paymentMethod: 'cash',
+          paymentStatus: 'paid',
+          cashAmount: 50_000,
+          debtLimitOverridden: false,
+          priceListId: plFuture!.id,
+          items: [
+            {
+              productId: p1.id,
+              productName: p1.name,
+              unitPrice: 50_000,
+              quantity: 1,
+              lineTotal: 50_000,
+              originalPrice: null,
+              priceOverride: false,
+            },
+          ],
+        }),
+      })
+      expect(orderRes.status).toBe(400)
+      const orderErr = (await orderRes.json()) as { error: { message: string } }
+      expect(orderErr.error.message).toContain('chưa đến ngày hiệu lực')
+    })
+  })
+
+  describe('6. Unit Conversion Precedence with Manual Price List', () => {
+    it('manual price list price wins unitConversion.sellingPrice (scales base price by conversionFactor) with preview and checkout agreement', async () => {
+      // Product base price: 10,000 (Cái)
+      const p1 = await createProduct(env.base, { sellingPrice: 10_000 })
+      // Unit conversion: Thùng = 10 Cái, sellingPrice = 120,000 (cao hơn 10 * 10,000)
+      const uc = await createUnitConversion(env.base, p1.id, {
+        conversionFactor: 10,
+        sellingPrice: 120_000,
+      })
+
+      // Manual price list sets base price: 8,000 (Cái)
+      const [pl] = await env.base.db
+        .insert(priceLists)
+        .values({
+          storeId: env.base.storeId,
+          name: 'Bảng giá sỉ quy đổi',
+          method: 'direct',
+          isActive: true,
+        })
+        .returning()
+      await env.base.db.insert(priceListItems).values({
+        priceListId: pl!.id,
+        productId: p1.id,
+        price: 8_000,
+      })
+
+      // Expected: Manual price list base price 8,000 * factor 10 = 80,000 (WINS over uc.sellingPrice 120,000!)
+      // 1. Preview agreement
+      const previewRes = await env.posApp.request('/resolve-prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...env.base.staff.authHeader },
+        body: JSON.stringify({
+          priceListId: pl!.id,
+          items: [
+            {
+              productId: p1.id,
+              unitConversionId: uc.id,
+              quantity: 2,
+            },
+          ],
+        }),
+      })
+
+      expect(previewRes.status).toBe(200)
+      const previewJson = (await previewRes.json()) as ApiDataResponse<ResolvedItem[]>
+      expect(previewJson.data[0]!.price).toBe(80_000)
+      expect(previewJson.data[0]!.source).toBe('price_list')
+      expect(previewJson.data[0]!.sourceDetail).toBe('Bảng giá sỉ quy đổi')
+
+      // 2. Checkout agreement
+      const orderRes = await env.posApp.request('/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...env.base.staff.authHeader },
+        body: JSON.stringify({
+          subtotal: 160_000,
+          discountValue: 0,
+          discountAmount: 0,
+          total: 160_000,
+          paymentMethod: 'cash',
+          paymentStatus: 'paid',
+          cashAmount: 160_000,
+          debtLimitOverridden: false,
+          priceListId: pl!.id,
+          items: [
+            {
+              productId: p1.id,
+              productName: p1.name,
+              unitConversionId: uc.id,
+              unitPrice: 80_000,
+              quantity: 2,
+              lineTotal: 160_000,
+              originalPrice: null,
+              priceOverride: false,
+            },
+          ],
+        }),
+      })
+
+      expect(orderRes.status).toBe(201)
+      const orderJson = (await orderRes.json()) as ApiDataResponse<OrderDetailResult>
+      expect(orderJson.data.items[0]!.unitPrice).toBe(80_000)
+      expect(orderJson.data.items[0]!.priceSource).toBe('price_list')
+      expect(orderJson.data.priceListId).toBe(pl!.id)
+      expect(orderJson.data.priceListName).toBe('Bảng giá sỉ quy đổi')
     })
   })
 })

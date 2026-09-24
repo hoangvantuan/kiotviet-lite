@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { createOrderSchema, priceLists, resolvePricesSchema } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { toIsoDate } from '../lib/date.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
@@ -27,7 +28,7 @@ export function createPosRoutes({ db }: PosRoutesDeps) {
   // Issue #35 - List active valid price lists for POS selection
   app.get('/price-lists', async (c) => {
     const auth = c.get('auth')
-    const today = new Date().toISOString().slice(0, 10)
+    const today = toIsoDate(new Date())
     const lists = await db
       .select({
         id: priceLists.id,

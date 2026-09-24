@@ -16,6 +16,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { toIsoDate } from '../lib/date.js'
 import { ApiError } from '../lib/errors.js'
 import { findApplicableCategoryDiscount } from './category-discounts.service.js'
 
@@ -28,6 +29,10 @@ interface ResolveContext {
   variantId?: string | null
   unitConversionId?: string | null
   quantity: number
+  context?: {
+    customerGroupId?: string | null
+    orderDate?: Date
+  }
 }
 
 interface ResolvedPrice {
@@ -36,10 +41,6 @@ interface ResolvedPrice {
   sourceDetail: string | null
   isFallback?: boolean
   breakdown: TierBreakdown[]
-}
-
-function toIsoDate(d: Date): string {
-  return d.toISOString().slice(0, 10)
 }
 
 async function findUnitConversion(
@@ -160,7 +161,9 @@ async function findManualPriceListItem(
   storeId: string,
   priceListId: string,
   productId: string,
+  today: Date = new Date(),
 ): Promise<{ price: number; priceListName: string } | null> {
+  const todayStr = toIsoDate(today)
   const rows = await db
     .select({
       price: priceListItems.price,
@@ -177,6 +180,8 @@ async function findManualPriceListItem(
         eq(priceLists.storeId, storeId),
         isNull(priceLists.deletedAt),
         eq(priceLists.isActive, true),
+        sql`(${priceLists.effectiveFrom} IS NULL OR ${priceLists.effectiveFrom} <= ${todayStr})`,
+        sql`(${priceLists.effectiveTo} IS NULL OR ${priceLists.effectiveTo} >= ${todayStr})`,
       ),
     )
     .limit(1)
@@ -264,9 +269,11 @@ export async function resolveProductPrice(ctx: ResolveContext): Promise<Resolved
   let isFallback = false
 
   if (priceListId) {
-    const manualItem = await findManualPriceListItem(db, storeId, priceListId, productId)
+    const today = ctx.context?.orderDate ?? new Date()
+    const manualItem = await findManualPriceListItem(db, storeId, priceListId, productId, today)
     if (manualItem) {
-      const manualPrice = unitConv?.sellingPrice ?? Math.round(manualItem.price * conversionFactor)
+      // Ensure selected manual list price wins unitConversion.sellingPrice (scale by factor)
+      const manualPrice = Math.round(manualItem.price * conversionFactor)
       winner = {
         price: manualPrice,
         source: 'price_list',

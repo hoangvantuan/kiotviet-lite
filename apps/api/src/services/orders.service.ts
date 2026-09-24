@@ -22,6 +22,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { toIsoDate } from '../lib/date.js'
 import { env } from '../lib/env.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
@@ -127,11 +128,6 @@ const DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
 
 function formatDateForCode(date: Date): string {
   return DATE_FORMATTER.format(date).replace(/-/g, '')
-}
-
-function toIsoDate(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 async function generateOrderNumber({ tx, storeId }: { tx: Db; storeId: string }): Promise<string> {
@@ -299,6 +295,13 @@ export async function createOrder({
 
   // Validate manual price list if selected
   let snapshotPriceListName: string | null = null
+  let effectivePriceListId: string | null = null
+  let priceListDiscrepancy: {
+    requestedPriceListId: string
+    devicePriceListName: string | null
+    reason: string
+  } | null = null
+
   if (input.priceListId) {
     const [pl] = await db
       .select({
@@ -327,9 +330,24 @@ export async function createOrder({
       if (pl.effectiveTo && today > pl.effectiveTo) {
         throw new ApiError('VALIDATION_ERROR', 'Bảng giá đã hết hiệu lực')
       }
+      effectivePriceListId = pl.id
       snapshotPriceListName = pl.name
     } else {
-      snapshotPriceListName = pl?.name ?? input.priceListName ?? null
+      // offline_sync: persist only store-owned ID or null while preserving device name as untrusted snapshot
+      if (pl && pl.deletedAt === null) {
+        effectivePriceListId = pl.id
+        snapshotPriceListName = pl.name
+      } else {
+        effectivePriceListId = null
+        snapshotPriceListName = input.priceListName ?? null
+        priceListDiscrepancy = {
+          requestedPriceListId: input.priceListId,
+          devicePriceListName: input.priceListName ?? null,
+          reason: !pl
+            ? 'Bảng giá không tồn tại hoặc không thuộc cửa hàng trên máy chủ'
+            : 'Bảng giá đã bị xóa trên máy chủ',
+        }
+      }
     }
   } else if (source === 'offline_sync') {
     snapshotPriceListName = input.priceListName ?? null
@@ -354,7 +372,7 @@ export async function createOrder({
               orderNumber,
               customerId: input.customerId ?? null,
               userId: actor.userId,
-              priceListId: input.priceListId ?? null,
+              priceListId: effectivePriceListId,
               priceListName: snapshotPriceListName,
               subtotal: input.subtotal,
               discountType: input.discountType ?? null,
@@ -478,11 +496,14 @@ export async function createOrder({
           db: txDb,
           storeId: actor.storeId,
           customerId: input.customerId ?? null,
-          priceListId: input.priceListId ?? null,
+          priceListId: effectivePriceListId,
           productId: item.productId,
           variantId: item.variantId ?? null,
           unitConversionId: item.unitConversionId ?? null,
           quantity: item.quantity,
+          context: {
+            orderDate: new Date(),
+          },
         })
 
         const effectivePriceOverride = item.priceOverride ?? false
@@ -820,6 +841,25 @@ export async function createOrder({
             soldTotal: input.total,
             mismatchedLines,
           },
+        })
+      }
+
+      if (priceListDiscrepancy) {
+        await logAction({
+          db: txDb,
+          storeId: actor.storeId,
+          actorId: actor.userId,
+          actorRole: actor.role,
+          action: 'order.price_mismatch_adjusted',
+          targetType: 'order',
+          targetId: createdId,
+          changes: {
+            orderId: createdId,
+            orderNumber,
+            priceListDiscrepancy,
+          },
+          ipAddress: meta?.ipAddress,
+          userAgent: meta?.userAgent,
         })
       }
 
