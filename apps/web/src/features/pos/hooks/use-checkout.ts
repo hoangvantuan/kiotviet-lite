@@ -64,10 +64,11 @@ interface CustomerDebtResponse {
 
 export function useCheckoutMutation() {
   const qc = useQueryClient()
-
   return useMutation({
     mutationFn: async (payload: CheckoutPayload) => {
-      const isOffline = useOfflineStore.getState().status === 'offline' || !navigator.onLine
+      const isOffline =
+        useOfflineStore.getState().status === 'offline' ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
 
       if (isOffline) {
         const pglite = getPGliteClient()

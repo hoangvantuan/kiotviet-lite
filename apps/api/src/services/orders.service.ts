@@ -448,9 +448,16 @@ export async function createOrder({
         let effectiveUnitPrice = item.unitPrice
         let effectiveLineTotal = item.lineTotal
 
-        // M16: Tự tính lại giá cho đơn vị quy đổi nếu client gửi unitPrice <= 0.
-        // Không áp dụng cho dòng sửa giá có chủ đích (M13: bán 0đ hợp lệ, ví dụ hàng tặng).
-        if (item.unitConversionId && effectiveUnitPrice <= 0 && !effectivePriceOverride) {
+        // M16: Tu tinh lai gia cho don vi quy doi neu client gui unitPrice <= 0.
+        // Chi ap dung cho don tao truc tiep (source !== 'offline_sync').
+        // Khong ap dung cho dong sua gia co chu dich (M13: ban 0d hop le)
+        // va khong ap dung cho don ngoai tuyen (#34: giu nguyen gia da chot tren thiet bi va ghi doi soat).
+        if (
+          source !== 'offline_sync' &&
+          item.unitConversionId &&
+          effectiveUnitPrice <= 0 &&
+          !effectivePriceOverride
+        ) {
           effectiveUnitPrice = resolvedPrice.price
           const lineRes = calculateLineTotal({
             unitPrice: effectiveUnitPrice,
@@ -461,27 +468,26 @@ export async function createOrder({
           effectiveLineTotal = lineRes.lineTotal
         }
 
-        const devicePriceSource: PriceSource =
-          (item.priceSource as PriceSource | undefined) ??
-          (effectivePriceOverride ? 'manual_override' : 'retail_price')
-        const devicePriceSourceDetail: string | null =
-          item.priceSourceDetail ??
-          (effectivePriceOverride ? (item.priceOverrideReason ?? null) : null)
+        const devicePriceSource: PriceSource = effectivePriceOverride
+          ? 'manual_override'
+          : ((item.priceSource as PriceSource | undefined) ?? 'retail_price')
+        const devicePriceSourceDetail: string | null = effectivePriceOverride
+          ? (item.priceOverrideReason ?? item.priceSourceDetail ?? null)
+          : (item.priceSourceDetail ?? null)
 
-        // For offline sync, persist device-saved price source provenance. For pos, server determines it.
-        const itemPriceSource: PriceSource =
-          source === 'offline_sync'
+        // For offline sync, persist device-saved price source provenance (normalized if override).
+        // For pos, server determines it.
+        const itemPriceSource: PriceSource = effectivePriceOverride
+          ? 'manual_override'
+          : source === 'offline_sync'
             ? devicePriceSource
-            : effectivePriceOverride
-              ? 'manual_override'
-              : resolvedPrice.source
+            : resolvedPrice.source
 
-        const itemPriceSourceDetail: string | null =
-          source === 'offline_sync'
+        const itemPriceSourceDetail: string | null = effectivePriceOverride
+          ? (item.priceOverrideReason ?? item.priceSourceDetail ?? null)
+          : source === 'offline_sync'
             ? devicePriceSourceDetail
-            : effectivePriceOverride
-              ? (item.priceOverrideReason ?? null)
-              : resolvedPrice.sourceDetail
+            : resolvedPrice.sourceDetail
 
         if (!effectivePriceOverride) {
           const expectedSysPrice = resolvedPrice.price

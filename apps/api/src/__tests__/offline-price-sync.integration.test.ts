@@ -14,7 +14,7 @@ import { auditLogs, customers, debts, orderItems, orders, products } from '@kiot
 import { createPosRoutes } from '../routes/pos.routes.js'
 import { createStoreRoutes } from '../routes/store.routes.js'
 import { createSyncRoutes } from '../routes/sync.routes.js'
-import { createCustomer, createProduct } from './helpers/factories.js'
+import { createCustomer, createProduct, createUnitConversion } from './helpers/factories.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 beforeAll(() => {
@@ -304,5 +304,187 @@ describe('Issue #34: Giữ giá đã chốt khi đồng bộ đơn ngoại tuy�
       .from(orders)
       .where(eq(orders.clientId, orderClientId))
     expect(orderRows).toHaveLength(1)
+  })
+
+  it('4. Đơn vị quy đổi giá 0đ khi ngoại tuyến: giữ nguyên giá 0đ, tổng tiền, công nợ và ghi audit đối soát lệch giá', async () => {
+    const notifyMock = vi.mocked(notify)
+    notifyMock.mockClear()
+
+    const p4 = await createProduct(
+      { db: env.base.db, storeId: env.base.storeId },
+      { sellingPrice: 50000 },
+    )
+
+    const pRegular = await createProduct(
+      { db: env.base.db, storeId: env.base.storeId },
+      { sellingPrice: 100000 },
+    )
+
+    const conv = await createUnitConversion(env.base, p4.id, {
+      unit: 'thùng',
+      conversionFactor: 10,
+      sellingPrice: 500000,
+    })
+
+    const cust = await createCustomer(
+      { db: env.base.db, storeId: env.base.storeId },
+      { currentDebt: 0, debtLimit: 1000000 },
+    )
+
+    const orderClientId = '11111111-aaaa-4444-8888-111111111111'
+    const payload = {
+      clientId: '22222222-aaaa-4444-8888-222222222222',
+      orders: [
+        {
+          clientId: orderClientId,
+          createdAt: new Date().toISOString(),
+          orderData: {
+            customerId: cust.id,
+            subtotal: 100000,
+            discountValue: 0,
+            discountAmount: 0,
+            total: 100000,
+            paymentMethod: 'debt',
+            paymentStatus: 'unpaid',
+            cashAmount: 0,
+            debtAmount: 100000,
+            debtLimitOverridden: false,
+            items: [
+              {
+                productId: p4.id,
+                productName: p4.name,
+                unit: 'thùng',
+                unitConversionId: conv.id,
+                unitPrice: 0,
+                quantity: 1,
+                lineTotal: 0,
+                originalPrice: 500000,
+                priceOverride: false,
+                priceSource: 'retail_price',
+              },
+              {
+                productId: pRegular.id,
+                productName: pRegular.name,
+                unitPrice: 100000,
+                quantity: 1,
+                lineTotal: 100000,
+                originalPrice: 100000,
+                priceOverride: false,
+              },
+            ],
+          },
+        },
+      ],
+    }
+
+    const res = await makeRequest(env.syncApp, 'POST', '/push', payload, env.base.owner.authHeader)
+    expect(res.status).toBe(200)
+    expect(res.body.data.results[0].status).toBe('synced')
+
+    const serverId = res.body.data.results[0].serverId
+
+    // Kiểm tra đơn hàng giữ nguyên tổng tiền và công nợ đã chốt
+    const [savedOrder] = await env.base.db.select().from(orders).where(eq(orders.id, serverId))
+    expect(savedOrder?.subtotal).toBe(100000)
+    expect(savedOrder?.total).toBe(100000)
+
+    const [savedDebt] = await env.base.db.select().from(debts).where(eq(debts.orderId, serverId))
+    expect(savedDebt?.amount).toBe(100000)
+
+    // Kiểm tra dòng hàng quy đổi giữ nguyên đơn giá 0đ và thành tiền 0đ
+    const savedItems = await env.base.db
+      .select()
+      .from(orderItems)
+      .where(eq(orderItems.orderId, serverId))
+    const convItem = savedItems.find((it) => it.productId === p4.id)
+    expect(convItem?.unitPrice).toBe(0)
+    expect(convItem?.lineTotal).toBe(0)
+
+    // Kiểm tra nhật ký kiểm toán ghi nhận lệch giá đối soát
+    const logs = await env.base.db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'order.price_mismatch_adjusted'))
+    expect(logs.length).toBeGreaterThan(0)
+    const log = logs.find((l) => l.targetId === serverId)
+    expect(log).toBeDefined()
+    const changes = log?.changes as {
+      mismatchedLines: Array<{
+        soldUnitPrice: number
+        serverUnitPrice: number
+        serverPriceSource: string
+      }>
+    }
+    expect(changes.mismatchedLines).toHaveLength(1)
+    expect(changes.mismatchedLines[0].soldUnitPrice).toBe(0)
+    expect(changes.mismatchedLines[0].serverUnitPrice).toBe(500000)
+    expect(changes.mismatchedLines[0].serverPriceSource).toBe('retail_price')
+  })
+
+  it('5. Nguồn giá bị làm giả: thiết bị sửa giá nhưng khai báo retail_price, máy chủ chuẩn hóa thành manual_override', async () => {
+    const p5 = await createProduct(
+      { db: env.base.db, storeId: env.base.storeId },
+      { sellingPrice: 100000 },
+    )
+
+    const orderClientId = '33333333-bbbb-4444-8888-333333333333'
+    const payload = {
+      clientId: '44444444-bbbb-4444-8888-444444444444',
+      orders: [
+        {
+          clientId: orderClientId,
+          createdAt: new Date().toISOString(),
+          orderData: {
+            subtotal: 40000,
+            discountValue: 0,
+            discountAmount: 0,
+            total: 40000,
+            paymentMethod: 'cash',
+            paymentStatus: 'paid',
+            cashAmount: 40000,
+            debtLimitOverridden: false,
+            items: [
+              {
+                productId: p5.id,
+                productName: p5.name,
+                unitPrice: 40000,
+                quantity: 1,
+                lineTotal: 40000,
+                originalPrice: 100000,
+                priceOverride: true,
+                priceOverrideReason: 'Gia giam thoa thuan',
+                priceSource: 'retail_price',
+              },
+            ],
+          },
+        },
+      ],
+    }
+
+    const res = await makeRequest(env.syncApp, 'POST', '/push', payload, env.base.owner.authHeader)
+    expect(res.status).toBe(200)
+    expect(res.body.data.results[0].status).toBe('synced')
+
+    const serverId = res.body.data.results[0].serverId
+
+    // Nguồn giá trên dòng hàng phải được chuẩn hóa thành manual_override
+    const [savedItem] = await env.base.db
+      .select()
+      .from(orderItems)
+      .where(eq(orderItems.orderId, serverId))
+    expect(savedItem?.priceOverride).toBe(true)
+    expect(savedItem?.priceSource).toBe('manual_override')
+    expect(savedItem?.unitPrice).toBe(40000)
+
+    // Kiểm tra nhật ký kiểm toán ghi nhận order_item.price_overridden với pinUsed = false
+    const overrideLogs = await env.base.db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'order_item.price_overridden'))
+    const overrideLog = overrideLogs.find((l) => l.targetId === serverId)
+    expect(overrideLog).toBeDefined()
+    const changes = overrideLog?.changes as { pinUsed: boolean; unitPrice: number }
+    expect(changes.pinUsed).toBe(false)
+    expect(changes.unitPrice).toBe(40000)
   })
 })
