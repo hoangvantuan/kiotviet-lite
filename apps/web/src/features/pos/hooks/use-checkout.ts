@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import type { CreateOrderInput, DebtInfo } from '@kiotviet-lite/shared'
+import type { CreateOrderInput, DebtInfo, PriceSource } from '@kiotviet-lite/shared'
 
 import { apiClient } from '@/lib/api-client'
 import { saveOfflineOrder } from '@/lib/offline-orders'
@@ -41,6 +41,12 @@ interface CheckoutPayload {
     lineTotal: number
     note: string | null
     unitConversionId: string | null
+    originalPrice?: number | null
+    priceOverride?: boolean
+    priceOverrideReason?: string | null
+    priceOverridePinUsed?: boolean
+    priceSource?: PriceSource | null
+    priceSourceDetail?: string | null
   }[]
 }
 
@@ -115,10 +121,12 @@ export function useCheckoutMutation() {
             discountValue: item.discountValue,
             discountAmount: item.discountAmount,
             lineTotal: item.lineTotal,
-            originalPrice: null,
-            priceOverride: false,
+            originalPrice: item.originalPrice ?? null,
+            priceOverride: item.priceOverride ?? false,
             sku: null,
             costPrice: null,
+            priceSource: item.priceSource ?? 'retail_price',
+            priceSourceDetail: item.priceSourceDetail ?? null,
           })),
           createdAt: new Date().toISOString(),
           oldDebt: null,

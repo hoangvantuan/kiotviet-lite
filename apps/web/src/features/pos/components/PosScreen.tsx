@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { LayoutGrid, ShoppingCart, X } from 'lucide-react'
+import { LayoutGrid, ShoppingCart, WifiOff, X } from 'lucide-react'
 
 import {
   Sheet,
@@ -13,6 +13,7 @@ import { ApiClientError } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
 import { useCartStore } from '@/stores/use-cart-store'
+import { useOfflineStore } from '@/stores/use-offline-store'
 
 import { MAX_CART_TABS } from '../constants'
 import { useAddToCart } from '../hooks/use-add-to-cart'
@@ -50,6 +51,10 @@ export function PosScreen() {
   >('cash')
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false)
   const [completionOrder, setCompletionOrder] = useState<OrderDetail | null>(null)
+
+  const offlineStatus = useOfflineStore((s) => s.status)
+  const isOffline =
+    offlineStatus === 'offline' || (typeof navigator !== 'undefined' && !navigator.onLine)
 
   const cartCount = useCartStore((s) =>
     (s.tabs[s.activeTab]?.items ?? []).reduce((sum, i) => sum + i.quantity, 0),
@@ -159,6 +164,8 @@ export function PosScreen() {
           priceOverride: item.priceOverride,
           priceOverrideReason: item.priceOverrideReason,
           priceOverridePinUsed: item.priceOverridePinUsed,
+          priceSource: item.priceSource,
+          priceSourceDetail: item.priceSourceDetail,
         })),
       },
       {
@@ -219,6 +226,21 @@ export function PosScreen() {
         showProductGrid={showProductGrid}
         onToggleProductGrid={isDesktop ? () => setShowProductGrid((v) => !v) : undefined}
       />
+
+      {isOffline && (
+        <div
+          data-testid="pos-offline-price-warning"
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/70 dark:text-amber-200 shrink-0"
+        >
+          <WifiOff className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
+          <span>
+            Đang ngoại tuyến: Không thể cập nhật giá. Giá đang hiện trên từng dòng sẽ được giữ
+            nguyên khi hoàn tất đơn.
+          </span>
+        </div>
+      )}
 
       {isDesktop ? (
         <div className="flex min-h-0 flex-1 overflow-hidden">

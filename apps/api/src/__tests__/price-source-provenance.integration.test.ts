@@ -352,7 +352,8 @@ describe('#32 Price Source Provenance', () => {
       .where(eq(orderItems.orderId, syncBody.data.results[0]!.serverId))
 
     expect(dbItems[0]!.priceSource).toBe('retail_price')
-    expect(dbItems[0]!.unitPrice).toBe(100_000)
+    // #34: Offline sync preserves finalized unitPrice at sale time, does not rewrite to server price
+    expect(dbItems[0]!.unitPrice).toBe(50_000)
   })
 
   it('PS-6: server ignores client-declared priceSource (forgery)', async () => {

@@ -270,7 +270,7 @@ export async function createOrder({
     }
   }
 
-  let debtAmount = input.debtAmount ?? 0
+  const debtAmount = input.debtAmount ?? 0
 
   // Calculate change amount before insert
   let change = 0
@@ -350,12 +350,24 @@ export async function createOrder({
       }
 
       // Process items: insert order_items + deduct stock
-
-      // Process items: insert order_items + deduct stock
       const processedItems: OrderDetailItem[] = []
       let isPriceMismatchAdjusted = false
-      let adjustedSubtotal = 0
       let negativeStockAlertsEnabled: boolean | undefined
+      const mismatchedLines: Array<{
+        productId: string
+        productName: string
+        quantity: number
+        soldUnitPrice: number
+        serverUnitPrice: number
+        unitPriceDiff: number
+        soldLineTotal: number
+        serverLineTotal: number
+        lineTotalDiff: number
+        devicePriceSource: PriceSource
+        serverPriceSource: PriceSource
+        devicePriceSourceDetail: string | null
+        serverPriceSourceDetail: string | null
+      }> = []
 
       for (const item of input.items) {
         const product = await loadProductForUpdate({
@@ -449,6 +461,28 @@ export async function createOrder({
           effectiveLineTotal = lineRes.lineTotal
         }
 
+        const devicePriceSource: PriceSource =
+          (item.priceSource as PriceSource | undefined) ??
+          (effectivePriceOverride ? 'manual_override' : 'retail_price')
+        const devicePriceSourceDetail: string | null =
+          item.priceSourceDetail ??
+          (effectivePriceOverride ? (item.priceOverrideReason ?? null) : null)
+
+        // For offline sync, persist device-saved price source provenance. For pos, server determines it.
+        const itemPriceSource: PriceSource =
+          source === 'offline_sync'
+            ? devicePriceSource
+            : effectivePriceOverride
+              ? 'manual_override'
+              : resolvedPrice.source
+
+        const itemPriceSourceDetail: string | null =
+          source === 'offline_sync'
+            ? devicePriceSourceDetail
+            : effectivePriceOverride
+              ? (item.priceOverrideReason ?? null)
+              : resolvedPrice.sourceDetail
+
         if (!effectivePriceOverride) {
           const expectedSysPrice = resolvedPrice.price
           if (effectiveUnitPrice !== expectedSysPrice) {
@@ -463,26 +497,33 @@ export async function createOrder({
                 },
               )
             } else {
-              effectiveUnitPrice = expectedSysPrice
-              const lineRes = calculateLineTotal({
-                unitPrice: effectiveUnitPrice,
+              // offline_sync: giữ nguyên đơn giá và thành tiền đã chốt trên thiết bị.
+              // Ghi nhận dòng lệch giá và nguồn giá hai bên để đối soát.
+              const serverLineRes = calculateLineTotal({
+                unitPrice: expectedSysPrice,
                 quantity: item.quantity,
                 discountType: item.discountType,
                 discountValue: item.discountValue,
               })
-              effectiveLineTotal = lineRes.lineTotal
+              mismatchedLines.push({
+                productId: item.productId,
+                productName: item.productName,
+                quantity: item.quantity,
+                soldUnitPrice: effectiveUnitPrice,
+                serverUnitPrice: expectedSysPrice,
+                unitPriceDiff: expectedSysPrice - effectiveUnitPrice,
+                soldLineTotal: effectiveLineTotal,
+                serverLineTotal: serverLineRes.lineTotal,
+                lineTotalDiff: serverLineRes.lineTotal - effectiveLineTotal,
+                devicePriceSource,
+                serverPriceSource: resolvedPrice.source,
+                devicePriceSourceDetail,
+                serverPriceSourceDetail: resolvedPrice.sourceDetail,
+              })
               isPriceMismatchAdjusted = true
             }
           }
         }
-
-        adjustedSubtotal += effectiveLineTotal
-
-        // #32: Server determines price source; never trust client-sent labels.
-        const itemPriceSource = effectivePriceOverride ? 'manual_override' : resolvedPrice.source
-        const itemPriceSourceDetail = effectivePriceOverride
-          ? (item.priceOverrideReason ?? null)
-          : resolvedPrice.sourceDetail
 
         // Insert order_item
         const [insertedItem] = await tx
@@ -683,30 +724,7 @@ export async function createOrder({
         }
       }
 
-      if (isPriceMismatchAdjusted) {
-        const newTotal = Math.max(0, adjustedSubtotal - input.discountAmount)
-
-        let newChange = 0
-        if (input.paymentMethod === 'cash' && input.cashAmount != null) {
-          newChange = input.cashAmount - newTotal
-        } else if (input.paymentMethod === 'combined') {
-          const cashPart = input.cashAmount ?? 0
-          const transferPart = input.transferAmount ?? 0
-          newChange = cashPart + transferPart - newTotal
-        } else if (input.paymentMethod === 'debt' && input.cashAmount != null) {
-          newChange = input.cashAmount - (newTotal - debtAmount)
-        }
-        newChange = Math.max(0, newChange)
-
-        await tx
-          .update(orders)
-          .set({
-            subtotal: adjustedSubtotal,
-            total: newTotal,
-            change: newChange,
-          })
-          .where(eq(orders.id, createdId))
-
+      if (isPriceMismatchAdjusted && mismatchedLines.length > 0) {
         await logAction({
           db: txDb,
           storeId: actor.storeId,
@@ -718,10 +736,14 @@ export async function createOrder({
           changes: {
             orderId: createdId,
             orderNumber,
+            soldSubtotal: input.subtotal,
+            soldTotal: input.total,
             oldSubtotal: input.subtotal,
-            newSubtotal: adjustedSubtotal,
+            newSubtotal: input.subtotal,
             oldTotal: input.total,
-            newTotal,
+            newTotal: input.total,
+            lines: mismatchedLines,
+            mismatchedLines,
           },
           ipAddress: meta?.ipAddress,
           userAgent: meta?.userAgent,
@@ -731,22 +753,15 @@ export async function createOrder({
           storeId: actor.storeId,
           type: 'order.price_mismatch_adjusted',
           severity: 'warn',
-          title: `Đơn ngoại tuyến điều chỉnh giá: ${orderNumber}`,
-          body: `Đơn ${orderNumber} có sai lệch giá so với hệ thống. Tự động điều chỉnh tổng đơn từ ${formatVnd(input.total)} thành ${formatVnd(newTotal)}.`,
+          title: `Cảnh báo lệch giá đơn ngoại tuyến: ${orderNumber}`,
+          body: `Đơn ${orderNumber} có ${mismatchedLines.length} dòng hàng lệch giá so với giá hiện hành trên máy chủ. Tổng tiền đã chốt: ${formatVnd(input.total)}.`,
           context: {
             orderId: createdId,
             orderNumber,
-            oldTotal: input.total,
-            newTotal,
+            soldTotal: input.total,
+            mismatchedLines,
           },
         })
-
-        // Dùng biến cục bộ lưu tổng kết quả thay vì gán vào input.* (tránh lỗi retry)
-        // Mình sẽ truyền adjustedSubtotal ra ngoài qua một cơ chế hoặc biến đã định nghĩa
-        change = newChange
-        if (input.paymentMethod === 'debt') {
-          debtAmount = Math.max(0, newTotal - (input.cashAmount ?? 0) - (input.transferAmount ?? 0))
-        }
       }
 
       let oldDebt: number | null = null
@@ -1045,11 +1060,9 @@ export async function createOrder({
         customerCode: printCustomer?.code ?? null,
         customerName: printCustomer?.name ?? null,
         customerPhone: printCustomer?.phone ?? null,
-        subtotal: isPriceMismatchAdjusted ? adjustedSubtotal : input.subtotal,
+        subtotal: input.subtotal,
         discountAmount: input.discountAmount,
-        total: isPriceMismatchAdjusted
-          ? Math.max(0, adjustedSubtotal - input.discountAmount)
-          : input.total,
+        total: input.total,
         paymentMethod: input.paymentMethod,
         paymentStatus: input.paymentStatus,
         cashAmount: input.cashAmount ?? null,
