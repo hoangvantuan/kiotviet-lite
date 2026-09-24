@@ -14,7 +14,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PinDialog } from '@/features/auth/pin-dialog'
-import { usePermissions } from '@/features/auth/use-permissions'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
 import { type CartItem, useCartStore } from '@/stores/use-cart-store'
@@ -28,7 +27,6 @@ interface EditUnitPriceDialogProps {
 export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceDialogProps) {
   const updateUnitPrice = useCartStore((s) => s.updateUnitPrice)
   const setPriceOverridePin = useCartStore((s) => s.setPriceOverridePin)
-  const permissions = usePermissions()
 
   const [draftPrice, setDraftPrice] = useState<number | null>(null)
   const [reason, setReason] = useState('')
@@ -52,7 +50,6 @@ export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceD
   const costPrice = item.costPrice
   const isCostUnknown = costPrice === null
   const isBelowCost = !isCostUnknown && draftPrice !== null && draftPrice < costPrice
-  const canEditBelowCost = permissions.has('pos.editPriceBelowCost')
 
   function applyEdit(price: number, reasonText: string | null, pinUsed: boolean) {
     updateUnitPrice(item!.id, price, {
@@ -71,14 +68,9 @@ export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceD
 
     const trimmedReason = reason.trim() === '' ? null : reason.trim()
 
-    if (isBelowCost && !canEditBelowCost) {
-      pendingPriceRef.current = draftPrice
-      pendingReasonRef.current = trimmedReason
-      setPinOpen(true)
-      return
-    }
-
-    applyEdit(draftPrice, trimmedReason, false)
+    pendingPriceRef.current = draftPrice
+    pendingReasonRef.current = trimmedReason
+    setPinOpen(true)
   }
 
   function handlePinVerified(pin?: string) {
@@ -137,16 +129,13 @@ export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceD
               {isBelowCost && (
                 <p className="flex items-center gap-1.5 text-xs text-amber-600">
                   <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
-                  Giá thấp hơn giá vốn
-                  {canEditBelowCost ? '.' : ', cần xác thực PIN của Owner.'}
+                  Giá thấp hơn giá vốn.
                 </p>
               )}
-              {!canEditBelowCost && isBelowCost && (
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Shield className="h-3.5 w-3.5" aria-hidden="true" />
-                  Hệ thống sẽ yêu cầu PIN khi xác nhận.
-                </p>
-              )}
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Shield className="h-3.5 w-3.5" aria-hidden="true" />
+                Sửa giá bán yêu cầu xác thực PIN.
+              </p>
             </div>
 
             <div className="space-y-1.5">
@@ -176,8 +165,8 @@ export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceD
         open={pinOpen}
         onOpenChange={setPinOpen}
         onVerified={handlePinVerified}
-        title="Xác thực PIN của Owner"
-        description="Giá bán thấp hơn giá vốn. Vui lòng nhập PIN của Owner để tiếp tục."
+        title="Xác thực PIN"
+        description="Vui lòng nhập PIN để xác nhận giá bán đã sửa."
       />
     </>
   )

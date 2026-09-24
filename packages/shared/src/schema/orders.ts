@@ -12,6 +12,7 @@ import {
 import { uuidv7 } from 'uuidv7'
 
 import { customers } from './customers.js'
+import { priceLists } from './price-lists.js'
 import { stores } from './stores.js'
 import { users } from './users.js'
 
@@ -46,6 +47,8 @@ export const orders = pgTable(
     clientId: uuid(),
     status: varchar({ length: 16 }).notNull().default('completed'),
     debtLimitExceeded: boolean().notNull().default(false),
+    priceListId: uuid().references(() => priceLists.id, { onDelete: 'set null' }),
+    priceListName: varchar({ length: 100 }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })
       .notNull()
@@ -56,6 +59,7 @@ export const orders = pgTable(
     uniqueIndex('uniq_orders_store_number').on(table.storeId, table.orderNumber),
     uniqueIndex('uniq_orders_store_client').on(table.storeId, table.clientId),
     index('idx_orders_store_date').on(table.storeId, table.createdAt),
+    index('idx_orders_store_price_list').on(table.storeId, table.priceListId),
     index('idx_orders_store_status').on(table.storeId, table.status),
     index('idx_orders_store_customer').on(table.storeId, table.customerId),
     index('idx_orders_store_payment_status').on(table.storeId, table.paymentStatus),

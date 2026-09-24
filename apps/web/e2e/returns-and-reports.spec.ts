@@ -1,14 +1,10 @@
 import { expect, type Page, test } from './fixtures/auth.fixture'
 
 async function addProductToCart(page: Page, productNameRegex: RegExp) {
-  const productBtn = page.getByRole('button', { name: productNameRegex }).first()
-  await expect(productBtn).toBeVisible({ timeout: 10000 })
-  await productBtn.click()
-
-  const addToCartBtn = page.getByRole('button', { name: /Thêm vào giỏ|Them vao gio/i })
-  if (await addToCartBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-    await addToCartBtn.click()
-  }
+  const productName = productNameRegex.source.split('|')[0]
+  await page.getByRole('combobox', { name: /Tìm sản phẩm/i }).fill(productName)
+  await page.getByRole('option', { name: productNameRegex }).getByRole('button').click()
+  await page.getByRole('button', { name: 'Thêm vào giỏ' }).click()
 }
 
 test.describe('Kiểm thử E2E: Trả hàng và Khớp Báo cáo Doanh thu, Lợi nhuận (H5/H6)', () => {

@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from 'react'
-import { ShoppingCart } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { LayoutGrid, ShoppingCart, WifiOff, X } from 'lucide-react'
 
 import {
   Sheet,
@@ -11,8 +11,10 @@ import {
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { ApiClientError } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
+import { initializeOfflineDB } from '@/lib/pglite'
 import { showError, showSuccess } from '@/lib/toast'
 import { useCartStore } from '@/stores/use-cart-store'
+import { useOfflineStore } from '@/stores/use-offline-store'
 
 import { MAX_CART_TABS } from '../constants'
 import { useAddToCart } from '../hooks/use-add-to-cart'
@@ -22,7 +24,10 @@ import { usePosProducts } from '../hooks/use-pos-products'
 import type { OrderDetail, PosProductItem } from '../types'
 import { BarcodeScanner } from './BarcodeScanner'
 import { CartPanel } from './CartPanel'
+import { CartTabBar } from './CartTabBar'
 import { CategoryFilter } from './CategoryFilter'
+import { DesktopCartTable } from './DesktopCartTable'
+import { DesktopCheckoutPanel } from './DesktopCheckoutPanel'
 import { KeyboardShortcutsTooltip } from './KeyboardShortcutsTooltip'
 import { OrderCompletionDialog } from './OrderCompletionDialog'
 import { PaymentDialog } from './PaymentDialog'
@@ -36,6 +41,7 @@ export function PosScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string | undefined>()
   const [scannerOpen, setScannerOpen] = useState(false)
   const [cartSheetOpen, setCartSheetOpen] = useState(false)
+  const [showProductGrid, setShowProductGrid] = useState(false)
   const [variantProduct, setVariantProduct] = useState<PosProductItem | null>(null)
   const [variantDialogOpen, setVariantDialogOpen] = useState(false)
 
@@ -46,6 +52,15 @@ export function PosScreen() {
   >('cash')
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false)
   const [completionOrder, setCompletionOrder] = useState<OrderDetail | null>(null)
+
+  const offlineStatus = useOfflineStore((s) => s.status)
+  useEffect(() => {
+    void initializeOfflineDB().catch((error: unknown) => {
+      console.error('Không thể chuẩn bị dữ liệu bán hàng ngoại tuyến', error)
+    })
+  }, [])
+  const isOffline =
+    offlineStatus === 'offline' || (typeof navigator !== 'undefined' && !navigator.onLine)
 
   const cartCount = useCartStore((s) =>
     (s.tabs[s.activeTab]?.items ?? []).reduce((sum, i) => sum + i.quantity, 0),
@@ -70,14 +85,7 @@ export function PosScreen() {
   const addToCart = useAddToCart()
 
   function handleSelectProduct(product: PosProductItem) {
-    if (product.hasVariants) {
-      setVariantProduct(product)
-      setVariantDialogOpen(true)
-      return
-    }
-
-    // Normal mode: show variant dialog for quantity selection
-    if (mode === 'normal') {
+    if (product.hasVariants || mode === 'normal') {
       setVariantProduct(product)
       setVariantDialogOpen(true)
       return
@@ -130,6 +138,8 @@ export function PosScreen() {
     checkoutMutation.mutate(
       {
         customerId: tab.customerId ?? null,
+        priceListId: tab.priceListId ?? null,
+        priceListName: tab.priceListName ?? null,
         subtotal,
         discountType: tab.orderDiscountType,
         discountValue: tab.orderDiscountValue,
@@ -162,6 +172,8 @@ export function PosScreen() {
           priceOverride: item.priceOverride,
           priceOverrideReason: item.priceOverrideReason,
           priceOverridePinUsed: item.priceOverridePinUsed,
+          priceSource: item.priceSource,
+          priceSourceDetail: item.priceSourceDetail,
         })),
       },
       {
@@ -213,75 +225,145 @@ export function PosScreen() {
     onNewOrder: handleNewTab,
     onFocusSearch: handleFocusSearch,
     onDebtPayment: handleOpenDebtPayment,
+    onToggleProductGrid: () => setShowProductGrid((v) => !v),
   })
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      <PosHeader />
+      <PosHeader
+        showProductGrid={showProductGrid}
+        onToggleProductGrid={isDesktop ? () => setShowProductGrid((v) => !v) : undefined}
+      />
 
-      <div className="flex min-h-0 flex-1">
-        {/* Product area */}
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="space-y-3 p-3 pb-0">
-            <PosSearchBar
-              searchRef={searchRef}
-              onOpenScanner={() => setScannerOpen(true)}
-              onSelectProduct={handleSelectProduct}
-            />
-            <CategoryFilter selectedId={selectedCategory} onSelect={setSelectedCategory} />
+      {isOffline && (
+        <div
+          data-testid="pos-offline-price-warning"
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/70 dark:text-amber-200 shrink-0"
+        >
+          <WifiOff className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
+          <span>
+            Đang ngoại tuyến: Không thể cập nhật giá. Giá đang hiện trên từng dòng sẽ được giữ
+            nguyên khi hoàn tất đơn.
+          </span>
+        </div>
+      )}
+
+      {isDesktop ? (
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          {/* Main wide workspace: Search, Tabs, Multi-line Editor */}
+          <div className="flex min-h-0 flex-1 flex-col p-3 gap-2.5 min-w-0">
+            {/* Top Bar: Search Bar & Tabs */}
+            <div className="shrink-0 flex flex-col gap-2">
+              <PosSearchBar
+                searchRef={searchRef}
+                onOpenScanner={() => setScannerOpen(true)}
+                onSelectProduct={handleSelectProduct}
+              />
+              <CartTabBar />
+            </div>
+
+            {/* Middle Workspace: DesktopCartTable (+ optional ProductGrid side-by-side) */}
+            <div className="flex min-h-0 flex-1 gap-3">
+              {/* Left/Center: Wide multi-line cart table editor */}
+              <div className="flex min-h-0 flex-1 flex-col min-w-0">
+                <DesktopCartTable />
+              </div>
+
+              {/* Optional Product Grid browsing panel */}
+              {showProductGrid && (
+                <div className="w-[380px] xl:w-[440px] shrink-0 flex flex-col border border-border rounded-lg bg-card overflow-hidden shadow-sm">
+                  <div className="flex items-center justify-between border-b border-border px-3 py-2 bg-muted/40">
+                    <div className="flex items-center gap-2">
+                      <LayoutGrid className="h-4 w-4 text-primary" />
+                      <span className="text-xs font-semibold text-foreground">Lưới sản phẩm</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowProductGrid(false)}
+                      className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground"
+                      aria-label="Đóng lưới sản phẩm"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="p-2 border-b border-border bg-background">
+                    <CategoryFilter selectedId={selectedCategory} onSelect={setSelectedCategory} />
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2">
+                    <ProductGrid
+                      products={products}
+                      isLoading={isLoading}
+                      onSelectProduct={handleSelectProduct}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-3 pb-24 lg:pb-3">
-            <ProductGrid
-              products={products}
-              isLoading={isLoading}
-              onSelectProduct={handleSelectProduct}
-            />
+
+          {/* Right sidebar: Checkout panel (always visible on desktop!) */}
+          <div className="w-[320px] xl:w-[350px] shrink-0 border-l border-border bg-background">
+            <DesktopCheckoutPanel onPayment={handleOpenPayment} />
           </div>
         </div>
-
-        {/* Cart area: sidebar on desktop, bottom sheet on mobile */}
-        {isDesktop ? (
-          <div className="w-80 shrink-0 border-l border-border bg-background lg:w-[380px]">
-            <CartPanel onPayment={handleOpenPayment} />
+      ) : (
+        <div className="flex min-h-0 flex-1">
+          {/* Product area on mobile */}
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="space-y-3 p-3 pb-0">
+              <PosSearchBar
+                searchRef={searchRef}
+                onOpenScanner={() => setScannerOpen(true)}
+                onSelectProduct={handleSelectProduct}
+              />
+              <CategoryFilter selectedId={selectedCategory} onSelect={setSelectedCategory} />
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 pb-24">
+              <ProductGrid
+                products={products}
+                isLoading={isLoading}
+                onSelectProduct={handleSelectProduct}
+              />
+            </div>
           </div>
-        ) : (
-          <>
-            {/* Floating cart button on mobile */}
-            <button
-              type="button"
-              onClick={() => setCartSheetOpen(true)}
-              className="fixed bottom-4 left-4 right-4 z-40 flex h-14 items-center justify-between gap-3 rounded-full bg-primary px-5 text-primary-foreground shadow-lg transition-transform active:scale-[0.98]"
-              aria-label={
-                cartCount > 0
-                  ? `Mở giỏ hàng: ${cartCount} sản phẩm, tổng ${formatVndWithSuffix(cartGrandTotal)}`
-                  : 'Mở giỏ hàng trống'
-              }
-            >
-              <span className="flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5" aria-hidden="true" />
-                <span className="text-sm font-semibold">
-                  {cartCount > 0 ? `${cartCount} SP` : 'Giỏ hàng trống'}
-                </span>
-              </span>
-              {cartCount > 0 && (
-                <span className="font-mono text-base font-bold">
-                  Tổng: {formatVndWithSuffix(cartGrandTotal)}
-                </span>
-              )}
-            </button>
 
-            <Sheet open={cartSheetOpen} onOpenChange={setCartSheetOpen}>
-              <SheetContent side="bottom" className="h-[85vh] p-0">
-                <SheetHeader className="sr-only">
-                  <SheetTitle>Giỏ hàng</SheetTitle>
-                  <SheetDescription>Danh sách sản phẩm trong giỏ hàng</SheetDescription>
-                </SheetHeader>
-                <CartPanel onPayment={handleOpenPayment} />
-              </SheetContent>
-            </Sheet>
-          </>
-        )}
-      </div>
+          {/* Floating cart button on mobile */}
+          <button
+            type="button"
+            onClick={() => setCartSheetOpen(true)}
+            className="fixed bottom-4 left-4 right-4 z-40 flex h-14 items-center justify-between gap-3 rounded-full bg-primary px-5 text-primary-foreground shadow-lg transition-transform active:scale-[0.98]"
+            aria-label={
+              cartCount > 0
+                ? `Mở giỏ hàng: ${cartCount} sản phẩm, tổng ${formatVndWithSuffix(cartGrandTotal)}`
+                : 'Mở giỏ hàng trống'
+            }
+          >
+            <span className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" aria-hidden="true" />
+              <span className="text-sm font-semibold">
+                {cartCount > 0 ? `${cartCount} SP` : 'Giỏ hàng trống'}
+              </span>
+            </span>
+            {cartCount > 0 && (
+              <span className="font-mono text-base font-bold">
+                Tổng: {formatVndWithSuffix(cartGrandTotal)}
+              </span>
+            )}
+          </button>
+
+          <Sheet open={cartSheetOpen} onOpenChange={setCartSheetOpen}>
+            <SheetContent side="bottom" className="h-[85vh] p-0">
+              <SheetHeader className="sr-only">
+                <SheetTitle>Giỏ hàng</SheetTitle>
+                <SheetDescription>Danh sách sản phẩm trong giỏ hàng</SheetDescription>
+              </SheetHeader>
+              <CartPanel onPayment={handleOpenPayment} />
+            </SheetContent>
+          </Sheet>
+        </div>
+      )}
 
       {/* Barcode scanner dialog */}
       <BarcodeScanner

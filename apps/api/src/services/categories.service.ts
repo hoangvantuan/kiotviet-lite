@@ -13,6 +13,7 @@ import {
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { diffObjects, logAction, type RequestMeta } from './audit.service.js'
+import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
 export interface CategoriesActor {
   userId: string
@@ -186,14 +187,17 @@ export interface CreateCategoryDeps {
   actor: CategoriesActor
   input: CreateCategoryInput
   meta?: RequestMeta
+  transaction?: ServiceTransaction
 }
 
 export async function createCategory({
-  db,
+  db: rootDb,
   actor,
   input,
   meta,
+  transaction,
 }: CreateCategoryDeps): Promise<CategoryItem> {
+  const db = serviceDb(rootDb, transaction)
   const parentId = input.parentId ?? null
   const normalizedName = input.name.replace(/\s+/g, ' ').trim()
 
@@ -262,15 +266,18 @@ export interface UpdateCategoryDeps {
   targetId: string
   input: UpdateCategoryInput
   meta?: RequestMeta
+  transaction?: ServiceTransaction
 }
 
 export async function updateCategory({
-  db,
+  db: rootDb,
   actor,
   targetId,
   input,
   meta,
+  transaction,
 }: UpdateCategoryDeps): Promise<CategoryItem> {
+  const db = serviceDb(rootDb, transaction)
   const target = await db.query.categories.findFirst({
     where: eq(categories.id, targetId),
   })

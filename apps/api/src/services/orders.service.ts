@@ -11,6 +11,8 @@ import {
   type ListOrdersQuery,
   orderItems,
   orders,
+  priceLists,
+  type PriceSource,
   products,
   productUnitConversions,
   productVariants,
@@ -20,6 +22,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { toIsoDate } from '../lib/date.js'
 import { env } from '../lib/env.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
@@ -60,6 +63,8 @@ export interface OrderDetailItem {
   lineTotal: number
   originalPrice: number | null
   priceOverride: boolean
+  priceSource?: PriceSource | null
+  priceSourceDetail?: string | null
   sku?: string | null
   costPrice?: number | null
 }
@@ -71,6 +76,8 @@ export interface OrderDetail {
   customerCode?: string | null
   customerName?: string | null
   customerPhone?: string | null
+  priceListId?: string | null
+  priceListName?: string | null
   subtotal: number
   discountAmount: number
   total: number
@@ -197,6 +204,8 @@ export async function createOrder({
         id: orders.id,
         orderNumber: orders.orderNumber,
         customerId: orders.customerId,
+        priceListId: orders.priceListId,
+        priceListName: orders.priceListName,
         subtotal: orders.subtotal,
         discountAmount: orders.discountAmount,
         total: orders.total,
@@ -219,6 +228,8 @@ export async function createOrder({
         id: existing.id,
         orderNumber: existing.orderNumber,
         customerId: existing.customerId,
+        priceListId: existing.priceListId ?? null,
+        priceListName: existing.priceListName ?? null,
         subtotal: existing.subtotal,
         discountAmount: existing.discountAmount,
         total: existing.total,
@@ -267,7 +278,7 @@ export async function createOrder({
     }
   }
 
-  let debtAmount = input.debtAmount ?? 0
+  const debtAmount = input.debtAmount ?? 0
 
   // Calculate change amount before insert
   let change = 0
@@ -281,6 +292,66 @@ export async function createOrder({
     change = input.cashAmount - (input.total - debtAmount)
   }
   change = Math.max(0, change)
+
+  // Validate manual price list if selected
+  let snapshotPriceListName: string | null = null
+  let effectivePriceListId: string | null = null
+  let priceListDiscrepancy: {
+    requestedPriceListId: string
+    devicePriceListName: string | null
+    reason: string
+  } | null = null
+
+  if (input.priceListId) {
+    const [pl] = await db
+      .select({
+        id: priceLists.id,
+        name: priceLists.name,
+        isActive: priceLists.isActive,
+        effectiveFrom: priceLists.effectiveFrom,
+        effectiveTo: priceLists.effectiveTo,
+        deletedAt: priceLists.deletedAt,
+      })
+      .from(priceLists)
+      .where(and(eq(priceLists.id, input.priceListId), eq(priceLists.storeId, actor.storeId)))
+      .limit(1)
+
+    if (source === 'pos') {
+      if (!pl || pl.deletedAt !== null) {
+        throw new ApiError('VALIDATION_ERROR', 'Bảng giá không tồn tại hoặc không thuộc cửa hàng')
+      }
+      if (!pl.isActive) {
+        throw new ApiError('VALIDATION_ERROR', 'Bảng giá đang ngừng hoạt động')
+      }
+      const today = toIsoDate(new Date())
+      if (pl.effectiveFrom && today < pl.effectiveFrom) {
+        throw new ApiError('VALIDATION_ERROR', 'Bảng giá chưa đến ngày hiệu lực')
+      }
+      if (pl.effectiveTo && today > pl.effectiveTo) {
+        throw new ApiError('VALIDATION_ERROR', 'Bảng giá đã hết hiệu lực')
+      }
+      effectivePriceListId = pl.id
+      snapshotPriceListName = pl.name
+    } else {
+      // offline_sync: persist only store-owned ID or null while preserving device name as untrusted snapshot
+      if (pl && pl.deletedAt === null) {
+        effectivePriceListId = pl.id
+        snapshotPriceListName = pl.name
+      } else {
+        effectivePriceListId = null
+        snapshotPriceListName = input.priceListName ?? null
+        priceListDiscrepancy = {
+          requestedPriceListId: input.priceListId,
+          devicePriceListName: input.priceListName ?? null,
+          reason: !pl
+            ? 'Bảng giá không tồn tại hoặc không thuộc cửa hàng trên máy chủ'
+            : 'Bảng giá đã bị xóa trên máy chủ',
+        }
+      }
+    }
+  } else if (source === 'offline_sync') {
+    snapshotPriceListName = input.priceListName ?? null
+  }
 
   try {
     const result = await db.transaction(async (tx) => {
@@ -301,6 +372,8 @@ export async function createOrder({
               orderNumber,
               customerId: input.customerId ?? null,
               userId: actor.userId,
+              priceListId: effectivePriceListId,
+              priceListName: snapshotPriceListName,
               subtotal: input.subtotal,
               discountType: input.discountType ?? null,
               discountValue: input.discountValue,
@@ -347,12 +420,24 @@ export async function createOrder({
       }
 
       // Process items: insert order_items + deduct stock
-
-      // Process items: insert order_items + deduct stock
       const processedItems: OrderDetailItem[] = []
       let isPriceMismatchAdjusted = false
-      let adjustedSubtotal = 0
       let negativeStockAlertsEnabled: boolean | undefined
+      const mismatchedLines: Array<{
+        productId: string
+        productName: string
+        quantity: number
+        soldUnitPrice: number
+        serverUnitPrice: number
+        unitPriceDiff: number
+        soldLineTotal: number
+        serverLineTotal: number
+        lineTotalDiff: number
+        devicePriceSource: PriceSource
+        serverPriceSource: PriceSource
+        devicePriceSourceDetail: string | null
+        serverPriceSourceDetail: string | null
+      }> = []
 
       for (const item of input.items) {
         const product = await loadProductForUpdate({
@@ -411,10 +496,14 @@ export async function createOrder({
           db: txDb,
           storeId: actor.storeId,
           customerId: input.customerId ?? null,
+          priceListId: effectivePriceListId,
           productId: item.productId,
           variantId: item.variantId ?? null,
           unitConversionId: item.unitConversionId ?? null,
           quantity: item.quantity,
+          context: {
+            orderDate: new Date(),
+          },
         })
 
         const effectivePriceOverride = item.priceOverride ?? false
@@ -433,9 +522,16 @@ export async function createOrder({
         let effectiveUnitPrice = item.unitPrice
         let effectiveLineTotal = item.lineTotal
 
-        // M16: Tự tính lại giá cho đơn vị quy đổi nếu client gửi unitPrice <= 0.
-        // Không áp dụng cho dòng sửa giá có chủ đích (M13: bán 0đ hợp lệ, ví dụ hàng tặng).
-        if (item.unitConversionId && effectiveUnitPrice <= 0 && !effectivePriceOverride) {
+        // M16: Tu tinh lai gia cho don vi quy doi neu client gui unitPrice <= 0.
+        // Chi ap dung cho don tao truc tiep (source !== 'offline_sync').
+        // Khong ap dung cho dong sua gia co chu dich (M13: ban 0d hop le)
+        // va khong ap dung cho don ngoai tuyen (#34: giu nguyen gia da chot tren thiet bi va ghi doi soat).
+        if (
+          source !== 'offline_sync' &&
+          item.unitConversionId &&
+          effectiveUnitPrice <= 0 &&
+          !effectivePriceOverride
+        ) {
           effectiveUnitPrice = resolvedPrice.price
           const lineRes = calculateLineTotal({
             unitPrice: effectiveUnitPrice,
@@ -445,6 +541,27 @@ export async function createOrder({
           })
           effectiveLineTotal = lineRes.lineTotal
         }
+
+        const devicePriceSource: PriceSource = effectivePriceOverride
+          ? 'manual_override'
+          : ((item.priceSource as PriceSource | undefined) ?? 'retail_price')
+        const devicePriceSourceDetail: string | null = effectivePriceOverride
+          ? (item.priceOverrideReason ?? item.priceSourceDetail ?? null)
+          : (item.priceSourceDetail ?? null)
+
+        // For offline sync, persist device-saved price source provenance (normalized if override).
+        // For pos, server determines it.
+        const itemPriceSource: PriceSource = effectivePriceOverride
+          ? 'manual_override'
+          : source === 'offline_sync'
+            ? devicePriceSource
+            : resolvedPrice.source
+
+        const itemPriceSourceDetail: string | null = effectivePriceOverride
+          ? (item.priceOverrideReason ?? item.priceSourceDetail ?? null)
+          : source === 'offline_sync'
+            ? devicePriceSourceDetail
+            : resolvedPrice.sourceDetail
 
         if (!effectivePriceOverride) {
           const expectedSysPrice = resolvedPrice.price
@@ -460,20 +577,33 @@ export async function createOrder({
                 },
               )
             } else {
-              effectiveUnitPrice = expectedSysPrice
-              const lineRes = calculateLineTotal({
-                unitPrice: effectiveUnitPrice,
+              // offline_sync: giữ nguyên đơn giá và thành tiền đã chốt trên thiết bị.
+              // Ghi nhận dòng lệch giá và nguồn giá hai bên để đối soát.
+              const serverLineRes = calculateLineTotal({
+                unitPrice: expectedSysPrice,
                 quantity: item.quantity,
                 discountType: item.discountType,
                 discountValue: item.discountValue,
               })
-              effectiveLineTotal = lineRes.lineTotal
+              mismatchedLines.push({
+                productId: item.productId,
+                productName: item.productName,
+                quantity: item.quantity,
+                soldUnitPrice: effectiveUnitPrice,
+                serverUnitPrice: expectedSysPrice,
+                unitPriceDiff: expectedSysPrice - effectiveUnitPrice,
+                soldLineTotal: effectiveLineTotal,
+                serverLineTotal: serverLineRes.lineTotal,
+                lineTotalDiff: serverLineRes.lineTotal - effectiveLineTotal,
+                devicePriceSource,
+                serverPriceSource: resolvedPrice.source,
+                devicePriceSourceDetail,
+                serverPriceSourceDetail: resolvedPrice.sourceDetail,
+              })
               isPriceMismatchAdjusted = true
             }
           }
         }
-
-        adjustedSubtotal += effectiveLineTotal
 
         // Insert order_item
         const [insertedItem] = await tx
@@ -496,6 +626,8 @@ export async function createOrder({
             priceOverride: effectivePriceOverride,
             priceOverrideReason: item.priceOverrideReason ?? null,
             priceOverridePinUsed: effectivePriceOverridePinUsed,
+            priceSource: itemPriceSource,
+            priceSourceDetail: itemPriceSourceDetail,
           })
           .returning({ id: orderItems.id })
 
@@ -574,6 +706,8 @@ export async function createOrder({
           lineTotal: effectiveLineTotal,
           originalPrice: item.originalPrice ?? null,
           priceOverride: effectivePriceOverride,
+          priceSource: itemPriceSource,
+          priceSourceDetail: itemPriceSourceDetail,
           sku: itemSku,
           costPrice: itemCostPrice,
         })
@@ -670,30 +804,7 @@ export async function createOrder({
         }
       }
 
-      if (isPriceMismatchAdjusted) {
-        const newTotal = Math.max(0, adjustedSubtotal - input.discountAmount)
-
-        let newChange = 0
-        if (input.paymentMethod === 'cash' && input.cashAmount != null) {
-          newChange = input.cashAmount - newTotal
-        } else if (input.paymentMethod === 'combined') {
-          const cashPart = input.cashAmount ?? 0
-          const transferPart = input.transferAmount ?? 0
-          newChange = cashPart + transferPart - newTotal
-        } else if (input.paymentMethod === 'debt' && input.cashAmount != null) {
-          newChange = input.cashAmount - (newTotal - debtAmount)
-        }
-        newChange = Math.max(0, newChange)
-
-        await tx
-          .update(orders)
-          .set({
-            subtotal: adjustedSubtotal,
-            total: newTotal,
-            change: newChange,
-          })
-          .where(eq(orders.id, createdId))
-
+      if (isPriceMismatchAdjusted && mismatchedLines.length > 0) {
         await logAction({
           db: txDb,
           storeId: actor.storeId,
@@ -705,10 +816,14 @@ export async function createOrder({
           changes: {
             orderId: createdId,
             orderNumber,
+            soldSubtotal: input.subtotal,
+            soldTotal: input.total,
             oldSubtotal: input.subtotal,
-            newSubtotal: adjustedSubtotal,
+            newSubtotal: input.subtotal,
             oldTotal: input.total,
-            newTotal,
+            newTotal: input.total,
+            lines: mismatchedLines,
+            mismatchedLines,
           },
           ipAddress: meta?.ipAddress,
           userAgent: meta?.userAgent,
@@ -718,22 +833,34 @@ export async function createOrder({
           storeId: actor.storeId,
           type: 'order.price_mismatch_adjusted',
           severity: 'warn',
-          title: `Đơn ngoại tuyến điều chỉnh giá: ${orderNumber}`,
-          body: `Đơn ${orderNumber} có sai lệch giá so với hệ thống. Tự động điều chỉnh tổng đơn từ ${formatVnd(input.total)} thành ${formatVnd(newTotal)}.`,
+          title: `Cảnh báo lệch giá đơn ngoại tuyến: ${orderNumber}`,
+          body: `Đơn ${orderNumber} có ${mismatchedLines.length} dòng hàng lệch giá so với giá hiện hành trên máy chủ. Tổng tiền đã chốt: ${formatVnd(input.total)}.`,
           context: {
             orderId: createdId,
             orderNumber,
-            oldTotal: input.total,
-            newTotal,
+            soldTotal: input.total,
+            mismatchedLines,
           },
         })
+      }
 
-        // Dùng biến cục bộ lưu tổng kết quả thay vì gán vào input.* (tránh lỗi retry)
-        // Mình sẽ truyền adjustedSubtotal ra ngoài qua một cơ chế hoặc biến đã định nghĩa
-        change = newChange
-        if (input.paymentMethod === 'debt') {
-          debtAmount = Math.max(0, newTotal - (input.cashAmount ?? 0) - (input.transferAmount ?? 0))
-        }
+      if (priceListDiscrepancy) {
+        await logAction({
+          db: txDb,
+          storeId: actor.storeId,
+          actorId: actor.userId,
+          actorRole: actor.role,
+          action: 'order.price_mismatch_adjusted',
+          targetType: 'order',
+          targetId: createdId,
+          changes: {
+            orderId: createdId,
+            orderNumber,
+            priceListDiscrepancy,
+          },
+          ipAddress: meta?.ipAddress,
+          userAgent: meta?.userAgent,
+        })
       }
 
       let oldDebt: number | null = null
@@ -981,6 +1108,8 @@ export async function createOrder({
         targetId: createdId,
         changes: {
           orderNumber,
+          priceListId: input.priceListId ?? null,
+          priceListName: snapshotPriceListName,
           itemCount: input.items.length,
           subtotal: input.subtotal,
           discountAmount: input.discountAmount,
@@ -1032,11 +1161,11 @@ export async function createOrder({
         customerCode: printCustomer?.code ?? null,
         customerName: printCustomer?.name ?? null,
         customerPhone: printCustomer?.phone ?? null,
-        subtotal: isPriceMismatchAdjusted ? adjustedSubtotal : input.subtotal,
+        priceListId: input.priceListId ?? null,
+        priceListName: snapshotPriceListName,
+        subtotal: input.subtotal,
         discountAmount: input.discountAmount,
-        total: isPriceMismatchAdjusted
-          ? Math.max(0, adjustedSubtotal - input.discountAmount)
-          : input.total,
+        total: input.total,
         paymentMethod: input.paymentMethod,
         paymentStatus: input.paymentStatus,
         cashAmount: input.cashAmount ?? null,
@@ -1064,6 +1193,8 @@ export async function createOrder({
           id: orders.id,
           orderNumber: orders.orderNumber,
           customerId: orders.customerId,
+          priceListId: orders.priceListId,
+          priceListName: orders.priceListName,
           subtotal: orders.subtotal,
           discountAmount: orders.discountAmount,
           total: orders.total,
@@ -1086,6 +1217,8 @@ export async function createOrder({
           id: dup.id,
           orderNumber: dup.orderNumber,
           customerId: dup.customerId,
+          priceListId: dup.priceListId ?? null,
+          priceListName: dup.priceListName ?? null,
           subtotal: dup.subtotal,
           discountAmount: dup.discountAmount,
           total: dup.total,
@@ -1252,6 +1385,8 @@ export interface OrderListItem {
   customerId: string | null
   customerName: string | null
   customerPhone: string | null
+  priceListId?: string | null
+  priceListName?: string | null
   createdByName: string | null
   subtotal: number
   discountAmount: number
@@ -1338,6 +1473,8 @@ export async function listOrders({
       id: orders.id,
       orderNumber: orders.orderNumber,
       customerId: orders.customerId,
+      priceListId: orders.priceListId,
+      priceListName: orders.priceListName,
       customerName: customers.name,
       customerPhone: customers.phone,
       createdByName: users.name,
@@ -1384,6 +1521,8 @@ export async function listOrders({
       customerId: r.customerId,
       customerName: r.customerName ?? null,
       customerPhone: r.customerPhone ?? null,
+      priceListId: r.priceListId ?? null,
+      priceListName: r.priceListName ?? null,
       createdByName: r.createdByName ?? null,
       subtotal: Number(r.subtotal),
       discountAmount: Number(r.discountAmount),
@@ -1418,6 +1557,8 @@ export interface OrderDetailFull {
   customerGroupName: string | null
   customerCurrentDebt?: number | null
   oldDebt?: number | null
+  priceListId?: string | null
+  priceListName?: string | null
   createdByName: string | null
   subtotal: number
   discountType: string | null
@@ -1455,6 +1596,8 @@ export async function getOrderDetail({
       id: orders.id,
       orderNumber: orders.orderNumber,
       customerId: orders.customerId,
+      priceListId: orders.priceListId,
+      priceListName: orders.priceListName,
       customerName: customers.name,
       customerCode: customers.code,
       customerPhone: customers.phone,
@@ -1507,6 +1650,8 @@ export async function getOrderDetail({
       lineTotal: orderItems.lineTotal,
       originalPrice: orderItems.originalPrice,
       priceOverride: orderItems.priceOverride,
+      priceSource: orderItems.priceSource,
+      priceSourceDetail: orderItems.priceSourceDetail,
       sku: sql<string | null>`COALESCE(${productVariants.sku}, ${products.sku})`.as('sku'),
       costPrice: sql<
         number | null
@@ -1533,6 +1678,8 @@ export async function getOrderDetail({
     lineTotal: Number(it.lineTotal),
     originalPrice: it.originalPrice != null ? Number(it.originalPrice) : null,
     priceOverride: it.priceOverride,
+    priceSource: it.priceSource ?? null,
+    priceSourceDetail: it.priceSourceDetail ?? null,
     sku: it.sku ?? null,
     costPrice: it.costPrice != null ? Number(it.costPrice) : null,
   }))
@@ -1554,6 +1701,8 @@ export async function getOrderDetail({
     customerGroupName: row.customerGroupName ?? null,
     customerCurrentDebt: currentDebt,
     oldDebt,
+    priceListId: row.priceListId ?? null,
+    priceListName: row.priceListName ?? null,
     createdByName: row.createdByName ?? null,
     subtotal: Number(row.subtotal),
     discountType: row.discountType ?? null,

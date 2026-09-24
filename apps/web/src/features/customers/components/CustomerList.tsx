@@ -3,6 +3,9 @@ import { Link } from '@tanstack/react-router'
 import {
   AlertTriangle,
   Archive,
+  Download,
+  FileDown,
+  FileUp,
   Pencil,
   Plus,
   RotateCcw,
@@ -50,10 +53,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useBulkExportDownload } from '@/features/bulk-export/use-bulk-export-download'
+import { BulkImportDialog } from '@/features/bulk-import/BulkImportDialog'
 import { useStoreQuery } from '@/features/settings/use-store-settings'
 import { useDebounced } from '@/hooks/use-debounced'
 import { ApiClientError } from '@/lib/api-client'
 import { showError, showSuccess } from '@/lib/toast'
+import { useAuthStore } from '@/stores/use-auth-store'
 
 import {
   useCustomerGroupsQuery,
@@ -124,11 +130,15 @@ function DebtBadge({
 }
 
 export function CustomerList() {
+  const role = useAuthStore((state) => state.user?.role)
+  const canExport = role === 'owner' || role === 'manager'
+  const { downloading, download } = useBulkExportDownload('customers', 'khach-hang')
   const [search, setSearch] = useState('')
   const [groupFilter, setGroupFilter] = useState<string>(ALL_GROUPS_VALUE)
   const [debtFilter, setDebtFilter] = useState<'all' | 'yes' | 'no'>('all')
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editTargetId, setEditTargetId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<CustomerListItem | null>(null)
   const [trashedOpen, setTrashedOpen] = useState(false)
@@ -167,7 +177,41 @@ export function CustomerList() {
             Quản lý danh sách khách hàng và phân nhóm.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {canExport && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={downloading !== null}
+                onClick={() => void download('template')}
+              >
+                <FileDown className="h-4 w-4" />
+                <span>{downloading === 'template' ? 'Đang tải mẫu…' : 'Tải tệp mẫu'}</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={downloading !== null}
+                onClick={() =>
+                  void download('export', {
+                    search: apiQuery.search,
+                    groupId: apiQuery.groupId,
+                    hasDebt: apiQuery.hasDebt,
+                  })
+                }
+              >
+                <Download className="h-4 w-4" />
+                <span>{downloading === 'export' ? 'Đang xuất…' : 'Xuất Excel'}</span>
+              </Button>
+            </>
+          )}
+          {role === 'owner' && (
+            <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+              <FileUp className="h-4 w-4" />
+              <span>Nhập Excel</span>
+            </Button>
+          )}
           <Button size="sm" variant="outline" onClick={() => setTrashedOpen(true)}>
             <Archive className="h-4 w-4" />
             <span>Đã xoá</span>
@@ -361,6 +405,9 @@ export function CustomerList() {
         customer={deleteTarget}
       />
       <TrashedCustomersSheet open={trashedOpen} onOpenChange={setTrashedOpen} />
+      {role === 'owner' && (
+        <BulkImportDialog kind="customers" open={importOpen} onOpenChange={setImportOpen} />
+      )}
     </div>
   )
 }

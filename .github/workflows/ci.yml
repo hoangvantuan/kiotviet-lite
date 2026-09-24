@@ -62,6 +62,7 @@ jobs:
       ALLOWED_ORIGINS: http://localhost:5173
       # Bộ E2E đăng nhập nhiều lần liên tiếp từ cùng một IP, vượt ngưỡng 5 lần/phút
       RATE_LIMIT_DISABLED: 'true'
+      BULK_IMPORT_DIR: /tmp/kiotviet-lite-e2e-imports
     steps:
       - uses: actions/checkout@v4
 
@@ -83,6 +84,9 @@ jobs:
 
       - name: Seed Database
         run: pnpm --filter @kiotviet-lite/api run db:seed
+
+      - name: Prepare Bulk Import Storage
+        run: mkdir -p "$BULK_IMPORT_DIR"
 
       - name: Start API Server and Wait for Ready
         run: |

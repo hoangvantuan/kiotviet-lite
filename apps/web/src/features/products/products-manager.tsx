@@ -1,13 +1,16 @@
 import { useMemo, useState } from 'react'
-import { Package, Plus, SearchX, Trash2 } from 'lucide-react'
+import { Download, FileDown, FileUp, Package, Plus, SearchX, Trash2 } from 'lucide-react'
 
 import type { ListProductsQuery, ProductListItem, StockFilter } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
 import { Button } from '@/components/ui/button'
+import { useBulkExportDownload } from '@/features/bulk-export/use-bulk-export-download'
+import { BulkImportDialog } from '@/features/bulk-import/BulkImportDialog'
 import { useDebounced } from '@/hooks/use-debounced'
 import { useMediaQuery } from '@/hooks/use-media-query'
+import { useAuthStore } from '@/stores/use-auth-store'
 
 import { useAllBrandsQuery } from '../brands/use-brands'
 import { useCategoriesQuery } from '../categories/use-categories'
@@ -31,9 +34,13 @@ const PAGE_SIZE = 20
 
 export function ProductsManager() {
   const isDesktop = useMediaQuery('(min-width: 768px)')
+  const role = useAuthStore((state) => state.user?.role)
+  const canExport = role === 'owner' || role === 'manager'
+  const { downloading, download } = useBulkExportDownload('products', 'san-pham')
   const [filters, setFilters] = useState<ProductFiltersValue>(DEFAULT_FILTERS)
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editTargetId, setEditTargetId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ProductListItem | null>(null)
   const [trashedOpen, setTrashedOpen] = useState(false)
@@ -89,6 +96,42 @@ export function ProductsManager() {
           <p className="text-sm text-muted-foreground">Quản lý danh sách hàng hoá của cửa hàng.</p>
         </div>
         <div className="flex flex-wrap gap-2 self-start md:self-auto">
+          {canExport && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={downloading !== null}
+                onClick={() => void download('template')}
+              >
+                <FileDown className="h-4 w-4" />
+                <span>{downloading === 'template' ? 'Đang tải mẫu…' : 'Tải tệp mẫu'}</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={downloading !== null}
+                onClick={() =>
+                  void download('export', {
+                    search: apiQuery.search,
+                    categoryId: apiQuery.categoryId,
+                    brandId: apiQuery.brandId,
+                    status: apiQuery.status,
+                    stockFilter: apiQuery.stockFilter,
+                  })
+                }
+              >
+                <Download className="h-4 w-4" />
+                <span>{downloading === 'export' ? 'Đang xuất…' : 'Xuất Excel'}</span>
+              </Button>
+            </>
+          )}
+          {role === 'owner' && (
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <FileUp className="h-4 w-4" />
+              <span>Nhập Excel</span>
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => setTrashedOpen(true)}>
             <Trash2 className="h-4 w-4" />
             <span>Sản phẩm đã xoá</span>
@@ -177,6 +220,9 @@ export function ProductsManager() {
         product={deleteTarget}
       />
       <TrashedProductsSheet open={trashedOpen} onOpenChange={setTrashedOpen} />
+      {role === 'owner' && (
+        <BulkImportDialog kind="products" open={importOpen} onOpenChange={setImportOpen} />
+      )}
     </div>
   )
 }

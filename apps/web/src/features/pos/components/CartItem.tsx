@@ -178,6 +178,7 @@ export function CartItem({ item }: CartItemProps) {
                   <PriceSourceBadge
                     source={item.priceSource}
                     sourceDetail={item.priceSourceDetail}
+                    isFallback={item.isFallback}
                   />
                 )}
               </div>

@@ -1,0 +1,252 @@
+import { and, eq, gt, isNull } from 'drizzle-orm'
+
+import { brands, bulkImportJobs, categories } from '@kiotviet-lite/shared'
+
+import type { Db } from '../db/index.js'
+import { ApiError } from '../lib/errors.js'
+import { logger } from '../lib/logger.js'
+import type { AuthContext } from '../middleware/auth.middleware.js'
+import { createBrand } from './brands.service.js'
+import { BULK_EXPORT_CATEGORY_SEPARATOR } from './bulk-export.service.js'
+import {
+  claimBulkImportJob,
+  clearBulkImportProgress,
+  finishBulkImportJob,
+  loadBulkImportJobFile,
+  publishBulkImportProgress,
+  updateBulkImportProgress,
+} from './bulk-import-jobs.service.js'
+import { type BulkImportKind, previewBulkImport } from './bulk-import-preview.service.js'
+import { createCategory } from './categories.service.js'
+import { createCustomer, updateCustomer } from './customers.service.js'
+import { createProduct, updateProduct } from './products.service.js'
+import { createSupplier, updateSupplier } from './suppliers.service.js'
+
+const BATCH_SIZE = 100
+const QUEUE_POLL_MS = 10_000
+const normalize = (value: string) => value.trim().toLowerCase()
+type RunArgs = { db: Db; storageRoot: string; storeId: string; id: string }
+
+/** Claims once. Domain writes, audits, and the completed state commit together or all roll back. */
+export async function runBulkImportJob({ db, storageRoot, storeId, id }: RunArgs) {
+  try {
+    await claimBulkImportJob({ db, storeId, id })
+  } catch (error) {
+    if (error instanceof ApiError && error.code === 'CONFLICT') return
+    throw error
+  }
+  try {
+    const { job, bytes } = await loadBulkImportJobFile({ db, storageRoot, storeId, id })
+    const actor: AuthContext = { storeId, userId: job.createdBy, role: 'owner' }
+    const kind = `${job.type}s` as BulkImportKind
+    // Reject stale confirmations before taking the long write transaction; check again
+    // inside it in case tenant data changed between preflight and the first write.
+    const preflight = await previewBulkImport({
+      db,
+      actor,
+      kind,
+      mode: job.mode,
+      bytes,
+      filename: job.originalFilename,
+    })
+    if (preflight.digest !== job.confirmedDigest || preflight.totalRows !== job.totalRows) {
+      throw new ApiError(
+        'CONFLICT',
+        'Dữ liệu cửa hàng đã thay đổi kể từ khi xác nhận; vui lòng xem trước lại',
+      )
+    }
+    if (preflight.errors.length)
+      throw new ApiError('VALIDATION_ERROR', `Tệp có lỗi tại dòng ${preflight.errors[0]!.row}`)
+    if (!job.approveNewNames && (preflight.newCategories.length || preflight.newBrands.length)) {
+      throw new ApiError('VALIDATION_ERROR', 'Danh mục hoặc thương hiệu mới chưa được chấp thuận')
+    }
+    await db.transaction(async (tx) => {
+      const transactionalDb = tx as unknown as Db
+      const plan = await previewBulkImport({
+        db: transactionalDb,
+        actor,
+        kind,
+        mode: job.mode,
+        bytes,
+        filename: job.originalFilename,
+      })
+      if (plan.digest !== job.confirmedDigest || plan.totalRows !== job.totalRows) {
+        throw new ApiError(
+          'CONFLICT',
+          'Dữ liệu cửa hàng đã thay đổi kể từ khi xác nhận; vui lòng xem trước lại',
+        )
+      }
+      if (plan.errors.length)
+        throw new ApiError('VALIDATION_ERROR', `Tệp có lỗi tại dòng ${plan.errors[0]!.row}`)
+      if (!job.approveNewNames && (plan.newCategories.length || plan.newBrands.length)) {
+        throw new ApiError('VALIDATION_ERROR', 'Danh mục hoặc thương hiệu mới chưa được chấp thuận')
+      }
+      const categoryIds = new Map<string, string>()
+      const brandIds = new Map<string, string>()
+      if (kind === 'products') {
+        const existingCategories = await tx
+          .select()
+          .from(categories)
+          .where(eq(categories.storeId, storeId))
+        const byId = new Map(existingCategories.map((category) => [category.id, category]))
+        for (const category of existingCategories) {
+          const parent = category.parentId ? byId.get(category.parentId) : undefined
+          const path = parent
+            ? `${parent.name}${BULK_EXPORT_CATEGORY_SEPARATOR}${category.name}`
+            : category.name
+          categoryIds.set(normalize(path), category.id)
+        }
+        for (const path of plan.newCategories) {
+          const parts = path.split(BULK_EXPORT_CATEGORY_SEPARATOR)
+          const parentId = parts.length === 2 ? categoryIds.get(normalize(parts[0]!)) : null
+          if (parts.length === 2 && !parentId)
+            throw new ApiError('CONFLICT', `Không tìm thấy danh mục cha: ${parts[0]}`)
+          const category = await createCategory({
+            db,
+            transaction: tx,
+            actor,
+            input: { name: parts.at(-1)!, parentId },
+          })
+          categoryIds.set(normalize(path), category.id)
+        }
+        const existingBrands = await tx
+          .select()
+          .from(brands)
+          .where(and(eq(brands.storeId, storeId), isNull(brands.deletedAt)))
+        for (const brand of existingBrands) brandIds.set(normalize(brand.name), brand.id)
+        for (const name of plan.newBrands) {
+          const brand = await createBrand({ db, transaction: tx, actor, input: { name } })
+          brandIds.set(normalize(name), brand.id)
+        }
+      }
+      for (let index = 0; index < plan.rows.length; index++) {
+        const row = plan.rows[index]!
+        if (row.action === 'error')
+          throw new ApiError('VALIDATION_ERROR', `Tệp có lỗi tại dòng ${row.row}`)
+        try {
+          if (row.action !== 'no-op') {
+            const input = { ...row.input }
+            if (kind === 'products') {
+              if (row.categoryPath) input.categoryId = categoryIds.get(normalize(row.categoryPath))
+              if (row.brandName) input.brandId = brandIds.get(normalize(row.brandName))
+              if (row.action === 'create')
+                await createProduct({
+                  db,
+                  transaction: tx,
+                  actor,
+                  input: input as Parameters<typeof createProduct>[0]['input'],
+                })
+              else
+                await updateProduct({
+                  db,
+                  transaction: tx,
+                  actor,
+                  productId: row.targetId!,
+                  input: input as Parameters<typeof updateProduct>[0]['input'],
+                })
+            } else if (kind === 'customers') {
+              if (row.action === 'create')
+                await createCustomer({
+                  db,
+                  transaction: tx,
+                  actor,
+                  input: input as Parameters<typeof createCustomer>[0]['input'],
+                })
+              else
+                await updateCustomer({
+                  db,
+                  transaction: tx,
+                  actor,
+                  targetId: row.targetId!,
+                  input: input as Parameters<typeof updateCustomer>[0]['input'],
+                })
+            } else {
+              if (row.action === 'create')
+                await createSupplier({
+                  db,
+                  transaction: tx,
+                  actor,
+                  input: input as Parameters<typeof createSupplier>[0]['input'],
+                })
+              else
+                await updateSupplier({
+                  db,
+                  transaction: tx,
+                  actor,
+                  targetId: row.targetId!,
+                  input: input as Parameters<typeof updateSupplier>[0]['input'],
+                })
+            }
+          }
+        } catch (error) {
+          throw new Error(
+            `Dòng ${row.row}: ${error instanceof Error ? error.message : String(error)}`,
+            { cause: error },
+          )
+        }
+        if ((index + 1) % BATCH_SIZE === 0 || index + 1 === plan.totalRows) {
+          await updateBulkImportProgress({
+            db: tx,
+            storeId,
+            id,
+            processedRows: index + 1,
+            succeededRows: index + 1,
+            failedRows: 0,
+          })
+          publishBulkImportProgress(storeId, id, index + 1)
+        }
+      }
+      await finishBulkImportJob({ db: tx, storeId, id, status: 'completed' })
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    try {
+      return await finishBulkImportJob({
+        db,
+        storeId,
+        id,
+        status: 'failed',
+        errorMessage: message.slice(0, 2000),
+      })
+    } catch (finishError) {
+      // A concurrent owner cancellation wins; no domain writes survive the failed final CAS.
+      if (finishError instanceof ApiError && finishError.code === 'CONFLICT') return
+      throw finishError
+    }
+  } finally {
+    clearBulkImportProgress(id)
+  }
+}
+
+export function startBulkImportRunner(args: RunArgs): void {
+  setImmediate(() => {
+    void runBulkImportJob(args).catch((err: unknown) =>
+      logger.error({ err, id: args.id }, 'Import runner failed'),
+    )
+  })
+}
+
+export async function runQueuedBulkImportJobs({
+  db,
+  storageRoot,
+}: {
+  db: Db
+  storageRoot: string
+}): Promise<void> {
+  const queued = await db
+    .select({ id: bulkImportJobs.id, storeId: bulkImportJobs.storeId })
+    .from(bulkImportJobs)
+    .where(and(eq(bulkImportJobs.status, 'queued'), gt(bulkImportJobs.expiresAt, new Date())))
+  await Promise.all(queued.map((job) => runBulkImportJob({ db, storageRoot, ...job })))
+}
+
+export function pollBulkImportQueue(args: { db: Db; storageRoot: string }): void {
+  void runQueuedBulkImportJobs(args).catch((err: unknown) =>
+    logger.error({ err }, 'Import queue poll failed'),
+  )
+  setInterval(() => {
+    void runQueuedBulkImportJobs(args).catch((err: unknown) =>
+      logger.error({ err }, 'Import queue poll failed'),
+    )
+  }, QUEUE_POLL_MS).unref()
+}

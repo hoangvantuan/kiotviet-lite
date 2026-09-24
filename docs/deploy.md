@@ -55,7 +55,14 @@ tail -f "data/logs/api/$(ls -t data/logs/api | head -1)"
 docker compose -f docker-compose.prod.yml logs -f api
 ```
 
-## 5. Backup
+## 5. Lưu trữ tệp nhập Excel
+
+- API lưu tệp gốc tại `./data/imports/` trên host, gắn vào `/app/imports` trong container. Compose đặt `BULK_IMPORT_DIR=/app/imports`; thư mục phải ghi được, nếu thiếu hoặc không an toàn API production từ chối khởi động.
+- Tệp `.xlsx` tối đa 8 MiB và 12.000 dòng dữ liệu. Nginx cho phép body 20 MiB; bước xem trước không ghi dữ liệu. Chỉ chủ cửa hàng được nhập, tối đa 6 yêu cầu tải lên mỗi phút cho một tài khoản.
+- Công việc đang chạy khi API khởi động lại được đánh dấu hỏng; công việc còn chờ tiếp tục chạy. Bản ghi nghiệp vụ và nhật ký nhập được ghi nguyên khối hoặc không ghi gì.
+- Công việc và tệp gốc tự xóa sau 30 ngày. Service `backup` chỉ sao lưu PostgreSQL, **không** sao lưu `./data/imports/`; muốn khôi phục cả lịch sử tải tệp thì sao lưu thư mục này đồng bộ với bản dump DB.
+
+## 6. Backup
 
 - Tự động: service `backup` chạy pg_dump theo lịch `@daily`, lưu vào `./data/backups/`.
 - Retention: 7 bản ngày, 4 bản tuần, 6 bản tháng (đổi trong `.env`).
@@ -68,7 +75,7 @@ docker compose -f docker-compose.prod.yml exec backup /backup.sh
 ls data/backups/daily/
 ```
 
-## 6. Restore
+## 7. Restore
 
 Restore file dump vào database (dừng api trước để tránh ghi đè dở dang):
 
@@ -91,7 +98,7 @@ docker compose -f docker-compose.prod.yml start api
 
 Nên diễn tập restore vào DB tạm trước khi cần thật.
 
-## 7. Sự cố thường gặp
+## 8. Sự cố thường gặp
 
 | Triệu chứng          | Kiểm tra                                                                          |
 | -------------------- | --------------------------------------------------------------------------------- |

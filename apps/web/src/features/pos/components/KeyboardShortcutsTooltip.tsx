@@ -4,7 +4,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 const SHORTCUTS = [
   { key: 'F2', description: 'Thanh toán' },
-  { key: 'F4', description: 'Ghi nợ (chưa kích hoạt)' },
+  { key: 'F3', description: 'Bật, tắt lưới sản phẩm' },
+  { key: 'F4', description: 'Ghi nợ' },
   { key: 'F5', description: 'Đơn hàng mới' },
   { key: 'Esc', description: 'Đóng hộp thoại' },
   { key: 'Ctrl+F', description: 'Tìm kiếm sản phẩm' },

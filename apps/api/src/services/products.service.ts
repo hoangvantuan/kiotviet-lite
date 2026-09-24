@@ -37,6 +37,7 @@ import {
   hasVariantTransactions,
   toVariantItem,
 } from './product-variants.service.js'
+import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 import { createUnitConversion, toUnitConversionItem } from './unit-conversions.service.js'
 
 export interface ProductsActor {
@@ -842,14 +843,17 @@ export interface CreateProductDeps {
   actor: ProductsActor
   input: CreateProductInput
   meta?: RequestMeta
+  transaction?: ServiceTransaction
 }
 
 export async function createProduct({
-  db,
+  db: rootDb,
   actor,
   input,
   meta,
+  transaction,
 }: CreateProductDeps): Promise<ProductDetail> {
+  const db = serviceDb(rootDb, transaction)
   const hasVariantsConfig = input.variantsConfig !== null && input.variantsConfig !== undefined
   const trackInventory = input.trackInventory ?? false
   const initialStock = !hasVariantsConfig && trackInventory ? (input.initialStock ?? 0) : 0
@@ -1060,15 +1064,18 @@ export interface UpdateProductDeps {
   productId: string
   input: UpdateProductInput
   meta?: RequestMeta
+  transaction?: ServiceTransaction
 }
 
 export async function updateProduct({
-  db,
+  db: rootDb,
   actor,
   productId,
   input,
   meta,
+  transaction,
 }: UpdateProductDeps): Promise<ProductDetail> {
+  const db = serviceDb(rootDb, transaction)
   const target = await db.query.products.findFirst({
     where: eq(products.id, productId),
   })

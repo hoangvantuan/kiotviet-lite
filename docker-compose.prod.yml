@@ -46,8 +46,10 @@ services:
     environment:
       NODE_ENV: production
       LOG_DIR: /app/logs
+      BULK_IMPORT_DIR: /app/imports
     volumes:
       - ./data/logs/api:/app/logs
+      - ./data/imports:/app/imports
     depends_on:
       postgres:
         condition: service_healthy

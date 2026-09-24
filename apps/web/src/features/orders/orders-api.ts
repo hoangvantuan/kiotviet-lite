@@ -1,3 +1,5 @@
+import type { PriceSource } from '@kiotviet-lite/shared'
+
 import { apiClient } from '@/lib/api-client'
 
 interface OrderListItem {
@@ -6,6 +8,8 @@ interface OrderListItem {
   customerId: string | null
   customerName: string | null
   customerPhone: string | null
+  priceListId?: string | null
+  priceListName?: string | null
   createdByName: string | null
   subtotal: number
   discountAmount: number
@@ -32,6 +36,8 @@ interface OrderDetailResponse {
   customerGroupName: string | null
   customerCurrentDebt?: number | null
   oldDebt?: number | null
+  priceListId?: string | null
+  priceListName?: string | null
   createdByName: string | null
   subtotal: number
   discountType: string | null
@@ -68,6 +74,8 @@ interface OrderDetailItem {
   lineTotal: number
   originalPrice: number | null
   priceOverride: boolean
+  priceSource?: PriceSource | null
+  priceSourceDetail?: string | null
   sku?: string | null
   costPrice?: number | null
 }

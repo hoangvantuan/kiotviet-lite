@@ -1,5 +1,16 @@
 import { useState } from 'react'
-import { MoreVertical, Pencil, Plus, RotateCcw, SearchX, Trash2, Truck } from 'lucide-react'
+import {
+  Download,
+  FileDown,
+  FileUp,
+  MoreVertical,
+  Pencil,
+  Plus,
+  RotateCcw,
+  SearchX,
+  Trash2,
+  Truck,
+} from 'lucide-react'
 
 import type { SupplierHasDebt, SupplierListItem } from '@kiotviet-lite/shared'
 
@@ -46,10 +57,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useBulkExportDownload } from '@/features/bulk-export/use-bulk-export-download'
+import { BulkImportDialog } from '@/features/bulk-import/BulkImportDialog'
 import { useDebounced } from '@/hooks/use-debounced'
 import { ApiClientError } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
+import { useAuthStore } from '@/stores/use-auth-store'
 
 import { SupplierDebtPanel } from './supplier-debt-panel'
 import { SupplierFormDialog } from './supplier-form-dialog'
@@ -79,11 +93,15 @@ function DebtBadge({ currentDebt }: { currentDebt: number }) {
 }
 
 export function SupplierManager() {
+  const role = useAuthStore((state) => state.user?.role)
+  const canExport = role === 'owner' || role === 'manager'
+  const { downloading, download } = useBulkExportDownload('suppliers', 'nha-cung-cap')
   const [searchInput, setSearchInput] = useState('')
   const debouncedSearch = useDebounced(searchInput, 300)
   const [hasDebt, setHasDebt] = useState<SupplierHasDebt>('all')
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<SupplierListItem | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<SupplierListItem | null>(null)
   const [trashedOpen, setTrashedOpen] = useState(false)
@@ -112,7 +130,37 @@ export function SupplierManager() {
           <h1 className="text-2xl font-semibold">Nhà cung cấp</h1>
           <p className="text-sm text-muted-foreground">Quản lý danh sách NCC và công nợ phải trả</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {canExport && (
+            <>
+              <Button
+                variant="outline"
+                disabled={downloading !== null}
+                onClick={() => void download('template')}
+              >
+                <FileDown className="size-4 mr-1" />
+                {downloading === 'template' ? 'Đang tải mẫu…' : 'Tải tệp mẫu'}
+              </Button>
+              <Button
+                variant="outline"
+                disabled={downloading !== null}
+                onClick={() =>
+                  void download('export', {
+                    search: debouncedSearch.trim() || undefined,
+                    hasDebt,
+                  })
+                }
+              >
+                <Download className="size-4 mr-1" />
+                {downloading === 'export' ? 'Đang xuất…' : 'Xuất Excel'}
+              </Button>
+            </>
+          )}
+          {role === 'owner' && (
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <FileUp className="size-4 mr-1" /> Nhập Excel
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setTrashedOpen(true)}>
             <Trash2 className="size-4 mr-1" /> NCC đã xoá
           </Button>
@@ -230,6 +278,9 @@ export function SupplierManager() {
         onClose={() => setDebtTarget(null)}
       />
       <TrashedSuppliersSheet open={trashedOpen} onOpenChange={setTrashedOpen} />
+      {role === 'owner' && (
+        <BulkImportDialog kind="suppliers" open={importOpen} onOpenChange={setImportOpen} />
+      )}
     </div>
   )
 }

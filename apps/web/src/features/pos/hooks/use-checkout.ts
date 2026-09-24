@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import type { CreateOrderInput, DebtInfo } from '@kiotviet-lite/shared'
+import type { CreateOrderInput, DebtInfo, PriceSource } from '@kiotviet-lite/shared'
 
 import { apiClient } from '@/lib/api-client'
 import { saveOfflineOrder } from '@/lib/offline-orders'
-import { getPGliteClient } from '@/lib/pglite'
+import { getPGliteRaw, initializeOfflineDB } from '@/lib/pglite'
 import { useAuthStore } from '@/stores/use-auth-store'
 import { useOfflineStore } from '@/stores/use-offline-store'
 
@@ -13,6 +13,8 @@ import type { OrderDetail, StockInfo } from '../types'
 
 interface CheckoutPayload {
   customerId?: string | null
+  priceListId?: string | null
+  priceListName?: string | null
   subtotal: number
   discountType: string | null
   discountValue: number
@@ -41,6 +43,12 @@ interface CheckoutPayload {
     lineTotal: number
     note: string | null
     unitConversionId: string | null
+    originalPrice?: number | null
+    priceOverride?: boolean
+    priceOverrideReason?: string | null
+    priceOverridePinUsed?: boolean
+    priceSource?: PriceSource | null
+    priceSourceDetail?: string | null
   }[]
 }
 
@@ -58,14 +66,16 @@ interface CustomerDebtResponse {
 
 export function useCheckoutMutation() {
   const qc = useQueryClient()
-
   return useMutation({
+    networkMode: 'always',
     mutationFn: async (payload: CheckoutPayload) => {
-      const isOffline = useOfflineStore.getState().status === 'offline' || !navigator.onLine
+      const isOffline =
+        useOfflineStore.getState().status === 'offline' ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
 
       if (isOffline) {
-        const pglite = getPGliteClient()
-        if (!pglite) throw new Error('PGlite chưa khởi tạo')
+        await initializeOfflineDB()
+        const pglite = getPGliteRaw()
 
         const storeId = useAuthStore.getState().user?.storeId
         if (!storeId) throw new Error('Chưa đăng nhập')
@@ -89,6 +99,8 @@ export function useCheckoutMutation() {
           id: clientId,
           orderNumber: `OFFLINE-${clientId.slice(0, 8).toUpperCase()}`,
           customerId: payload.customerId ?? null,
+          priceListId: payload.priceListId ?? null,
+          priceListName: payload.priceListName ?? null,
           subtotal: payload.subtotal,
           discountAmount: payload.discountAmount,
           total: payload.total,
@@ -115,10 +127,12 @@ export function useCheckoutMutation() {
             discountValue: item.discountValue,
             discountAmount: item.discountAmount,
             lineTotal: item.lineTotal,
-            originalPrice: null,
-            priceOverride: false,
+            originalPrice: item.originalPrice ?? null,
+            priceOverride: item.priceOverride ?? false,
             sku: null,
             costPrice: null,
+            priceSource: item.priceSource ?? 'retail_price',
+            priceSourceDetail: item.priceSourceDetail ?? null,
           })),
           createdAt: new Date().toISOString(),
           oldDebt: null,

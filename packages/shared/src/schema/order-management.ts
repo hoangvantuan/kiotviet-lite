@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { priceSourceSchema } from './pricing-resolve.js'
+
 export const orderDiscountTypeSchema = z.enum(['percent', 'amount'])
 
 export const orderPaymentMethodSchema = z.enum(['cash', 'transfer', 'qr', 'combined', 'debt'])
@@ -58,6 +60,8 @@ export const createOrderItemSchema = z
       .nullable()
       .default(null),
     priceOverridePinUsed: z.boolean().default(false),
+    priceSource: priceSourceSchema.nullable().optional(),
+    priceSourceDetail: z.string().trim().max(255).nullable().optional(),
   })
   .refine((item) => item.lineTotal === item.unitPrice * item.quantity - item.discountAmount, {
     message: 'lineTotal không khớp với unitPrice * quantity - discountAmount',
@@ -95,6 +99,8 @@ export const createOrderSchema = z
     debtLimitOverridePin: z.string().trim().min(1).max(32).optional(),
     priceOverridePin: z.string().trim().min(1).max(32).optional(),
     note: z.string().trim().max(1000, 'Ghi chú đơn tối đa 1000 ký tự').nullable().default(null),
+    priceListId: z.string().uuid('Bảng giá không hợp lệ').nullable().optional(),
+    priceListName: z.string().trim().max(100).nullable().optional(),
     items: z
       .array(createOrderItemSchema)
       .min(1, 'Đơn hàng phải có ít nhất 1 sản phẩm')

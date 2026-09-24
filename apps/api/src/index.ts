@@ -15,6 +15,9 @@ import { securityHeaders } from './middleware/security-headers.middleware.js'
 import { createAuditRoutes } from './routes/audit.routes.js'
 import { createAuthRoutes } from './routes/auth.routes.js'
 import { createBrandsRoutes } from './routes/brands.routes.js'
+import { createBulkExportRoutes } from './routes/bulk-export.routes.js'
+import { createBulkImportJobsRoutes } from './routes/bulk-import-jobs.routes.js'
+import { createBulkImportPreviewRoutes } from './routes/bulk-import-preview.routes.js'
 import { createCategoriesRoutes } from './routes/categories.routes.js'
 import { createCategoryDiscountsRoutes } from './routes/category-discounts.routes.js'
 import { createCustomerGroupsRoutes } from './routes/customer-groups.routes.js'
@@ -39,6 +42,10 @@ import { createSuppliersRoutes } from './routes/suppliers.routes.js'
 import { createSyncRoutes } from './routes/sync.routes.js'
 import { createUsersRoutes } from './routes/users.routes.js'
 import { createVolumePricesRoutes } from './routes/volume-prices.routes.js'
+import { importStorageRoot, verifyImportStorageRoot } from './services/bulk-import-jobs.service.js'
+
+// Refuse to serve any endpoint when production import storage is absent or unsafe.
+if (process.env.NODE_ENV === 'production') await verifyImportStorageRoot(importStorageRoot())
 
 const app = new Hono()
 
@@ -80,6 +87,9 @@ app.route('/api/v1/products', createProductHistoryRoutes({ db }))
 app.route('/api/v1/pos', createPosRoutes({ db }))
 app.route('/api/v1/customer-groups', createCustomerGroupsRoutes({ db }))
 app.route('/api/v1/customers', createCustomersRoutes({ db }))
+app.route('/api/v1/bulk-export', createBulkExportRoutes({ db }))
+app.route('/api/v1/bulk-import', createBulkImportPreviewRoutes({ db }))
+app.route('/api/v1/bulk-import-jobs', createBulkImportJobsRoutes({ db }))
 app.route('/api/v1/debt-adjustments', createDebtAdjustmentsRoutes({ db }))
 app.route('/api/v1/suppliers', createSuppliersRoutes({ db }))
 app.route('/api/v1/supplier-debt-adjustments', createSupplierDebtAdjustmentsRoutes({ db }))

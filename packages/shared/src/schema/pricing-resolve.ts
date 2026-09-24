@@ -14,6 +14,7 @@ export const resolvePriceItemSchema = z.object({
 export const resolvePricesSchema = z
   .object({
     customerId: z.string().uuid().nullable().optional(),
+    priceListId: z.string().uuid().nullable().optional(),
     items: z.array(resolvePriceItemSchema).min(1).max(100),
   })
   .strict()
@@ -33,6 +34,7 @@ export const resolvedPriceItemSchema = z.object({
   price: z.number().int().min(0),
   source: priceSourceSchema,
   sourceDetail: z.string().nullable(),
+  isFallback: z.boolean().optional(),
   breakdown: z.array(tierBreakdownSchema).optional(),
 })
 

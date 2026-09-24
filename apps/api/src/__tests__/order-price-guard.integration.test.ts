@@ -261,12 +261,20 @@ describe('T10 - order-price-guard.integration.test', () => {
     expect(orderRes.status).toBe('synced')
 
     const orderId = orderRes.serverId
-    console.log('orderRes=', orderRes)
     const orderList = await env.base.db.select().from(orders).where(eq(orders.id, orderId))
     const order = orderList[0]
-    expect(order?.subtotal).toBe(200000)
-    expect(order?.total).toBe(200000)
+    expect(order?.subtotal).toBe(100000)
+    expect(order?.total).toBe(100000)
     expect(order?.cashAmount).toBe(100000)
+    expect(order?.change).toBe(0)
+
+    const dbItems = await env.base.db
+      .select()
+      .from(orderItems)
+      .where(eq(orderItems.orderId, orderId))
+    expect(dbItems).toHaveLength(1)
+    expect(dbItems[0]?.unitPrice).toBe(50000)
+    expect(dbItems[0]?.lineTotal).toBe(100000)
 
     const logs = await env.base.db.query.auditLogs.findMany({
       where: eq(auditLogs.targetId, orderId),
@@ -275,6 +283,13 @@ describe('T10 - order-price-guard.integration.test', () => {
       (l: { action: string }) => l.action === 'order.price_mismatch_adjusted',
     )
     expect(adjustLog).toBeDefined()
+    const changes = adjustLog.changes as Record<string, unknown>
+    expect(changes.soldTotal).toBe(100000)
+    const mismatched = changes.mismatchedLines as Array<Record<string, unknown>>
+    expect(mismatched).toHaveLength(1)
+    expect(mismatched[0]?.soldUnitPrice).toBe(50000)
+    expect(mismatched[0]?.serverUnitPrice).toBe(100000)
+    expect(mismatched[0]?.serverPriceSource).toBe('retail_price')
   })
 
   it('5. Các đơn POS HỢP LỆ không bị từ chối nhầm', async () => {

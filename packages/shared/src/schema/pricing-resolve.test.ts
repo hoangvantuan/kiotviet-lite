@@ -135,4 +135,27 @@ describe('resolvedPriceItemSchema', () => {
     const result = resolvedPriceItemSchema.safeParse(item)
     expect(result.success).toBe(false)
   })
+
+  it('accepts priceListId in resolvePricesSchema', () => {
+    const input = {
+      customerId: VALID_UUID,
+      priceListId: VALID_UUID2,
+      items: [{ productId: VALID_UUID, quantity: 1 }],
+    }
+    const result = resolvePricesSchema.safeParse(input)
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts isFallback boolean in resolvedPriceItemSchema', () => {
+    const item = {
+      productId: VALID_UUID,
+      variantId: null,
+      price: 15000,
+      source: 'retail_price' as const,
+      sourceDetail: 'Giá dự phòng: Giá bán lẻ',
+      isFallback: true,
+    }
+    const result = resolvedPriceItemSchema.safeParse(item)
+    expect(result.success).toBe(true)
+  })
 })

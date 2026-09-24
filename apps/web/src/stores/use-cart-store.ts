@@ -4,12 +4,14 @@ import {
   calculateLineTotal,
   calculateOrderDiscount,
   type DiscountType,
+  type PosUnitConversion,
   type PriceSource,
 } from '@kiotviet-lite/shared'
 
 export type { DiscountType }
 
 import { MAX_CART_TABS } from '@/features/pos/constants'
+import { computeUnitConversionPriceAndStock } from '@/features/pos/utils'
 
 export interface CartItem {
   id: string
@@ -24,6 +26,10 @@ export interface CartItem {
   notes: string | null
   unitName: string | null
   unitConversionId: string | null
+  baseUnit?: string | null
+  baseUnitPrice?: number | null
+  baseStockQuantity?: number | null
+  unitConversions?: PosUnitConversion[]
   discountType: DiscountType | null
   discountValue: number
   discountAmount: number
@@ -37,6 +43,7 @@ export interface CartItem {
   priceOverridePinUsed: boolean
   priceSource: PriceSource
   priceSourceDetail: string | null
+  isFallback?: boolean
 }
 
 type CartItemInput = Omit<
@@ -68,6 +75,11 @@ type CartItemInput = Omit<
   priceOverridePinUsed?: boolean
   priceSource?: PriceSource
   priceSourceDetail?: string | null
+  isFallback?: boolean
+  baseUnit?: string | null
+  baseUnitPrice?: number | null
+  baseStockQuantity?: number | null
+  unitConversions?: PosUnitConversion[]
 }
 
 export interface TabState {
@@ -79,6 +91,8 @@ export interface TabState {
   customerName: string | null
   customerGroupId: string | null
   customerGroupName: string | null
+  priceListId: string | null
+  priceListName: string | null
   priceOverridePin: string | null
 }
 
@@ -90,6 +104,7 @@ interface CartState {
   addItem: (item: CartItemInput, qty?: number) => void
   removeItem: (id: string) => void
   updateQuantity: (id: string, qty: number) => void
+  changeItemUnit: (id: string, unitConversionId: string | null) => void
   updateLineDiscount: (id: string, type: DiscountType | null, value: number) => void
   updateLineNotes: (id: string, notes: string | null) => void
   updateUnitPrice: (
@@ -106,11 +121,20 @@ interface CartState {
       groupName: string | null
     } | null,
   ) => void
+  setPriceList: (
+    priceList: {
+      id: string
+      name: string
+    } | null,
+    targetTabIndex?: number,
+  ) => void
   updateItemPrice: (
     id: string,
     price: number,
     source: PriceSource,
     sourceDetail: string | null,
+    targetTabIndex?: number,
+    isFallback?: boolean,
   ) => void
   setPriceOverridePin: (pin: string | null) => void
   clearCart: () => void
@@ -168,6 +192,8 @@ function createEmptyTab(): TabState {
     customerName: null,
     customerGroupId: null,
     customerGroupName: null,
+    priceListId: null,
+    priceListName: null,
     priceOverridePin: null,
   }
 }
@@ -180,13 +206,21 @@ function createInitialTabs(): Record<number, TabState> {
   return tabs
 }
 
+function updateTab(
+  state: CartState,
+  tabIndex: number,
+  updater: (tab: TabState) => TabState,
+): Pick<CartState, 'tabs'> {
+  const current = state.tabs[tabIndex] ?? createEmptyTab()
+  const next = updater(current)
+  return { tabs: { ...state.tabs, [tabIndex]: next } }
+}
+
 function updateActiveTab(
   state: CartState,
   updater: (tab: TabState) => TabState,
 ): Pick<CartState, 'tabs'> {
-  const current = state.tabs[state.activeTab] ?? createEmptyTab()
-  const next = updater(current)
-  return { tabs: { ...state.tabs, [state.activeTab]: next } }
+  return updateTab(state, state.activeTab, updater)
 }
 
 export const useCartStore = create<CartState>((set, get) => ({
@@ -228,6 +262,11 @@ export const useCartStore = create<CartState>((set, get) => ({
             priceOverridePinUsed: input.priceOverridePinUsed ?? false,
             priceSource: input.priceSource ?? 'retail_price',
             priceSourceDetail: input.priceSourceDetail ?? null,
+            isFallback: input.isFallback ?? false,
+            baseUnit: input.baseUnit ?? input.unitName ?? null,
+            baseUnitPrice: input.baseUnitPrice ?? input.unitPrice,
+            baseStockQuantity: input.baseStockQuantity ?? input.stockQuantity ?? 0,
+            unitConversions: input.unitConversions ?? [],
           }
           nextItems = [...tab.items, recomputeLine(baseItem)]
         }
@@ -241,6 +280,66 @@ export const useCartStore = create<CartState>((set, get) => ({
       updateActiveTab(state, (tab) =>
         recomputeOrderDiscount({ ...tab, items: tab.items.filter((i) => i.id !== id) }),
       ),
+    )
+  },
+
+  changeItemUnit: (id, unitConversionId) => {
+    set((state) =>
+      updateActiveTab(state, (tab) => {
+        const item = tab.items.find((i) => i.id === id)
+        if (!item) return tab
+
+        if (item.unitConversionId === unitConversionId) return tab
+
+        let newUnitName: string | null = item.baseUnit ?? item.unitName
+        let newUnitPrice: number = item.baseUnitPrice ?? item.unitPrice
+        let newStockQuantity: number = item.baseStockQuantity ?? item.stockQuantity
+
+        if (unitConversionId !== null && item.unitConversions) {
+          const conv = item.unitConversions.find((u) => u.id === unitConversionId)
+          if (!conv) return tab
+          newUnitName = conv.unit
+          const computed = computeUnitConversionPriceAndStock(
+            item.baseUnitPrice ?? item.unitPrice,
+            item.baseStockQuantity ?? item.stockQuantity,
+            conv,
+          )
+          newUnitPrice = computed.unitPrice
+          newStockQuantity = computed.stockQuantity
+        }
+
+        const newId = buildCartItemId(item.productId, item.variantId, unitConversionId)
+        const existing = tab.items.find((i) => i.id === newId && i.id !== id)
+        let nextItems: CartItem[]
+
+        if (existing) {
+          nextItems = tab.items
+            .filter((i) => i.id !== id)
+            .map((i) =>
+              i.id === newId ? recomputeLine({ ...i, quantity: i.quantity + item.quantity }) : i,
+            )
+        } else {
+          nextItems = tab.items.map((i) => {
+            if (i.id !== id) return i
+            return recomputeLine({
+              ...i,
+              id: newId,
+              unitName: newUnitName,
+              unitConversionId,
+              unitPrice: newUnitPrice,
+              originalPrice: null,
+              priceOverride: false,
+              priceOverrideReason: null,
+              priceOverridePinUsed: false,
+              priceSource: 'retail_price',
+              priceSourceDetail: null,
+              stockQuantity: newStockQuantity,
+            })
+          })
+        }
+
+        return recomputeOrderDiscount({ ...tab, items: nextItems })
+      }),
     )
   },
 
@@ -334,10 +433,22 @@ export const useCartStore = create<CartState>((set, get) => ({
     )
   },
 
-  updateItemPrice: (id, price, source, sourceDetail) => {
+  setPriceList: (priceList, targetTabIndex) => {
+    set((state) => {
+      const tabIndex = targetTabIndex !== undefined ? targetTabIndex : state.activeTab
+      return updateTab(state, tabIndex, (tab) => ({
+        ...tab,
+        priceListId: priceList?.id ?? null,
+        priceListName: priceList?.name ?? null,
+      }))
+    })
+  },
+
+  updateItemPrice: (id, price, source, sourceDetail, targetTabIndex, isFallback) => {
     const safePrice = Math.round(price)
-    set((state) =>
-      updateActiveTab(state, (tab) => {
+    set((state) => {
+      const tabIndex = targetTabIndex !== undefined ? targetTabIndex : state.activeTab
+      return updateTab(state, tabIndex, (tab) => {
         const nextItems = tab.items.map((i) =>
           i.id === id && !i.priceOverride
             ? recomputeLine({
@@ -345,12 +456,13 @@ export const useCartStore = create<CartState>((set, get) => ({
                 unitPrice: safePrice,
                 priceSource: source,
                 priceSourceDetail: sourceDetail,
+                isFallback: isFallback ?? false,
               })
             : i,
         )
         return recomputeOrderDiscount({ ...tab, items: nextItems })
-      }),
-    )
+      })
+    })
   },
 
   setPriceOverridePin: (pin) => {
