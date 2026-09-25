@@ -47,14 +47,14 @@ Xác thực quy trình bán hàng tại quầy thu ngân: vào màn hình bán h
 
 ### Kịch bản 1.3: Bán hàng thanh toán Chuyển khoản
 
-> Ứng dụng chưa sinh mã VietQR. Thu ngân đối chiếu tiền về trên ứng dụng ngân hàng rồi mới bấm "Hoàn thành".
+> Ứng dụng chưa sinh mã VietQR. Phương thức "QR Code" trong hộp thanh toán hiện chỉ ghi nhận "Đã nhận thanh toán QR", giống "Chuyển khoản". Thu ngân đối chiếu tiền về trên ứng dụng ngân hàng rồi mới bấm "Hoàn thành".
 
-| Bước | Thao tác thực hiện                                             | Dữ liệu mẫu                       | Kết quả mong đợi                                                                 | Kết quả thực tế | Ghi chú |
-| :--- | :------------------------------------------------------------- | :-------------------------------- | :------------------------------------------------------------------------------- | :-------------- | :------ |
-| 1    | Chọn sản phẩm vào giỏ hàng.                                    | 1 túi `Bột giặt Omo` (Mã `BO001`) | Tổng tiền giỏ hàng hiển thị `85.000 đ`.                                          |                 |         |
-| 2    | Bấm nút "Thanh toán (F2)".                                     |                                   | Mở hộp thoại "Thanh toán" với các phương thức "Tiền mặt", "Chuyển khoản", ...    |                 |         |
-| 3    | Chọn phương thức "Chuyển khoản".                               |                                   | Hiển thị dòng "Đã nhận chuyển khoản 85.000 đ".                                   |                 |         |
-| 4    | Xác nhận khách đã chuyển khoản thành công và bấm "Hoàn thành". |                                   | Hiện hộp "Đơn hàng hoàn thành!", đơn được ghi nhận thanh toán bằng chuyển khoản. |                 |         |
+| Bước | Thao tác thực hiện                                             | Dữ liệu mẫu                       | Kết quả mong đợi                                                                               | Kết quả thực tế | Ghi chú |
+| :--- | :------------------------------------------------------------- | :-------------------------------- | :--------------------------------------------------------------------------------------------- | :-------------- | :------ |
+| 1    | Chọn sản phẩm vào giỏ hàng.                                    | 1 túi `Bột giặt Omo` (Mã `BO001`) | Tổng tiền giỏ hàng hiển thị `85.000 đ`.                                                        |                 |         |
+| 2    | Bấm nút "Thanh toán (F2)".                                     |                                   | Mở hộp thoại "Thanh toán" với các phương thức "Tiền mặt", "Chuyển khoản", "QR Code", "Kết hợp" |                 |         |
+| 3    | Chọn phương thức "Chuyển khoản".                               |                                   | Hiển thị dòng "Đã nhận chuyển khoản 85.000 đ".                                                 |                 |         |
+| 4    | Xác nhận khách đã chuyển khoản thành công và bấm "Hoàn thành". |                                   | Hiện hộp "Đơn hàng hoàn thành!", đơn được ghi nhận thanh toán bằng chuyển khoản.               |                 |         |
 
 ### Kịch bản 1.4: Bán hàng Ghi nợ (Trong hạn mức cho phép)
 
