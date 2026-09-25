@@ -11,7 +11,7 @@ interface ProductHistoryTabsProps {
 export function ProductHistoryTabs({ productId }: ProductHistoryTabsProps) {
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-semibold">Lịch sử kho</h3>
+      <h3 className="text-sm font-semibold">Sổ giao dịch kho</h3>
       <Tabs defaultValue="movements" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="movements">Biến động kho</TabsTrigger>

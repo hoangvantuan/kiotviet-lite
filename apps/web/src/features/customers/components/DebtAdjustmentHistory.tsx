@@ -54,8 +54,8 @@ export function DebtAdjustmentHistory({ customerId }: DebtAdjustmentHistoryProps
           <TableHeader>
             <TableRow>
               <TableHead>Ngày</TableHead>
-              <TableHead className="text-right">Nợ cũ</TableHead>
-              <TableHead className="text-right">Nợ mới</TableHead>
+              <TableHead className="text-right">Công nợ trước điều chỉnh</TableHead>
+              <TableHead className="text-right">Công nợ sau điều chỉnh</TableHead>
               <TableHead className="text-right">Chênh lệch</TableHead>
               <TableHead>Lý do</TableHead>
               <TableHead>Người điều chỉnh</TableHead>

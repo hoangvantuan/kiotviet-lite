@@ -283,7 +283,7 @@ function DirectForm({ onBack, onClose }: DirectFormProps) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{p.name}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    SKU {p.sku} • Gốc {formatVndWithSuffix(p.sellingPrice)}
+                    Mã hàng {p.sku} • Gốc {formatVndWithSuffix(p.sellingPrice)}
                   </p>
                 </div>
                 <div className="w-40">
@@ -1099,7 +1099,7 @@ function ImportForm({ onBack, onClose }: ImportFormProps) {
                 <thead className="bg-muted">
                   <tr>
                     <th className="p-1 text-left">Dòng</th>
-                    <th className="p-1 text-left">Mã SP</th>
+                    <th className="p-1 text-left">Mã hàng</th>
                     <th className="p-1 text-left">Lý do</th>
                   </tr>
                 </thead>

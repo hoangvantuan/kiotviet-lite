@@ -32,8 +32,8 @@ export function PricingTabsHeader() {
     <Tabs value={active} onValueChange={handleChange} className="w-full">
       <TabsList className="grid w-full grid-cols-2 md:inline-flex md:w-auto md:grid-cols-4">
         <TabsTrigger value="price-lists">Bảng giá</TabsTrigger>
-        <TabsTrigger value="customer-prices">Giá riêng KH</TabsTrigger>
-        <TabsTrigger value="volume-prices">Giá theo SL</TabsTrigger>
+        <TabsTrigger value="customer-prices">Giá riêng khách hàng</TabsTrigger>
+        <TabsTrigger value="volume-prices">Giá theo số lượng</TabsTrigger>
         <TabsTrigger value="category-discounts">Chiết khấu danh mục</TabsTrigger>
       </TabsList>
     </Tabs>

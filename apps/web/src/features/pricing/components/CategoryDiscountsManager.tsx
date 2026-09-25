@@ -71,7 +71,7 @@ export function CategoryDiscountsManager() {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Chiết khấu danh mục</h2>
           <p className="text-sm text-muted-foreground">
-            Tạo quy tắc giảm giá theo danh mục cho khách hàng hoặc nhóm KH.
+            Tạo quy tắc giảm giá theo danh mục cho khách hàng hoặc nhóm khách hàng.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 self-start md:self-auto">
@@ -92,7 +92,7 @@ export function CategoryDiscountsManager() {
         <EmptyState
           icon={Percent}
           title="Chưa có chiết khấu danh mục"
-          description="Tạo rule giảm giá cho khách VIP hoặc nhóm KH."
+          description="Tạo quy tắc giảm giá cho khách VIP hoặc nhóm khách hàng."
           actionLabel="Thêm chiết khấu"
           onAction={() => setCreateOpen(true)}
         />

@@ -26,7 +26,6 @@ import { downloadReportExport } from '../reports-api'
 import { ReportDateRangePicker } from './ReportDateRangePicker'
 import { ReportExportButton } from './ReportExportButton'
 
-
 export function PricingReport() {
   const [tab, setTab] = useState<PricingReportTab>('overrides')
   const [from, setFrom] = useState<string | undefined>()
@@ -127,7 +126,9 @@ export function PricingReport() {
                   <TableRow key={r.productId}>
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.sku}</TableCell>
-                    <TableCell className="text-right font-mono">{formatVndWithSuffix(r.costPrice)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatVndWithSuffix(r.costPrice)}
+                    </TableCell>
                     {r.prices.map((price: number | null, i: number) => {
                       const margin = r.margins[i] ?? null
                       return (
@@ -152,7 +153,7 @@ export function PricingReport() {
                 <TableRow>
                   <TableHead>Sản phẩm</TableHead>
                   <TableHead>Ngày nhập</TableHead>
-                  <TableHead>NCC</TableHead>
+                  <TableHead>Nhà cung cấp</TableHead>
                   <TableHead className="text-right">Gi�� nhập</TableHead>
                   <TableHead className="text-right">Giá vốn sau</TableHead>
                 </TableRow>
@@ -163,7 +164,9 @@ export function PricingReport() {
                     <TableCell>{r.productName}</TableCell>
                     <TableCell>{r.purchaseDate}</TableCell>
                     <TableCell>{r.supplierName}</TableCell>
-                    <TableCell className="text-right font-mono">{formatVndWithSuffix(r.unitPrice)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatVndWithSuffix(r.unitPrice)}
+                    </TableCell>
                     <TableCell className="text-right font-mono">
                       {r.costAfter !== null ? formatVndWithSuffix(r.costAfter) : '-'}
                     </TableCell>

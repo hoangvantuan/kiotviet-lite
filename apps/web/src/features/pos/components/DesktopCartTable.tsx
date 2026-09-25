@@ -130,7 +130,7 @@ function DesktopCartRow({ item, index }: DesktopCartRowProps) {
         </span>
       </td>
 
-      {/* 3. Tên hàng hóa, biến thể, nguồn giá & cảnh báo */}
+      {/* 3. Tên sản phẩm, biến thể, nguồn giá & cảnh báo */}
       <td className="min-w-[180px] px-3 py-3">
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-1.5">

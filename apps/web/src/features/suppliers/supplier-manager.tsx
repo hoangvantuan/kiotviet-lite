@@ -130,7 +130,9 @@ export function SupplierManager() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Nhà cung cấp</h1>
-          <p className="text-sm text-muted-foreground">Quản lý danh sách NCC và công nợ phải trả</p>
+          <p className="text-sm text-muted-foreground">
+            Quản lý danh sách nhà cung cấp và công nợ phải trả
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {canExport && (
@@ -164,10 +166,10 @@ export function SupplierManager() {
             </Button>
           )}
           <Button variant="outline" onClick={() => setTrashedOpen(true)}>
-            <Trash2 className="size-4 mr-1" /> NCC đã xoá
+            <Trash2 className="size-4 mr-1" /> Nhà cung cấp đã xoá
           </Button>
           <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="size-4 mr-1" /> Thêm NCC
+            <Plus className="size-4 mr-1" /> Thêm nhà cung cấp
           </Button>
         </div>
       </header>
@@ -220,8 +222,8 @@ export function SupplierManager() {
         <EmptyState
           icon={Truck}
           title="Chưa có nhà cung cấp nào"
-          description="Thêm NCC đầu tiên để tạo phiếu nhập"
-          actionLabel="Thêm NCC"
+          description="Thêm nhà cung cấp đầu tiên để tạo phiếu nhập"
+          actionLabel="Thêm nhà cung cấp"
           onAction={() => setCreateOpen(true)}
         />
       )}
@@ -229,7 +231,7 @@ export function SupplierManager() {
       {isEmpty && hasFilter && (
         <EmptyState
           icon={SearchX}
-          title="Không tìm thấy NCC"
+          title="Không tìm thấy nhà cung cấp"
           description="Thử thay đổi từ khoá hoặc bộ lọc."
         />
       )}
@@ -306,7 +308,7 @@ function SupplierTable({ items, onEdit, onDelete, onDebt }: SupplierTableProps) 
           <TableRow>
             <TableHead>Tên</TableHead>
             <TableHead>Mã nhà cung cấp</TableHead>
-            <TableHead>SĐT</TableHead>
+            <TableHead>Số điện thoại</TableHead>
             <TableHead className="hidden lg:table-cell">Email</TableHead>
             <TableHead>Công nợ</TableHead>
             <TableHead className="hidden lg:table-cell text-right">Số phiếu</TableHead>
@@ -470,10 +472,10 @@ function DeleteSupplierDialog({ target, onClose }: DeleteSupplierDialogProps) {
     <AlertDialog open={!!target} onOpenChange={(v) => !v && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Xoá NCC {target?.name}?</AlertDialogTitle>
+          <AlertDialogTitle>Xoá nhà cung cấp {target?.name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            NCC sẽ được chuyển vào thùng rác. Có thể khôi phục từ mục NCC đã xoá. Không xoá được NCC
-            còn công nợ hoặc đã có phiếu nhập.
+            Nhà cung cấp sẽ được chuyển vào thùng rác. Có thể khôi phục từ mục Nhà cung cấp đã xoá.
+            Không xoá được nhà cung cấp còn công nợ hoặc đã có phiếu nhập.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -519,8 +521,8 @@ function TrashedSuppliersSheet({ open, onOpenChange }: TrashedSuppliersSheetProp
         <SheetHeader>
           <SheetTitle>Nhà cung cấp đã xoá</SheetTitle>
           <SheetDescription>
-            Khôi phục NCC để dùng lại. Nếu trùng tên hoặc SĐT với NCC khác, hãy đổi trước khi khôi
-            phục.
+            Khôi phục nhà cung cấp để dùng lại. Nếu trùng tên hoặc số điện thoại với nhà cung cấp
+            khác, hãy đổi trước khi khôi phục.
           </SheetDescription>
         </SheetHeader>
         <div className="space-y-2 mt-4">

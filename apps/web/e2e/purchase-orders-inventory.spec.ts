@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures/auth.fixture'
 
 test.describe('Kiểm thử E2E: Nhập hàng và Cập nhật Tồn kho (Purchase Orders & Inventory)', () => {
-  test('Tạo phiếu nhập kho thành công và kiểm tra tồn kho tăng chính xác', async ({
+  test('Tạo phiếu nhập hàng thành công và kiểm tra tồn kho tăng chính xác', async ({
     page,
     loginAs,
   }) => {
@@ -23,15 +23,15 @@ test.describe('Kiểm thử E2E: Nhập hàng và Cập nhật Tồn kho (Purcha
     await expect(carrotRow).toBeVisible({ timeout: 10000 })
     await expect(carrotRow).toContainText(/Cà rốt|Ca rot/i)
 
-    // 3. Vào trang Tạo phiếu nhập kho (/inventory/purchase-orders/new)
+    // 3. Vào trang Tạo phiếu nhập hàng (/inventory/purchase-orders/new)
     await page.goto('/inventory/purchase-orders/new')
     await page.waitForURL('**/inventory/purchase-orders/new')
 
-    await expect(page.getByRole('heading', { name: /Tạo phiếu nhập kho/i })).toBeVisible({
+    await expect(page.getByRole('heading', { name: /Tạo phiếu nhập hàng/i })).toBeVisible({
       timeout: 10000,
     })
 
-    // 4. Chọn Nhà cung cấp: mở dropdown Chọn NCC
+    // 4. Chọn Nhà cung cấp: mở dropdown Chọn nhà cung cấp
     const selectNccBtn = page.getByRole('combobox').first()
     await selectNccBtn.click()
 

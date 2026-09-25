@@ -72,7 +72,7 @@ export function SelectProductForVolumePricesDialog({ open, onOpenChange, onPick 
                     >
                       <div className="min-w-0 flex-1">
                         <div className="font-medium">{p.name}</div>
-                        <div className="text-xs text-muted-foreground">SKU {p.sku}</div>
+                        <div className="text-xs text-muted-foreground">Mã hàng {p.sku}</div>
                       </div>
                       <div className="text-right text-sm tabular-nums">
                         {formatVndWithSuffix(p.sellingPrice)}

@@ -98,7 +98,7 @@ export function DebtSummaryReport({ query }: DebtSummaryReportProps) {
             <p className="text-2xl font-bold text-blue-700">
               {formatVndWithSuffix(receivable.totalDebt)}
             </p>
-            <StatRow label="Số KH còn nợ" value={String(receivable.customerCount)} />
+            <StatRow label="Số khách hàng còn nợ" value={String(receivable.customerCount)} />
             <StatRow
               label="Tổng đã thu (trong kỳ)"
               value={`${formatVndWithSuffix(receivable.totalCollected)}`}
@@ -117,7 +117,7 @@ export function DebtSummaryReport({ query }: DebtSummaryReportProps) {
             <p className="text-2xl font-bold text-orange-700">
               {formatVndWithSuffix(payable.totalDebt)}
             </p>
-            <StatRow label="Số NCC còn nợ" value={String(payable.supplierCount)} />
+            <StatRow label="Số nhà cung cấp còn nợ" value={String(payable.supplierCount)} />
             <StatRow
               label="Tổng đã trả (trong kỳ)"
               value={`${formatVndWithSuffix(payable.totalPaid)}`}

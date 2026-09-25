@@ -79,7 +79,7 @@ export function StockCheckDetailView({ stockCheckId }: StockCheckDetailViewProps
   if (query.isError || !query.data) {
     return (
       <div className="p-4 md:p-6">
-        <p className="text-sm text-destructive">Không tải được phiếu kiểm kho.</p>
+        <p className="text-sm text-destructive">Không tải được phiếu kiểm kê.</p>
         <Button asChild variant="outline" className="mt-3">
           <Link to="/inventory/stock-checks">
             <ChevronLeft className="size-4 mr-1" /> Về danh sách
@@ -119,7 +119,7 @@ export function StockCheckDetailView({ stockCheckId }: StockCheckDetailViewProps
       <div className="flex items-center gap-2">
         <Button asChild variant="ghost" size="sm">
           <Link to="/inventory/stock-checks">
-            <ChevronLeft className="size-4 mr-1" /> Kiểm kho
+            <ChevronLeft className="size-4 mr-1" /> Kiểm kê
           </Link>
         </Button>
       </div>
@@ -165,7 +165,7 @@ export function StockCheckDetailView({ stockCheckId }: StockCheckDetailViewProps
 
       <section className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-md border p-3">
-          <h2 className="text-sm font-medium text-muted-foreground">Tổng SP</h2>
+          <h2 className="text-sm font-medium text-muted-foreground">Tổng sản phẩm</h2>
           <p className="text-xl font-semibold mt-1">{data.totalItems}</p>
         </div>
         <div className="rounded-md border p-3">
@@ -191,8 +191,8 @@ export function StockCheckDetailView({ stockCheckId }: StockCheckDetailViewProps
             <TableHeader>
               <TableRow>
                 <TableHead>Sản phẩm</TableHead>
-                <TableHead>SKU</TableHead>
-                <TableHead className="text-right">Tồn HT</TableHead>
+                <TableHead>Mã hàng</TableHead>
+                <TableHead className="text-right">Tồn kho hệ thống</TableHead>
                 <TableHead className="text-right">Thực tế</TableHead>
                 <TableHead className="text-right">Chênh lệch</TableHead>
                 <TableHead>Ghi chú</TableHead>
@@ -216,7 +216,7 @@ export function StockCheckDetailView({ stockCheckId }: StockCheckDetailViewProps
                       {isLowStock && (
                         <div className="text-xs text-amber-600 flex items-center gap-1 mt-1">
                           <AlertTriangle className="size-3" />
-                          Dưới định mức (min: {minStock})
+                          Dưới tồn tối thiểu ({minStock})
                         </div>
                       )}
                     </TableCell>
@@ -254,12 +254,12 @@ export function StockCheckDetailView({ stockCheckId }: StockCheckDetailViewProps
                 {isLowStock && (
                   <div className="text-xs text-amber-600 flex items-center gap-1">
                     <AlertTriangle className="size-3" />
-                    Dưới định mức (min: {minStock})
+                    Dưới tồn tối thiểu ({minStock})
                   </div>
                 )}
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div>
-                    <div className="text-xs text-muted-foreground">Tồn HT</div>
+                    <div className="text-xs text-muted-foreground">Tồn kho hệ thống</div>
                     <div className="font-mono">{it.systemQty}</div>
                   </div>
                   <div>

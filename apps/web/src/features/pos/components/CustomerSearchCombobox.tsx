@@ -99,7 +99,7 @@ export function CustomerSearchCombobox() {
               ref={inputRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm tên, mã hoặc SĐT..."
+              placeholder="Tìm theo tên, mã hoặc số điện thoại..."
               className="h-8 text-sm"
             />
           </div>
@@ -145,7 +145,7 @@ export function CustomerSearchCombobox() {
               className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-primary transition-colors hover:bg-accent"
             >
               <UserPlus className="h-4 w-4" />
-              Tạo KH mới
+              Tạo khách hàng
             </button>
           </div>
         </PopoverContent>

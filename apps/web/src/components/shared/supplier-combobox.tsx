@@ -79,7 +79,7 @@ export function SupplierCombobox({
               ref={inputRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm NCC..."
+              placeholder="Tìm nhà cung cấp..."
               className="h-8 pl-8 text-sm"
             />
           </div>

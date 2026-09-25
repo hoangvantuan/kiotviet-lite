@@ -37,7 +37,7 @@ export function ReceiptSuccessDialog({ open, onOpenChange, receipt }: ReceiptSuc
           <DialogHeader>
             <DialogTitle>Đã tạo phiếu thu thành công</DialogTitle>
             <DialogDescription>
-              Phiếu thu đã được lưu và công nợ KH đã được cập nhật.
+              Phiếu thu đã được lưu và công nợ khách hàng đã được cập nhật.
             </DialogDescription>
           </DialogHeader>
 

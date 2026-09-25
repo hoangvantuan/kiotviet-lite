@@ -171,7 +171,7 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
         <DialogHeader>
           <DialogTitle>Tạo phiếu thu nợ</DialogTitle>
           <DialogDescription>
-            Phiếu thu sẽ giảm trực tiếp công nợ KH. Không thể sửa hoặc xoá sau khi tạo.
+            Phiếu thu sẽ giảm trực tiếp công nợ khách hàng. Không thể sửa hoặc xoá sau khi tạo.
           </DialogDescription>
         </DialogHeader>
 

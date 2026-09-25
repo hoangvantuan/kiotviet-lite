@@ -70,7 +70,7 @@ export function DashboardTopProducts({ data, isLoading, isError }: DashboardTopP
                   <tr className="border-b text-left text-muted-foreground">
                     <th className="pb-2 pr-2 font-medium">#</th>
                     <th className="pb-2 pr-2 font-medium">Sản phẩm</th>
-                    <th className="pb-2 pr-2 text-right font-medium">SL bán</th>
+                    <th className="pb-2 pr-2 text-right font-medium">Số lượng bán</th>
                     <th className="pb-2 pr-2 text-right font-medium">Doanh thu</th>
                     <th className="pb-2 text-right font-medium">%</th>
                   </tr>
@@ -108,7 +108,7 @@ export function DashboardTopProducts({ data, isLoading, isError }: DashboardTopP
                     <p className="text-sm font-mono font-medium">
                       {formatVndWithSuffix(p.revenue)}
                     </p>
-                    <p className="text-xs text-muted-foreground">{p.quantity} SP</p>
+                    <p className="text-xs text-muted-foreground">{p.quantity} sản phẩm</p>
                   </div>
                 </div>
               ))}

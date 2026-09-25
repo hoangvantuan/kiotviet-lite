@@ -17,7 +17,7 @@ export function CustomerPricesFilters({ value, onChange }: Props) {
   return (
     <div className="grid gap-2 md:grid-cols-3">
       <Input
-        placeholder="Tìm theo tên KH, tên SP, SKU…"
+        placeholder="Tìm theo tên khách hàng, tên sản phẩm, mã hàng…"
         value={value.search}
         onChange={(e) => onChange({ search: e.target.value })}
       />

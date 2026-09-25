@@ -150,7 +150,7 @@ export function RevenueReport() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Khách hàng</TableHead>
-                  <TableHead>SĐT</TableHead>
+                  <TableHead>Số điện thoại</TableHead>
                   <TableHead className="text-right">Số đơn</TableHead>
                   <TableHead className="text-right">Doanh thu</TableHead>
                   <TableHead className="text-right">Nợ hiện tại</TableHead>

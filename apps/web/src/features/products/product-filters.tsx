@@ -109,7 +109,7 @@ function StockSelect({
         <SelectItem value="all">Tất cả tồn kho</SelectItem>
         <SelectItem value="in_stock">Còn hàng</SelectItem>
         <SelectItem value="out_of_stock">Hết hàng</SelectItem>
-        <SelectItem value="below_min">Dưới định mức</SelectItem>
+        <SelectItem value="below_min">Dưới tồn tối thiểu</SelectItem>
       </SelectContent>
     </Select>
   )

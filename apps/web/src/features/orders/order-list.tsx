@@ -134,7 +134,7 @@ function CustomerSearchFilter({
       <PopoverContent className="w-64 p-2" align="start">
         <Input
           ref={inputRef}
-          placeholder="Tìm tên hoặc SĐT"
+          placeholder="Tìm theo tên hoặc số điện thoại"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="mb-2 h-8"
@@ -380,15 +380,15 @@ export function OrderList() {
       {isEmpty && !hasFilter && (
         <EmptyState
           icon={Receipt}
-          title="Chưa có hóa đơn nào"
-          description="Hóa đơn sẽ xuất hiện sau khi bán hàng tại POS"
+          title="Chưa có đơn hàng nào"
+          description="Đơn hàng sẽ xuất hiện sau khi bán tại màn bán hàng"
         />
       )}
 
       {isEmpty && hasFilter && (
         <EmptyState
           icon={SearchX}
-          title="Không tìm thấy hóa đơn"
+          title="Không tìm thấy đơn hàng"
           description="Thử thay đổi từ khóa hoặc bộ lọc."
         />
       )}
@@ -407,7 +407,7 @@ export function OrderList() {
           total={meta.total}
           totalPages={meta.totalPages}
           onPageChange={(p) => updateSearch({ page: p })}
-          unitLabel="hóa đơn"
+          unitLabel="đơn hàng"
         />
       )}
     </div>

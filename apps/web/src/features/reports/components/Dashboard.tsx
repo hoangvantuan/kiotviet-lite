@@ -65,7 +65,7 @@ export function Dashboard() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Dashboard</h1>
+          <h1 className="text-xl font-semibold text-foreground">Tổng quan báo cáo</h1>
           <p className="text-sm text-muted-foreground">Tổng quan tình hình kinh doanh cửa hàng.</p>
         </div>
         <div className="flex items-center gap-3">

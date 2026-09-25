@@ -56,7 +56,7 @@ export function CategoryDiscountsTable({ items, onEdit, onDelete }: Props) {
             <TableHead>Danh mục</TableHead>
             <TableHead>Đối tượng</TableHead>
             <TableHead className="text-right">Mức giảm</TableHead>
-            <TableHead className="text-right">SL tối thiểu</TableHead>
+            <TableHead className="text-right">Số lượng tối thiểu</TableHead>
             <TableHead>Hiệu lực</TableHead>
             <TableHead>Trạng thái</TableHead>
             <TableHead>Ghi chú</TableHead>

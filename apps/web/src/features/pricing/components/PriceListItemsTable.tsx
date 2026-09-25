@@ -31,7 +31,7 @@ export function PriceListItemsTable({ priceList, items, onEdit, onDelete }: Prop
         <TableHeader>
           <TableRow>
             <TableHead>Sản phẩm</TableHead>
-            <TableHead>SKU</TableHead>
+            <TableHead>Mã hàng</TableHead>
             <TableHead className="text-right">Giá gốc</TableHead>
             <TableHead className="text-right">Giá bảng</TableHead>
             {priceList.method === 'formula' && <TableHead>Override</TableHead>}

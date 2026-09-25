@@ -375,7 +375,7 @@ export function PosScreen() {
             <span className="flex items-center gap-2">
               <ShoppingCart className="h-5 w-5" aria-hidden="true" />
               <span className="text-sm font-semibold">
-                {cartCount > 0 ? `${cartCount} SP` : 'Giỏ hàng trống'}
+                {cartCount > 0 ? `${cartCount} sản phẩm` : 'Giỏ hàng trống'}
               </span>
             </span>
             {cartCount > 0 && (

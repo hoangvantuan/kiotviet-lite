@@ -58,7 +58,7 @@ export function SupplierPaymentsManager() {
     <div className="space-y-4 p-4 md:p-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Phiếu chi trả nợ NCC</h1>
+          <h1 className="text-2xl font-semibold">Phiếu chi</h1>
           <p className="text-sm text-muted-foreground">
             Quản lý phiếu chi thanh toán công nợ phải trả nhà cung cấp
           </p>
@@ -111,7 +111,7 @@ export function SupplierPaymentsManager() {
           title="Chưa có phiếu chi nào"
           description={
             isOwner
-              ? 'Tạo phiếu chi đầu tiên để thanh toán nợ NCC'
+              ? 'Tạo phiếu chi đầu tiên để trả nợ nhà cung cấp'
               : 'Chưa có phiếu chi nào trong khoảng thời gian này'
           }
           actionLabel={isOwner ? 'Tạo phiếu chi' : undefined}

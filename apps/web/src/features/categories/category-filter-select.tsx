@@ -36,7 +36,7 @@ export function CategoryFilterSelect({
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={CATEGORY_FILTER_ALL}>Tất cả danh mục</SelectItem>
-        <SelectItem value={CATEGORY_FILTER_NONE}>Chưa phân loại</SelectItem>
+        <SelectItem value={CATEGORY_FILTER_NONE}>Chưa có danh mục</SelectItem>
         {tree.map((parent) => (
           <div key={parent.id}>
             <SelectItem value={parent.id}>{parent.name}</SelectItem>

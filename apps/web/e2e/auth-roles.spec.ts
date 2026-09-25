@@ -21,10 +21,10 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
       /Phiếu thu|Phieu thu/i,
       /Bảng giá|Bang gia/i,
       /Nhà cung cấp|Nha cung cap/i,
-      /Phiếu nhập kho|Phieu nhap kho/i,
-      /Phiếu chi NCC|Phieu chi NCC/i,
-      /Kiểm kho|Kiem kho/i,
-      /Dashboard/i,
+      /Phiếu nhập hàng|Phieu nhap hang/i,
+      /Phiếu chi|Phieu chi/i,
+      /Kiểm kê|Kiem ke/i,
+      /Tổng quan báo cáo|Tong quan bao cao/i,
       /Doanh thu/i,
       /Lợi nhuận|Loi nhuan/i,
       /Tồn kho|Ton kho/i,
@@ -57,10 +57,10 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
       /Phiếu thu|Phieu thu/i,
       /Bảng giá|Bang gia/i,
       /Nhà cung cấp|Nha cung cap/i,
-      /Phiếu nhập kho|Phieu nhap kho/i,
-      /Phiếu chi NCC|Phieu chi NCC/i,
-      /Kiểm kho|Kiem kho/i,
-      /Dashboard/i,
+      /Phiếu nhập hàng|Phieu nhap hang/i,
+      /Phiếu chi|Phieu chi/i,
+      /Kiểm kê|Kiem ke/i,
+      /Tổng quan báo cáo|Tong quan bao cao/i,
       /Doanh thu/i,
       /Lợi nhuận|Loi nhuan/i,
       /Tồn kho|Ton kho/i,
@@ -83,7 +83,7 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
     const sidebar = page.locator('aside')
     await expect(sidebar).toBeVisible()
 
-    // Staff chỉ được thấy các menu: Tổng quan, Bán hàng, Hóa đơn, Cài đặt
+    // Staff chỉ được thấy các menu: Tổng quan, Bán hàng, Đơn hàng, Cài đặt
     const allowedStaffMenuPatterns = [
       /Tổng quan|Tong quan/i,
       /Bán hàng|Ban hang/i,
@@ -102,10 +102,10 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
       /Phiếu thu|Phieu thu/i,
       /Bảng giá|Bang gia/i,
       /Nhà cung cấp|Nha cung cap/i,
-      /Phiếu nhập kho|Phieu nhap kho/i,
-      /Phiếu chi NCC|Phieu chi NCC/i,
-      /Kiểm kho|Kiem kho/i,
-      /Dashboard/i,
+      /Phiếu nhập hàng|Phieu nhap hang/i,
+      /Phiếu chi|Phieu chi/i,
+      /Kiểm kê|Kiem ke/i,
+      /Tổng quan báo cáo|Tong quan bao cao/i,
       /Doanh thu/i,
       /Lợi nhuận|Loi nhuan/i,
       /Tồn kho|Ton kho/i,

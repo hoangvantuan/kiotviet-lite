@@ -25,7 +25,7 @@ export function SupplierPaymentsFilters({
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
       <Input
-        placeholder="Tìm theo tên NCC hoặc ghi chú"
+        placeholder="Tìm theo tên nhà cung cấp hoặc ghi chú"
         value={searchInput}
         onChange={(e) => onSearchInputChange(e.target.value)}
       />
@@ -33,7 +33,7 @@ export function SupplierPaymentsFilters({
         value={supplierId}
         onChange={onSupplierIdChange}
         hasDebt="all"
-        placeholder="Tất cả NCC"
+        placeholder="Tất cả nhà cung cấp"
       />
       <Input
         type="date"

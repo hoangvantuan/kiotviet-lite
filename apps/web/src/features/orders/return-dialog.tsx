@@ -219,7 +219,7 @@ export function ReturnDialog({
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-1.5">
                         <label className="text-xs text-muted-foreground whitespace-nowrap">
-                          SL trả:
+                          Số lượng trả:
                         </label>
                         <Input
                           type="number"

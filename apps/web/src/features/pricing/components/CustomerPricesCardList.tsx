@@ -28,7 +28,7 @@ export function CustomerPricesCardList({ items, onEdit, onDelete }: Props) {
                 )}
                 <div className="mt-2 text-sm">
                   <span className="font-medium">{p.productName}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">SKU {p.productSku}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">Mã hàng {p.productSku}</span>
                 </div>
                 <div className="mt-1 text-sm">
                   Giá riêng: <span className="font-semibold">{formatVndWithSuffix(p.price)}</span>

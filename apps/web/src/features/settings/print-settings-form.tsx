@@ -39,7 +39,7 @@ interface ToggleField {
 
 const TOGGLE_FIELDS: ToggleField[] = [
   { name: 'showCustomerName', label: 'Tên khách hàng' },
-  { name: 'showCustomerPhone', label: 'SĐT khách hàng' },
+  { name: 'showCustomerPhone', label: 'Số điện thoại khách hàng' },
   { name: 'showDiscount', label: 'Chiết khấu' },
   { name: 'showSku', label: 'Mã hàng' },
   { name: 'showOldDebt', label: 'Nợ trước đơn' },
@@ -311,7 +311,7 @@ function InvoicePreview({ settings }: { settings: UpdatePrintSettingsInput }) {
       <div className="space-y-0.5">
         <PreviewRow label="HĐ" value="HD-20260504-0001" />
         <PreviewRow label="Ngày" value="04/05/2026 10:30" />
-        {settings.showCustomerName && <PreviewRow label="KH" value="Nguyễn Văn A" />}
+        {settings.showCustomerName && <PreviewRow label="Khách hàng" value="Nguyễn Văn A" />}
         {settings.showCustomerPhone && <PreviewRow label="SĐT" value="0901 234 567" />}
       </div>
 

@@ -75,25 +75,25 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     path: '/inventory/purchase-orders',
-    label: 'Phiếu nhập kho',
+    label: 'Phiếu nhập hàng',
     icon: ClipboardList,
     requiredPermission: 'inventory.manage',
   },
   {
     path: '/inventory/supplier-payments',
-    label: 'Phiếu chi NCC',
+    label: 'Phiếu chi',
     icon: Wallet,
     requiredPermission: 'inventory.manage',
   },
   {
     path: '/inventory/stock-checks',
-    label: 'Kiểm kho',
+    label: 'Kiểm kê',
     icon: ClipboardCheck,
     requiredPermission: 'inventory.manage',
   },
   {
     path: '/reports/dashboard',
-    label: 'Dashboard',
+    label: 'Tổng quan báo cáo',
     icon: Activity,
     requiredPermission: 'reports.view',
   },
@@ -121,6 +121,11 @@ export const NAV_ITEMS: NavItem[] = [
     icon: PieChart,
     requiredPermission: 'reports.view',
   },
-  { path: '/reports', label: 'Công nợ', icon: BarChart3, requiredPermission: 'reports.view' },
+  {
+    path: '/reports',
+    label: 'Báo cáo công nợ',
+    icon: BarChart3,
+    requiredPermission: 'reports.view',
+  },
   { path: '/settings', label: 'Cài đặt', icon: Settings, requiredPermission: 'audit.viewOwn' },
 ]

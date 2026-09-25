@@ -20,7 +20,7 @@ export function VolumePricesCardList({ items, onEdit, onClear }: Props) {
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <div className="font-medium">{p.productName}</div>
-              <div className="text-xs text-muted-foreground">SKU {p.productSku}</div>
+              <div className="text-xs text-muted-foreground">Mã hàng {p.productSku}</div>
               <div className="mt-1 text-xs text-muted-foreground">
                 Giá lẻ chuẩn: {formatVndWithSuffix(p.productSellingPrice)}
               </div>

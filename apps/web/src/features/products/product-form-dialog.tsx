@@ -278,7 +278,7 @@ function CreateDialog({ open, onOpenChange, categories, brands }: ProductFormDia
               <Switch checked={hasVariants} onCheckedChange={setHasVariants} />
             </div>
             <p className="text-xs text-muted-foreground">
-              Bật khi sản phẩm có nhiều phiên bản (màu sắc, kích cỡ...). Khi bật, giá và barcode sẽ
+              Bật khi sản phẩm có nhiều phiên bản (màu sắc, kích cỡ...). Khi bật, giá và mã vạch sẽ
               được nhập riêng cho từng biến thể.
             </p>
           </section>
@@ -571,7 +571,7 @@ function EditDialog({
             )}
             {hasVariants && !product.hasVariants && product.currentStock > 0 && (
               <p className="text-xs text-amber-700">
-                Tồn kho hiện tại {product.currentStock} &gt; 0. Vui lòng kiểm kho về 0 trước khi bật
+                Tồn kho hiện tại {product.currentStock} &gt; 0. Vui lòng kiểm kê về 0 trước khi bật
                 biến thể.
               </p>
             )}
@@ -757,7 +757,7 @@ function BasicSection<T extends FieldValues & ProductFormFields>({
               <SelectValue placeholder="Chọn danh mục" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NO_CATEGORY}>Không phân loại</SelectItem>
+              <SelectItem value={NO_CATEGORY}>Chưa có danh mục</SelectItem>
               {tree.map((parent) => (
                 <div key={parent.id}>
                   <SelectItem value={parent.id}>{parent.name}</SelectItem>
@@ -1009,7 +1009,7 @@ function InventorySection<T extends FieldValues & ProductFormFields>({
             </div>
           )}
           <div className="space-y-1">
-            <Label htmlFor="p-min">Định mức tồn tối thiểu (báo sắp hết khi tồn ≤ định mức)</Label>
+            <Label htmlFor="p-min">Tồn tối thiểu (báo sắp hết khi tồn kho ≤ tồn tối thiểu)</Label>
             <Input
               id="p-min"
               type="number"
@@ -1028,7 +1028,9 @@ function InventorySection<T extends FieldValues & ProductFormFields>({
             <div className="space-y-1">
               <Label>Tồn kho hiện tại</Label>
               <Input value={currentStock ?? 0} readOnly disabled />
-              <p className="text-xs text-muted-foreground">Cập nhật qua phiếu nhập kho/kiểm kho.</p>
+              <p className="text-xs text-muted-foreground">
+                Cập nhật qua phiếu nhập hàng hoặc kiểm kê.
+              </p>
             </div>
           )}
         </div>

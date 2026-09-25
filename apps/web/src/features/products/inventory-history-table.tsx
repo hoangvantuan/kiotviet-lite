@@ -27,7 +27,7 @@ const TYPE_LABELS: Record<InventoryTransactionItem['type'], string> = {
   sale: 'Bán',
   manual_adjustment: 'Điều chỉnh',
   return: 'Trả hàng',
-  stock_check: 'Kiểm kho',
+  stock_check: 'Kiểm kê',
 }
 
 const TYPE_VARIANTS: Record<
@@ -116,7 +116,7 @@ export function InventoryHistoryTable({ productId }: InventoryHistoryTableProps)
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                   <span>
-                    SL:{' '}
+                    Số lượng:{' '}
                     <span className={tx.quantity < 0 ? 'text-red-600' : 'text-emerald-600'}>
                       {tx.quantity > 0 ? '+' : ''}
                       {tx.quantity}

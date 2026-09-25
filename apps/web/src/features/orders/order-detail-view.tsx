@@ -105,7 +105,7 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
       {/* Back button */}
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/orders' })}>
-          <ChevronLeft className="size-4 mr-1" /> Hóa đơn
+          <ChevronLeft className="size-4 mr-1" /> Đơn hàng
         </Button>
       </div>
 
@@ -192,9 +192,9 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12">STT</TableHead>
-                <TableHead>Tên SP</TableHead>
-                <TableHead>ĐVT</TableHead>
-                <TableHead className="text-right">SL</TableHead>
+                <TableHead>Sản phẩm</TableHead>
+                <TableHead>Đơn vị tính</TableHead>
+                <TableHead className="text-right">Số lượng</TableHead>
                 <TableHead className="text-right">Đơn giá</TableHead>
                 <TableHead className="text-right">CK</TableHead>
                 <TableHead className="text-right">Thành tiền</TableHead>
@@ -255,7 +255,7 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
                 </div>
               )}
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">SL x Đơn giá</span>
+                <span className="text-muted-foreground">Số lượng x Đơn giá</span>
                 <span>
                   {it.quantity} x {formatVnd(it.unitPrice)}
                 </span>

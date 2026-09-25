@@ -147,7 +147,7 @@ export function VolumePricesDialog({
           <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
             <div className="font-medium">{displayName}</div>
             <div className="text-xs text-muted-foreground">
-              SKU {displaySku} • Giá lẻ chuẩn: {formatVndWithSuffix(displaySellingPrice)}
+              Mã hàng {displaySku} • Giá lẻ chuẩn: {formatVndWithSuffix(displaySellingPrice)}
               {displayCostPrice !== null
                 ? ` • Giá vốn: ${formatVndWithSuffix(displayCostPrice)}`
                 : ''}
@@ -168,7 +168,7 @@ export function VolumePricesDialog({
                 <div className="space-y-2">
                   <div className="grid grid-cols-[1fr_1fr_auto] gap-2 text-xs font-medium text-muted-foreground">
                     <div>Số lượng tối thiểu</div>
-                    <div>Giá / SP</div>
+                    <div>Giá / sản phẩm</div>
                     <div className="w-9" />
                   </div>
                   {fields.map((field, index) => {
@@ -267,7 +267,7 @@ export function VolumePricesDialog({
                     <thead className="bg-muted/50 text-xs text-muted-foreground">
                       <tr>
                         <th className="px-3 py-2 text-left">Số lượng từ</th>
-                        <th className="px-3 py-2 text-right">Giá / SP</th>
+                        <th className="px-3 py-2 text-right">Giá / sản phẩm</th>
                         <th className="px-3 py-2 text-right">Chênh giá lẻ</th>
                       </tr>
                     </thead>

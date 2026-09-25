@@ -25,7 +25,7 @@ export function ReceiptsFilters({
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
       <Input
-        placeholder="Tìm theo tên KH, phone hoặc ghi chú"
+        placeholder="Tìm theo tên, số điện thoại hoặc ghi chú"
         value={searchInput}
         onChange={(e) => onSearchInputChange(e.target.value)}
       />
@@ -33,7 +33,7 @@ export function ReceiptsFilters({
         value={customerId}
         onChange={onCustomerIdChange}
         hasDebt="all"
-        placeholder="Tất cả KH"
+        placeholder="Tất cả khách hàng"
       />
       <Input
         type="date"

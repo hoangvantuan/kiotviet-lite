@@ -74,14 +74,14 @@ export function StockCheckManager() {
     <div className="space-y-4 p-4 md:p-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Kiểm kho</h1>
+          <h1 className="text-2xl font-semibold">Kiểm kê</h1>
           <p className="text-sm text-muted-foreground">
             Tạo phiếu kiểm để đối chiếu tồn kho thực tế.
           </p>
         </div>
         <Button asChild>
           <Link to="/inventory/stock-checks/new">
-            <Plus className="size-4 mr-1" /> Tạo phiếu kiểm kho
+            <Plus className="size-4 mr-1" /> Tạo phiếu kiểm kê
           </Link>
         </Button>
       </header>
@@ -175,15 +175,15 @@ export function StockCheckManager() {
       )}
 
       {isError && (
-        <p className="text-sm text-destructive">Không tải được danh sách phiếu kiểm kho.</p>
+        <p className="text-sm text-destructive">Không tải được danh sách phiếu kiểm kê.</p>
       )}
 
       {isEmpty && !hasFilter && (
         <EmptyState
           icon={ClipboardCheck}
-          title="Chưa có phiếu kiểm kho"
+          title="Chưa có phiếu kiểm kê"
           description="Tạo phiếu kiểm đầu tiên để đối chiếu tồn kho thực tế."
-          actionLabel="Tạo phiếu kiểm kho"
+          actionLabel="Tạo phiếu kiểm kê"
           onAction={() => navigate({ to: '/inventory/stock-checks/new' })}
         />
       )}
@@ -220,7 +220,7 @@ function StockCheckTable({ items }: { items: StockCheckListItem[] }) {
             <TableRow>
               <TableHead>Mã</TableHead>
               <TableHead>Trạng thái</TableHead>
-              <TableHead className="text-right">SP</TableHead>
+              <TableHead className="text-right">Số sản phẩm</TableHead>
               <TableHead className="text-right">Tăng</TableHead>
               <TableHead className="text-right">Giảm</TableHead>
               <TableHead>Người tạo</TableHead>
@@ -278,7 +278,7 @@ function StockCheckTable({ items }: { items: StockCheckListItem[] }) {
               <span>
                 <span className="text-green-600">+{it.totalDiffPositive}</span>{' '}
                 <span className="text-red-600">-{it.totalDiffNegative}</span>{' '}
-                <span className="text-muted-foreground">({it.totalItems} SP)</span>
+                <span className="text-muted-foreground">({it.totalItems} sản phẩm)</span>
               </span>
             </div>
           </Link>

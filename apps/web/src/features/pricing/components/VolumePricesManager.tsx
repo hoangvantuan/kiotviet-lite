@@ -125,7 +125,7 @@ export function VolumePricesManager() {
 
       <div className="grid gap-2 md:grid-cols-3">
         <Input
-          placeholder="Tìm theo tên SP, SKU…"
+          placeholder="Tìm theo tên sản phẩm, mã hàng…"
           value={search}
           onChange={(e) => {
             setSearch(e.target.value)

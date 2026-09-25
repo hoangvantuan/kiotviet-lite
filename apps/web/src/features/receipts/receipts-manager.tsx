@@ -66,7 +66,7 @@ export function ReceiptsManager() {
   const handleCreated = (receipt: ReceiptDetail) => {
     const debtAfter = receipt.debtAfter ?? 0
     showSuccess(
-      `Đã tạo phiếu thu ${formatVndWithSuffix(receipt.amount)} cho ${receipt.customerName ?? 'KH'}. Nợ còn lại: ${formatVndWithSuffix(debtAfter)}`,
+      `Đã tạo phiếu thu ${formatVndWithSuffix(receipt.amount)} cho ${receipt.customerName ?? 'khách hàng'}. Nợ còn lại: ${formatVndWithSuffix(debtAfter)}`,
     )
     setCreatedReceipt(receipt)
     setSuccessOpen(true)
@@ -134,7 +134,7 @@ export function ReceiptsManager() {
         <EmptyState
           icon={HandCoins}
           title="Chưa có phiếu thu nào"
-          description="Tạo phiếu thu đầu tiên để ghi nhận thu nợ KH"
+          description="Tạo phiếu thu đầu tiên để ghi nhận thu nợ khách hàng"
           actionLabel="Tạo phiếu thu"
           onAction={() => setCreateOpen(true)}
         />

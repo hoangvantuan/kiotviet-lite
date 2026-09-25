@@ -31,7 +31,6 @@ import { useInventoryReport } from '../hooks/use-reports'
 import { downloadReportExport } from '../reports-api'
 import { ReportExportButton } from './ReportExportButton'
 
-
 export function InventoryReport() {
   const [tab, setTab] = useState<InventoryReportTab>('current')
   const [page, setPage] = useState<number>(1)
@@ -82,7 +81,7 @@ export function InventoryReport() {
         <div className="grid grid-cols-2 gap-4">
           <Card>
             <CardContent className="pt-4">
-              <p className="text-sm text-muted-foreground">Tổng SP</p>
+              <p className="text-sm text-muted-foreground">Tổng sản phẩm</p>
               <p className="text-2xl font-bold font-mono">
                 {(data as InventoryCurrentResponse).summary.totalProducts}
               </p>
@@ -122,7 +121,9 @@ export function InventoryReport() {
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.sku}</TableCell>
                     <TableCell className="text-right font-mono">{r.currentStock}</TableCell>
-                    <TableCell className="text-right font-mono">{formatVndWithSuffix(r.costPrice)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatVndWithSuffix(r.costPrice)}
+                    </TableCell>
                     <TableCell className="text-right font-mono">
                       {formatVndWithSuffix(r.stockValue)}
                     </TableCell>

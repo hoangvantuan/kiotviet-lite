@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 
-import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 import {
   type CreateCustomerInput,
   createCustomerSchema,
   type CustomerDetail,
   type CustomerGroupItem,
+  formatVndWithSuffix,
   type UpdateCustomerInput,
   updateCustomerSchema,
 } from '@kiotviet-lite/shared'

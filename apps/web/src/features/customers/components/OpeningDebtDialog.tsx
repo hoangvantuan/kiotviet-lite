@@ -1,7 +1,6 @@
 import { type SyntheticEvent, useState } from 'react'
 
-import { formatVndWithSuffix } from '@kiotviet-lite/shared'
-import { createOpeningDebtSchema } from '@kiotviet-lite/shared'
+import { createOpeningDebtSchema, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
 import { Button } from '@/components/ui/button'

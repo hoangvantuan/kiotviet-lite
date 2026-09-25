@@ -43,8 +43,8 @@ export function StockCheckItemsEditor({ items, onUpdateItem, onRemoveItem, disab
             <TableRow>
               <TableHead className="w-12">STT</TableHead>
               <TableHead>Sản phẩm</TableHead>
-              <TableHead className="hidden lg:table-cell">SKU</TableHead>
-              <TableHead className="text-right w-28">Tồn HT</TableHead>
+              <TableHead className="hidden lg:table-cell">Mã hàng</TableHead>
+              <TableHead className="text-right w-28">Tồn kho hệ thống</TableHead>
               <TableHead className="w-28">Thực tế</TableHead>
               <TableHead className="text-right w-24">Chênh lệch</TableHead>
               <TableHead>Ghi chú</TableHead>
@@ -139,7 +139,7 @@ export function StockCheckItemsEditor({ items, onUpdateItem, onRemoveItem, disab
               </div>
               <div className="grid grid-cols-3 gap-2 items-end">
                 <div>
-                  <div className="text-xs text-muted-foreground">Tồn HT</div>
+                  <div className="text-xs text-muted-foreground">Tồn kho hệ thống</div>
                   <div className="font-mono font-medium">{it.systemQty}</div>
                 </div>
                 <div>
@@ -176,7 +176,7 @@ export function StockCheckItemsEditor({ items, onUpdateItem, onRemoveItem, disab
 
       <div className="sticky bottom-0 z-10 rounded-md border bg-background/95 backdrop-blur p-3 text-sm flex flex-wrap gap-x-6 gap-y-1">
         <span>
-          Tổng SP: <strong>{items.length}</strong>
+          Tổng sản phẩm: <strong>{items.length}</strong>
         </span>
         <span className="text-green-600">
           Tăng: <strong>+{summary.totalDiffPositive}</strong>

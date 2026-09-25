@@ -320,7 +320,7 @@ export function PurchaseOrderForm() {
   return (
     <div className="space-y-6 p-4 md:p-6 pb-32">
       <header>
-        <h1 className="text-2xl font-semibold">Tạo phiếu nhập kho</h1>
+        <h1 className="text-2xl font-semibold">Tạo phiếu nhập hàng</h1>
         <p className="text-sm text-muted-foreground">
           Mã phiếu PN-YYYYMMDD-XXXX sẽ tự sinh khi lưu.
         </p>
@@ -378,7 +378,7 @@ export function PurchaseOrderForm() {
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Input
-            placeholder="Tìm sản phẩm theo tên hoặc SKU"
+            placeholder="Tìm sản phẩm theo tên hoặc mã hàng"
             value={productSearch}
             onChange={(e) => setProductSearch(e.target.value)}
             className="sm:max-w-md"
@@ -416,8 +416,8 @@ export function PurchaseOrderForm() {
                 <TableRow>
                   <TableHead className="w-12">STT</TableHead>
                   <TableHead>Sản phẩm</TableHead>
-                  <TableHead className="hidden lg:table-cell">SKU</TableHead>
-                  <TableHead className="w-32">SL</TableHead>
+                  <TableHead className="hidden lg:table-cell">Mã hàng</TableHead>
+                  <TableHead className="w-32">Số lượng</TableHead>
                   <TableHead className="w-36">Đơn giá</TableHead>
                   <TableHead className="w-44">Chiết khấu</TableHead>
                   <TableHead className="w-36 text-right">Thành tiền</TableHead>
@@ -620,7 +620,9 @@ export function PurchaseOrderForm() {
               disabled={paymentSelect !== 'partial'}
             />
             {remaining > 0 && (
-              <p className="text-xs text-amber-600">Còn nợ NCC: {formatVndWithSuffix(remaining)}</p>
+              <p className="text-xs text-amber-600">
+                Công nợ nhà cung cấp: {formatVndWithSuffix(remaining)}
+              </p>
             )}
             {paidAmount > totalAmount && (
               <p className="text-xs text-destructive">Số tiền đã trả vượt quá tổng phiếu.</p>

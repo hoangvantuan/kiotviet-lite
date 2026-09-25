@@ -29,7 +29,7 @@ export function StockCheckEditPage() {
   if (query.isError || !query.data) {
     return (
       <div className="p-4 md:p-6">
-        <p className="text-sm text-destructive">Không tải được phiếu kiểm kho.</p>
+        <p className="text-sm text-destructive">Không tải được phiếu kiểm kê.</p>
       </div>
     )
   }

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 
-import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 import {
   applyRounding,
   type CreatePriceListItemInput,
+  formatVndWithSuffix,
   MAX_PAGE_SIZE,
   type PriceListDetail,
 } from '@kiotviet-lite/shared'
@@ -144,7 +144,7 @@ export function AddPriceListItemDialog({
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{p.name}</p>
-                    <p className="text-xs text-muted-foreground">SKU {p.sku}</p>
+                    <p className="text-xs text-muted-foreground">Mã hàng {p.sku}</p>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {formatVndWithSuffix(p.sellingPrice)}

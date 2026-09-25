@@ -159,7 +159,7 @@ export function StockCheckProductPicker({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Chọn sản phẩm để kiểm kho</DialogTitle>
+          <DialogTitle>Chọn sản phẩm để kiểm kê</DialogTitle>
           <DialogDescription>
             Tích chọn sản phẩm cần kiểm. Sản phẩm có biến thể sẽ yêu cầu chọn biến thể ở bước sau.
           </DialogDescription>
@@ -169,7 +169,7 @@ export function StockCheckProductPicker({
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="all">Kiểm tất cả</TabsTrigger>
             <TabsTrigger value="category">Theo danh mục</TabsTrigger>
-            <TabsTrigger value="search">Tìm SP</TabsTrigger>
+            <TabsTrigger value="search">Tìm sản phẩm</TabsTrigger>
           </TabsList>
 
           <TabsContent value="all" className="mt-3">
@@ -178,8 +178,8 @@ export function StockCheckProductPicker({
             </div>
             {allItems.length >= MAX_BULK_SIZE && (
               <p className="text-xs text-amber-600 mt-2">
-                Đã đạt giới hạn {MAX_BULK_SIZE} SP. Hãy dùng tab "Theo danh mục" hoặc "Tìm SP" để
-                chọn chính xác hơn.
+                Đã đạt giới hạn {MAX_BULK_SIZE} sản phẩm. Hãy dùng tab "Theo danh mục" hoặc "Tìm sản
+                phẩm" để chọn chính xác hơn.
               </p>
             )}
           </TabsContent>
@@ -193,7 +193,7 @@ export function StockCheckProductPicker({
                   selectedCategoryId === 'none' ? 'bg-primary text-primary-foreground' : ''
                 }`}
               >
-                Chưa phân loại
+                Chưa có danh mục
               </button>
               {(categoriesQuery.data ?? []).map((c) => (
                 <button

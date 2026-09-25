@@ -71,7 +71,7 @@ export function CreateSupplierPaymentDialog({
   const submit = form.handleSubmit(async (values) => {
     if (selectedSupplier && values.amount > selectedSupplier.currentDebt) {
       form.setError('amount', {
-        message: `Số tiền chi vượt quá nợ phải trả NCC (${formatVndWithSuffix(
+        message: `Số tiền chi vượt quá nợ phải trả nhà cung cấp (${formatVndWithSuffix(
           selectedSupplier.currentDebt,
         )})`,
       })
@@ -106,9 +106,10 @@ export function CreateSupplierPaymentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Tạo phiếu chi trả nợ NCC</DialogTitle>
+          <DialogTitle>Tạo phiếu chi</DialogTitle>
           <DialogDescription>
-            Phiếu chi sẽ giảm trực tiếp số nợ phải trả NCC. Không thể sửa hoặc xoá sau khi tạo.
+            Phiếu chi sẽ giảm trực tiếp số nợ phải trả nhà cung cấp. Không thể sửa hoặc xoá sau khi
+            tạo.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
@@ -124,7 +125,9 @@ export function CreateSupplierPaymentDialog({
               showDebt={true}
             />
             {noSuppliersWithDebt && (
-              <p className="text-xs text-muted-foreground">Hiện không có NCC nào còn nợ phải trả</p>
+              <p className="text-xs text-muted-foreground">
+                Hiện không có nhà cung cấp nào còn nợ phải trả
+              </p>
             )}
 
             {errors.supplierId?.message && (
@@ -172,7 +175,7 @@ export function CreateSupplierPaymentDialog({
               id="payment-note"
               rows={3}
               maxLength={500}
-              placeholder="VD: Chi trả nợ tháng 4 cho NCC ABC, tiền mặt"
+              placeholder="VD: Chi trả nợ tháng 4 cho nhà cung cấp ABC, tiền mặt"
               {...form.register('note')}
             />
             <p className="text-xs text-muted-foreground text-right">{noteValue.length}/500</p>

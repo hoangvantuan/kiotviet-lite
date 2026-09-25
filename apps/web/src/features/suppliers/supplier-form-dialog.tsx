@@ -2,10 +2,10 @@ import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 
-import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 import {
   type CreateSupplierInput,
   createSupplierSchema,
+  formatVndWithSuffix,
   type SupplierDetail,
   type UpdateSupplierInput,
   updateSupplierSchema,
@@ -101,7 +101,7 @@ function CreateSupplierDialog({ open, onOpenChange, onSupplierCreated }: Supplie
         <DialogHeader>
           <DialogTitle>Thêm nhà cung cấp</DialogTitle>
           <DialogDescription>
-            Tạo NCC mới để phục vụ phiếu nhập kho và theo dõi công nợ phải trả.
+            Tạo nhà cung cấp mới để phục vụ phiếu nhập hàng và theo dõi công nợ phải trả.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
@@ -197,7 +197,7 @@ function EditSupplierDialog({
           <FormFields form={form as unknown as FormShape} mode="edit" />
           <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Công nợ NCC</span>
+              <span className="text-muted-foreground">Công nợ nhà cung cấp</span>
               <span className="font-medium">{formatVndWithSuffix(supplier.currentDebt)}</span>
             </div>
             <div className="flex justify-between">
@@ -240,7 +240,7 @@ function FormFields({ form, mode }: { form: FormShape; mode: 'create' | 'edit' }
     <div className="space-y-4">
       <div className="grid gap-2">
         <Label htmlFor="supplier-name">
-          Tên NCC <span className="text-destructive">*</span>
+          Tên nhà cung cấp <span className="text-destructive">*</span>
         </Label>
         <Input id="supplier-name" autoFocus {...form.register('name')} />
         {errors.name?.message && <p className="text-xs text-destructive">{errors.name.message}</p>}

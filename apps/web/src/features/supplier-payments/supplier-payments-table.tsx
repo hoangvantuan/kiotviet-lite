@@ -29,7 +29,7 @@ export function SupplierPaymentsTable({ items }: SupplierPaymentsTableProps) {
         <TableHeader>
           <TableRow>
             <TableHead>Ngày tạo</TableHead>
-            <TableHead>NCC</TableHead>
+            <TableHead>Nhà cung cấp</TableHead>
             <TableHead className="text-right">Số tiền</TableHead>
             <TableHead>Ghi chú</TableHead>
             <TableHead>Người tạo</TableHead>

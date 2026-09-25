@@ -180,7 +180,7 @@ export function ComparePriceListsView({ listAId, listBId, onSwap, onBack }: Prop
       {/* Summary chips */}
       <div className="flex flex-wrap gap-2 text-xs">
         <Badge variant="outline">
-          Tổng: {summary.totalProducts} SP{' '}
+          Tổng: {summary.totalProducts} sản phẩm{' '}
           {filteredRows.length !== summary.totalProducts && (
             <span className="ml-1 text-muted-foreground">(hiển thị {filteredRows.length})</span>
           )}

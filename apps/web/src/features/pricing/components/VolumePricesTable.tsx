@@ -39,7 +39,7 @@ export function VolumePricesTable({ items, onEdit, onClear }: Props) {
             <TableRow key={p.productId}>
               <TableCell className="align-top">
                 <div className="font-medium">{p.productName}</div>
-                <div className="text-xs text-muted-foreground">SKU {p.productSku}</div>
+                <div className="text-xs text-muted-foreground">Mã hàng {p.productSku}</div>
               </TableCell>
               <TableCell className="text-right tabular-nums">
                 {formatVndWithSuffix(p.productSellingPrice)}

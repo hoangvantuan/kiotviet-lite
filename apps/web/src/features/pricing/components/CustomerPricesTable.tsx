@@ -54,7 +54,7 @@ export function CustomerPricesTable({ items, onEdit, onDelete }: Props) {
                 </TableCell>
                 <TableCell className="align-top">
                   <div className="font-medium">{p.productName}</div>
-                  <div className="text-xs text-muted-foreground">SKU {p.productSku}</div>
+                  <div className="text-xs text-muted-foreground">Mã hàng {p.productSku}</div>
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {formatVndWithSuffix(p.productSellingPrice)}
