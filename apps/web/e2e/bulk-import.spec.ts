@@ -1,5 +1,12 @@
-import { expect, type Page, test } from '@playwright/test'
+import { expect, type Page, type Route, test } from '@playwright/test'
 import { Buffer } from 'node:buffer'
+
+// Bộ này mock toàn bộ API bằng page.route. Trên bản build production, request đi qua service
+// worker không bị page.route chặn, nên phải chặn service worker (project chromium-prod).
+test.use({ serviceWorkers: 'block' })
+
+// Origin của trang đang test (dev 5173 hoặc bản build), để header CORS của mock khớp mọi project
+const allowOrigin = (route: Route) => route.request().headers()['origin'] ?? '*'
 
 const now = '2026-09-23T10:00:00.000Z'
 const later = '2026-10-23T10:00:00.000Z'
@@ -64,7 +71,7 @@ async function mockCatalog(page: Page, role: 'owner' | 'manager' | 'staff') {
       status: url.pathname.endsWith('/confirm') ? 201 : 200,
       contentType: 'application/json',
       headers: {
-        'access-control-allow-origin': 'http://localhost:5173',
+        'access-control-allow-origin': allowOrigin(route),
         'access-control-allow-credentials': 'true',
         'access-control-allow-headers': 'authorization,content-type',
         'access-control-allow-methods': 'GET,POST,OPTIONS',
@@ -101,7 +108,7 @@ test('owner previews errors and names before committing; history survives reopen
     route.fulfill({
       contentType: 'application/json',
       headers: {
-        'access-control-allow-origin': 'http://localhost:5173',
+        'access-control-allow-origin': allowOrigin(route),
         'access-control-allow-credentials': 'true',
       },
       body: JSON.stringify({ data: { ...preview, errors: [], digest: 'digest-valid' } }),
@@ -138,7 +145,7 @@ test('unchanged export can be confirmed without manufacturing a product update',
     route.fulfill({
       contentType: 'application/json',
       headers: {
-        'access-control-allow-origin': 'http://localhost:5173',
+        'access-control-allow-origin': allowOrigin(route),
         'access-control-allow-credentials': 'true',
       },
       body: JSON.stringify({
@@ -212,7 +219,7 @@ test('late preview response cannot replace a newly selected file', async ({ page
       .fulfill({
         contentType: 'application/json',
         headers: {
-          'access-control-allow-origin': 'http://localhost:5173',
+          'access-control-allow-origin': allowOrigin(route),
           'access-control-allow-credentials': 'true',
         },
         body: JSON.stringify({ data: preview }),
@@ -256,7 +263,7 @@ test('active import can be cancelled and failed history explains the failure', a
     route.fulfill({
       contentType: 'application/json',
       headers: {
-        'access-control-allow-origin': 'http://localhost:5173',
+        'access-control-allow-origin': allowOrigin(route),
         'access-control-allow-credentials': 'true',
       },
       body: JSON.stringify({
