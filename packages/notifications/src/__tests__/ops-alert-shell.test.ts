@@ -26,6 +26,15 @@ printf '%s' "\${FAKE_STATUS:-200}"
 `,
   )
   chmodSync(join(dir, 'curl'), 0o755)
+  // openssl giả ghi lại tham số rồi chuyển cho openssl thật, để kiểm secret không nằm trên argv.
+  writeFileSync(
+    join(dir, 'openssl'),
+    `#!/bin/sh
+printf '%s\\n' "$*" >> "$CALL_DIR/openssl.argv"
+PATH=$REAL_PATH exec openssl "$@"
+`,
+  )
+  chmodSync(join(dir, 'openssl'), 0o755)
 })
 
 afterEach(() => {
@@ -37,7 +46,12 @@ function run(
   args = ['backup.failed', 'error', 'Tiêu đề', 'Nội dung'],
 ) {
   execFileSync('sh', [SCRIPT, ...args], {
-    env: { PATH: `${dir}:${process.env.PATH}`, CALL_DIR: dir, ...env },
+    env: {
+      PATH: `${dir}:${process.env.PATH}`,
+      REAL_PATH: process.env.PATH!,
+      CALL_DIR: dir,
+      ...env,
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 }
@@ -85,9 +99,12 @@ describe('deploy/scripts/lib/alert.sh', () => {
     )
   })
 
-  it('webhook có chữ ký HMAC mà verifyWebhookSignature chấp nhận', () => {
+  it('webhook có chữ ký HMAC mà verifyWebhookSignature chấp nhận, secret không nằm trên argv', () => {
     run({ ...webhook, OPS_ALERT_SOURCE: 'cua-hang-a' })
     const [call] = calls()
+    const opensslArgv = readFileSync(join(dir, 'openssl.argv'), 'utf8')
+    expect(opensslArgv).toContain('dgst')
+    expect(opensslArgv).not.toContain(webhook.OPS_ALERT_WEBHOOK_SECRET)
     expect(call!.url).toBe(webhook.OPS_ALERT_WEBHOOK_URL)
     const payload = JSON.parse(call!.body) as Record<string, string>
     expect(payload).toMatchObject({
@@ -104,6 +121,21 @@ describe('deploy/scripts/lib/alert.sh', () => {
         nonce: call!.headers['X-KVL-Nonce']!,
         body: call!.body,
         secret: webhook.OPS_ALERT_WEBHOOK_SECRET,
+      }),
+    ).toEqual({ valid: true })
+  })
+
+  it('HMAC đúng với secret dài hơn một khối và có ký tự đặc biệt', () => {
+    const secret = `${'k'.repeat(80)}\\%s"6\\`
+    run({ ...webhook, OPS_ALERT_WEBHOOK_SECRET: secret })
+    const [call] = calls()
+    expect(
+      verifyWebhookSignature({
+        signature: call!.headers['X-KVL-Signature']!,
+        timestamp: call!.headers['X-KVL-Timestamp']!,
+        nonce: call!.headers['X-KVL-Nonce']!,
+        body: call!.body,
+        secret,
       }),
     ).toEqual({ valid: true })
   })

@@ -11,9 +11,12 @@
 #   backup      last-success.json của bản sao lưu cũ hơn MONITOR_BACKUP_MAX_AGE_HOURS (26).
 #   disk        phân vùng chứa ./data dùng quá MONITOR_DISK_MAX_PCT (85%).
 #   imports     job nhập hàng loạt ở trạng thái running quá MONITOR_IMPORT_STUCK_MINUTES (30).
-#   invariants  apps/api/scripts/invariants.sql (nếu có): mã thoát khác 0 là có vi phạm.
+#   invariants  apps/api/scripts/invariants.sql (nếu có): mã thoát khác 0 là có vi phạm, mỗi
+#               dòng kết quả (psql -At) là một vi phạm.
 # Mỗi kiểm tra lỗi gửi một cảnh báo (bị giới hạn theo OPS_ALERT_THROTTLE_SECONDS), hết lỗi thì
 # gửi một thông báo phục hồi. Mọi kiểm tra đạt và có MONITOR_HEARTBEAT_URL thì ping URL đó.
+# Cảnh báo chỉ mang tên kiểm tra, số vi phạm, mã thoát: không bao giờ gửi dữ liệu (dòng vi phạm,
+# output lệnh) ra Telegram/webhook. Chi tiết ghi vào data/monitor-state/logs/<kiểm tra>.log.
 # Mã thoát: 0 khi mọi kiểm tra đạt, 1 khi có kiểm tra lỗi.
 set -uo pipefail
 
@@ -39,6 +42,16 @@ mkdir -p "$OPS_ALERT_STATE_DIR"
 . "$ROOT/deploy/scripts/lib/alert.sh"
 
 failed=0
+LOG_DIR=$OPS_ALERT_STATE_DIR/logs
+(umask 077 && mkdir -p "$LOG_DIR")
+
+# $1 khóa, stdin là chi tiết: chỉ ghi nhật ký trên máy, không gửi đi. In đường dẫn nhật ký.
+local_log() {
+  local file=$LOG_DIR/$1.log
+  { printf '=== %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; cat; } >>"$file"
+  chmod 600 "$file"
+  printf '%s' "$file"
+}
 
 # $1 khóa, $2 mức, $3 tiêu đề, $4 nội dung khi lỗi. Gọi với $2=ok khi kiểm tra đạt.
 report() {
@@ -61,14 +74,15 @@ psql_in_db() {
 }
 
 check_health() {
-  local out
-  if out=$(compose exec -T api wget -qO- -T 5 http://127.0.0.1:3000/api/v1/health 2>&1); then
+  local out rc log
+  out=$(compose exec -T api wget -qO- -T 5 http://127.0.0.1:3000/api/v1/health 2>&1)
+  rc=$?
+  if ((rc == 0)); then
     report monitor.health ok "API sẵn sàng"
   else
+    log=$({ printf '%s\n' "$out"; compose ps 2>&1; } | local_log monitor.health)
     report monitor.health critical "API không sẵn sàng" \
-      "Readiness /api/v1/health lỗi hoặc container api không chạy.
-$(printf '%s' "$out" | tail -n 5 | cut -c1-300)
-Trạng thái: $(compose ps --format '{{.Service}}={{.State}}' 2>&1 | tr '\n' ' ')"
+      "Readiness /api/v1/health lỗi hoặc container api không chạy (mã thoát $rc). Chi tiết: $log"
   fi
 }
 
@@ -82,7 +96,7 @@ check_backup() {
   age_hours=$((($(date +%s) - $(stat -c %Y "$file" 2>/dev/null || stat -f %m "$file")) / 3600))
   if ((age_hours >= max_hours)); then
     report monitor.backup error "Bản sao lưu đạt gần nhất đã cũ ${age_hours} giờ" \
-      "Ngưỡng ${max_hours} giờ. Bản gần nhất: $(cut -c1-300 "$file")"
+      "Ngưỡng ${max_hours} giờ. Xem $file và nhật ký service backup."
   else
     report monitor.backup ok "Bản sao lưu còn mới"
   fi
@@ -101,9 +115,10 @@ check_disk() {
 }
 
 check_imports() {
-  local minutes=${MONITOR_IMPORT_STUCK_MINUTES:-30} out
+  local minutes=${MONITOR_IMPORT_STUCK_MINUTES:-30} out log
   if ! out=$(psql_in_db -At -c "SELECT count(*) FROM bulk_import_jobs WHERE status = 'running' AND started_at < now() - interval '$minutes minutes'" 2>&1); then
-    report monitor.imports warn "Không kiểm được job nhập hàng loạt" "$(printf '%s' "$out" | tail -n 3)"
+    log=$(printf '%s\n' "$out" | local_log monitor.imports)
+    report monitor.imports warn "Không kiểm được job nhập hàng loạt" "Chi tiết: $log"
   elif ((out > 0)); then
     report monitor.imports warn "$out job nhập chạy quá $minutes phút" \
       "Xem bảng bulk_import_jobs và log api (jobId) để biết job nào đang kẹt."
@@ -113,19 +128,21 @@ check_imports() {
 }
 
 check_invariants() {
-  local file=$ROOT/apps/api/scripts/invariants.sql out rc
+  local file=$ROOT/apps/api/scripts/invariants.sql out rc log violations
   if [[ ! -f $file ]]; then
     echo "Bỏ qua bất biến: chưa có $file" >&2
     return
   fi
-  out=$(psql_in_db -f - <"$file" 2>&1)
+  out=$(psql_in_db -At -f - <"$file" 2>&1)
   rc=$?
   if ((rc == 0)); then
     report monitor.invariants ok "Bất biến dữ liệu"
   else
-    report monitor.invariants error "Bất biến dữ liệu bị lệch" \
-      "invariants.sql thoát mã $rc:
-$(printf '%s' "$out" | tail -n 25 | cut -c1-300)"
+    # Dòng vi phạm có thể chứa dữ liệu khách hàng: chỉ đếm, nội dung nằm ở nhật ký trên máy.
+    violations=$(printf '%s\n' "$out" | grep -c .)
+    log=$(printf '%s\n' "$out" | local_log monitor.invariants)
+    report monitor.invariants error "Bất biến dữ liệu bị lệch: $violations vi phạm" \
+      "invariants.sql thoát mã $rc, $violations dòng kết quả. Chi tiết: $log"
   fi
 }
 

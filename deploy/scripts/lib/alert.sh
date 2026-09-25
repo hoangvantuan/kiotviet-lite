@@ -21,6 +21,36 @@ ops_alert_json_escape() {
     awk '{ printf "%s%s", (NR > 1 ? "\\n" : ""), $0 }'
 }
 
+# HMAC-SHA256(khóa $1, dữ liệu stdin) dạng hex theo RFC 2104, chỉ dùng `openssl dgst` không
+# khóa: khóa đi qua builtin printf và stdin của od, không bao giờ nằm trên dòng lệnh của tiến
+# trình nào (openssl -hmac <khóa> sẽ lộ khóa qua ps, /proc/<pid>/cmdline).
+ops_alert_hmac_sha256() {
+  _k=$(printf '%s' "$1" | od -An -v -tx1 | tr -d ' \n')
+  # Khóa dài hơn một khối (64 byte) thì dùng băm của nó.
+  if [ "${#_k}" -gt 128 ]; then
+    _k=$(printf '%s' "$1" | openssl dgst -sha256 -hex | sed 's/^.*= //')
+  fi
+  _ipad=""
+  _opad=""
+  _i=0
+  while [ "$_i" -lt 64 ]; do
+    if [ -n "$_k" ]; then
+      _b=${_k%"${_k#??}"}
+      _k=${_k#??}
+    else
+      _b=00
+    fi
+    _ipad="$_ipad\\$(printf '%03o' $((0x$_b ^ 0x36)))"
+    _opad="$_opad\\$(printf '%03o' $((0x$_b ^ 0x5c)))"
+    _i=$((_i + 1))
+  done
+  # shellcheck disable=SC2059 # định dạng là chuỗi thoát bát phân tự sinh ở trên
+  {
+    printf "$_opad"
+    { printf "$_ipad"; cat; } | openssl dgst -sha256 -binary
+  } | openssl dgst -sha256 -hex | sed 's/^.*= //'
+}
+
 ops_alert_post() {
   # $1 url, $2 body, các tham số còn lại là header "Tên: giá trị". URL qua stdin (curl -K)
   # để bot token không lộ trong danh sách tiến trình.
@@ -82,8 +112,7 @@ $_at"
     _nonce=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || echo "$_now-$$")
     set -- "Content-Type: application/json" "X-KVL-Timestamp: $_at" "X-KVL-Nonce: $_nonce"
     if [ -n "${OPS_ALERT_WEBHOOK_SECRET:-}" ]; then
-      _sig=$(printf '%s' "$_at.$_nonce.$_payload" |
-        openssl dgst -sha256 -hmac "$OPS_ALERT_WEBHOOK_SECRET" | sed 's/^.*= //')
+      _sig=$(printf '%s' "$_at.$_nonce.$_payload" | ops_alert_hmac_sha256 "$OPS_ALERT_WEBHOOK_SECRET")
       set -- "$@" "X-KVL-Signature: $_sig"
     fi
     _code=$(ops_alert_post "$OPS_ALERT_WEBHOOK_URL" "$_payload" "$@")
