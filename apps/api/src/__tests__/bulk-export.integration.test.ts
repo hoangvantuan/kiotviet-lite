@@ -12,10 +12,10 @@ import {
   suppliers,
 } from '@kiotviet-lite/shared'
 
-import { signAccessToken } from '../lib/jwt.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { createBulkExportRoutes } from '../routes/bulk-export.routes.js'
 import { BULK_EXPORT_HEADERS } from '../services/bulk-export.service.js'
+import { createUser } from './helpers/factories.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 beforeAll(() => {
@@ -153,9 +153,9 @@ describe('bulk XLSX downloads over authenticated HTTP', () => {
     await env.db
       .insert(suppliers)
       .values({ storeId: otherStore!.id, code: 'NCC-SECRET', name: 'Secret' })
-    const otherAuth = {
-      Authorization: `Bearer ${signAccessToken({ userId: env.owner.id, storeId: otherStore!.id, role: 'owner' })}`,
-    }
+    // Token phải thuộc một tài khoản có thật của cửa hàng kia (requireAuth đối chiếu DB, BM-03)
+    const otherOwner = await createUser(env, { storeId: otherStore!.id, role: 'owner' })
+    const otherAuth = otherOwner.authHeader
 
     const product = await sheet(
       await app.request(
