@@ -27,6 +27,8 @@ KEEP_MONTHS=${BACKUP_KEEP_MONTHS:-6}
 VERIFY=${BACKUP_VERIFY:-restore}
 REMOTE=${BACKUP_RCLONE_REMOTE:-}
 PREFIX=kvl-backup-
+# retention_victims (lib.sh) đọc các biến này từ môi trường.
+export PREFIX KEEP_DAYS KEEP_WEEKS KEEP_MONTHS
 
 export PGHOST=${PGHOST:-postgres}
 export PGPORT=${PGPORT:-5432}
@@ -37,6 +39,8 @@ export OPS_ALERT_STATE_DIR=${OPS_ALERT_STATE_DIR:-$BACKUP_ROOT/.alert-state}
 
 # shellcheck source=../scripts/lib/alert.sh
 . "${KVL_ALERT_LIB:-/usr/local/lib/kvl/alert.sh}"
+# shellcheck source=lib.sh
+. "${KVL_BACKUP_LIB:-/usr/local/lib/kvl/backup-lib.sh}"
 
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 NAME=$PREFIX$STAMP
@@ -48,7 +52,15 @@ STEP=init
 exporter_pid=""
 verify_db_created=""
 
-mkdir -p "$ARCHIVE_DIR" "$WORK" "$LOG_DIR" "$OPS_ALERT_STATE_DIR"
+mkdir -p "$ARCHIVE_DIR" "$LOG_DIR" "$OPS_ALERT_STATE_DIR"
+# Lần chạy trước bị kill (mất điện, docker stop quá hạn) có thể để lại thư mục làm việc chứa
+# bản dump chưa mã hóa và DB tạm kvl_verify_*: dọn trước khi bắt đầu. Hai lần chạy chồng nhau
+# bị flock chặn nên không xóa nhầm của lần đang chạy.
+exec 9>"$BACKUP_ROOT/.lock"
+flock -n 9 || { echo "Đang có một lần sao lưu khác chạy" >&2; exit 75; }
+# Chỉ dọn thư mục của backup.sh; restore.sh dùng .work/restore-* và có thể đang chạy song song.
+rm -rf "$BACKUP_ROOT/.work/$PREFIX"*
+mkdir -p "$WORK"
 exec > >(tee -a "$LOG") 2>&1
 
 log() { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*"; }
@@ -70,62 +82,23 @@ on_error() {
   trap - ERR
   log "LỖI ở bước '$STEP' (mã $rc)"
   touch "$OPS_ALERT_STATE_DIR/backup-last-failed"
+  # Chỉ gửi tên bước và mã thoát ra kênh ngoài; thông báo lỗi (có thể chứa tên bảng, dữ liệu
+  # hoặc chuỗi kết nối) chỉ nằm trong log trên máy.
   ops_alert backup.failed error "Sao lưu thất bại ở bước $STEP" \
-    "Bản $NAME, mã thoát $rc. Nhật ký: $LOG
-$(tail -n 15 "$LOG" 2>/dev/null | cut -c1-300)"
+    "Bản $NAME, mã thoát $rc. Xem nhật ký trên máy chủ: $LOG"
   exit "$rc"
 }
 trap 'on_error $?' ERR
 trap cleanup EXIT
 
-# In "schema.bảng|số dòng" cho mọi bảng thường, sắp xếp ổn định. $1 là DB, $2 (tùy chọn) snapshot.
-count_rows() {
-  psql -X -q -At -v ON_ERROR_STOP=1 -d "$1" <<SQL | LC_ALL=C sort
-BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
-${2:+SET TRANSACTION SNAPSHOT '$2';}
-SELECT format('SELECT %L || ''|'' || count(*) FROM %I.%I', n.nspname || '.' || c.relname, n.nspname, c.relname)
-FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE c.relkind IN ('r', 'p')
-  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND n.nspname NOT LIKE 'pg\_toast%' AND n.nspname NOT LIKE 'pg\_temp%'
-ORDER BY 1 \gexec
-COMMIT;
-SQL
-}
-
-# Đọc danh sách tên (mới nhất trước) từ stdin, in các tên cần xóa theo quy tắc ông-cha-con:
-# giữ bản mới nhất của mỗi ngày trong KEEP_DAYS ngày gần nhất có sao lưu, mỗi tuần ISO trong
-# KEEP_WEEKS tuần, mỗi tháng trong KEEP_MONTHS tháng.
-retention_victims() {
-  local -A seen_d=() seen_w=() seen_m=()
-  local nd=0 nw=0 nm=0 name d w m keep
-  while read -r name; do
-    [[ $name =~ ^${PREFIX}([0-9]{8})T[0-9]{6}Z\.tar(\.age)?$ ]] || continue
-    d=${BASH_REMATCH[1]}
-    m=${d:0:6}
-    w=$(date -u -d "${d:0:4}-${d:4:2}-${d:6:2}" +%G%V)
-    keep=0
-    if [[ -z ${seen_d[$d]:-} ]]; then
-      seen_d[$d]=1
-      nd=$((nd + 1))
-      ((nd <= KEEP_DAYS)) && keep=1
-    fi
-    if [[ -z ${seen_w[$w]:-} ]]; then
-      seen_w[$w]=1
-      nw=$((nw + 1))
-      ((nw <= KEEP_WEEKS)) && keep=1
-    fi
-    if [[ -z ${seen_m[$m]:-} ]]; then
-      seen_m[$m]=1
-      nm=$((nm + 1))
-      ((nm <= KEEP_MONTHS)) && keep=1
-    fi
-    ((keep == 1)) || printf '%s\n' "$name"
-  done
-}
-
 ((KEEP_DAYS >= 1)) || { echo "BACKUP_KEEP_DAYS phải >= 1" >&2; exit 64; }
 log "Bắt đầu sao lưu $NAME (DB $PGDATABASE trên $PGHOST:$PGPORT)"
+
+STEP=cleanup_stale
+for stale in $(psql -X -At -d postgres -c "SELECT datname FROM pg_database WHERE datname LIKE 'kvl\_verify\_%'"); do
+  dropdb --if-exists "$stale"
+  log "Xóa DB tạm sót lại từ lần chạy trước: $stale"
+done
 
 STEP=snapshot
 mkfifo "$WORK/ctl"

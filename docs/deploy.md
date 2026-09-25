@@ -1,9 +1,8 @@
 # Runbook deploy production
 
-Stack chạy bằng Docker Compose: postgres + init-permissions và migrate (one-shot) + api + web (nginx)
-
-- backup. Ngoài compose có `deploy/scripts/monitor.sh` chạy bằng cron của host (mục 7).
-  Thiết kế chi tiết: [spec](superpowers/specs/2026-06-12-docker-compose-production-design.md).
+Stack chạy bằng Docker Compose: postgres, init-permissions và migrate (one-shot), api, web (nginx)
+và backup. Ngoài compose có `deploy/scripts/monitor.sh` chạy bằng cron của host (mục 7).
+Thiết kế chi tiết: [spec](superpowers/specs/2026-06-12-docker-compose-production-design.md).
 
 ## 1. Chuẩn bị lần đầu
 
@@ -121,7 +120,9 @@ ngắn thời gian thực tế khi lưu lượng tăng.
 ### 6.1 Cách hoạt động
 
 Service `backup` (image `deploy/backup/Dockerfile`, chạy bằng uid 1000) chạy `backup.sh` mỗi ngày
-lúc `BACKUP_TIME` (mặc định 02:30 theo `TZ`). Mỗi lần:
+lúc `BACKUP_TIME` (mặc định 02:30 theo `TZ`). Service chỉ chờ postgres, không chờ migrate: migration
+lỗi thì sao lưu vẫn chạy. Mỗi lần giữ khóa `flock` trên `./data/backups/.lock` (lần chạy tay trùng
+lịch thì thoát mã 75), dọn thư mục `.work` và các DB `kvl_verify_*` còn sót từ lần bị kill, rồi:
 
 1. `pg_dump -Fc` trong một snapshot đã export; số dòng từng bảng được đếm trong cùng snapshot.
 2. Đóng gói `./data/imports/` (tệp nhập gốc).
@@ -136,8 +137,9 @@ lúc `BACKUP_TIME` (mặc định 02:30 theo `TZ`). Mỗi lần:
    remote cùng quy tắc (tắt bằng `BACKUP_REMOTE_PRUNE=false`).
 7. Ghi `./data/backups/last-success.json`; `monitor.sh` báo khi tệp này cũ hơn 26 giờ.
 
-Bước nào lỗi thì gửi cảnh báo `backup.failed` kèm 15 dòng log cuối; log đầy đủ ở
-`./data/backups/logs/`. Thiếu khóa công khai thì vẫn sao lưu nhưng không mã hóa, không đẩy đi và
+Bước nào lỗi thì gửi cảnh báo `backup.failed` chỉ gồm tên bước và mã thoát (không kèm log, vì log
+có thể chứa dữ liệu); log đầy đủ ở `./data/backups/logs/`. Khi dừng, compose chờ tối đa 5 phút
+(`stop_grace_period`) cho lần sao lưu đang chạy. Thiếu khóa công khai thì vẫn sao lưu nhưng không mã hóa, không đẩy đi và
 cảnh báo mỗi lần; thiếu remote thì cảnh báo mỗi lần. Data sống của Postgres nằm ở `./data/postgres/`.
 
 ### 6.2 Cài đặt lần đầu
@@ -193,9 +195,13 @@ docker rm -f kvl-drill-pg && docker network rm kvl-drill && cd .. && rm -rf dril
 
 ### 6.4 Khôi phục thật
 
-`restore.sh` giải mã, kiểm `SHA256SUMS`, khôi phục DB rồi so số dòng từng bảng với manifest, bung
-tệp nhập ra `data/backups/restore/<tên>/imports`. Mặc định khôi phục vào DB **mới**
-`kvl_restore_<mốc>`; chỉ ghi đè DB đang dùng khi có `--target-db ... --replace`.
+`restore.sh` giải mã, kiểm `SHA256SUMS`, luôn khôi phục vào DB tạm `kvl_restoring_<pid>` rồi so số
+dòng từng bảng với manifest, bung tệp nhập ra `data/backups/restore/<tên>/imports`. Mặc định DB tạm
+được đổi tên thành DB **mới** `kvl_restore_<mốc>`. Với `--target-db <tên> --replace`, DB đích không
+bị xóa: sau khi số dòng khớp, DB đích đổi tên thành `<tên>_old_<UTC>` (không nhận kết nối) và DB tạm
+đổi tên thành `<tên>`, cả hai trong một transaction. Số dòng lệch hay lỗi giữa chừng thì DB đích giữ
+nguyên, DB tạm bị xóa. Còn kết nối tới DB đích (api, psql...) thì script từ chối; chỉ thêm
+`--force-disconnect` khi chắc chắn muốn ngắt chúng. Tên DB chỉ gồm chữ thường, số, `_` (tối đa 40).
 
 ```bash
 # 1. Dừng ghi: api (và web để người dùng thấy bảo trì)
@@ -204,7 +210,9 @@ docker compose -f docker-compose.prod.yml stop web api
 # 2. Đưa khóa bí mật lên server TẠM THỜI, chỉ uid 1000 đọc được
 sudo install -m 600 -o 1000 -g 1000 ~/kvl-backup.key data/backups/kvl-backup.key
 
-# 3. Khôi phục (tên tệp trong data/backups/archive, hoặc tên trên remote: tự tải về)
+# 3. Khôi phục (tên tệp trong data/backups/archive, hoặc tên trên remote: tự tải về).
+#    Log in tên DB cũ, ví dụ "DB cũ giữ lại tên kiotviet_old_20260925021500".
+docker compose -f docker-compose.prod.yml stop backup
 docker compose -f docker-compose.prod.yml run --rm --no-deps backup bash -c \
   'restore.sh kvl-backup-<UTC>.tar.age --identity /backups/kvl-backup.key \
      --target-db "$POSTGRES_DB" --replace'
@@ -212,14 +220,22 @@ docker compose -f docker-compose.prod.yml run --rm --no-deps backup bash -c \
 # 4. Xóa khóa bí mật khỏi server ngay
 sudo shred -u data/backups/kvl-backup.key
 
-# 5. Trả tệp nhập về chỗ cũ
+# 5. Trả tệp nhập về chỗ cũ, rồi xóa bản bung ra (tệp nhập chứa dữ liệu khách hàng)
 sudo cp -a data/backups/restore/kvl-backup-<UTC>/imports/. data/imports/
 sudo chown -R 1000:1000 data/imports
+sudo rm -rf data/backups/restore/kvl-backup-<UTC>
 
 # 6. Chạy lại (migrate chạy bù nếu bản sao lưu cũ hơn mã hiện tại)
 docker compose -f docker-compose.prod.yml up -d
 curl -i http://localhost:8080/api/v1/health
+
+# 7. Khi đã chắc DB khôi phục đúng (vài ngày sau), xóa DB cũ để lấy lại đĩa
+docker compose -f docker-compose.prod.yml exec postgres sh -c \
+  'dropdb -U "$POSTGRES_USER" <tên DB cũ ở bước 3>'
 ```
+
+Cần quay về DB cũ: dừng api, đổi tên ngược lại bằng `ALTER DATABASE ... RENAME TO ...` và bật
+`ALTER DATABASE <tên cũ> WITH ALLOW_CONNECTIONS true`.
 
 Server mới hoàn toàn: clone repo, đặt lại `.env` (cùng secret JWT để phiên cũ còn hợp lệ, hoặc
 secret mới để buộc đăng nhập lại), `docker compose ... up -d postgres init-permissions`, rồi làm
@@ -247,7 +263,9 @@ Cron của root trên host (`sudo crontab -e`, vì script cần quyền Docker v
 ```
 
 Kiểm tra bất biến chạy `apps/api/scripts/invariants.sql` nếu tệp có trong repo: mã thoát khác 0
-là có vi phạm, cảnh báo kèm output; chưa có tệp thì bỏ qua. Xem kết quả: `journalctl -t kvl-monitor`.
+là có vi phạm, mỗi dòng kết quả (`psql -At`) là một vi phạm; chưa có tệp thì bỏ qua. Cảnh báo chỉ
+gồm tên kiểm tra, số vi phạm và mã thoát, không bao giờ kèm dòng dữ liệu hay output lệnh; chi tiết
+ghi ở `data/monitor-state/logs/<kiểm tra>.log` (chỉ root đọc được). Xem kết quả: `journalctl -t kvl-monitor`.
 
 Uptime monitor bên ngoài (UptimeRobot, Better Stack, Healthchecks...):
 

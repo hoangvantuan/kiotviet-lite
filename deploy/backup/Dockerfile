@@ -4,6 +4,7 @@
 FROM postgres:17-alpine
 RUN apk add --no-cache bash age rclone curl openssl tzdata coreutils
 COPY deploy/scripts/lib/alert.sh /usr/local/lib/kvl/alert.sh
+COPY deploy/backup/lib.sh /usr/local/lib/kvl/backup-lib.sh
 COPY deploy/backup/backup.sh deploy/backup/restore.sh deploy/backup/scheduler.sh /usr/local/bin/
 RUN chmod 755 /usr/local/bin/backup.sh /usr/local/bin/restore.sh /usr/local/bin/scheduler.sh
 # Không cần HOME thật; rclone và age ghi cache tạm vào đây.

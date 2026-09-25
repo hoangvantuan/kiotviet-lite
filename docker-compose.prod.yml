@@ -113,12 +113,14 @@ services:
     volumes:
       - ./data/backups:/backups
       - ./data/imports:/data/imports:ro
+    # Không phụ thuộc migrate: migration lỗi thì càng cần sao lưu chạy tiếp.
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
       init-permissions:
         condition: service_completed_successfully
+    # scheduler chờ lần sao lưu đang chạy xong rồi mới thoát; bị kill giữa chừng thì lần sau
+    # tự dọn thư mục làm việc và DB tạm.
+    stop_grace_period: 5m
     restart: unless-stopped
     logging: *default-logging
