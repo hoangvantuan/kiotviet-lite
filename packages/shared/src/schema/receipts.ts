@@ -19,6 +19,11 @@ export const receipts = pgTable(
       .references(() => customers.id, { onDelete: 'restrict' }),
     amount: bigint({ mode: 'number' }).notNull(),
     note: varchar({ length: 500 }),
+    // TIEN-107: chứng từ không bị xóa, hủy thì đổi trạng thái và ghi người hủy, lúc hủy, lý do
+    status: varchar({ length: 16 }).notNull().default('active'),
+    cancelledAt: timestamp({ withTimezone: true }),
+    cancelledBy: uuid().references(() => users.id, { onDelete: 'restrict' }),
+    cancelReason: varchar({ length: 500 }),
     createdBy: uuid()
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),

@@ -44,6 +44,8 @@ export const purchaseOrderItems = pgTable(
     unitCost: bigint({ mode: 'number' }),
     costAfter: bigint({ mode: 'number' }),
     stockAfter: integer(),
+    // KHO-11: lũy kế số lượng đã trả NCC, theo đơn vị ghi trên chứng từ
+    returnedQuantity: integer().notNull().default(0),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

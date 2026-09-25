@@ -67,6 +67,8 @@ export const auditActionSchema = z.enum([
   'supplier_debt_adjustment.created',
   'supplier_debt.opening_created',
   'purchase_order.created',
+  'purchase_order.cancelled',
+  'purchase_return.created',
   'stock_check.created',
   'stock_check.updated',
   'stock_check.confirmed',
@@ -88,10 +90,13 @@ export const auditActionSchema = z.enum([
   'order.review_approved',
   'order.review_rejected',
   'receipt.created',
+  'receipt.cancelled',
+  'supplier_payment.cancelled',
   'receipt.printed',
   'debt_adjustment.created',
   'debt_ledger.backfilled',
   'order.returned',
+  'order.cancelled',
   'print_settings.updated',
 ])
 

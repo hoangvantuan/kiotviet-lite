@@ -35,6 +35,17 @@ export const purchaseOrders = pgTable(
     paidAmount: bigint({ mode: 'number' }).notNull().default(0),
     paymentStatus: varchar({ length: 16 }).notNull(),
     note: text(),
+    // KHO-11: phiếu nhập hủy thì đổi trạng thái, không xóa. Hủy đảo tồn kho và công nợ NCC.
+    status: varchar({ length: 16 }).notNull().default('active'),
+    cancelledAt: timestamp({ withTimezone: true }),
+    cancelledBy: uuid().references(() => users.id, { onDelete: 'restrict' }),
+    cancelReason: varchar({ length: 500 }),
+    // Lúc hủy: phần giảm vào công nợ NCC và phần NCC phải hoàn tiền mặt (tổng = totalAmount)
+    cancelDebtReduction: bigint({ mode: 'number' }).notNull().default(0),
+    cancelSupplierRefund: bigint({ mode: 'number' }).notNull().default(0),
+    // Lũy kế trả hàng nhập: giá trị hàng trả và phần NCC hoàn tiền mặt
+    returnedAmount: bigint({ mode: 'number' }).notNull().default(0),
+    returnRefundAmount: bigint({ mode: 'number' }).notNull().default(0),
     purchaseDate: timestamp({ withTimezone: true }).notNull().defaultNow(),
     createdBy: uuid()
       .notNull()

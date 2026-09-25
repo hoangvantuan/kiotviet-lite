@@ -1,6 +1,8 @@
 import { z } from 'zod'
 
+import { documentStatusSchema } from './document-cancel.js'
 import { dateFilterSchema, paginationSchema } from './pagination.js'
+import { purchaseReturnSchema } from './purchase-return-management.js'
 
 export const discountTypeSchema = z.enum(['amount', 'percent'])
 export const paymentStatusSchema = z.enum(['unpaid', 'partial', 'paid'])
@@ -50,6 +52,7 @@ export const listPurchaseOrdersQuerySchema = paginationSchema.extend({
   search: z.string().trim().optional(),
   supplierId: z.string().uuid().optional(),
   paymentStatus: paymentStatusSchema.optional(),
+  status: documentStatusSchema.optional(),
   fromDate: dateFilterSchema.optional(),
   toDate: dateFilterSchema.optional(),
 })
@@ -79,6 +82,8 @@ export const purchaseOrderItemDetailSchema = z.object({
   unitCost: z.number().nullable(),
   costAfter: z.number().nullable(),
   stockAfter: z.number().nullable(),
+  // KHO-11: lũy kế đã trả NCC, theo đơn vị ghi trên chứng từ
+  returnedQuantity: z.number(),
 })
 
 export const purchaseOrderListItemSchema = z.object({
@@ -90,8 +95,12 @@ export const purchaseOrderListItemSchema = z.object({
   subtotal: z.number(),
   discountTotal: z.number(),
   totalAmount: z.number(),
+  // Đã trả ròng cho phiếu: trả lúc nhập + phiếu chi gắn phiếu (còn hiệu lực) - NCC hoàn khi trả hàng
   paidAmount: z.number(),
+  // Lũy kế giá trị hàng đã trả NCC (KHO-11)
+  returnedAmount: z.number(),
   paymentStatus: paymentStatusSchema,
+  status: documentStatusSchema,
   purchaseDate: z.string(),
   createdAt: z.string(),
 })
@@ -109,6 +118,17 @@ export const purchaseOrderDetailSchema = purchaseOrderListItemSchema.extend({
     phone: z.string().nullable(),
   }),
   items: z.array(purchaseOrderItemDetailSchema),
+  // Trả lúc nhập, tách khỏi phiếu chi gắn sau (TIEN-104)
+  initialPaidAmount: z.number(),
+  linkedPaymentAmount: z.number(),
+  returnRefundAmount: z.number(),
+  cancelledAt: z.string().nullable(),
+  cancelledBy: z.string().uuid().nullable(),
+  cancelledByName: z.string().nullable(),
+  cancelReason: z.string().nullable(),
+  cancelDebtReduction: z.number(),
+  cancelSupplierRefund: z.number(),
+  returns: z.array(purchaseReturnSchema),
   updatedAt: z.string(),
 })
 

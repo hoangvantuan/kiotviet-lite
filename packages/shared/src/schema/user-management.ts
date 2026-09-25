@@ -49,6 +49,7 @@ export const approvalPermissionSchema = z.enum([
   'pos.editPrice',
   'pos.editPriceBelowCost',
   'pos.overrideDebtLimit',
+  'documents.cancel',
 ])
 
 // userId bỏ trống: kiểm PIN của chính người đang đăng nhập.
@@ -57,7 +58,7 @@ export const verifyPinSchema = z
   .object({
     pin: pinSchema,
     userId: z.string().uuid('Người duyệt không hợp lệ').optional(),
-    permissions: z.array(approvalPermissionSchema).max(3).optional(),
+    permissions: z.array(approvalPermissionSchema).max(4).optional(),
   })
   // Kiểm PIN của một người cụ thể chỉ để duyệt một thao tác: phải nói rõ quyền cần duyệt, không
   // thì endpoint thành chỗ dò PIN của bất kỳ ai trong cửa hàng

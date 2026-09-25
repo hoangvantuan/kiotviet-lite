@@ -9,6 +9,10 @@ export const inventoryTransactionTypeSchema = z.enum([
   'manual_adjustment',
   'return',
   'stock_check',
+  // TIEN-107, KHO-11: bút toán đảo khi hủy đơn bán, hủy phiếu nhập và khi trả hàng nhập
+  'order_cancel',
+  'purchase_cancel',
+  'purchase_return',
 ])
 
 export const inventoryTransactionItemSchema = z.object({
