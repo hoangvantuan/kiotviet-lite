@@ -1,8 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
-
-import type { CategoryItem } from '@kiotviet-lite/shared'
-
-import { apiClient } from '@/lib/api-client'
+import { useCategoriesQuery } from '@/features/categories/use-categories'
 import { cn } from '@/lib/utils'
 
 interface CategoryFilterProps {
@@ -10,17 +6,8 @@ interface CategoryFilterProps {
   onSelect: (categoryId: string | undefined) => void
 }
 
-interface CategoriesResponse {
-  data: CategoryItem[]
-}
-
 export function CategoryFilter({ selectedId, onSelect }: CategoryFilterProps) {
-  const { data: categories } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => apiClient.get<CategoriesResponse>('/api/v1/categories'),
-    staleTime: 60_000,
-    select: (res) => res.data,
-  })
+  const { data: categories } = useCategoriesQuery()
 
   return (
     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">

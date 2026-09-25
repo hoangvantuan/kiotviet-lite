@@ -66,7 +66,7 @@ _Tránh dùng_: đơn vị cơ bản, ĐVT
 _Tránh dùng_: đơn vị lớn, quy cách đóng gói
 
 **Bảng giá**:
-Một bộ giá bán áp cho một nhóm khách hàng hoặc một khoảng thời gian, thay cho giá bán mặc định.
+Một bộ giá bán có thể gắn với nhóm khách hàng hoặc được chọn cho một đơn hàng, thay cho giá bán mặc định.
 _Tránh dùng_: chính sách giá, biểu giá
 
 ### Tồn kho
