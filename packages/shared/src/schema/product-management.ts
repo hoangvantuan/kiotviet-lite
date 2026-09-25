@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { paginationSchema } from './pagination.js'
 import { unitConversionInputSchema, unitConversionItemSchema } from './unit-conversions.js'
 
 const NAME_REGEX = /^[\p{L}\p{N}\p{Zs}\-_&()'./,+*:%=;#?–]+$/u
@@ -281,9 +282,7 @@ export const updateProductSchema = z
 
 export const stockFilterSchema = z.enum(['in_stock', 'out_of_stock', 'below_min'])
 
-export const listProductsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+export const listProductsQuerySchema = paginationSchema.extend({
   search: z.string().trim().optional(),
   categoryId: z.union([z.string().uuid(), z.literal('none')]).optional(),
   brandId: z.union([z.string().uuid(), z.literal('none')]).optional(),

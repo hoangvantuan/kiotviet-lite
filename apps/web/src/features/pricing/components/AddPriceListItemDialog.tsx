@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import {
   applyRounding,
   type CreatePriceListItemInput,
+  MAX_PAGE_SIZE,
   type PriceListDetail,
 } from '@kiotviet-lite/shared'
 
@@ -45,7 +46,7 @@ export function AddPriceListItemDialog({
   excludeProductIds,
 }: Props) {
   const mutation = useCreatePriceListItemMutation()
-  const productsQuery = useProductsQuery({ status: 'active', pageSize: 100, page: 1 })
+  const productsQuery = useProductsQuery({ status: 'active', pageSize: MAX_PAGE_SIZE, page: 1 })
 
   const [search, setSearch] = useState('')
 

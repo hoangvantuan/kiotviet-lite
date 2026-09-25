@@ -11,6 +11,7 @@ import type {
   UpdatePriceListInput,
   UpdatePriceListItemInput,
 } from '@kiotviet-lite/shared'
+import { MAX_PAGE_SIZE } from '@kiotviet-lite/shared'
 
 import {
   clonePriceListApi,
@@ -42,9 +43,9 @@ export function usePriceListsQuery(query: Partial<ListPriceListsQuery>) {
 
 export function useDirectPriceListsQuery(options?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: [...PRICE_LISTS_KEY, 'list', { method: 'direct', pageSize: 100 }],
+    queryKey: [...PRICE_LISTS_KEY, 'list', { method: 'direct', pageSize: MAX_PAGE_SIZE }],
     queryFn: async () =>
-      listPriceListsApi({ method: 'direct', pageSize: 100, status: 'all', page: 1 }),
+      listPriceListsApi({ method: 'direct', pageSize: MAX_PAGE_SIZE, status: 'all', page: 1 }),
     enabled: options?.enabled,
   })
 }
@@ -54,8 +55,8 @@ export function useChainBaseListsQuery(options?: { enabled?: boolean }) {
     queryKey: [...PRICE_LISTS_KEY, 'list', { chainBase: true }],
     queryFn: async () => {
       const [direct, formula] = await Promise.all([
-        listPriceListsApi({ method: 'direct', pageSize: 100, status: 'all', page: 1 }),
-        listPriceListsApi({ method: 'formula', pageSize: 100, status: 'all', page: 1 }),
+        listPriceListsApi({ method: 'direct', pageSize: MAX_PAGE_SIZE, status: 'all', page: 1 }),
+        listPriceListsApi({ method: 'formula', pageSize: MAX_PAGE_SIZE, status: 'all', page: 1 }),
       ])
       const list: PriceListListItem[] = [...direct.data, ...formula.data]
       return { data: list }
@@ -67,7 +68,7 @@ export function useChainBaseListsQuery(options?: { enabled?: boolean }) {
 export function useAllPriceListsQuery(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: [...PRICE_LISTS_KEY, 'list', { allLists: true }],
-    queryFn: async () => listPriceListsApi({ pageSize: 100, status: 'all', page: 1 }),
+    queryFn: async () => listPriceListsApi({ pageSize: MAX_PAGE_SIZE, status: 'all', page: 1 }),
     enabled: options?.enabled,
   })
 }

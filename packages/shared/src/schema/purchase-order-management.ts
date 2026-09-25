@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { paginationSchema } from './pagination.js'
+
 export const discountTypeSchema = z.enum(['amount', 'percent'])
 export const paymentStatusSchema = z.enum(['unpaid', 'partial', 'paid'])
 
@@ -41,9 +43,7 @@ export const createPurchaseOrderSchema = z.object({
   note: z.string().trim().max(500, 'Ghi chú tối đa 500 ký tự').optional(),
 })
 
-export const listPurchaseOrdersQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+export const listPurchaseOrdersQuerySchema = paginationSchema.extend({
   search: z.string().trim().optional(),
   supplierId: z.string().uuid().optional(),
   paymentStatus: paymentStatusSchema.optional(),

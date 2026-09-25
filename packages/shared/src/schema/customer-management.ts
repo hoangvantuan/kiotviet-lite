@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { NAME_REGEX, PHONE_REGEX, TAX_ID_REGEX } from '../constants/regex.js'
+import { paginationSchema } from './pagination.js'
 
 const GROUP_NAME_REGEX = /^[\p{L}\p{N}\s\-_&()'./]+$/u
 
@@ -112,9 +113,7 @@ export const quickCreateCustomerSchema = z.object({
   phone: customerPhoneSchema.nullable().optional(),
 })
 
-export const listCustomersQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+export const listCustomersQuerySchema = paginationSchema.extend({
   search: z.string().trim().optional(),
   groupId: z.union([z.string().uuid(), z.literal('none')]).optional(),
   hasDebt: z.enum(['yes', 'no', 'all']).default('all'),
@@ -200,9 +199,7 @@ export const customerStatsSchema = z.object({
   monthlySales: z.array(customerStatsMonthlySaleSchema),
 })
 
-export const listCustomerOrdersQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+export const listCustomerOrdersQuerySchema = paginationSchema.extend({
   status: customerOrderStatusSchema.optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),

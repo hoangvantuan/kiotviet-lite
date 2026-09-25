@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { paginationSchema } from './pagination.js'
 import { priceSourceSchema } from './pricing-resolve.js'
 
 export const orderDiscountTypeSchema = z.enum(['percent', 'amount'])
@@ -231,9 +232,7 @@ export type CreateOrderInput = z.infer<typeof createOrderSchema>
 
 // --- Story 7-1: List & Detail ---
 
-export const listOrdersQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+export const listOrdersQuerySchema = paginationSchema.extend({
   search: z.string().optional(),
   fromDate: z
     .string()

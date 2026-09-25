@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { paginationSchema } from './pagination.js'
+
 export const categoryDiscountTypeSchema = z.enum(['percent', 'amount'], {
   required_error: 'Vui lòng chọn loại chiết khấu',
 })
@@ -136,9 +138,7 @@ export const updateCategoryDiscountSchema = z
     }
   })
 
-export const listCategoryDiscountsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+export const listCategoryDiscountsQuerySchema = paginationSchema.extend({
   categoryId: z.string().uuid('Danh mục không hợp lệ').optional(),
   customerId: z.string().uuid('Khách hàng không hợp lệ').optional(),
   customerGroupId: z.string().uuid('Nhóm khách hàng không hợp lệ').optional(),

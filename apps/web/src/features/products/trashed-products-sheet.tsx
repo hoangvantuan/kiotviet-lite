@@ -1,5 +1,7 @@
 import { Package, RotateCcw, Trash2 } from 'lucide-react'
 
+import { MAX_PAGE_SIZE } from '@kiotviet-lite/shared'
+
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -33,7 +35,7 @@ export function TrashedProductsTrigger({ onOpen }: { onOpen: () => void }) {
 
 export function TrashedProductsSheet({ open, onOpenChange }: TrashedProductsSheetProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
-  const trashedQuery = useTrashedProductsQuery({ page: 1, pageSize: 100 }, open)
+  const trashedQuery = useTrashedProductsQuery({ page: 1, pageSize: MAX_PAGE_SIZE }, open)
   const restoreMutation = useRestoreProductMutation()
 
   const items = trashedQuery.data?.data ?? []

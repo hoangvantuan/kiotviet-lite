@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { paginationSchema } from './pagination.js'
+
 export const createSupplierPaymentSchema = z
   .object({
     supplierId: z.string().uuid({ message: 'Vui lòng chọn nhà cung cấp' }),
@@ -12,10 +14,8 @@ export const createSupplierPaymentSchema = z
   })
   .strict()
 
-export const listSupplierPaymentsQuerySchema = z
-  .object({
-    page: z.coerce.number().int().min(1).default(1),
-    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+export const listSupplierPaymentsQuerySchema = paginationSchema
+  .extend({
     supplierId: z.string().uuid().optional(),
     fromDate: z.string().datetime().optional(),
     toDate: z.string().datetime().optional(),

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { paginationSchema } from './pagination.js'
 import { priceSchema } from './price-list-management.js'
 
 export const customerPriceNoteSchema = z
@@ -28,9 +29,7 @@ export const updateCustomerPriceSchema = z
     message: 'Cần ít nhất một trường để cập nhật',
   })
 
-export const listCustomerPricesQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+export const listCustomerPricesQuerySchema = paginationSchema.extend({
   customerId: z.string().uuid('Khách hàng không hợp lệ').optional(),
   productId: z.string().uuid('Sản phẩm không hợp lệ').optional(),
   search: z.string().trim().optional(),

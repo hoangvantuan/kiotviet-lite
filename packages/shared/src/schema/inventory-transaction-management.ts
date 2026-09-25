@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { paginationSchema } from './pagination.js'
+
 export const inventoryTransactionTypeSchema = z.enum([
   'initial_stock',
   'purchase',
@@ -40,10 +42,7 @@ export const recordManualAdjustInputSchema = z.object({
   note: z.string().trim().max(500).optional(),
 })
 
-export const listInventoryTransactionsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
-})
+export const listInventoryTransactionsQuerySchema = paginationSchema.extend({})
 
 export type InventoryTransactionType = z.infer<typeof inventoryTransactionTypeSchema>
 export type InventoryTransactionItem = z.infer<typeof inventoryTransactionItemSchema>

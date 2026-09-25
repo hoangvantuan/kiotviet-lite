@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { paginationSchema } from './pagination.js'
+
 const NAME_REGEX = /^[\p{L}\p{N}\s\-_&()'./,]+$/u
 
 export const priceListMethodSchema = z.enum(['direct', 'formula', 'chain'])
@@ -139,24 +141,17 @@ export const updatePriceListItemSchema = z.object({
 
 export const createPriceListItemSchema = priceListItemInputSchema
 
-export const listPriceListsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+export const listPriceListsQuerySchema = paginationSchema.extend({
   search: z.string().trim().optional(),
   method: priceListMethodSchema.optional(),
   status: priceListStatusFilterSchema.default('all'),
 })
 
-export const listPriceListItemsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+export const listPriceListItemsQuerySchema = paginationSchema.extend({
   search: z.string().trim().optional(),
 })
 
-export const listTrashedPriceListsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
-})
+export const listTrashedPriceListsQuerySchema = paginationSchema.extend({})
 
 export const priceListListItemSchema = z.object({
   id: z.string().uuid(),
