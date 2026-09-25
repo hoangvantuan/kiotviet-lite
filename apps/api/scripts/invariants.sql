@@ -28,12 +28,14 @@ LEFT JOIN (SELECT customer_id, sum(remaining) AS remaining FROM debts GROUP BY c
   ON d.customer_id = c.id
 WHERE c.current_debt <> coalesce(d.remaining, 0);
 
--- I2. Khoản nợ: amount = paid + remaining, không số âm
+-- I2. Khoản nợ: amount = paid + reduced + remaining, không số âm (ADR 0008)
 INSERT INTO invariant_violations
 SELECT 'I2_debt_balance', d.store_id, 'debt ' || d.id,
-       format('amount=%s, paid=%s, remaining=%s', d.amount, d.paid, d.remaining)
+       format('amount=%s, paid=%s, reduced=%s, remaining=%s',
+              d.amount, d.paid, d.reduced, d.remaining)
 FROM debts d
-WHERE d.amount <> d.paid + d.remaining OR d.paid < 0 OR d.remaining < 0;
+WHERE d.amount <> d.paid + d.reduced + d.remaining
+   OR d.paid < 0 OR d.reduced < 0 OR d.remaining < 0;
 
 -- I3. Phiếu thu: số thu = tổng phân bổ
 INSERT INTO invariant_violations
@@ -54,15 +56,15 @@ JOIN receipts r ON r.id = a.receipt_id
 JOIN debts d ON d.id = a.debt_id
 WHERE a.amount <= 0 OR d.store_id <> r.store_id OR d.customer_id <> r.customer_id;
 
--- I5. Phân bổ không vượt số đã trả của khoản nợ. paid còn gồm phần cấn trừ khi trả hàng
--- (không có dòng phân bổ) nên chỉ kiểm chiều "phân bổ <= paid".
+-- I5. Số đã trả của khoản nợ = tổng phân bổ phiếu thu. Từ ADR 0008, paid chỉ tăng qua phiếu
+-- thu; cấn trừ khi trả hàng và điều chỉnh giảm ghi vào reduced.
 INSERT INTO invariant_violations
-SELECT 'I5_allocation_over_paid', d.store_id, 'debt ' || d.id,
-       format('paid=%s, sum(allocations)=%s', d.paid, sum(a.amount))
+SELECT 'I5_paid_allocated', d.store_id, 'debt ' || d.id,
+       format('paid=%s, sum(allocations)=%s', d.paid, coalesce(sum(a.amount), 0))
 FROM debts d
-JOIN receipt_allocations a ON a.debt_id = d.id
+LEFT JOIN receipt_allocations a ON a.debt_id = d.id
 GROUP BY d.id
-HAVING sum(a.amount) > d.paid;
+HAVING d.paid <> coalesce(sum(a.amount), 0);
 
 -- I6. Tồn kho = tổng sổ giao dịch kho (ADR 0006). Sản phẩm không biến thể so theo dòng sổ
 -- variant_id IS NULL; sản phẩm có biến thể so tồn từng biến thể với dòng sổ của biến thể đó.

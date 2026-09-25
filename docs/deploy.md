@@ -317,10 +317,10 @@ Uptime monitor bên ngoài (UptimeRobot, Better Stack, Healthchecks...):
 | Mã  | Bất biến                                                                                            |
 | --- | --------------------------------------------------------------------------------------------------- |
 | I1  | `customers.current_debt` = tổng `debts.remaining` của khách                                         |
-| I2  | Khoản nợ: `amount = paid + remaining`, không âm                                                     |
+| I2  | Khoản nợ: `amount = paid + reduced + remaining`, không âm (ADR 0008)                                |
 | I3  | Phiếu thu: `amount` = tổng `receipt_allocations.amount`                                             |
 | I4  | Dòng phân bổ dương, trỏ vào khoản nợ cùng cửa hàng và cùng khách với phiếu thu                      |
-| I5  | Tổng phân bổ của một khoản nợ không vượt `debts.paid`                                               |
+| I5  | `debts.paid` = tổng phân bổ phiếu thu vào khoản nợ đó (giảm trừ nằm ở `reduced`)                    |
 | I6  | Tồn kho sản phẩm (không biến thể) và từng biến thể = tổng `inventory_transactions.quantity`         |
 | I7  | `suppliers.current_debt` = tổng (phiếu nhập − đã trả) + tổng điều chỉnh (mới − cũ) − tổng phiếu chi |
 | I8  | Không có công nợ khách hay NCC âm                                                                   |
@@ -339,7 +339,3 @@ docker compose -f docker-compose.prod.yml exec -T postgres \
 Chạy hằng đêm và gửi cảnh báo khi lệch: `deploy/scripts/monitor.sh invariants` (cron ở mục 7).
 Có lệch thì không tự sửa số: đối chiếu chứng từ theo dòng lệch trong
 `data/monitor-state/logs/monitor.invariants.log`, ghi lại mã cửa hàng và thực thể, rồi báo đội phát triển.
-
-**Lệch đã biết:** I1 lệch sau mỗi lần điều chỉnh tăng công nợ khách (TIEN-03, bộ E2E hiện chưa đi qua
-luồng này), sẽ hết khi sổ công nợ được gom về một nguồn (#42). Khi #42 thêm cột `debts.reduced`, I2 phải
-đổi thành `amount = paid + reduced + remaining`.
