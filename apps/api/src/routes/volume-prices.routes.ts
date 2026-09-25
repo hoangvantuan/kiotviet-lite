@@ -24,7 +24,7 @@ export interface VolumePricesRoutesDeps {
 export function createVolumePricesRoutes({ db }: VolumePricesRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
   app.use('*', requirePermission('pricing.manage'))
 
   app.get('/', async (c) => {

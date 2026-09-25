@@ -18,7 +18,7 @@ export function createAuditRoutes({ db }: AuditRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
 
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
 
   app.get('/', requirePermission('audit.viewOwn'), async (c) => {
     const auth = c.get('auth')

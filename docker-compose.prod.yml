@@ -47,6 +47,8 @@ services:
       NODE_ENV: production
       LOG_DIR: /app/logs
       BULK_IMPORT_DIR: /app/imports
+      # API chỉ nhận request qua nginx: tin đúng một hop X-Forwarded-For do nginx ghi (BM-01)
+      TRUSTED_PROXY_HOPS: 1
     volumes:
       - ./data/logs/api:/app/logs
       - ./data/imports:/app/imports

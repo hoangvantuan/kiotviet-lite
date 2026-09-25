@@ -25,7 +25,7 @@ export interface SupplierPaymentsRoutesDeps {
 export function createSupplierPaymentsRoutes({ db }: SupplierPaymentsRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
   app.use('*', requirePermission('inventory.manage'))
 
   app.get('/', async (c) => {

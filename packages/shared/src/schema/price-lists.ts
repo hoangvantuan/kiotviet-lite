@@ -43,6 +43,8 @@ export const priceLists = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    // Đích của khóa ngoại ghép (store_id, price_list_id) từ bảng khác: chặn tham chiếu chéo cửa hàng.
+    uniqueIndex('uniq_price_lists_store_id').on(table.storeId, table.id),
     uniqueIndex('uniq_price_lists_store_name_alive')
       .on(table.storeId, sql`LOWER(${table.name})`)
       .where(sql`${table.deletedAt} IS NULL`),

@@ -1,6 +1,7 @@
 import {
   bigint,
   boolean,
+  foreignKey,
   index,
   pgTable,
   text,
@@ -56,6 +57,18 @@ export const orders = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    // BM-02: khách và bảng giá của đơn phải cùng cửa hàng với đơn. MATCH SIMPLE nên cột NULL
+    // không bị kiểm; khóa ngoại một cột ở trên vẫn giữ ON DELETE SET NULL.
+    foreignKey({
+      name: 'fk_orders_store_customer',
+      columns: [table.storeId, table.customerId],
+      foreignColumns: [customers.storeId, customers.id],
+    }),
+    foreignKey({
+      name: 'fk_orders_store_price_list',
+      columns: [table.storeId, table.priceListId],
+      foreignColumns: [priceLists.storeId, priceLists.id],
+    }),
     uniqueIndex('uniq_orders_store_number').on(table.storeId, table.orderNumber),
     uniqueIndex('uniq_orders_store_client').on(table.storeId, table.clientId),
     index('idx_orders_store_date').on(table.storeId, table.createdAt),

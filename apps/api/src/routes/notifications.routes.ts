@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { notificationSeverityValues, notificationTypeValues } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { getClientIp } from '../lib/client-ip.js'
 import { env } from '../lib/env.js'
 import { parseJson } from '../lib/http.js'
 import { logger } from '../lib/logger.js'
@@ -20,10 +21,7 @@ const RATE_LIMIT_MAX = 60
 const emitRateLimiter = rateLimiter({
   windowMs: RATE_LIMIT_WINDOW_MS,
   limit: RATE_LIMIT_MAX,
-  keyGenerator: (c) =>
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    'anonymous',
+  keyGenerator: (c) => getClientIp(c),
   standardHeaders: 'draft-7',
 })
 
@@ -66,8 +64,9 @@ export interface NotificationRoutesDeps {
 export function createNotificationRoutes({ db }: NotificationRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
+  const authenticate = requireAuth(db)
 
-  app.post('/emit', emitRateLimiter, requireAuth, requirePermission('store.manage'), async (c) => {
+  app.post('/emit', emitRateLimiter, authenticate, requirePermission('store.manage'), async (c) => {
     const auth = c.get('auth')
     const input = await parseJson(c, emitInputSchema)
 

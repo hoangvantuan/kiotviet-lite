@@ -27,7 +27,7 @@ export type BrandsApp = Hono
 export function createBrandsRoutes({ db }: BrandsRoutesDeps): BrandsApp {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
   app.use('*', requirePermission('products.manage'))
 
   app.get('/', async (c) => {

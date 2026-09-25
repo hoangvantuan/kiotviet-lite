@@ -19,7 +19,7 @@ const xlsxMime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sh
 export function createBulkExportRoutes({ db }: { db: Db }) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
   app.use('*', async (c, next) => {
     if (c.get('auth').role !== 'owner' && c.get('auth').role !== 'manager') {
       throw new ApiError('FORBIDDEN', 'Bạn không có quyền xuất dữ liệu')

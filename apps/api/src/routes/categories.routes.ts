@@ -30,7 +30,7 @@ export interface CategoriesRoutesDeps {
 export function createCategoriesRoutes({ db }: CategoriesRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
   app.use('*', requirePermission('products.manage'))
 
   app.get('/', async (c) => {

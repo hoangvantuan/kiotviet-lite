@@ -41,7 +41,7 @@ export interface CustomersRoutesDeps {
 export function createCustomersRoutes({ db }: CustomersRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
 
   app.get('/', requirePermission('customers.view'), async (c) => {
     const auth = c.get('auth')

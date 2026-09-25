@@ -21,7 +21,7 @@ export interface ProductHistoryRoutesDeps {
 export function createProductHistoryRoutes({ db }: ProductHistoryRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
   app.use('*', requirePermission('inventory.manage'))
 
   app.get('/:productId/purchase-history', async (c) => {

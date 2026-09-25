@@ -18,7 +18,7 @@ export function createStoreRoutes({ db }: StoreRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
 
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
 
   app.get('/', async (c) => {
     const auth = c.get('auth')

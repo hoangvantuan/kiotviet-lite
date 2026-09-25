@@ -26,7 +26,7 @@ export interface CustomerGroupsRoutesDeps {
 export function createCustomerGroupsRoutes({ db }: CustomerGroupsRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
   app.use('*', requirePermission('customers.manage'))
 
   app.get('/', async (c) => {
