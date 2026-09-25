@@ -32,10 +32,6 @@ import { useStockChecksQuery } from './use-stock-checks'
 
 const PAGE_SIZE = 20
 
-function toLocalIsoString(localDateTime: string): string {
-  return new Date(localDateTime).toISOString()
-}
-
 export function StockCheckManager() {
   const navigate = useNavigate()
   const [importOpen, setImportOpen] = useState(false)
@@ -51,8 +47,9 @@ export function StockCheckManager() {
     pageSize: PAGE_SIZE,
     search: debouncedSearch.trim() || undefined,
     status: status === 'all' ? undefined : status,
-    fromDate: fromDate ? toLocalIsoString(`${fromDate}T00:00:00`) : undefined,
-    toDate: toDate ? toLocalIsoString(`${toDate}T23:59:59`) : undefined,
+    // R7: gửi ngày YYYY-MM-DD, máy chủ cắt ngày theo lịch cửa hàng
+    fromDate: fromDate || undefined,
+    toDate: toDate || undefined,
   })
 
   const items = query.data?.data ?? []

@@ -37,6 +37,19 @@ describe('escapeCsvField (BC-12)', () => {
     expect(escapeCsvField('2026-09-25')).toBe('2026-09-25')
   })
 
+  it('chuỗi số thập phân (toFixed) giữ là số, không thêm dấu nháy', () => {
+    expect(escapeCsvField('-12.50')).toBe('-12.50')
+    expect(escapeCsvField('12.50')).toBe('12.50')
+    expect(escapeCsvField('-3')).toBe('-3')
+    expect(escapeCsvField('-1.5+1')).toBe("'-1.5+1")
+  })
+
+  it('excelLeadingZero = false: tệp cho máy đọc ghi nguyên số 0 đầu, vẫn chặn công thức', () => {
+    expect(escapeCsvField('007', { excelLeadingZero: false })).toBe('007')
+    expect(escapeCsvField('=x', { excelLeadingZero: false })).toBe("'=x")
+    expect(toCsvLine(['0901', '-2.00'], { excelLeadingZero: false })).toBe('0901,-2.00')
+  })
+
   it('toCsvLine nối các ô đã mã hóa', () => {
     expect(toCsvLine(['=x', '0901', 12])).toBe('\'=x,"=""0901""",12')
   })

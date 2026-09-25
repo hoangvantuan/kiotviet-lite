@@ -1,4 +1,4 @@
-import { and, eq, gt, gte, isNull, lte, sql } from 'drizzle-orm'
+import { and, eq, gt, gte, lte, sql } from 'drizzle-orm'
 
 import {
   customers,
@@ -12,7 +12,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
-import { effectiveStockSql } from '../lib/effective-stock.js'
+import { effectiveStockSql, lowStockConditionSql } from '../lib/effective-stock.js'
 import {
   orderItemCogsExpr,
   orderItemNetQuantityExpr,
@@ -356,7 +356,7 @@ export async function getLowStockAlerts(
   db: Db,
   storeId: string,
 ): Promise<DashboardResponse['lowStockAlerts']> {
-  // BC-11: tồn hiệu lực (cộng biến thể), cùng định nghĩa với chuông thông báo và báo cáo tồn
+  // BC-11: tồn hiệu lực và điều kiện sắp hết hàng dùng chung với chuông thông báo và báo cáo tồn
   const stock = effectiveStockSql()
   const result = await db
     .select({
@@ -366,14 +366,7 @@ export async function getLowStockAlerts(
       minStock: products.minStock,
     })
     .from(products)
-    .where(
-      and(
-        eq(products.storeId, storeId),
-        isNull(products.deletedAt),
-        gt(products.minStock, 0),
-        sql`${stock} <= ${products.minStock}`,
-      ),
-    )
+    .where(and(eq(products.storeId, storeId), lowStockConditionSql()))
     .orderBy(sql`current_stock ASC`)
     .limit(5)
 

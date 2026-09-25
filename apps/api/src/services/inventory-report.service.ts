@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, type SQL, sql } from 'drizzle-orm'
+import { and, eq, isNull, type SQL, sql } from 'drizzle-orm'
 
 import {
   categories,
@@ -11,7 +11,11 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
-import { effectiveStockSql, effectiveStockValueSql } from '../lib/effective-stock.js'
+import {
+  effectiveStockSql,
+  effectiveStockValueSql,
+  lowStockConditionSql,
+} from '../lib/effective-stock.js'
 import { revenueStatusFilter } from '../lib/order-status.js'
 import { daysBetweenDateKeys, localDateKey, localDateSql } from '../lib/timezone.js'
 
@@ -115,9 +119,7 @@ export async function getInventoryReorder(
   const offset = isPaged ? (page - 1) * pageSize : 0
   const whereCondition = and(
     eq(products.storeId, storeId),
-    isNull(products.deletedAt),
-    gt(products.minStock, 0),
-    sql`${stockExpr} <= ${products.minStock}`,
+    lowStockConditionSql(),
     categoryCondition(storeId, categoryId),
   )
 

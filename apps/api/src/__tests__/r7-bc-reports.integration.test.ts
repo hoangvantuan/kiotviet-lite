@@ -1,10 +1,10 @@
 /**
  * Đợt 3, luồng báo cáo: R7 (mốc ngày theo múi giờ cửa hàng) và các mã BC.
  *
- * Tiến trình chạy TZ=UTC như máy chủ production (Docker). Trên máy phát triển giờ +07, các lỗi
+ * Tiến trình chạy TZ=UTC như máy chủ production (Docker), đặt chung cho mọi test API ở
+ * vitest.workspace.ts. Trên máy phát triển giờ +07, các lỗi
  * startOfDay, getHours, toISOString().slice(0, 10) không lộ ra nếu không ép múi giờ này.
  */
-process.env.TZ = 'UTC'
 
 import { Hono } from 'hono'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -23,6 +23,10 @@ import {
 import { errorHandler } from '../middleware/error-handler.js'
 import { createReportsRoutes } from '../routes/reports.routes.js'
 import { createUsersRoutes } from '../routes/users.routes.js'
+import {
+  getLowStockCount,
+  listLowStockProducts,
+} from '../services/inventory-transactions.service.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 interface Env {
@@ -214,6 +218,30 @@ describe('BC-11: tồn kho tính theo biến thể; UAT 04 mục 4.3: dòng tổ
     const dash = await getJson<DashboardResponse>(env, '/api/v1/reports/dashboard?period=today')
     const alert = dash.lowStockAlerts.find((a) => a.name === 'Áo thun')!
     expect(alert.currentStock).toBe(100)
+  })
+  it('chuông, cảnh báo tổng quan và cần nhập cùng một danh sách: bỏ sản phẩm không theo dõi tồn', async () => {
+    await env.base.db.insert(products).values({
+      storeId: env.base.storeId,
+      name: 'Túi nilon',
+      sku: 'TN001',
+      sellingPrice: 0,
+      costPrice: 0,
+      currentStock: 0,
+      minStock: 5,
+      trackInventory: false,
+    })
+    const reorder = await getJson<{ rows: Array<{ sku: string }> }>(
+      env,
+      '/api/v1/reports/inventory?tab=reorder',
+    )
+    const dash = await getJson<DashboardResponse>(env, '/api/v1/reports/dashboard?period=today')
+    const bell = await getLowStockCount({ db: env.base.db, storeId: env.base.storeId })
+    const bellList = await listLowStockProducts({ db: env.base.db, storeId: env.base.storeId })
+
+    expect(reorder.rows.map((r) => r.sku)).toEqual(['ST001'])
+    expect(dash.lowStockAlerts.map((a) => a.name)).toEqual(['Áo thun'])
+    expect(bell).toBe(1)
+    expect(bellList.items.map((i) => i.sku)).toEqual(['ST001'])
   })
 })
 

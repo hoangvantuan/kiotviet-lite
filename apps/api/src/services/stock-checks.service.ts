@@ -27,6 +27,7 @@ import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
+import { parseDateRangeBoundary } from '../lib/timezone.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import {
   aggregateVariantStock,
@@ -801,12 +802,11 @@ export async function listStockChecks({
   if (status) {
     conditions.push(eq(stockChecks.status, status))
   }
-  if (fromDate) {
-    conditions.push(gte(stockChecks.createdAt, new Date(fromDate)))
-  }
-  if (toDate) {
-    conditions.push(lte(stockChecks.createdAt, new Date(toDate)))
-  }
+  // R7: ngày YYYY-MM-DD hiểu theo lịch cửa hàng, không theo UTC
+  const from = parseDateRangeBoundary(fromDate, 'start')
+  const to = parseDateRangeBoundary(toDate, 'end')
+  if (from) conditions.push(gte(stockChecks.createdAt, from))
+  if (to) conditions.push(lte(stockChecks.createdAt, to))
 
   const whereClause = and(...conditions)
   const offset = (page - 1) * pageSize

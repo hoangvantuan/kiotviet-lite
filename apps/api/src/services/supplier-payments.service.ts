@@ -16,6 +16,7 @@ import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { escapeLikePattern } from '../lib/strings.js'
+import { parseDateRangeBoundary } from '../lib/timezone.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
@@ -100,21 +101,11 @@ export async function listSupplierPayments({
   if (supplierId) {
     conditions.push(eq(supplierPayments.supplierId, supplierId))
   }
-  if (fromDate) {
-    conditions.push(gte(supplierPayments.createdAt, new Date(fromDate)))
-  }
-  if (toDate) {
-    const d = new Date(toDate)
-    if (
-      d.getUTCHours() === 0 &&
-      d.getUTCMinutes() === 0 &&
-      d.getUTCSeconds() === 0 &&
-      d.getUTCMilliseconds() === 0
-    ) {
-      d.setUTCHours(23, 59, 59, 999)
-    }
-    conditions.push(lte(supplierPayments.createdAt, d))
-  }
+  // R7: ngày YYYY-MM-DD hiểu theo lịch cửa hàng, không theo UTC
+  const from = parseDateRangeBoundary(fromDate, 'start')
+  const to = parseDateRangeBoundary(toDate, 'end')
+  if (from) conditions.push(gte(supplierPayments.createdAt, from))
+  if (to) conditions.push(lte(supplierPayments.createdAt, to))
 
   const trimmedSearch = search?.trim()
   if (trimmedSearch) {

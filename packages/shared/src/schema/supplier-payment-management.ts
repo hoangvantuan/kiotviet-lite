@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { paginationSchema } from './pagination.js'
+import { dateFilterSchema, paginationSchema } from './pagination.js'
 
 export const createSupplierPaymentSchema = z
   .object({
@@ -17,8 +17,8 @@ export const createSupplierPaymentSchema = z
 export const listSupplierPaymentsQuerySchema = paginationSchema
   .extend({
     supplierId: z.string().uuid().optional(),
-    fromDate: z.string().datetime().optional(),
-    toDate: z.string().datetime().optional(),
+    fromDate: dateFilterSchema.optional(),
+    toDate: dateFilterSchema.optional(),
     search: z.string().trim().max(200).optional(),
   })
   .refine(

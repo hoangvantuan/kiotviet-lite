@@ -13,7 +13,7 @@ export function buildCsv(headers: string[], rows: (string | number | null)[][]):
 /** CSV nhiều khối (ví dụ báo cáo tổng hợp), mỗi phần tử là một dòng; dòng rỗng là dòng trống. */
 export function buildCsvFromLines(lines: readonly (readonly unknown[])[]): string {
   const BOM = '﻿'
-  return BOM + lines.map(toCsvLine).join('\n')
+  return BOM + lines.map((line) => toCsvLine(line)).join('\n')
 }
 
 export function buildXlsx(

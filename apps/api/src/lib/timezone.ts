@@ -18,11 +18,50 @@ export function getStoreTimezone(): string {
 }
 
 /**
- * Offset chuỗi ISO cho múi giờ cửa hàng.
- * Dùng để ghép với chuỗi ngày YYYY-MM-DD khi parse thành Date.
+ * Kiểm cấu hình múi giờ lúc khởi động: STORE_TIMEZONE phải là tên IANA hợp lệ. Biến cũ
+ * STORE_TIMEZONE_OFFSET không còn được đọc (offset suy từ STORE_TIMEZONE), nếu còn đặt mà lệch
+ * thì báo lỗi rõ thay vì âm thầm cắt ngày sai.
  */
-export function getTimezoneOffset(): string {
-  return process.env.STORE_TIMEZONE_OFFSET ?? '+07:00'
+export function assertStoreTimezoneConfig(now: Date = new Date()): void {
+  const tz = getStoreTimezone()
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone: tz })
+  } catch {
+    throw new Error(`STORE_TIMEZONE không hợp lệ: "${tz}" (cần tên IANA, ví dụ Asia/Ho_Chi_Minh)`)
+  }
+  const legacy = process.env.STORE_TIMEZONE_OFFSET
+  if (legacy && legacy !== getTimezoneOffset(now)) {
+    throw new Error(
+      `STORE_TIMEZONE_OFFSET=${legacy} lệch với STORE_TIMEZONE=${tz} (${getTimezoneOffset(now)}). ` +
+        'Bỏ STORE_TIMEZONE_OFFSET, offset được suy từ STORE_TIMEZONE.',
+    )
+  }
+}
+
+/** Offset (phút) của múi giờ cửa hàng tại một thời điểm, suy từ STORE_TIMEZONE bằng Intl. */
+function offsetMinutesAt(at: Date): number {
+  const p = localParts(at)
+  const wallAsUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
+  return Math.round((wallAsUtc - Math.floor(at.getTime() / 1000) * 1000) / 60_000)
+}
+
+/** Offset dạng "+07:00" của múi giờ cửa hàng tại thời điểm `at` (mặc định bây giờ). */
+export function getTimezoneOffset(at: Date = new Date()): string {
+  const minutes = offsetMinutesAt(at)
+  const abs = Math.abs(minutes)
+  const hh = String(Math.floor(abs / 60)).padStart(2, '0')
+  const mm = String(abs % 60).padStart(2, '0')
+  return `${minutes < 0 ? '-' : '+'}${hh}:${mm}`
+}
+
+/**
+ * Giờ đồng hồ tại cửa hàng (ngày YYYY-MM-DD + "THH:mm:ss.SSS") thành thời điểm UTC.
+ * Offset lấy đúng tại thời điểm đó nên múi giờ có giờ mùa hè cũng đúng.
+ */
+function localWallTimeToDate(dateKey: string, time: string): Date {
+  const wall = Date.parse(`${dateKey}${time}Z`)
+  const guess = wall - offsetMinutesAt(new Date(wall)) * 60_000
+  return new Date(wall - offsetMinutesAt(new Date(guess)) * 60_000)
 }
 
 /**
@@ -30,13 +69,12 @@ export function getTimezoneOffset(): string {
  * Thay thế các hàm parseDateRange hardcode 'Z' rải rác.
  */
 export function parseDateRangeLocal(from?: string, to?: string, defaultRangeDays = 30) {
-  const offset = getTimezoneOffset()
   const now = new Date()
   return {
     start: from
-      ? new Date(`${from}T00:00:00${offset}`)
+      ? localWallTimeToDate(from, 'T00:00:00.000')
       : new Date(now.getTime() - defaultRangeDays * 86_400_000),
-    end: to ? new Date(`${to}T23:59:59.999${offset}`) : now,
+    end: to ? localWallTimeToDate(to, 'T23:59:59.999') : now,
   }
 }
 
@@ -54,9 +92,7 @@ export function parseDateRangeBoundary(
   if (!value) return undefined
   const trimmed = value.trim()
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    const offset = getTimezoneOffset()
-    const timeSuffix = boundary === 'start' ? `T00:00:00.000${offset}` : `T23:59:59.999${offset}`
-    return new Date(`${trimmed}${timeSuffix}`)
+    return localWallTimeToDate(trimmed, boundary === 'start' ? 'T00:00:00.000' : 'T23:59:59.999')
   }
   return new Date(trimmed)
 }
@@ -95,7 +131,7 @@ export function lastLocalDays(
     const day = new Date(todayUtc - (n - 1 - i) * 86_400_000)
     return { key: day.toISOString().slice(0, 10), dayOfWeek: day.getUTCDay() }
   })
-  return { start: new Date(`${days[0]!.key}T00:00:00${getTimezoneOffset()}`), days }
+  return { start: localWallTimeToDate(days[0]!.key, 'T00:00:00.000'), days }
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +177,7 @@ function localParts(d: Date): LocalParts {
 /** Ghép giờ địa phương thành Date, tháng và ngày tràn tự chuẩn hóa (tháng 13, ngày 0...). */
 function fromLocal(year: number, month: number, day: number, time = 'T00:00:00.000'): Date {
   const key = new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10)
-  return new Date(`${key}${time}${getTimezoneOffset()}`)
+  return localWallTimeToDate(key, time)
 }
 
 /** Ngày lịch YYYY-MM-DD theo múi giờ cửa hàng. */

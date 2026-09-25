@@ -15,16 +15,6 @@ import { useSupplierPaymentsQuery } from './use-supplier-payments'
 
 const PAGE_SIZE = 20
 
-function toIsoStart(date: string): string | undefined {
-  if (!date) return undefined
-  return new Date(`${date}T00:00:00`).toISOString()
-}
-
-function toIsoEnd(date: string): string | undefined {
-  if (!date) return undefined
-  return new Date(`${date}T23:59:59.999`).toISOString()
-}
-
 export function SupplierPaymentsManager() {
   const user = useAuthStore((s) => s.user)
   const isOwner = user?.role === 'owner'
@@ -41,8 +31,9 @@ export function SupplierPaymentsManager() {
     page,
     pageSize: PAGE_SIZE,
     supplierId,
-    fromDate: toIsoStart(fromDate),
-    toDate: toIsoEnd(toDate),
+    // R7: gửi ngày YYYY-MM-DD, máy chủ cắt ngày theo lịch cửa hàng
+    fromDate: fromDate || undefined,
+    toDate: toDate || undefined,
     search: debouncedSearch.trim() || undefined,
   })
 

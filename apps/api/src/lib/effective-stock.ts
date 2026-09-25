@@ -1,4 +1,4 @@
-import { type SQL, sql } from 'drizzle-orm'
+import { and, eq, gt, isNull, type SQL, sql } from 'drizzle-orm'
 
 import { products, productVariants } from '@kiotviet-lite/shared'
 
@@ -25,4 +25,18 @@ export function effectiveStockValueSql(): SQL<number> {
     FROM ${productVariants}
     WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL
   ) ELSE ${products.currentStock}::bigint * coalesce(${products.costPrice}, 0) END)`
+}
+
+/**
+ * Điều kiện "sắp hết hàng" duy nhất (BC-11): sản phẩm còn hoạt động, có theo dõi tồn, đặt tồn tối
+ * thiểu, tồn hiệu lực không vượt tồn tối thiểu. Chuông thông báo, cảnh báo trên tổng quan và báo
+ * cáo đặt hàng lại cùng dùng điều kiện này nên luôn ra cùng một danh sách.
+ */
+export function lowStockConditionSql(): SQL {
+  return and(
+    isNull(products.deletedAt),
+    eq(products.trackInventory, true),
+    gt(products.minStock, 0),
+    sql`${effectiveStockSql()} <= ${products.minStock}`,
+  )!
 }

@@ -44,5 +44,6 @@ export function buildCompareCsv(rows: CompareRow[]): string {
     boolBit(r.isBelowCostA),
     boolBit(r.isBelowCostB),
   ])
-  return buildCsv(HEADERS, dataRows)
+  // Tệp cho máy đọc (cột snake_case): không bọc ="0...", mã SKU giữ nguyên chuỗi
+  return buildCsv(HEADERS, dataRows, { excelLeadingZero: false })
 }

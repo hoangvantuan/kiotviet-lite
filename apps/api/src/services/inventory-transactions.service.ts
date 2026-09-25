@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 
 import {
   type InventoryTransactionItem,
@@ -14,6 +14,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { effectiveStockSql, lowStockConditionSql } from '../lib/effective-stock.js'
 import { ApiError } from '../lib/errors.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import { receiveStock } from './inventory-cost.helper.js'
@@ -349,24 +350,11 @@ export interface LowStockListDeps extends LowStockDeps {
   pageSize?: number
 }
 
-function lowStockEffectiveSql() {
-  return sql`(CASE WHEN ${products.hasVariants} THEN COALESCE((SELECT SUM(${productVariants.stockQuantity}) FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL), 0) ELSE ${products.currentStock} END)`
-}
-
 export async function getLowStockCount({ db, storeId }: LowStockDeps): Promise<number> {
-  const effective = lowStockEffectiveSql()
   const rows = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(products)
-    .where(
-      and(
-        eq(products.storeId, storeId),
-        isNull(products.deletedAt),
-        eq(products.trackInventory, true),
-        sql`${products.minStock} > 0`,
-        sql`${effective} <= ${products.minStock}`,
-      ),
-    )
+    .where(and(eq(products.storeId, storeId), lowStockConditionSql()))
   return rows[0]?.count ?? 0
 }
 
@@ -381,14 +369,8 @@ export async function listLowStockProducts({
   page = 1,
   pageSize = 50,
 }: LowStockListDeps): Promise<LowStockListResult> {
-  const effective = lowStockEffectiveSql()
-  const whereClause = and(
-    eq(products.storeId, storeId),
-    isNull(products.deletedAt),
-    eq(products.trackInventory, true),
-    sql`${products.minStock} > 0`,
-    sql`${effective} <= ${products.minStock}`,
-  )
+  const effective = effectiveStockSql()
+  const whereClause = and(eq(products.storeId, storeId), lowStockConditionSql())
 
   const offset = (page - 1) * pageSize
   const rows = await db
@@ -412,7 +394,7 @@ export async function listLowStockProducts({
       minStock: products.minStock,
       createdAt: products.createdAt,
       updatedAt: products.updatedAt,
-      effectiveStock: sql<number>`${effective}::int`,
+      effectiveStock: effective,
     })
     .from(products)
     .where(whereClause)

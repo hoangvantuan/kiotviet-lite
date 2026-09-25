@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  assertStoreTimezoneConfig,
   daysBetweenDateKeys,
   formatLocalTime,
+  getTimezoneOffset,
   lastLocalDays,
   localDateKey,
+  parseDateRangeBoundary,
   sameMomentPreviousPeriod,
   startOfLocalPeriod,
 } from './timezone.js'
@@ -76,5 +79,46 @@ describe('mốc kỳ theo lịch cửa hàng (R7)', () => {
   it('số ngày giữa hai khóa ngày', () => {
     expect(daysBetweenDateKeys('2026-08-27', '2026-09-26')).toBe(30)
     expect(daysBetweenDateKeys('2026-09-26', '2026-09-26')).toBe(0)
+  })
+})
+
+describe('offset suy từ STORE_TIMEZONE (review #55)', () => {
+  afterEach(() => {
+    delete process.env.STORE_TIMEZONE
+    delete process.env.STORE_TIMEZONE_OFFSET
+  })
+
+  it('đổi STORE_TIMEZONE thì mốc ngày đổi theo, không cần biến offset riêng', () => {
+    process.env.STORE_TIMEZONE = 'Asia/Tokyo'
+    expect(getTimezoneOffset()).toBe('+09:00')
+    expect(parseDateRangeBoundary('2026-09-26', 'start')?.toISOString()).toBe(
+      '2026-09-25T15:00:00.000Z',
+    )
+    expect(startOfLocalPeriod('today', new Date('2026-09-26T01:00:00Z')).toISOString()).toBe(
+      '2026-09-25T15:00:00.000Z',
+    )
+  })
+
+  it('múi giờ có giờ mùa hè dùng offset đúng của từng ngày', () => {
+    process.env.STORE_TIMEZONE = 'Europe/Berlin'
+    expect(parseDateRangeBoundary('2026-07-01', 'start')?.toISOString()).toBe(
+      '2026-06-30T22:00:00.000Z',
+    )
+    expect(parseDateRangeBoundary('2026-12-01', 'end')?.toISOString()).toBe(
+      '2026-12-01T22:59:59.999Z',
+    )
+  })
+
+  it('mặc định Asia/Ho_Chi_Minh là +07:00', () => {
+    expect(getTimezoneOffset()).toBe('+07:00')
+    expect(() => assertStoreTimezoneConfig()).not.toThrow()
+  })
+
+  it('báo lỗi rõ khi STORE_TIMEZONE sai hoặc STORE_TIMEZONE_OFFSET cũ lệch', () => {
+    process.env.STORE_TIMEZONE = 'Asia/Khong_Co'
+    expect(() => assertStoreTimezoneConfig()).toThrow(/STORE_TIMEZONE không hợp lệ/)
+    process.env.STORE_TIMEZONE = 'Asia/Tokyo'
+    process.env.STORE_TIMEZONE_OFFSET = '+07:00'
+    expect(() => assertStoreTimezoneConfig()).toThrow(/lệch/)
   })
 })
