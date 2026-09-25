@@ -1,4 +1,4 @@
-# Production stack: postgres + migrate (one-shot) + api + web (nginx) + backup
+# Production stack: postgres + init-permissions, migrate (one-shot) + api + web (nginx) + backup
 # Cách dùng: xem docs/deploy.md
 #   cp .env.production.example .env  (sửa giá trị thật)
 #   docker compose -f docker-compose.prod.yml up -d --build
@@ -26,11 +26,27 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
+  # api và backup chạy bằng uid 1000 (không phải root); bind mount từ host phải thuộc uid đó
+  # (-R vì tệp cũ do bản chạy root tạo ra).
+  init-permissions:
+    image: alpine:3.22
+    command:
+      - sh
+      - -c
+      - >-
+        mkdir -p /data/imports /data/logs/api /data/backups &&
+        chown -R 1000:1000 /data/imports /data/logs/api /data/backups &&
+        chmod 700 /data/imports /data/backups
+    volumes:
+      - ./data:/data
+    restart: 'no'
+    logging: *default-logging
+
   migrate:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: ['node_modules/.bin/drizzle-kit', 'migrate']
+    command: ['node', 'dist/migrate.js']
     env_file: .env
     depends_on:
       postgres:
@@ -57,12 +73,17 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      init-permissions:
+        condition: service_completed_successfully
+    # /api/v1/health là readiness (DB tới được và đủ migration), trả 503 khi chưa sẵn sàng.
     healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/v1/health || exit 1']
+      test: ['CMD-SHELL', 'wget -qO- -T 4 http://127.0.0.1:3000/api/v1/health || exit 1']
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 15s
+    # Tắt êm: API chờ request và job nhập đang chạy tối đa 30 giây rồi mới thoát.
+    stop_grace_period: 45s
     restart: unless-stopped
     logging: *default-logging
 
@@ -79,21 +100,27 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
+  # Sao lưu mã hóa, tự kiểm, đẩy ra ngoài máy (deploy/backup, runbook ở docs/deploy.md mục 6).
   backup:
-    image: prodrigestivill/postgres-backup-local:17-alpine
+    build:
+      context: .
+      dockerfile: deploy/backup/Dockerfile
+    user: '1000:1000'
+    env_file: .env
     environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      SCHEDULE: ${BACKUP_SCHEDULE:-@daily}
-      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-7}
-      BACKUP_KEEP_WEEKS: ${BACKUP_KEEP_WEEKS:-4}
-      BACKUP_KEEP_MONTHS: ${BACKUP_KEEP_MONTHS:-6}
+      PGHOST: postgres
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
     volumes:
       - ./data/backups:/backups
+      - ./data/imports:/data/imports:ro
+    # Không phụ thuộc migrate: migration lỗi thì càng cần sao lưu chạy tiếp.
     depends_on:
       postgres:
         condition: service_healthy
+      init-permissions:
+        condition: service_completed_successfully
+    # scheduler chờ lần sao lưu đang chạy xong rồi mới thoát; bị kill giữa chừng thì lần sau
+    # tự dọn thư mục làm việc và DB tạm.
+    stop_grace_period: 5m
     restart: unless-stopped
     logging: *default-logging

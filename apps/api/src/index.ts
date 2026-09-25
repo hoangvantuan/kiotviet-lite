@@ -11,6 +11,7 @@ import { closeDbPool, db } from './db/index.js'
 import { setupGracefulShutdown } from './lib/graceful-shutdown.js'
 import { parseJson } from './lib/http.js'
 import { initLogger, logger } from './lib/logger.js'
+import { opsAlerter, serverErrorSpikeAlert, watchReadiness } from './lib/ops-monitor.js'
 import { requireAuth } from './middleware/auth.middleware.js'
 import { errorHandler } from './middleware/error-handler.js'
 import { requestLoggerMiddleware } from './middleware/request-logger.middleware.js'
@@ -27,6 +28,7 @@ import { createCustomerGroupsRoutes } from './routes/customer-groups.routes.js'
 import { createCustomerPricesRoutes } from './routes/customer-prices.routes.js'
 import { createCustomersRoutes } from './routes/customers.routes.js'
 import { createDebtAdjustmentsRoutes } from './routes/debt-adjustments.routes.js'
+import { createHealthRoutes } from './routes/health.routes.js'
 import { createNotificationRoutes } from './routes/notifications.routes.js'
 import { createOrdersRoutes } from './routes/orders.routes.js'
 import { createPosRoutes } from './routes/pos.routes.js'
@@ -46,6 +48,7 @@ import { createSyncRoutes } from './routes/sync.routes.js'
 import { createUsersRoutes } from './routes/users.routes.js'
 import { createVolumePricesRoutes } from './routes/volume-prices.routes.js'
 import { importStorageRoot, verifyImportStorageRoot } from './services/bulk-import-jobs.service.js'
+import { drainBulkImportRunner } from './services/bulk-import-runner.service.js'
 
 // Refuse to serve any endpoint when production import storage is absent or unsafe.
 if (process.env.NODE_ENV === 'production') await verifyImportStorageRoot(importStorageRoot())
@@ -71,6 +74,13 @@ app.use(
 
 app.use('*', securityHeaders)
 app.use('/api/*', requestLoggerMiddleware)
+app.use(
+  '/api/*',
+  serverErrorSpikeAlert({
+    alerter: opsAlerter(),
+    threshold: Number(process.env.OPS_ALERT_5XX_THRESHOLD) || 20,
+  }),
+)
 
 app.onError(errorHandler)
 
@@ -78,9 +88,7 @@ app.get('/', (c) => {
   return c.json({ message: 'KiotViet Lite API' })
 })
 
-app.get('/api/v1/health', (c) => {
-  return c.json({ status: 'ok' })
-})
+app.route('/api/v1/health', createHealthRoutes({ db }))
 
 const clientDiagnosticSchema = z
   .object({
@@ -186,10 +194,19 @@ if (process.env.NODE_ENV !== 'test') {
       const server = serve({ fetch: app.fetch, port }, (info) => {
         logger.info({ port: info.port }, 'api server listening')
       })
+      if (opsAlerter().enabled) logger.info('ops alerts enabled')
+      watchReadiness({ db, alerter: opsAlerter() })
 
+      // GL-11: tổng hạn 30 s (stop_grace_period của compose là 45 s). Job nhập được 15 s để
+      // xong, quá hạn thì dừng tại ranh giới dòng, rollback và trả về hàng đợi (5 s),
+      // pool DB đóng cưỡng bức sau 5 s.
       setupGracefulShutdown({
         server,
         logger,
+        timeoutMs: 30_000,
+        drain: async () => {
+          await drainBulkImportRunner({ graceMs: 15_000, abortMs: 5_000 })
+        },
         cleanup: async () => {
           await closeDbPool()
         },

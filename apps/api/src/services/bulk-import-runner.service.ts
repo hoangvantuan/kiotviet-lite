@@ -4,7 +4,8 @@ import { brands, type BulkImportJob, bulkImportJobs, categories } from '@kiotvie
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
-import { logger } from '../lib/logger.js'
+import { isShuttingDown } from '../lib/lifecycle.js'
+import { logger, withLogContext } from '../lib/logger.js'
 import type { AuthContext } from '../middleware/auth.middleware.js'
 import { createBrand } from './brands.service.js'
 import { BULK_EXPORT_CATEGORY_SEPARATOR } from './bulk-export.service.js'
@@ -14,6 +15,7 @@ import {
   finishBulkImportJob,
   loadBulkImportJobFile,
   publishBulkImportProgress,
+  requeueInterruptedBulkImportJob,
   updateBulkImportProgress,
 } from './bulk-import-jobs.service.js'
 import { type BulkImportKind, previewBulkImport } from './bulk-import-preview.service.js'
@@ -23,12 +25,45 @@ import { createProduct, updateProduct } from './products.service.js'
 import { createSupplier, updateSupplier } from './suppliers.service.js'
 
 const BATCH_SIZE = 100
+// Nhường event loop sau mỗi chừng này dòng: driver chạy toàn microtask (PGlite) không bỏ đói
+// timer, request khác và yêu cầu tắt êm trong lúc một job lớn đang chạy.
+const YIELD_EVERY_ROWS = 25
 const QUEUE_POLL_MS = 10_000
 const normalize = (value: string) => value.trim().toLowerCase()
 type RunArgs = { db: Db; storageRoot: string; storeId: string; id: string }
 
+// GL-11: runner biết tiến trình đang tắt. Job đang chạy được theo dõi để tắt êm chờ có hạn;
+// quá hạn thì cờ abort làm vòng lặp dòng ném lỗi, transaction rollback, job về hàng đợi.
+const activeRuns = new Set<Promise<void>>()
+let abortRequested = false
+let pollTimer: NodeJS.Timeout | undefined
+
+class ShutdownInterruption extends Error {
+  constructor() {
+    super('Máy chủ đang tắt; tác vụ sẽ chạy lại khi khởi động')
+  }
+}
+
+function assertNotAborted(): void {
+  if (abortRequested) throw new ShutdownInterruption()
+}
+
+const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve))
+let rowHookForTest: ((index: number) => void) | undefined
+
 /** Claims once. Domain writes, audits, and the completed state commit together or all roll back. */
-export async function runBulkImportJob({ db, storageRoot, storeId, id }: RunArgs) {
+export function runBulkImportJob(args: RunArgs): Promise<void> {
+  // Đang tắt: không nhận job mới, job vẫn ở hàng đợi cho lần khởi động sau.
+  if (isShuttingDown()) return Promise.resolve()
+  // GL-22: mọi log phát ra trong job (kể cả "supplier.created" của bản ghi bị rollback)
+  // mang jobId để đối chiếu với kết quả cuối của job.
+  const run = withLogContext({ jobId: args.id }, () => executeBulkImportJob(args))
+  activeRuns.add(run)
+  void run.finally(() => activeRuns.delete(run)).catch(() => {})
+  return run
+}
+
+async function executeBulkImportJob({ db, storageRoot, storeId, id }: RunArgs) {
   let claimed: BulkImportJob
   try {
     claimed = await claimBulkImportJob({ db, storeId, id })
@@ -60,6 +95,7 @@ export async function runBulkImportJob({ db, storageRoot, storeId, id }: RunArgs
         'Dữ liệu cửa hàng đã thay đổi kể từ khi xác nhận; vui lòng xem trước lại',
       )
     }
+    assertNotAborted()
     if (preflight.errors.length)
       throw new ApiError('VALIDATION_ERROR', `Tệp có lỗi tại dòng ${preflight.errors[0]!.row}`)
     if (!job.approveNewNames && (preflight.newCategories.length || preflight.newBrands.length)) {
@@ -126,6 +162,9 @@ export async function runBulkImportJob({ db, storageRoot, storeId, id }: RunArgs
       }
       for (let index = 0; index < plan.rows.length; index++) {
         const row = plan.rows[index]!
+        if (index > 0 && index % YIELD_EVERY_ROWS === 0) await yieldToEventLoop()
+        rowHookForTest?.(index)
+        assertNotAborted()
         if (row.action === 'error')
           throw new ApiError('VALIDATION_ERROR', `Tệp có lỗi tại dòng ${row.row}`)
         try {
@@ -208,6 +247,22 @@ export async function runBulkImportJob({ db, storageRoot, storeId, id }: RunArgs
       'Import job completed',
     )
   } catch (error) {
+    if (error instanceof ShutdownInterruption) {
+      try {
+        await requeueInterruptedBulkImportJob({ db, storeId, id })
+        logger.warn(
+          { jobId: id, storeId, status: 'queued', jobType: claimed.type, errorCode: 'SHUTDOWN' },
+          'Import job requeued after shutdown',
+        )
+      } catch {
+        // Không trả được về hàng đợi (pool đã đóng): lần khởi động sau đánh dấu failed rõ ràng.
+        logger.error(
+          { jobId: id, storeId, status: 'running', errorCode: 'SHUTDOWN_REQUEUE_FAILED' },
+          'Import job requeue failed',
+        )
+      }
+      return
+    }
     const message = error instanceof Error ? error.message : String(error)
     const errorCode = error instanceof ApiError ? error.code : 'UNEXPECTED_ERROR'
     try {
@@ -263,6 +318,7 @@ export async function runQueuedBulkImportJobs({
   db: Db
   storageRoot: string
 }): Promise<void> {
+  if (isShuttingDown()) return
   const queued = await db
     .select({ id: bulkImportJobs.id, storeId: bulkImportJobs.storeId })
     .from(bulkImportJobs)
@@ -277,7 +333,8 @@ export function pollBulkImportQueue(args: { db: Db; storageRoot: string }): void
       'Import queue poll failed',
     ),
   )
-  setInterval(() => {
+  if (pollTimer) clearInterval(pollTimer)
+  pollTimer = setInterval(() => {
     void runQueuedBulkImportJobs(args).catch((error: unknown) =>
       logger.error(
         { errorCode: error instanceof ApiError ? error.code : 'UNEXPECTED_ERROR' },
@@ -285,4 +342,53 @@ export function pollBulkImportQueue(args: { db: Db; storageRoot: string }): void
       ),
     )
   }, QUEUE_POLL_MS).unref()
+}
+
+function waitFor(runs: Promise<void>[], ms: number): Promise<boolean> {
+  if (!runs.length) return Promise.resolve(true)
+  let timer: NodeJS.Timeout | undefined
+  return Promise.race([
+    Promise.allSettled(runs).then(() => true),
+    new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(false), ms)
+    }),
+  ]).finally(() => clearTimeout(timer))
+}
+
+/**
+ * Gọi khi tắt êm (sau khi lifecycle đã chuyển sang shutting down): dừng poller, cho job
+ * đang chạy tối đa `graceMs` để xong; quá hạn thì yêu cầu dừng tại ranh giới dòng và chờ
+ * thêm `abortMs` cho rollback và trả job về hàng đợi. Không bao giờ chờ vô hạn.
+ */
+export async function drainBulkImportRunner({
+  graceMs,
+  abortMs,
+}: {
+  graceMs: number
+  abortMs: number
+}): Promise<{ finished: boolean; interrupted: number }> {
+  if (pollTimer) clearInterval(pollTimer)
+  pollTimer = undefined
+  const running = [...activeRuns]
+  if (!running.length) return { finished: true, interrupted: 0 }
+  // graceMs <= 0: yêu cầu dừng ngay, đồng bộ, không chờ timer.
+  if (graceMs > 0 && (await waitFor(running, graceMs))) return { finished: true, interrupted: 0 }
+  const interrupted = activeRuns.size
+  abortRequested = true
+  logger.warn({ activeJobs: interrupted }, 'Import jobs interrupted by shutdown')
+  const finished = await waitFor([...activeRuns], abortMs)
+  return { finished, interrupted }
+}
+
+/** Chỉ dùng trong test: gọi trước khi xử lý mỗi dòng, để ngắt job tại một dòng xác định. */
+export function setBulkImportRowHookForTest(hook: ((index: number) => void) | undefined): void {
+  rowHookForTest = hook
+}
+
+/** Chỉ dùng trong test. */
+export function resetBulkImportRunnerForTest(): void {
+  abortRequested = false
+  rowHookForTest = undefined
+  if (pollTimer) clearInterval(pollTimer)
+  pollTimer = undefined
 }
