@@ -33,9 +33,13 @@ describe('healthcheck phản ánh DB thật', () => {
   })
 
   it('DB không tới được: readiness 503, liveness vẫn 200', async () => {
-    const env = await createTestEnv()
-    const app = createHealthRoutes({ db: env.db })
-    await env.close()
+    // Không truy vấn PGlite đã close: WASM có lúc kẹt đồng bộ, chặn event loop nên cả
+    // testTimeout cũng không cứu được (CI #54 treo 20 phút). Giả lập lỗi kết nối như postgres-js.
+    const refused = {
+      execute: () =>
+        Promise.reject(Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' })),
+    } as unknown as Db
+    const app = createHealthRoutes({ db: refused })
     const ready = await app.request('/')
     expect(ready.status).toBe(503)
     expect(await body(ready)).toEqual({

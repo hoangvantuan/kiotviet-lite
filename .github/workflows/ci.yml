@@ -9,6 +9,8 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    # Bình thường khoảng 20 phút; test treo thì hỏng sớm thay vì giữ runner 6 giờ
+    timeout-minutes: 45
     # Postgres thật cho các test cần nhiều kết nối đồng thời (PGlite chỉ có một kết nối),
     # ví dụ test deadlock phiếu thu và trả hàng (TIEN-103)
     services:
@@ -55,6 +57,7 @@ jobs:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
     needs: ci
+    timeout-minutes: 30
     services:
       postgres:
         # Cùng bản với production (docker-compose.prod.yml)
