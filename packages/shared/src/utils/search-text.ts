@@ -1,6 +1,6 @@
 /**
- * Bỏ dấu tiếng Việt cho tìm kiếm, cùng một bảng ký tự cho JS và SQL (`translate`), để API,
- * cột sinh `products.search_text` và PGlite ngoại tuyến cho cùng kết quả.
+ * Bỏ dấu tiếng Việt cho tìm kiếm, cùng một bảng ký tự cho JS và SQL (`translate`), để truy vấn API và
+ * cột sinh `products.search_text` cho cùng kết quả.
  */
 
 const LETTERS: Record<string, string> = {
@@ -44,7 +44,7 @@ export function searchLikePattern(term: string): string {
   return `%${normalizeSearchText(term.trim()).replace(/[\\%_]/g, (char) => `\\${char}`)}%`
 }
 
-/** Nguồn của cột products.search_text; PGlite ngoại tuyến dùng lại khi bảng không có cột sinh. */
+/** Nguồn của cột products.search_text */
 export const PRODUCT_SEARCH_SOURCE = `"name" || ' ' || "sku"`
 
 /** Biểu thức SQL cùng quy tắc với normalizeSearchText; `expression` là SQL tin cậy (tên cột). */
