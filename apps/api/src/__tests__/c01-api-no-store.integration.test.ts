@@ -16,7 +16,8 @@ const { default: app } = await import('../index.js')
  */
 describe('C-01: mọi phản hồi /api/ đặt Cache-Control: private, no-store', () => {
   const cases: Array<{ name: string; path: string; init?: RequestInit; status: number }> = [
-    { name: 'GET thành công', path: '/api/v1/health', status: 200 },
+    // Liveness không chạm DB; readiness (/api/v1/health) cần DB thật nên không dùng ở đây.
+    { name: 'GET thành công', path: '/api/v1/health/live', status: 200 },
     { name: 'GET chưa xác thực', path: '/api/v1/me', status: 401 },
     { name: 'GET route không tồn tại', path: '/api/v1/khong-ton-tai', status: 404 },
     {
