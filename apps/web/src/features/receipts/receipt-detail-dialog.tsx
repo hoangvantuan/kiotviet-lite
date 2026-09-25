@@ -1,5 +1,7 @@
 import { Printer } from 'lucide-react'
 
+import { debtSourceLabel } from '@kiotviet-lite/shared'
+
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -87,7 +89,7 @@ export function ReceiptDetailDialog({ open, onOpenChange, receiptId }: ReceiptDe
                     <tbody>
                       {receipt.allocations.map((a) => (
                         <tr key={a.id} className="border-t">
-                          <td className="p-2 font-mono text-xs">{a.orderCode ?? 'Nợ đầu kỳ'}</td>
+                          <td className="p-2 font-mono text-xs">{debtSourceLabel(a)}</td>
                           <td className="p-2 text-right">{formatVnd(a.amount)}</td>
                           <td className="p-2 text-right">
                             {a.debtRemainingAfter === null ? (

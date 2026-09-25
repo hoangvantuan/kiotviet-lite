@@ -219,6 +219,7 @@ async function loadReceiptAllocations(
       debtId: receiptAllocations.debtId,
       orderId: debts.orderId,
       orderCode: orders.orderNumber,
+      type: debts.type,
       amount: receiptAllocations.amount,
       debtCreatedAt: debts.createdAt,
     })
@@ -233,6 +234,7 @@ async function loadReceiptAllocations(
     debtId: row.debtId,
     orderId: row.orderId,
     orderCode: row.orderCode,
+    type: row.type,
     amount: Number(row.amount),
     debtRemainingAfter: debtAfterMap?.get(row.debtId) ?? null,
   }))

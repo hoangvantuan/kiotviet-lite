@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { AlertTriangle, CheckCircle2, Clock, PenLine, Wallet } from 'lucide-react'
 
-import type { CustomerDebtItem } from '@kiotviet-lite/shared'
+import { debtSourceLabel } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Badge } from '@/components/ui/badge'
@@ -62,12 +62,6 @@ function getDebtStatusBadge(dateIso: string, remaining: number, overdueDays: num
     label: `Quá hạn ${daysSince} ngày`,
     className: 'border-red-200 bg-red-50 text-red-700',
   }
-}
-
-/** Tên khoản nợ: đơn bán ghi mã đơn, nợ đầu kỳ và khoản điều chỉnh tăng ghi rõ loại. */
-function debtSourceLabel(debt: CustomerDebtItem): string {
-  if (debt.orderCode) return debt.orderCode
-  return debt.type === 'adjustment' ? 'Điều chỉnh tăng nợ' : 'Nợ đầu kỳ'
 }
 
 function DebtProgressBar({

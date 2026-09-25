@@ -171,8 +171,9 @@ interface ReceiptResp {
   allocations: Array<{
     id: string
     debtId: string
-    orderId: string
-    orderCode: string
+    orderId: string | null
+    orderCode: string | null
+    type: 'sale' | 'opening' | 'adjustment'
     amount: number
     debtRemainingAfter: number | null
   }>
@@ -722,6 +723,68 @@ describe('GET /receipts/:id (getReceipt)', () => {
     expect(r.body.data.debtAfter).toBeNull()
     expect(r.body.data.allocations.length).toBe(2)
     expect(r.body.data.allocations[0]?.orderCode).toBeTruthy()
+  })
+
+  it('allocations trả type của từng khoản nợ để phiếu thu ghi đúng nhãn (đơn, nợ đầu kỳ, điều chỉnh)', async () => {
+    await env.base.db.insert(debts).values([
+      {
+        storeId: env.base.storeId,
+        customerId: env.customerWithDebtId,
+        type: 'opening',
+        amount: 30_000,
+        remaining: 30_000,
+        createdAt: new Date('2020-01-01T00:00:00Z'),
+      },
+      {
+        storeId: env.base.storeId,
+        customerId: env.customerWithDebtId,
+        type: 'adjustment',
+        amount: 20_000,
+        remaining: 20_000,
+        createdAt: new Date('2020-01-02T00:00:00Z'),
+      },
+    ])
+    const [opening, adjustment] = await env.base.db
+      .select({ id: debts.id, type: debts.type })
+      .from(debts)
+      .where(eq(debts.customerId, env.customerWithDebtId))
+      .orderBy(debts.createdAt)
+    await env.base.db
+      .update(customers)
+      .set({ currentDebt: 250_000 })
+      .where(eq(customers.id, env.customerWithDebtId))
+
+    const created = await jsonReq<{ data: ReceiptResp }>(
+      env,
+      'POST',
+      '/',
+      {
+        customerId: env.customerWithDebtId,
+        amount: 60_000,
+        allocationMode: 'manual',
+        allocations: [
+          { debtId: opening!.id, amount: 30_000 },
+          { debtId: adjustment!.id, amount: 20_000 },
+          { debtId: env.debtC.id, amount: 10_000 },
+        ],
+      },
+      env.base.owner.authHeader,
+    )
+    expect(created.status).toBe(201)
+
+    const r = await jsonReq<{ data: ReceiptResp }>(
+      env,
+      'GET',
+      `/${created.body.data.id}`,
+      undefined,
+      env.base.owner.authHeader,
+    )
+    expect(r.status).toBe(200)
+    expect(r.body.data.allocations.map((a) => ({ type: a.type, orderCode: a.orderCode }))).toEqual([
+      { type: 'opening', orderCode: null },
+      { type: 'adjustment', orderCode: null },
+      { type: 'sale', orderCode: 'ORD-C' },
+    ])
   })
 
   it('ID không phải uuid → 400', async () => {
