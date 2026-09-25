@@ -19,15 +19,15 @@ describe('supplier-payments.service exports', () => {
 
 describe('formatVnd', () => {
   it('formats integer amount with Vietnamese locale', () => {
-    expect(formatVnd(1_000_000)).toBe('1.000.000 đ')
+    expect(formatVnd(1_000_000)).toBe('1.000.000đ')
   })
 
   it('formats zero', () => {
-    expect(formatVnd(0)).toBe('0 đ')
+    expect(formatVnd(0)).toBe('0đ')
   })
 
   it('formats small amount', () => {
-    expect(formatVnd(500)).toBe('500 đ')
+    expect(formatVnd(500)).toBe('500đ')
   })
 
   it('formats large amount', () => {

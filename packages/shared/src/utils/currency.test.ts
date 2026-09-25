@@ -15,18 +15,21 @@ describe('currency utils', () => {
   })
 
   describe('formatVndWithSuffix', () => {
-    it('định dạng kèm hậu tố mặc định hoặc tùy chỉnh', () => {
+    it('định dạng kèm hậu tố mặc định (NBSP + đ) hoặc tùy chỉnh', () => {
       expect(formatVndWithSuffix(1_000_000)).toBe('1.000.000\xA0đ')
+      expect(formatVndWithSuffix(0)).toBe('0\xA0đ')
+      expect(formatVndWithSuffix(1_000_000, ' đ')).toBe('1.000.000 đ')
       expect(formatVndWithSuffix(1_000_000, 'đ')).toBe('1.000.000đ')
       expect(formatVndWithSuffix(null)).toBe('')
     })
   })
 
   describe('formatCurrencyVnd', () => {
-    it('luôn trả về chuỗi có đuôi đ', () => {
-      expect(formatCurrencyVnd(1_000_000)).toBe('1.000.000\xA0đ')
-      expect(formatCurrencyVnd(0)).toBe('0\xA0đ')
-      expect(formatCurrencyVnd(null)).toBe('0\xA0đ')
+    it('luôn trả về chuỗi có đuôi đ liền số (định dạng API, không đổi)', () => {
+      expect(formatCurrencyVnd(1_000_000)).toBe('1.000.000đ')
+      expect(formatCurrencyVnd(0)).toBe('0đ')
+      expect(formatCurrencyVnd(null)).toBe('0đ')
+      expect(formatCurrencyVnd(1_000_000)).not.toContain('\xA0')
     })
   })
 

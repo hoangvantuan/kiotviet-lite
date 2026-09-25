@@ -19,16 +19,22 @@ export function formatVnd(value: number | null | undefined): string {
 }
 
 /**
- * Định dạng số tiền VND kèm hậu tố đơn vị tiền tệ (mặc định 'đ').
+ * Khoảng trắng không ngắt dòng (U+00A0) giữa số và 'đ' để ký hiệu tiền không rớt xuống dòng riêng.
+ */
+export const VND_DISPLAY_SUFFIX = '\xA0đ'
+
+/**
+ * Định dạng số tiền VND để HIỂN THỊ trên giao diện, kèm hậu tố đơn vị (mặc định NBSP + 'đ').
+ * Đây là định dạng tiền duy nhất của giao diện web (UX-13). API không dùng hàm này.
  *
  * Ví dụ:
- * - formatVndWithSuffix(1000000) -> '1.000.000 đ'
+ * - formatVndWithSuffix(1000000) -> '1.000.000\u00A0đ'
  * - formatVndWithSuffix(1000000, 'đ') -> '1.000.000đ'
  * - formatVndWithSuffix(null) -> ''
  */
 export function formatVndWithSuffix(
   value: number | null | undefined,
-  suffix: string = '\xA0đ',
+  suffix: string = VND_DISPLAY_SUFFIX,
 ): string {
   const formatted = formatVnd(value)
   if (!formatted) return ''
@@ -37,10 +43,12 @@ export function formatVndWithSuffix(
 
 /**
  * Định dạng số tiền VND luôn kèm hậu tố 'đ', nếu null/undefined/0 thì trả về '0đ'.
- * Thích hợp cho hiển thị báo cáo, thông báo lỗi công nợ trong API.
+ * Dùng cho thông báo lỗi và nội dung lưu DB của API; giữ nguyên định dạng này
+ * vì dữ liệu cũ và client đang dựa vào nó. Giao diện web dùng formatVndWithSuffix.
  */
 export function formatCurrencyVnd(value: number | null | undefined): string {
-  return formatVndWithSuffix(value ?? 0)
+  const formatted = formatVnd(value ?? 0)
+  return `${formatted || '0'}đ`
 }
 
 /**
