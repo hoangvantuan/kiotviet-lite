@@ -108,6 +108,15 @@ const categoryColumn = 'Danh mục'
 const brandColumn = 'Thương hiệu'
 const groupColumn = 'Nhóm khách hàng'
 const stockColumn = BULK_EXPORT_FORMAT.stockColumn
+// Alive-row unique indexes besides the key column, with the comparison the write path uses.
+const uniqueFields = {
+  products: [{ field: 'barcode', lower: false, message: 'Barcode đã tồn tại trong cửa hàng' }],
+  customers: [{ field: 'phone', lower: false, message: 'Số điện thoại đã được sử dụng' }],
+  suppliers: [
+    { field: 'name', lower: true, message: 'Tên nhà cung cấp đã được sử dụng' },
+    { field: 'phone', lower: false, message: 'Số điện thoại đã được sử dụng' },
+  ],
+} as const
 
 function normalized(value: string): string {
   return value.trim().toLowerCase()
@@ -481,6 +490,44 @@ export async function previewBulkImport({
       ...(groupId !== undefined ? { groupId } : {}),
     })
     if (key && !seenKeys.has(normalized(key))) seenKeys.set(normalized(key), rows[rows.length - 1]!)
+  }
+  // Replay the runner's sequential writes so preview rejects every unique conflict the write would.
+  for (const unique of uniqueFields[kind]) {
+    const column = expected[fields[kind].indexOf(unique.field as never)]!
+    const keyOf = (value: unknown) =>
+      typeof value === 'string' && value ? (unique.lower ? normalized(value) : value) : null
+    const owners = new Map<string, { id: string; row?: number }>()
+    const current = new Map<string, string | null>()
+    for (const item of existing as Record<string, unknown>[]) {
+      const value = keyOf(item[unique.field])
+      current.set(item.id as string, value)
+      if (value) owners.set(value, { id: item.id as string })
+    }
+    for (const item of rows) {
+      if (item.action !== 'create' && item.action !== 'update') continue
+      if (!(unique.field in item.input)) continue
+      const self = item.targetId ?? `row:${item.row}`
+      const value = keyOf(item.input[unique.field])
+      const before = current.get(self) ?? null
+      if (value === before) continue
+      const owner = value ? owners.get(value) : undefined
+      if (owner && owner.id !== self) {
+        const shown = String(item.input[unique.field])
+        errors.push({
+          row: item.row,
+          column,
+          message: owner.row
+            ? `${column} ${shown} bị trùng ở dòng ${owner.row} và ${item.row}`
+            : unique.message,
+        })
+        item.action = 'error'
+        item.input = {}
+        continue
+      }
+      if (before && owners.get(before)?.id === self) owners.delete(before)
+      if (value) owners.set(value, { id: self, row: item.row })
+      current.set(self, value)
+    }
   }
   let creates = 0
   let updates = 0
