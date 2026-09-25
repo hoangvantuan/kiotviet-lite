@@ -81,7 +81,9 @@ export function OrderDiscountPopover({
               discountAmount > 0 ? 'text-orange-500' : 'text-muted-foreground',
             )}
           >
-            {discountAmount > 0 ? `-${formatVndWithSuffix(discountAmount)}` : '0đ'}
+            {discountAmount > 0
+              ? `-${formatVndWithSuffix(discountAmount)}`
+              : formatVndWithSuffix(0)}
           </span>
         </button>
       </PopoverTrigger>

@@ -4,6 +4,7 @@ import { ChevronLeft, RotateCcw } from 'lucide-react'
 
 import { RETURN_REASON_LABELS } from '@kiotviet-lite/shared'
 
+import { QueryErrorState } from '@/components/shared/query-error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -80,10 +81,15 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
   if (query.isError || !query.data) {
     return (
       <div className="p-4 md:p-6">
-        <p className="text-sm text-destructive">Không tải được hóa đơn. Thử lại sau.</p>
-        <Button variant="outline" className="mt-3" onClick={() => navigate({ to: '/orders' })}>
-          <ChevronLeft className="size-4 mr-1" /> Về danh sách
-        </Button>
+        <QueryErrorState
+          title="Không tải được đơn hàng."
+          onRetry={() => query.refetch()}
+          retrying={query.isFetching}
+        >
+          <Button variant="outline" onClick={() => navigate({ to: '/orders' })}>
+            <ChevronLeft className="size-4 mr-1" /> Về danh sách
+          </Button>
+        </QueryErrorState>
       </div>
     )
   }

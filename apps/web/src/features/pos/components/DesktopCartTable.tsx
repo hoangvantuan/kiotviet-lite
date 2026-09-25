@@ -324,7 +324,7 @@ function DesktopCartRow({ item, index }: DesktopCartRowProps) {
                 ? item.discountType === DISCOUNT_TYPE.PERCENT
                   ? `-${item.discountValue}%`
                   : `-${formatVndWithSuffix(item.discountAmount)}`
-                : '0 đ'}
+                : formatVndWithSuffix(0)}
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-64 p-3" align="end">

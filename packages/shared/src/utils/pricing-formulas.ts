@@ -1,4 +1,5 @@
 import type { FormulaType, RoundingRule } from '../schema/price-list-management.js'
+import { formatVndWithSuffix } from './currency.js'
 
 const ROUNDING_UNITS: Record<
   RoundingRule,
@@ -57,8 +58,6 @@ export function computeFinalPrice(
   return Math.max(0, rounded)
 }
 
-const VND_FORMATTER = new Intl.NumberFormat('vi-VN')
-
 export function formatFormulaLabel(formulaType: FormulaType, formulaValue: number): string {
   switch (formulaType) {
     case 'percent_increase':
@@ -66,9 +65,9 @@ export function formatFormulaLabel(formulaType: FormulaType, formulaValue: numbe
     case 'percent_decrease':
       return `Giảm ${(formulaValue / 100).toString()}%`
     case 'amount_increase':
-      return `Tăng ${VND_FORMATTER.format(formulaValue)}đ`
+      return `Tăng ${formatVndWithSuffix(formulaValue)}`
     case 'amount_decrease':
-      return `Giảm ${VND_FORMATTER.format(formulaValue)}đ`
+      return `Giảm ${formatVndWithSuffix(formulaValue)}`
   }
 }
 
@@ -77,22 +76,22 @@ export function formatRoundingLabel(rule: RoundingRule): string {
     case 'none':
       return 'Không làm tròn'
     case 'nearest_hundred':
-      return 'Làm tròn 100đ'
+      return `Làm tròn ${formatVndWithSuffix(100)}`
     case 'nearest_five_hundred':
-      return 'Làm tròn 500đ'
+      return `Làm tròn ${formatVndWithSuffix(500)}`
     case 'nearest_thousand':
-      return 'Làm tròn 1.000đ'
+      return `Làm tròn ${formatVndWithSuffix(1000)}`
     case 'ceil_hundred':
-      return 'Làm tròn lên 100đ'
+      return `Làm tròn lên ${formatVndWithSuffix(100)}`
     case 'ceil_five_hundred':
-      return 'Làm tròn lên 500đ'
+      return `Làm tròn lên ${formatVndWithSuffix(500)}`
     case 'ceil_thousand':
-      return 'Làm tròn lên 1.000đ'
+      return `Làm tròn lên ${formatVndWithSuffix(1000)}`
     case 'floor_hundred':
-      return 'Làm tròn xuống 100đ'
+      return `Làm tròn xuống ${formatVndWithSuffix(100)}`
     case 'floor_five_hundred':
-      return 'Làm tròn xuống 500đ'
+      return `Làm tròn xuống ${formatVndWithSuffix(500)}`
     case 'floor_thousand':
-      return 'Làm tròn xuống 1.000đ'
+      return `Làm tròn xuống ${formatVndWithSuffix(1000)}`
   }
 }

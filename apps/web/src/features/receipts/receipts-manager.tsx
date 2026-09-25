@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { AlertCircle, HandCoins, Plus, SearchX } from 'lucide-react'
+import { HandCoins, Plus, SearchX } from 'lucide-react'
 
 import type { ReceiptDetail } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
+import { QueryErrorState } from '@/components/shared/query-error-state'
 import { Button } from '@/components/ui/button'
 import { useDebounced } from '@/hooks/use-debounced'
 import { formatVndWithSuffix } from '@/lib/currency'
@@ -122,12 +123,10 @@ export function ReceiptsManager() {
       )}
 
       {isError && (
-        <EmptyState
-          icon={AlertCircle}
-          title="Không tải được danh sách"
-          description="Vui lòng thử lại sau."
-          actionLabel="Thử lại"
-          onAction={() => receiptsQuery.refetch()}
+        <QueryErrorState
+          title="Không tải được danh sách phiếu thu."
+          onRetry={() => receiptsQuery.refetch()}
+          retrying={receiptsQuery.isFetching}
         />
       )}
 
@@ -149,7 +148,7 @@ export function ReceiptsManager() {
         />
       )}
 
-      {!isLoading && !isEmpty && (
+      {!isLoading && !isError && !isEmpty && (
         <>
           <div className="hidden md:block">
             <ReceiptsTable items={items} onView={handleView} />

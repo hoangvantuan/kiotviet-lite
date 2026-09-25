@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
-import { AlertCircle, Receipt, SearchX, Users, X } from 'lucide-react'
+import { Receipt, SearchX, Users, X } from 'lucide-react'
 
 import { formatPhone } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
+import { QueryErrorState } from '@/components/shared/query-error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -369,12 +370,10 @@ export function OrderList() {
       )}
 
       {isError && (
-        <EmptyState
-          icon={AlertCircle}
-          title="Không tải được danh sách"
-          description="Vui lòng thử lại sau."
-          actionLabel="Thử lại"
-          onAction={() => ordersQuery.refetch()}
+        <QueryErrorState
+          title="Không tải được danh sách đơn hàng."
+          onRetry={() => ordersQuery.refetch()}
+          retrying={ordersQuery.isFetching}
         />
       )}
 
@@ -394,7 +393,7 @@ export function OrderList() {
         />
       )}
 
-      {!isLoading && !isEmpty && (
+      {!isLoading && !isError && !isEmpty && (
         <OrderTable
           items={items}
           onRowClick={(id) => navigate({ to: '/orders/$orderId', params: { orderId: id } })}

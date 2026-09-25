@@ -52,6 +52,7 @@ export function Pagination({
           size="sm"
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
+          aria-label="Trang trước"
         >
           <ChevronLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Trước</span>
@@ -69,6 +70,7 @@ export function Pagination({
             }}
             className="mx-2 inline-block h-8 w-14 px-2 text-center"
             inputMode="numeric"
+            aria-label="Số trang"
           />
           / {totalPages}
         </span>
@@ -80,6 +82,7 @@ export function Pagination({
           size="sm"
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages}
+          aria-label="Trang sau"
         >
           <span className="hidden sm:inline">Sau</span>
           <ChevronRight className="h-4 w-4" />

@@ -3,6 +3,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
+
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -91,8 +93,8 @@ export function SettingsDebtPage() {
             </p>
           )}
           <p className="text-xs text-muted-foreground">
-            Ví dụ: Hạn mức 1.000.000₫, cảnh báo khi nợ {'>'}{' '}
-            {Math.round(10000 * (warningValue || 80)).toLocaleString('vi-VN')}₫
+            Ví dụ: Hạn mức {formatVndWithSuffix(1_000_000)}, cảnh báo khi nợ {'>'}{' '}
+            {formatVndWithSuffix(Math.round(10000 * (warningValue || 80)))}
           </p>
         </div>
       </div>
@@ -146,10 +148,7 @@ export function SettingsDebtPage() {
         )}
       </div>
 
-      <Button
-        type="submit"
-        disabled={!form.formState.isDirty || updateMutation.isPending}
-      >
+      <Button type="submit" disabled={!form.formState.isDirty || updateMutation.isPending}>
         {updateMutation.isPending ? 'Đang lưu...' : 'Lưu thay đổi'}
       </Button>
     </form>

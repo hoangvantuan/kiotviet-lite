@@ -1,7 +1,7 @@
 import type { AuditAction } from '@kiotviet-lite/shared'
 
 export const ACTION_LABELS: Record<AuditAction, string> = {
-  'login': 'Đăng nhập',
+  login: 'Đăng nhập',
   'user.created': 'Tạo nhân viên',
   'user.updated': 'Sửa nhân viên',
   'user.locked': 'Khoá nhân viên',

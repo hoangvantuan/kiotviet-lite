@@ -20,6 +20,7 @@ import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
+import { QueryErrorState } from '@/components/shared/query-error-state'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -89,7 +90,7 @@ function DebtBadge({
   if (currentDebt === 0) {
     return (
       <Badge variant="secondary" className="text-xs">
-        0đ
+        {formatVndWithSuffix(0)}
       </Badge>
     )
   }
@@ -285,7 +286,11 @@ export function CustomerList() {
       {customersQuery.isLoading ? (
         <p className="text-sm text-muted-foreground">Đang tải danh sách…</p>
       ) : customersQuery.isError ? (
-        <p className="text-sm text-destructive">Không tải được danh sách khách hàng.</p>
+        <QueryErrorState
+          title="Không tải được danh sách khách hàng."
+          onRetry={() => customersQuery.refetch()}
+          retrying={customersQuery.isFetching}
+        />
       ) : items.length === 0 && !isFiltered ? (
         <EmptyState
           icon={Users}

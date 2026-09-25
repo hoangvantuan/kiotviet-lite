@@ -17,6 +17,7 @@ import { formatPhone } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
+import { QueryErrorState } from '@/components/shared/query-error-state'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -82,7 +83,7 @@ function DebtBadge({ currentDebt }: { currentDebt: number }) {
   if (currentDebt === 0) {
     return (
       <Badge variant="secondary" className="text-xs">
-        0đ
+        {formatVndWithSuffix(0)}
       </Badge>
     )
   }
@@ -121,7 +122,7 @@ export function SupplierManager() {
   const meta = suppliersQuery.data?.meta
   const isLoading = suppliersQuery.isLoading
   const isError = suppliersQuery.isError
-  const isEmpty = !isLoading && items.length === 0
+  const isEmpty = !isLoading && !isError && items.length === 0
   const hasFilter = debouncedSearch.trim() !== '' || hasDebt !== 'all'
 
   return (
@@ -208,7 +209,11 @@ export function SupplierManager() {
       )}
 
       {isError && (
-        <p className="text-sm text-destructive">Không tải được danh sách. Thử lại sau.</p>
+        <QueryErrorState
+          title="Không tải được danh sách nhà cung cấp."
+          onRetry={() => suppliersQuery.refetch()}
+          retrying={suppliersQuery.isFetching}
+        />
       )}
 
       {isEmpty && !hasFilter && (
@@ -229,7 +234,7 @@ export function SupplierManager() {
         />
       )}
 
-      {!isLoading && !isEmpty && (
+      {!isLoading && !isError && !isEmpty && (
         <>
           <div className="hidden md:block">
             <SupplierTable

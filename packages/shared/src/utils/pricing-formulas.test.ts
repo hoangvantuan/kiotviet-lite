@@ -104,7 +104,7 @@ describe('formatFormulaLabel', () => {
   })
 
   it('amount_increase 5000 → Tăng 5.000đ', () => {
-    expect(formatFormulaLabel('amount_increase', 5000)).toBe('Tăng 5.000đ')
+    expect(formatFormulaLabel('amount_increase', 5000)).toBe('Tăng 5.000\xA0đ')
   })
 })
 
@@ -114,6 +114,6 @@ describe('formatRoundingLabel', () => {
   })
 
   it('ceil_thousand → Làm tròn lên 1.000đ', () => {
-    expect(formatRoundingLabel('ceil_thousand')).toBe('Làm tròn lên 1.000đ')
+    expect(formatRoundingLabel('ceil_thousand')).toBe('Làm tròn lên 1.000\xA0đ')
   })
 })

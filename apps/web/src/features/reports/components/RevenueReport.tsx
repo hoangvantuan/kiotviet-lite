@@ -10,8 +10,7 @@ import type {
   RevenueGroupBy,
   RevenueReportTab,
 } from '@kiotviet-lite/shared'
-import { formatPhone } from '@kiotviet-lite/shared'
-import { formatVndWithSuffix } from '@kiotviet-lite/shared'
+import { formatPhone, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -23,6 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { formatDate } from '@/lib/date'
 
 import { useRevenueReport } from '../hooks/use-reports'
 import { downloadReportExport } from '../reports-api'
@@ -60,9 +60,9 @@ export function RevenueReport() {
       <Tabs value={tab} onValueChange={(v) => setTab(v as RevenueReportTab)}>
         <TabsList className="h-auto flex-wrap">
           <TabsTrigger value="time">Theo thời gian</TabsTrigger>
-          <TabsTrigger value="product">Theo SP</TabsTrigger>
-          <TabsTrigger value="customer">Theo KH</TabsTrigger>
-          <TabsTrigger value="employee">Theo NV</TabsTrigger>
+          <TabsTrigger value="product">Theo sản phẩm</TabsTrigger>
+          <TabsTrigger value="customer">Theo khách hàng</TabsTrigger>
+          <TabsTrigger value="employee">Theo nhân viên</TabsTrigger>
           <TabsTrigger value="thuong-hieu">Theo thương hiệu</TabsTrigger>
           <TabsTrigger value="danh-muc">Theo danh mục</TabsTrigger>
         </TabsList>
@@ -111,7 +111,7 @@ export function RevenueReport() {
               <TableBody>
                 {(data.rows as RevenueByTimeRow[]).map((r) => (
                   <TableRow key={r.date}>
-                    <TableCell>{r.date}</TableCell>
+                    <TableCell>{formatDate(r.date)}</TableCell>
                     <TableCell className="text-right font-mono">{r.orderCount}</TableCell>
                     <TableCell className="text-right font-mono">
                       {formatVndWithSuffix(r.revenue)}
@@ -126,7 +126,7 @@ export function RevenueReport() {
                 <TableRow>
                   <TableHead>Sản phẩm</TableHead>
                   <TableHead>Mã hàng</TableHead>
-                  <TableHead className="text-right">SL</TableHead>
+                  <TableHead className="text-right">Số lượng</TableHead>
                   <TableHead className="text-right">Doanh thu</TableHead>
                   <TableHead className="text-right">%</TableHead>
                 </TableRow>
