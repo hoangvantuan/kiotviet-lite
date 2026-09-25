@@ -256,6 +256,20 @@ describe('GL-02: nhập tồn đầu kỳ từ tệp thành phiếu kiểm nháp
     expect(confirmed.status).toBe(409)
   })
 
+  it('giới hạn số lần tải tệp như nhập hàng loạt', async () => {
+    const previous = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+    try {
+      const bytes = workbook(['Mã hàng', 'Số lượng thực tế'], [['SP01', 1]])
+      const statuses: number[] = []
+      for (let i = 0; i < 7; i++) statuses.push((await upload('/import/preview', bytes)).status)
+      expect(statuses.slice(0, 6).every((status) => status !== 429)).toBe(true)
+      expect(statuses[6]).toBe(429)
+    } finally {
+      process.env.NODE_ENV = previous
+    }
+  })
+
   it('thiếu cột bắt buộc báo tiếng Việt', async () => {
     const preview = await upload('/import/preview', workbook(['Tên hàng', 'Giá bán'], [['A', 1]]))
     expect(preview.status).toBe(400)

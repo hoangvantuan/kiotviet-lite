@@ -21,7 +21,8 @@ import {
 } from '../services/bulk-import-preview.service.js'
 import { startBulkImportRunner } from '../services/bulk-import-runner.service.js'
 
-const uploadRateLimit = rateLimiter({
+/** Giới hạn tải tệp XLSX, dùng chung cho nhập hàng loạt và nhập tồn đầu kỳ (GL-02). */
+export const uploadRateLimit = rateLimiter({
   windowMs: 60_000,
   limit: 6,
   keyGenerator: (c) => `${c.get('auth').storeId}:${c.get('auth').userId}`,

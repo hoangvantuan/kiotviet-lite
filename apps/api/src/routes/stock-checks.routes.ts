@@ -28,7 +28,7 @@ import {
   listStockChecks,
   updateStockCheck,
 } from '../services/stock-checks.service.js'
-import { readMultipartForm } from './bulk-import-preview.routes.js'
+import { readMultipartForm, uploadRateLimit } from './bulk-import-preview.routes.js'
 
 const uuidParam = z.string().uuid('ID không hợp lệ')
 
@@ -110,7 +110,7 @@ export function createStockChecksRoutes({ db }: StockChecksRoutesDeps) {
   })
 
   // GL-02: nhập tồn đầu kỳ từ tệp thành các phiếu kiểm nháp. Đặt trước /:id/confirm.
-  app.post('/import/preview', async (c) => {
+  app.post('/import/preview', uploadRateLimit, async (c) => {
     const { bytes, filename } = await readStockImportUpload(c.req.raw, false)
     const preview = await previewStockCheckImport({ db, actor: c.get('auth'), bytes, filename })
     return c.json({
@@ -137,7 +137,7 @@ export function createStockChecksRoutes({ db }: StockChecksRoutesDeps) {
     })
   })
 
-  app.post('/import/confirm', async (c) => {
+  app.post('/import/confirm', uploadRateLimit, async (c) => {
     const upload = await readStockImportUpload(c.req.raw, true)
     const data = await confirmStockCheckImport({
       db,
