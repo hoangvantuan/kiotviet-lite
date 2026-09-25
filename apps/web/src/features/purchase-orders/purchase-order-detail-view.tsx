@@ -142,7 +142,14 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
                     )}
                   </TableCell>
                   <TableCell className="font-mono text-xs">{it.productSkuSnapshot}</TableCell>
-                  <TableCell className="text-right">{it.quantity}</TableCell>
+                  <TableCell className="text-right">
+                    {it.quantity}
+                    {it.unitName && (
+                      <div className="text-xs text-muted-foreground">
+                        {it.unitName} = {it.baseQuantity}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">{formatVnd(it.unitPrice)}</TableCell>
                   <TableCell className="text-right">
                     {it.discountAmount > 0 ? `-${formatVnd(it.discountAmount)}` : '—'}
@@ -173,7 +180,8 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">SL × Đơn giá</span>
                 <span>
-                  {it.quantity} × {formatVnd(it.unitPrice)}
+                  {it.quantity}
+                  {it.unitName ? ` ${it.unitName}` : ''} × {formatVnd(it.unitPrice)}
                 </span>
               </div>
               {it.discountAmount > 0 && (

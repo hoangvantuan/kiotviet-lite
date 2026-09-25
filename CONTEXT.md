@@ -87,6 +87,14 @@ _Tránh dùng_: lịch sử kho, nhật ký kho
 Chứng từ ghi nhận hàng mua từ nhà cung cấp về kho.
 _Tránh dùng_: đơn mua hàng, phiếu mua, PO
 
+**Giá vốn**:
+Giá trị của một đơn vị tính hàng đang tồn, tính theo bình quân gia quyền và cập nhật sau mỗi lần nhập hàng từ giá nhập thực của lô. Mỗi biến thể có giá vốn riêng; biến thể chưa có giá vốn thì dùng giá vốn sản phẩm cha. Giá vốn của một sản phẩm có biến thể chỉ là số tóm tắt: bình quân giá vốn các biến thể theo tồn kho. Quy tắc ở ADR-0007.
+_Tránh dùng_: giá gốc, giá nhập, cost
+
+**Giá nhập thực**:
+Số tiền thực trả cho một đơn vị tính trên một dòng phiếu nhập hàng: thành tiền dòng sau chiết khấu dòng, trừ phần chiết khấu phiếu phân bổ cho dòng, chia cho số lượng quy ra đơn vị tính. Chiết khấu phiếu phân bổ theo tỷ lệ thành tiền dòng, tổng phân bổ khớp đúng số chiết khấu. Đây là số đi vào giá vốn và sổ giao dịch kho, khác đơn giá ghi trên phiếu (chuẩn mực VAS 02 đoạn 06, cách KiotViet tính).
+_Tránh dùng_: giá sau chiết khấu, đơn giá thực, giá nhập ròng
+
 **Kiểm kê**:
 Việc đếm lại hàng thực tế trong kho rồi ghi nhận chênh lệch so với sổ sách.
 _Tránh dùng_: cân bằng kho, kiểm hàng

@@ -51,10 +51,30 @@ interface ItemRow {
   productSku: string
   variantLabel: string | null
   costPrice: number | null
+  baseUnit: string
+  unitConversions: UnitOption[]
+  // null = nhập theo đơn vị tính; quantity và unitPrice tính theo đơn vị đang chọn
+  unitConversionId: string | null
   quantity: number
   unitPrice: number
   discountType: DiscountType
   discountValue: number
+}
+
+interface UnitOption {
+  id: string
+  unit: string
+  conversionFactor: number
+}
+
+const BASE_UNIT_VALUE = 'base'
+
+function toUnitOptions(detail: ProductDetail): UnitOption[] {
+  return detail.unitConversions.map((u) => ({
+    id: u.id,
+    unit: u.unit,
+    conversionFactor: u.conversionFactor,
+  }))
 }
 
 function discountValueToDisplay(type: DiscountType, apiValue: number): number {
@@ -162,6 +182,9 @@ export function PurchaseOrderForm() {
           productSku: detail.sku,
           variantLabel: null,
           costPrice: detail.costPrice,
+          baseUnit: detail.unit,
+          unitConversions: toUnitOptions(detail),
+          unitConversionId: null,
           quantity: 1,
           unitPrice: detail.costPrice ?? 0,
           discountType: 'amount',
@@ -201,6 +224,9 @@ export function PurchaseOrderForm() {
             ? `${v.attribute1Value} - ${v.attribute2Value}`
             : v.attribute1Value,
           costPrice: cost,
+          baseUnit: product.unit,
+          unitConversions: toUnitOptions(product),
+          unitConversionId: null,
           quantity: 1,
           unitPrice: cost ?? 0,
           discountType: 'amount',
@@ -224,6 +250,16 @@ export function PurchaseOrderForm() {
 
   const updateItem = (tempId: string, patch: Partial<ItemRow>) => {
     setItems((prev) => prev.map((it) => (it.tempId === tempId ? { ...it, ...patch } : it)))
+  }
+
+  // Đổi đơn vị trên dòng: gợi ý đơn giá theo giá vốn hiện tại nhân hệ số quy đổi
+  const changeItemUnit = (it: ItemRow, value: string) => {
+    const conv = it.unitConversions.find((u) => u.id === value) ?? null
+    updateItem(it.tempId, {
+      unitConversionId: conv?.id ?? null,
+      unitPrice: (it.costPrice ?? 0) * (conv?.conversionFactor ?? 1),
+      discountValue: it.discountType === 'amount' ? 0 : it.discountValue,
+    })
   }
 
   const removeItem = (tempId: string) => {
@@ -253,6 +289,7 @@ export function PurchaseOrderForm() {
       items: items.map((it) => ({
         productId: it.productId,
         variantId: it.variantId ?? null,
+        unitConversionId: it.unitConversionId,
         quantity: it.quantity,
         unitPrice: it.unitPrice,
         discountType: it.discountType,
@@ -378,7 +415,7 @@ export function PurchaseOrderForm() {
                   <TableHead className="w-12">STT</TableHead>
                   <TableHead>Sản phẩm</TableHead>
                   <TableHead className="hidden md:table-cell">SKU</TableHead>
-                  <TableHead className="w-24">SL</TableHead>
+                  <TableHead className="w-32">SL</TableHead>
                   <TableHead className="w-36">Đơn giá</TableHead>
                   <TableHead className="w-44">Chiết khấu</TableHead>
                   <TableHead className="w-36 text-right">Thành tiền</TableHead>
@@ -393,6 +430,7 @@ export function PurchaseOrderForm() {
                     it.discountType,
                     it.discountValue,
                   )
+                  const conv = it.unitConversions.find((u) => u.id === it.unitConversionId)
                   return (
                     <TableRow key={it.tempId}>
                       <TableCell>{idx + 1}</TableCell>
@@ -421,6 +459,29 @@ export function PurchaseOrderForm() {
                             })
                           }
                         />
+                        {it.unitConversions.length > 0 && (
+                          <Select
+                            value={it.unitConversionId ?? BASE_UNIT_VALUE}
+                            onValueChange={(v) => changeItemUnit(it, v)}
+                          >
+                            <SelectTrigger className="mt-1" aria-label="Đơn vị nhập">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={BASE_UNIT_VALUE}>{it.baseUnit}</SelectItem>
+                              {it.unitConversions.map((u) => (
+                                <SelectItem key={u.id} value={u.id}>
+                                  {u.unit} ({u.conversionFactor} {it.baseUnit})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        {conv && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            = {it.quantity * conv.conversionFactor} {it.baseUnit}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <CurrencyInput
