@@ -127,6 +127,7 @@ interface SyncPushResult {
   serverId?: string
   status: 'synced' | 'error' | 'duplicate'
   error?: { code: string; message: string }
+  warnings?: Array<{ code: string; message: string }>
 }
 
 interface SyncPushEnvelope {
