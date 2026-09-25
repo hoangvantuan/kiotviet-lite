@@ -46,6 +46,8 @@ export const bulkImportJobs = pgTable(
     originalFilename: varchar({ length: 255 }).notNull(),
     confirmedDigest: varchar({ length: 64 }).notNull(),
     approveNewNames: boolean().notNull().default(false),
+    // Owner approved the preview's automatic conversions (rounding, default unit, dropped values).
+    approveConversions: boolean().notNull().default(false),
     fileSizeBytes: integer().notNull(),
     totalRows: integer().notNull(),
     processedRows: integer().notNull().default(0),

@@ -29,9 +29,19 @@ import {
   BULK_EXPORT_HEADERS,
   type BulkExportKind,
 } from './bulk-export.service.js'
+import {
+  type BulkImportConversion,
+  type BulkImportSourceRow,
+  ConversionReport,
+  isKiotVietExport,
+  readKiotVietRows,
+} from './bulk-import-kiotviet.js'
+
+export type { BulkImportConversion } from './bulk-import-kiotviet.js'
 
 export type BulkImportKind = BulkExportKind
 export type BulkImportMode = 'create-only' | 'upsert'
+export type BulkImportSourceFormat = 'template' | 'kiotviet'
 export const BULK_IMPORT_MAX_BYTES = 8 * 1024 * 1024
 export const BULK_IMPORT_MAX_ROWS = 12_000
 
@@ -65,6 +75,9 @@ export interface BulkImportPreview {
   newCategories: string[]
   newBrands: string[]
   warnings: string[]
+  sourceFormat: BulkImportSourceFormat
+  // Automatic changes applied to file values; see requiresConversionApproval.
+  conversions: BulkImportConversion[]
   sample: Record<string, unknown>[]
   digest: string
   // Internal validated plan: routes must omit rows from preview responses.
@@ -179,22 +192,38 @@ function workbookData(bytes: Uint8Array, kind: BulkImportKind) {
   } catch {
     throw new ApiError('VALIDATION_ERROR', 'Tệp XLSX bị hỏng hoặc không đúng định dạng')
   }
-  if (workbook.SheetNames[0] !== BULK_EXPORT_FORMAT.dataSheet) {
-    throw new ApiError('VALIDATION_ERROR', 'Sheet đầu tiên phải là Dữ liệu')
-  }
   const sheet = workbook.Sheets[workbook.SheetNames[0]!]
-  if (!sheet?.['!ref'])
-    throw new ApiError('VALIDATION_ERROR', 'Sheet Dữ liệu không có hàng tiêu đề')
-  const range = XLSX.utils.decode_range(sheet['!ref'])
-  if (range.e.r > BULK_IMPORT_MAX_ROWS) {
-    throw new ApiError('VALIDATION_ERROR', `Tệp vượt quá ${BULK_IMPORT_MAX_ROWS} dòng dữ liệu`)
-  }
   const header: string[] = []
-  for (let col = 0; col <= range.e.c; col++) {
-    const cell = sheet[XLSX.utils.encode_cell({ r: 0, c: col })] as XLSX.CellObject | undefined
+  const range = sheet?.['!ref'] ? XLSX.utils.decode_range(sheet['!ref']) : undefined
+  for (let col = 0; range && col <= range.e.c; col++) {
+    const cell = sheet![XLSX.utils.encode_cell({ r: 0, c: col })] as XLSX.CellObject | undefined
     header.push(cell?.v === undefined ? '' : String(cell.v))
   }
   const expected = BULK_EXPORT_HEADERS[kind]
+  // KiotViet exports keep their own sheet name and column names; map them instead of rejecting.
+  const kiotViet = isKiotVietExport(kind, header)
+  if (!kiotViet && workbook.SheetNames[0] !== BULK_EXPORT_FORMAT.dataSheet) {
+    throw new ApiError(
+      'VALIDATION_ERROR',
+      'Sheet đầu tiên phải là Dữ liệu (tệp mẫu) hoặc tệp xuất nguyên bản từ KiotViet',
+    )
+  }
+  if (!sheet || !range)
+    throw new ApiError('VALIDATION_ERROR', 'Sheet dữ liệu không có hàng tiêu đề')
+  if (range.e.r > BULK_IMPORT_MAX_ROWS) {
+    throw new ApiError('VALIDATION_ERROR', `Tệp vượt quá ${BULK_IMPORT_MAX_ROWS} dòng dữ liệu`)
+  }
+  const report = new ConversionReport()
+  if (kiotViet) {
+    const rows = readKiotVietRows({
+      kind,
+      header,
+      lastRow: range.e.r,
+      readCell: (row, column) => readCell(sheet, row, column),
+      report,
+    })
+    return { rows, expected, report, sourceFormat: 'kiotviet' as const }
+  }
   const missing = expected.filter((name) => !header.includes(name))
   if (missing.length)
     throw new ApiError('VALIDATION_ERROR', `Thiếu cột bắt buộc: ${missing.join(', ')}`)
@@ -202,7 +231,13 @@ function workbookData(bytes: Uint8Array, kind: BulkImportKind) {
   if (duplicates.length)
     throw new ApiError('VALIDATION_ERROR', `Cột bị trùng: ${duplicates.join(', ')}`)
   const columns = expected.map((name) => header.indexOf(name))
-  return { sheet, range, columns, expected }
+  const rows: BulkImportSourceRow[] = []
+  for (let index = 1; index <= range.e.r; index++) {
+    const values = columns.map((column) => readCell(sheet, index, column))
+    if (values.every((value) => value === undefined || value === null || value === '')) continue
+    rows.push({ row: index + 1, values })
+  }
+  return { rows, expected, report, sourceFormat: 'template' as const }
 }
 
 function readCell(sheet: XLSX.WorkSheet, row: number, column: number): unknown {
@@ -265,6 +300,59 @@ function fieldValue(
   return value.trim() || undefined
 }
 
+const KIOTVIET_IMAGE_HOST = /(^|\.)kiotviet\.(vn|com)$/i
+
+function isKiotVietImage(value: string): boolean {
+  try {
+    return KIOTVIET_IMAGE_HOST.test(new URL(value).hostname)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Merge unit spellings that differ only by case (Cái/cái, Kg/kg) into the spelling the store
+ * already uses most, else the most frequent one in the file. Returns the blank-unit default.
+ */
+function canonicalizeUnits(
+  rows: BulkImportSourceRow[],
+  existing: Record<string, unknown>[],
+  report: ConversionReport,
+): string {
+  const column = fields.products.indexOf('unit')
+  const tally = (counts: Map<string, Map<string, number>>, value: unknown) => {
+    if (typeof value !== 'string' || !value.trim()) return
+    const spelling = value.trim()
+    const byKey = counts.get(spelling.toLowerCase()) ?? new Map<string, number>()
+    byKey.set(spelling, (byKey.get(spelling) ?? 0) + 1)
+    counts.set(spelling.toLowerCase(), byKey)
+  }
+  const stored = new Map<string, Map<string, number>>()
+  const inFile = new Map<string, Map<string, number>>()
+  for (const item of existing) tally(stored, item.unit)
+  for (const item of rows) tally(inFile, item.values[column])
+  const pick = (key: string) => {
+    const counts = stored.get(key) ?? inFile.get(key)
+    if (!counts) return undefined
+    return [...counts.entries()].reduce((best, next) => (next[1] > best[1] ? next : best))[0]
+  }
+  for (const item of rows) {
+    const value = item.values[column]
+    if (typeof value !== 'string' || !value.trim()) continue
+    const canonical = pick(value.trim().toLowerCase())!
+    if (canonical !== value.trim()) {
+      report.add('unit_case', `ĐVT "${value.trim()}" được gộp thành "${canonical}"`, item.row)
+      item.values[column] = canonical
+    }
+  }
+  return pick('cái') ?? 'Cái'
+}
+
+/** Owner must approve before confirm when any automatic change alters or drops file values. */
+export function requiresConversionApproval(preview: Pick<BulkImportPreview, 'conversions'>) {
+  return preview.conversions.some((item) => item.requiresConfirmation)
+}
+
 /** Read-only, deterministic plan used unchanged by a later confirmation executor. */
 export async function previewBulkImport({
   db,
@@ -287,7 +375,7 @@ export async function previewBulkImport({
   }
   if (!filename.toLowerCase().endsWith('.xlsx'))
     throw new ApiError('VALIDATION_ERROR', 'Chỉ nhận tệp .xlsx')
-  const { sheet, range, columns, expected } = workbookData(bytes, kind)
+  const { rows: sourceRows, expected, report, sourceFormat } = workbookData(bytes, kind)
   const table = kind === 'products' ? products : kind === 'customers' ? customers : suppliers
   const existing = await db
     .select()
@@ -335,14 +423,19 @@ export async function previewBulkImport({
   const newCategories = new Map<string, string>()
   const newBrands = new Map<string, string>()
   const warnings =
-    kind === 'products'
+    kind === 'products' && sourceFormat === 'template'
       ? [`Cột ${stockColumn} chỉ để tham khảo; tồn kho luôn bị bỏ qua khi nhập.`]
       : []
-  for (let index = 1; index <= range.e.r; index++) {
-    const values = columns.map((column) => readCell(sheet, index, column))
-    if (values.every((value) => value === undefined || value === null || value === '')) continue
-    const row = index + 1
-    const rowErrors: BulkImportRowError[] = []
+  const defaultUnit =
+    kind === 'products'
+      ? canonicalizeUnits(sourceRows, existing as Record<string, unknown>[], report)
+      : ''
+  for (const source of sourceRows) {
+    const { row, values } = source
+    const rowErrors: BulkImportRowError[] = (source.errors ?? []).map((error) => ({
+      row,
+      ...error,
+    }))
     const input: Record<string, unknown> = {}
     let categoryPath: string | null | undefined
     let brandName: string | null | undefined
@@ -396,9 +489,21 @@ export async function previewBulkImport({
           if (id) {
             input.groupId = id
             groupId = id
-          } else
+          } else if (sourceFormat === 'kiotviet')
+            report.add(
+              'group_dropped',
+              'Nhóm khách hàng chưa có trong cửa hàng nên được để trống; tạo nhóm rồi nhập lại nếu cần',
+              row,
+            )
+          else
             rowErrors.push({ row, column, message: 'Nhóm khách hàng không tồn tại trong cửa hàng' })
         }
+      } else if (field === 'imageUrl' && typeof value === 'string' && isKiotVietImage(value)) {
+        report.add(
+          'image_dropped',
+          'Ảnh sản phẩm trỏ vào máy chủ ảnh KiotViet nên không được nhập; thêm lại ảnh sau khi nhập',
+          row,
+        )
       } else if (field) input[field] = value
     }
     const keyName = expected[0]!
@@ -420,6 +525,18 @@ export async function previewBulkImport({
         column: keyName,
         message: `Mã ${key} đã tồn tại; chế độ chỉ tạo mới không cập nhật`,
       })
+    if (kind === 'products' && !(matched && mode === 'upsert')) {
+      if (input.unit === undefined) {
+        report.add('unit_blank', `ĐVT trống được điền "${defaultUnit}"`, row)
+        input.unit = defaultUnit
+      }
+      if (source.unitConversions) input.unitConversions = source.unitConversions
+    } else if (source.unitConversions)
+      report.add(
+        'unit_conversion_skipped',
+        'Hàng đã có trong cửa hàng: ĐVT quy đổi trong tệp không được cập nhật, sửa ở trang sản phẩm',
+        row,
+      )
     const schema =
       matched && mode === 'upsert'
         ? kind === 'products'
@@ -548,9 +665,12 @@ export async function previewBulkImport({
       newBrands.set(normalized(item.brandName), item.brandName)
     }
   }
+  const conversions = report.list()
   const plan = {
     kind,
     mode,
+    sourceFormat,
+    conversions,
     totalRows: rows.length,
     creates,
     updates,

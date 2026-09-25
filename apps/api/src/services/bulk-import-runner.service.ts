@@ -18,7 +18,11 @@ import {
   requeueInterruptedBulkImportJob,
   updateBulkImportProgress,
 } from './bulk-import-jobs.service.js'
-import { type BulkImportKind, previewBulkImport } from './bulk-import-preview.service.js'
+import {
+  type BulkImportKind,
+  previewBulkImport,
+  requiresConversionApproval,
+} from './bulk-import-preview.service.js'
 import { createCategory } from './categories.service.js'
 import { createCustomer, updateCustomer } from './customers.service.js'
 import { createProduct, updateProduct } from './products.service.js'
@@ -101,6 +105,8 @@ async function executeBulkImportJob({ db, storageRoot, storeId, id }: RunArgs) {
     if (!job.approveNewNames && (preflight.newCategories.length || preflight.newBrands.length)) {
       throw new ApiError('VALIDATION_ERROR', 'Danh mục hoặc thương hiệu mới chưa được chấp thuận')
     }
+    if (!job.approveConversions && requiresConversionApproval(preflight))
+      throw new ApiError('VALIDATION_ERROR', 'Các thay đổi tự động chưa được chấp thuận')
     await db.transaction(async (tx) => {
       const transactionalDb = tx as unknown as Db
       const plan = await previewBulkImport({
@@ -122,6 +128,8 @@ async function executeBulkImportJob({ db, storageRoot, storeId, id }: RunArgs) {
       if (!job.approveNewNames && (plan.newCategories.length || plan.newBrands.length)) {
         throw new ApiError('VALIDATION_ERROR', 'Danh mục hoặc thương hiệu mới chưa được chấp thuận')
       }
+      if (!job.approveConversions && requiresConversionApproval(plan))
+        throw new ApiError('VALIDATION_ERROR', 'Các thay đổi tự động chưa được chấp thuận')
       const categoryIds = new Map<string, string>()
       const brandIds = new Map<string, string>()
       if (kind === 'products') {

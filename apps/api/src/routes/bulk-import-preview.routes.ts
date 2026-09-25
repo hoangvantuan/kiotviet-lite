@@ -17,6 +17,7 @@ import {
   type BulkImportMode,
   type BulkImportRowError,
   previewBulkImport,
+  requiresConversionApproval,
 } from '../services/bulk-import-preview.service.js'
 import { startBulkImportRunner } from '../services/bulk-import-runner.service.js'
 
@@ -42,6 +43,7 @@ export async function readBulkImportUpload(
   mode: BulkImportMode
   digest?: string
   approveNewNames?: boolean
+  approveConversions?: boolean
 }> {
   if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('multipart/form-data;')) {
     throw new ApiError('VALIDATION_ERROR', 'Cần gửi một tệp XLSX bằng multipart/form-data')
@@ -84,7 +86,9 @@ export async function readBulkImportUpload(
   } catch {
     throw new ApiError('VALIDATION_ERROR', 'Nội dung multipart không hợp lệ')
   }
-  const allowed = confirm ? ['file', 'mode', 'digest', 'approveNewNames'] : ['file', 'mode']
+  const allowed = confirm
+    ? ['file', 'mode', 'digest', 'approveNewNames', 'approveConversions']
+    : ['file', 'mode']
   if ([...form.keys()].some((key) => !allowed.includes(key))) {
     throw new ApiError('VALIDATION_ERROR', 'Trường tải lên không hợp lệ')
   }
@@ -107,6 +111,8 @@ export async function readBulkImportUpload(
     }
   const digests = form.getAll('digest')
   const approvals = form.getAll('approveNewNames')
+  // Optional for older clients: absent means not approved.
+  const conversionApprovals = form.getAll('approveConversions')
   if (
     digests.length !== 1 ||
     typeof digests[0] !== 'string' ||
@@ -117,12 +123,21 @@ export async function readBulkImportUpload(
   if (approvals.length !== 1 || (approvals[0] !== 'true' && approvals[0] !== 'false')) {
     throw new ApiError('VALIDATION_ERROR', 'Phải xác nhận việc tạo tên mới')
   }
+  if (
+    conversionApprovals.length > 1 ||
+    (conversionApprovals.length === 1 &&
+      conversionApprovals[0] !== 'true' &&
+      conversionApprovals[0] !== 'false')
+  ) {
+    throw new ApiError('VALIDATION_ERROR', 'Giá trị chấp thuận thay đổi tự động không hợp lệ')
+  }
   return {
     bytes: new Uint8Array(await file.arrayBuffer()),
     filename: file.name,
     mode: modes[0] as BulkImportMode,
     digest: digests[0],
     approveNewNames: approvals[0] === 'true',
+    approveConversions: conversionApprovals[0] === 'true',
   }
 }
 
@@ -174,6 +189,8 @@ export function createBulkImportPreviewRoutes({
         newCategories: preview.newCategories,
         newBrands: preview.newBrands,
         warnings: preview.warnings,
+        sourceFormat: preview.sourceFormat,
+        conversions: preview.conversions,
         sample: preview.sample,
         digest: preview.digest,
       },
@@ -181,10 +198,8 @@ export function createBulkImportPreviewRoutes({
   })
   app.post('/:kind/confirm', uploadRateLimit, async (c) => {
     const kind = importKind(c.req.param('kind'))
-    const { bytes, mode, filename, digest, approveNewNames } = await readBulkImportUpload(
-      c.req.raw,
-      true,
-    )
+    const { bytes, mode, filename, digest, approveNewNames, approveConversions } =
+      await readBulkImportUpload(c.req.raw, true)
     const actor = c.get('auth')
     const plan = await previewBulkImport({ db, actor, kind, mode, bytes, filename })
     if (plan.digest !== digest)
@@ -194,6 +209,8 @@ export function createBulkImportPreviewRoutes({
     if (!approveNewNames && (plan.newCategories.length || plan.newBrands.length)) {
       throw new ApiError('VALIDATION_ERROR', 'Cần chấp thuận tạo danh mục hoặc thương hiệu mới')
     }
+    if (!approveConversions && requiresConversionApproval(plan))
+      throw new ApiError('VALIDATION_ERROR', 'Cần chấp thuận các thay đổi tự động trong báo cáo')
     const root = storageRoot ?? importStorageRoot()
     await verifyImportStorageRoot(root)
     const job = await createBulkImportJob({
@@ -207,6 +224,7 @@ export function createBulkImportPreviewRoutes({
       file: bytes,
       digest: plan.digest,
       approveNewNames: !!approveNewNames,
+      approveConversions: !!approveConversions,
     })
     if (schedule) schedule(actor.storeId, job.id)
     else startBulkImportRunner({ db, storageRoot: root, storeId: actor.storeId, id: job.id })

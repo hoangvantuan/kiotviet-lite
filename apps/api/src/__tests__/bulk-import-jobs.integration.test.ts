@@ -37,6 +37,7 @@ import { previewBulkImport } from '../services/bulk-import-preview.service.js'
 import {
   runBulkImportJob,
   runQueuedBulkImportJobs,
+  setBulkImportRowHookForTest,
 } from '../services/bulk-import-runner.service.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
@@ -70,6 +71,7 @@ function upload(
   mode = 'upsert',
   digest?: string,
   approveNewNames = false,
+  approveConversions = true,
 ) {
   const form = new FormData()
   form.append('file', new File([Buffer.from(bytes)], 'original.xlsx'))
@@ -77,6 +79,7 @@ function upload(
   if (path === 'confirm') {
     form.append('digest', digest ?? '0'.repeat(64))
     form.append('approveNewNames', String(approveNewNames))
+    form.append('approveConversions', String(approveConversions))
   }
   return app.request(`/api/v1/bulk-import/${kind}/${path}`, {
     method: 'POST',
@@ -325,15 +328,16 @@ describe('confirmed atomic bulk imports over HTTP and PGlite', () => {
     ])
     const { result, response } = await confirm('suppliers', bytes)
     expect(response.status).toBe(201)
-    await env.db.insert(suppliers).values({
-      storeId: env.storeId,
-      code: 'PHONE-OWNER',
-      name: 'Phone owner',
-      phone: '0901234567',
+    // Preview now mirrors every unique check (GL-08), so simulate a service rejection mid-run.
+    setBulkImportRowHookForTest((index) => {
+      if (index === 1) throw new Error('Dòng 3: dịch vụ từ chối (giả lập)')
     })
-    // Revalidation must reject stale plans and leave no partial domain or audit mutations.
     const before = (await env.db.select({ value: count() }).from(auditLogs))[0]!.value
-    await run(result.data)
+    try {
+      await run(result.data)
+    } finally {
+      setBulkImportRowHookForTest(undefined)
+    }
     expect((await job(result.data.id)).status).toBe('failed')
     expect((await job(result.data.id)).errorMessage).toContain('Dòng 3')
     expect(
