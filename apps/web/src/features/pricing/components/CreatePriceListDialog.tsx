@@ -9,6 +9,8 @@ import {
   clonePriceListSchema,
   type CreatePriceListInput,
   createPriceListSchema,
+  formatRoundingLabel,
+  formatVndWithSuffix,
   type FormulaType,
   type ImportPriceListInput,
   importPriceListSchema,
@@ -16,6 +18,7 @@ import {
   MAX_PAGE_SIZE,
   type PriceListListItem,
   type RoundingRule,
+  roundingRuleSchema,
 } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
@@ -54,20 +57,9 @@ import {
   usePriceListsQuery,
 } from '../use-price-lists'
 
-const VND_FORMATTER = new Intl.NumberFormat('vi-VN')
-
-const ROUNDING_OPTIONS: { value: RoundingRule; label: string }[] = [
-  { value: 'none', label: 'Không làm tròn' },
-  { value: 'nearest_hundred', label: 'Làm tròn 100đ' },
-  { value: 'nearest_five_hundred', label: 'Làm tròn 500đ' },
-  { value: 'nearest_thousand', label: 'Làm tròn 1.000đ' },
-  { value: 'ceil_hundred', label: 'Làm tròn lên 100đ' },
-  { value: 'ceil_five_hundred', label: 'Làm tròn lên 500đ' },
-  { value: 'ceil_thousand', label: 'Làm tròn lên 1.000đ' },
-  { value: 'floor_hundred', label: 'Làm tròn xuống 100đ' },
-  { value: 'floor_five_hundred', label: 'Làm tròn xuống 500đ' },
-  { value: 'floor_thousand', label: 'Làm tròn xuống 1.000đ' },
-]
+const ROUNDING_OPTIONS: { value: RoundingRule; label: string }[] = roundingRuleSchema.options.map(
+  (value) => ({ value, label: formatRoundingLabel(value) }),
+)
 
 interface Props {
   open: boolean
@@ -291,7 +283,7 @@ function DirectForm({ onBack, onClose }: DirectFormProps) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{p.name}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    SKU {p.sku} • Gốc {VND_FORMATTER.format(p.sellingPrice)}đ
+                    Mã hàng {p.sku} • Gốc {formatVndWithSuffix(p.sellingPrice)}
                   </p>
                 </div>
                 <div className="w-40">
@@ -532,14 +524,14 @@ function FormulaForm({ onBack, onClose }: FormulaFormProps) {
                       <tr key={it.id} className="border-t border-border">
                         <td className="p-2">{it.productName}</td>
                         <td className="p-2 text-right tabular-nums">
-                          {VND_FORMATTER.format(it.price)}đ
+                          {formatVndWithSuffix(it.price)}
                         </td>
                         <td
                           className={`p-2 text-right tabular-nums font-medium ${
                             belowCost ? 'text-destructive' : ''
                           }`}
                         >
-                          {VND_FORMATTER.format(rounded)}đ
+                          {formatVndWithSuffix(rounded)}
                           {belowCost && (
                             <span className="ml-2 text-xs font-normal">(Dưới vốn)</span>
                           )}
@@ -775,10 +767,10 @@ function ChainForm({ onBack, onClose }: ChainFormProps) {
                       <tr key={it.id} className="border-t border-border">
                         <td className="p-2">{it.productName}</td>
                         <td className="p-2 text-right tabular-nums">
-                          {VND_FORMATTER.format(it.price)}đ
+                          {formatVndWithSuffix(it.price)}
                         </td>
                         <td className="p-2 text-right tabular-nums font-medium">
-                          {VND_FORMATTER.format(rounded)}đ
+                          {formatVndWithSuffix(rounded)}
                         </td>
                       </tr>
                     )
@@ -1107,7 +1099,7 @@ function ImportForm({ onBack, onClose }: ImportFormProps) {
                 <thead className="bg-muted">
                   <tr>
                     <th className="p-1 text-left">Dòng</th>
-                    <th className="p-1 text-left">Mã SP</th>
+                    <th className="p-1 text-left">Mã hàng</th>
                     <th className="p-1 text-left">Lý do</th>
                   </tr>
                 </thead>

@@ -53,6 +53,7 @@ export function PrintButton({
             size={size}
             disabled={disabled}
             className="rounded-l-none px-2"
+            aria-label="Tùy chọn in"
           >
             <ChevronDown className="size-4" />
           </Button>

@@ -1,4 +1,4 @@
-import { formatVnd } from './currency.js'
+import { formatVndWithSuffix } from './currency.js'
 
 export interface DebtLimitSource {
   debtUnlimited: boolean
@@ -30,5 +30,5 @@ export function remainingDebtAllowance(
 export function formatDebtLimitLabel(effectiveDebtLimit: number | null): string {
   if (effectiveDebtLimit === null) return 'Không giới hạn'
   if (effectiveDebtLimit === 0) return 'Không cho nợ'
-  return `${formatVnd(effectiveDebtLimit)} ₫`
+  return formatVndWithSuffix(effectiveDebtLimit)
 }

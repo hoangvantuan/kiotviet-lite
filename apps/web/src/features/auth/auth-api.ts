@@ -1,6 +1,6 @@
 import type { AuthResponse, AuthUser, LoginInput, RegisterInput } from '@kiotviet-lite/shared'
 
-import { apiClient } from '@/lib/api-client'
+import { apiClient, ApiClientError } from '@/lib/api-client'
 
 interface ApiEnvelope<T> {
   data: T
@@ -22,15 +22,25 @@ export function meApi() {
   return apiClient.get<ApiEnvelope<AuthUser>>('/api/v1/me')
 }
 
-export async function refreshApi(): Promise<{ accessToken: string; expiresIn: number } | null> {
+export type RefreshResult =
+  | { status: 'ok'; accessToken: string; expiresIn: number }
+  | { status: 'unauthenticated' }
+  // Không kết nối được máy chủ: khác với "chưa đăng nhập", màn đăng nhập phải báo (UX-15)
+  | { status: 'network_error' }
+
+export function isNetworkError(err: unknown): boolean {
+  return err instanceof ApiClientError && err.code === 'NETWORK_ERROR'
+}
+
+export async function refreshApi(): Promise<RefreshResult> {
   try {
     const response = await apiClient.post<ApiEnvelope<{ accessToken: string; expiresIn: number }>>(
       '/api/v1/auth/refresh',
       undefined,
       { auth: false, skipRefresh: true },
     )
-    return response.data
-  } catch {
-    return null
+    return { status: 'ok', ...response.data }
+  } catch (err) {
+    return isNetworkError(err) ? { status: 'network_error' } : { status: 'unauthenticated' }
   }
 }

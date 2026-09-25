@@ -7,10 +7,12 @@ interface AuthState {
   accessToken: string | null
   isAuthenticated: boolean
   booted: boolean
+  networkError: boolean
   setAuth: (input: { user: AuthUser; accessToken: string }) => void
   setAccessToken: (token: string) => void
   clearAuth: () => void
   markBooted: () => void
+  setNetworkError: (error: boolean) => void
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -18,10 +20,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   accessToken: null,
   isAuthenticated: false,
   booted: false,
+  networkError: false,
   setAuth: ({ user, accessToken }) =>
-    set({ user, accessToken, isAuthenticated: true, booted: true }),
+    set({ user, accessToken, isAuthenticated: true, booted: true, networkError: false }),
   setAccessToken: (token) =>
     set((state) => ({ accessToken: token, isAuthenticated: state.user !== null })),
-  clearAuth: () => set({ user: null, accessToken: null, isAuthenticated: false }),
+  clearAuth: () =>
+    set({ user: null, accessToken: null, isAuthenticated: false, networkError: false }),
   markBooted: () => set({ booted: true }),
+  setNetworkError: (error) => set({ networkError: error }),
 }))

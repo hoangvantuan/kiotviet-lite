@@ -5,6 +5,7 @@ import type { ListProductsQuery, ProductListItem, StockFilter } from '@kiotviet-
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
+import { QueryErrorState } from '@/components/shared/query-error-state'
 import { Button } from '@/components/ui/button'
 import { useBulkExportDownload } from '@/features/bulk-export/use-bulk-export-download'
 import { BulkImportDialog } from '@/features/bulk-import/BulkImportDialog'
@@ -93,7 +94,7 @@ export function ProductsManager() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Sản phẩm</h2>
-          <p className="text-sm text-muted-foreground">Quản lý danh sách hàng hoá của cửa hàng.</p>
+          <p className="text-sm text-muted-foreground">Quản lý danh sách sản phẩm của cửa hàng.</p>
         </div>
         <div className="flex flex-wrap gap-2 self-start md:self-auto">
           {canExport && (
@@ -153,7 +154,11 @@ export function ProductsManager() {
       {productsQuery.isLoading ? (
         <p className="text-sm text-muted-foreground">Đang tải danh sách…</p>
       ) : productsQuery.isError ? (
-        <p className="text-sm text-destructive">Không tải được danh sách sản phẩm.</p>
+        <QueryErrorState
+          title="Không tải được danh sách sản phẩm."
+          onRetry={() => productsQuery.refetch()}
+          retrying={productsQuery.isFetching}
+        />
       ) : items.length === 0 && !isFiltered ? (
         <EmptyState
           icon={Package}

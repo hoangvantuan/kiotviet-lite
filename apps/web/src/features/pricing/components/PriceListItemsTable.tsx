@@ -1,6 +1,10 @@
 import { Pencil, Trash2 } from 'lucide-react'
 
-import type { PriceListDetail, PriceListItemListItem } from '@kiotviet-lite/shared'
+import {
+  formatVndWithSuffix,
+  type PriceListDetail,
+  type PriceListItemListItem,
+} from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,8 +16,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-
-const VND_FORMATTER = new Intl.NumberFormat('vi-VN')
 
 interface Props {
   priceList: PriceListDetail
@@ -29,7 +31,7 @@ export function PriceListItemsTable({ priceList, items, onEdit, onDelete }: Prop
         <TableHeader>
           <TableRow>
             <TableHead>Sản phẩm</TableHead>
-            <TableHead>SKU</TableHead>
+            <TableHead>Mã hàng</TableHead>
             <TableHead className="text-right">Giá gốc</TableHead>
             <TableHead className="text-right">Giá bảng</TableHead>
             {priceList.method === 'formula' && <TableHead>Override</TableHead>}
@@ -42,10 +44,10 @@ export function PriceListItemsTable({ priceList, items, onEdit, onDelete }: Prop
               <TableCell className="font-medium">{it.productName}</TableCell>
               <TableCell className="text-sm text-muted-foreground">{it.productSku}</TableCell>
               <TableCell className="text-right tabular-nums text-muted-foreground">
-                {VND_FORMATTER.format(it.productSellingPrice)}đ
+                {formatVndWithSuffix(it.productSellingPrice)}
               </TableCell>
               <TableCell className="text-right tabular-nums font-medium">
-                {VND_FORMATTER.format(it.price)}đ
+                {formatVndWithSuffix(it.price)}
               </TableCell>
               {priceList.method === 'formula' && (
                 <TableCell>

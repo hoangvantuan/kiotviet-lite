@@ -104,7 +104,7 @@ export function PurchaseOrderManager() {
     <div className="space-y-4 p-4 md:p-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Phiếu nhập kho</h1>
+          <h1 className="text-2xl font-semibold">Phiếu nhập hàng</h1>
           <p className="text-sm text-muted-foreground">
             Danh sách phiếu nhập đã tạo. Phiếu không thể chỉnh sửa sau khi tạo.
           </p>
@@ -118,7 +118,7 @@ export function PurchaseOrderManager() {
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <Input
-          placeholder="Tìm theo mã phiếu hoặc tên NCC"
+          placeholder="Tìm theo mã phiếu hoặc tên nhà cung cấp"
           value={searchInput}
           onChange={(e) => {
             setSearchInput(e.target.value)
@@ -136,7 +136,7 @@ export function PurchaseOrderManager() {
             <SelectValue placeholder="Nhà cung cấp" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tất cả NCC</SelectItem>
+            <SelectItem value="all">Tất cả nhà cung cấp</SelectItem>
             {supplierOptions.map((s) => (
               <SelectItem key={s.id} value={s.id}>
                 {s.name}
@@ -238,7 +238,7 @@ function PurchaseOrderTable({ items }: PurchaseOrderTableProps) {
               <TableHead>Mã phiếu</TableHead>
               <TableHead>Ngày nhập</TableHead>
               <TableHead>Nhà cung cấp</TableHead>
-              <TableHead className="text-right">SL dòng</TableHead>
+              <TableHead className="text-right">Số dòng</TableHead>
               <TableHead className="text-right">Tổng</TableHead>
               <TableHead className="text-right">Đã trả</TableHead>
               <TableHead>Trạng thái</TableHead>

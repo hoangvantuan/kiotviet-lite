@@ -1,7 +1,13 @@
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 
-import type { PriceListDetail, RoundingRule, UpdatePriceListInput } from '@kiotviet-lite/shared'
+import {
+  formatRoundingLabel,
+  type PriceListDetail,
+  type RoundingRule,
+  roundingRuleSchema,
+  type UpdatePriceListInput,
+} from '@kiotviet-lite/shared'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -28,18 +34,9 @@ import { showSuccess } from '@/lib/toast'
 
 import { useUpdatePriceListMutation } from '../use-price-lists'
 
-const ROUNDING_OPTIONS: { value: RoundingRule; label: string }[] = [
-  { value: 'none', label: 'Không làm tròn' },
-  { value: 'nearest_hundred', label: 'Làm tròn 100đ' },
-  { value: 'nearest_five_hundred', label: 'Làm tròn 500đ' },
-  { value: 'nearest_thousand', label: 'Làm tròn 1.000đ' },
-  { value: 'ceil_hundred', label: 'Làm tròn lên 100đ' },
-  { value: 'ceil_five_hundred', label: 'Làm tròn lên 500đ' },
-  { value: 'ceil_thousand', label: 'Làm tròn lên 1.000đ' },
-  { value: 'floor_hundred', label: 'Làm tròn xuống 100đ' },
-  { value: 'floor_five_hundred', label: 'Làm tròn xuống 500đ' },
-  { value: 'floor_thousand', label: 'Làm tròn xuống 1.000đ' },
-]
+const ROUNDING_OPTIONS: { value: RoundingRule; label: string }[] = roundingRuleSchema.options.map(
+  (value) => ({ value, label: formatRoundingLabel(value) }),
+)
 
 interface FormShape {
   name: string

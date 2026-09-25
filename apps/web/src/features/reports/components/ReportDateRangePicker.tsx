@@ -52,6 +52,7 @@ export function ReportDateRangePicker({ from, to, onChange }: ReportDateRangePic
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex items-center gap-1">
         <Input
+          aria-label="Từ ngày"
           type="date"
           value={from ?? ''}
           onChange={(e) => onChange(e.target.value || undefined, to)}
@@ -59,13 +60,14 @@ export function ReportDateRangePicker({ from, to, onChange }: ReportDateRangePic
         />
         <span className="text-muted-foreground text-sm">~</span>
         <Input
+          aria-label="Đến ngày"
           type="date"
           value={to ?? ''}
           onChange={(e) => onChange(from, e.target.value || undefined)}
           className="h-8 w-36"
         />
       </div>
-      <div className="flex gap-1">
+      <div className="flex flex-wrap gap-1">
         {presets.map((p) => (
           <Button
             key={p.label}

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { PenLine } from 'lucide-react'
 
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
+
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
 import {
@@ -11,7 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatVnd } from '@/lib/currency'
 import { formatDateTime as formatDate } from '@/lib/date'
 import { cn } from '@/lib/utils'
 
@@ -53,8 +54,8 @@ export function DebtAdjustmentHistory({ customerId }: DebtAdjustmentHistoryProps
           <TableHeader>
             <TableRow>
               <TableHead>Ngày</TableHead>
-              <TableHead className="text-right">Nợ cũ</TableHead>
-              <TableHead className="text-right">Nợ mới</TableHead>
+              <TableHead className="text-right">Công nợ trước điều chỉnh</TableHead>
+              <TableHead className="text-right">Công nợ sau điều chỉnh</TableHead>
               <TableHead className="text-right">Chênh lệch</TableHead>
               <TableHead>Lý do</TableHead>
               <TableHead>Người điều chỉnh</TableHead>
@@ -68,9 +69,11 @@ export function DebtAdjustmentHistory({ customerId }: DebtAdjustmentHistoryProps
                   <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                     {formatDate(item.createdAt)}
                   </TableCell>
-                  <TableCell className="text-right">{formatVnd(item.oldAmount)} ₫</TableCell>
+                  <TableCell className="text-right">
+                    {formatVndWithSuffix(item.oldAmount)}
+                  </TableCell>
                   <TableCell className="text-right font-medium">
-                    {formatVnd(item.newAmount)} ₫
+                    {formatVndWithSuffix(item.newAmount)}
                   </TableCell>
                   <TableCell
                     className={cn(
@@ -79,7 +82,7 @@ export function DebtAdjustmentHistory({ customerId }: DebtAdjustmentHistoryProps
                     )}
                   >
                     {diff > 0 ? '+' : ''}
-                    {formatVnd(diff)} ₫
+                    {formatVndWithSuffix(diff)}
                   </TableCell>
                   <TableCell className="text-sm max-w-[200px] truncate" title={item.reason}>
                     {item.reason}

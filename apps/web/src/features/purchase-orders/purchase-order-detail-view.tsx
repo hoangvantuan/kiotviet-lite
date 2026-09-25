@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { ChevronLeft } from 'lucide-react'
 
 import type { PaymentStatus } from '@kiotviet-lite/shared'
+import { formatPhone } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -85,7 +86,7 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
       <div className="flex items-center gap-2">
         <Button asChild variant="ghost" size="sm">
           <Link to="/inventory/purchase-orders">
-            <ChevronLeft className="size-4 mr-1" /> Phiếu nhập kho
+            <ChevronLeft className="size-4 mr-1" /> Phiếu nhập hàng
           </Link>
         </Button>
       </div>
@@ -108,7 +109,9 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
           <h2 className="text-sm font-medium text-muted-foreground">Nhà cung cấp</h2>
           <p className="font-medium mt-1">{order.supplier.name}</p>
           {order.supplier.phone && (
-            <p className="text-sm text-muted-foreground font-mono">{order.supplier.phone}</p>
+            <p className="text-sm text-muted-foreground font-mono">
+              {formatPhone(order.supplier.phone)}
+            </p>
           )}
         </div>
         <div className="rounded-md border p-3">
@@ -123,8 +126,8 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
             <TableHeader>
               <TableRow>
                 <TableHead>Sản phẩm</TableHead>
-                <TableHead>SKU</TableHead>
-                <TableHead className="text-right">SL</TableHead>
+                <TableHead>Mã hàng</TableHead>
+                <TableHead className="text-right">Số lượng</TableHead>
                 <TableHead className="text-right">Đơn giá</TableHead>
                 <TableHead className="text-right">CK</TableHead>
                 <TableHead className="text-right">Thành tiền</TableHead>
@@ -178,7 +181,7 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
               )}
               <div className="text-xs font-mono text-muted-foreground">{it.productSkuSnapshot}</div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">SL × Đơn giá</span>
+                <span className="text-muted-foreground">Số lượng × Đơn giá</span>
                 <span>
                   {it.quantity}
                   {it.unitName ? ` ${it.unitName}` : ''} × {formatVnd(it.unitPrice)}

@@ -30,7 +30,7 @@ export function ProductGrid({ products, isLoading, onSelectProduct }: ProductGri
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-3 gap-2 md:grid-cols-4 md:gap-3 lg:grid-cols-5 xl:grid-cols-6">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-2">
         {Array.from({ length: 12 }).map((_, i) => (
           <ProductCardSkeleton key={i} />
         ))}
@@ -64,7 +64,7 @@ export function ProductGrid({ products, isLoading, onSelectProduct }: ProductGri
   }
 
   return (
-    <div className="grid grid-cols-3 gap-2 md:grid-cols-4 md:gap-3 lg:grid-cols-5 xl:grid-cols-6">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-2">
       {products.map((product) => {
         const isOutOfStock = product.trackInventory && product.stockQuantity <= 0
         return (

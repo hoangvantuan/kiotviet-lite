@@ -145,7 +145,7 @@ export function OfflineIndicator() {
 
           {pendingOrderCount > 0 && (
             <div className="flex items-center justify-between text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-              <span>Đơn chờ đồng bộ:</span>
+              <span>Đơn ngoại tuyến:</span>
               <span className="font-medium text-foreground">{pendingOrderCount}</span>
             </div>
           )}

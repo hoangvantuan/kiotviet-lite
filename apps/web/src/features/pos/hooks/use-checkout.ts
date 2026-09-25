@@ -83,7 +83,7 @@ export function useCheckoutMutation() {
         if (!storeId) throw new Error('Chưa đăng nhập')
 
         const clientId = await saveOfflineOrder(pglite, storeId, payload as CreateOrderInput)
-        toast.success('Đơn hàng đã lưu (chờ đồng bộ)')
+        toast.success('Đơn hàng đã lưu (ngoại tuyến, chờ đồng bộ)')
 
         const debtAmount = payload.debtAmount ?? 0
         let change = 0

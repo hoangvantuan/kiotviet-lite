@@ -3,6 +3,7 @@ import { useFieldArray, useForm } from 'react-hook-form'
 import { Plus, Trash2 } from 'lucide-react'
 
 import type { ReplaceVolumePricesInput } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
 import { Button } from '@/components/ui/button'
@@ -17,7 +18,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { handleApiError } from '@/lib/api-error'
-import { formatVnd } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
 
 import {
@@ -147,8 +147,10 @@ export function VolumePricesDialog({
           <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
             <div className="font-medium">{displayName}</div>
             <div className="text-xs text-muted-foreground">
-              SKU {displaySku} • Giá lẻ chuẩn: {formatVnd(displaySellingPrice)}đ
-              {displayCostPrice !== null ? ` • Giá vốn: ${formatVnd(displayCostPrice)}đ` : ''}
+              Mã hàng {displaySku} • Giá lẻ chuẩn: {formatVndWithSuffix(displaySellingPrice)}
+              {displayCostPrice !== null
+                ? ` • Giá vốn: ${formatVndWithSuffix(displayCostPrice)}`
+                : ''}
             </div>
           </div>
         )}
@@ -166,7 +168,7 @@ export function VolumePricesDialog({
                 <div className="space-y-2">
                   <div className="grid grid-cols-[1fr_1fr_auto] gap-2 text-xs font-medium text-muted-foreground">
                     <div>Số lượng tối thiểu</div>
-                    <div>Giá / SP</div>
+                    <div>Giá / sản phẩm</div>
                     <div className="w-9" />
                   </div>
                   {fields.map((field, index) => {
@@ -222,7 +224,7 @@ export function VolumePricesDialog({
                         )}
                         {tierWarning && (
                           <p className="text-xs text-destructive">
-                            ⚠ Giá thấp hơn giá vốn ({formatVnd(displayCostPrice!)}đ).
+                            ⚠ Giá thấp hơn giá vốn ({formatVndWithSuffix(displayCostPrice!)}).
                           </p>
                         )}
                       </div>
@@ -265,7 +267,7 @@ export function VolumePricesDialog({
                     <thead className="bg-muted/50 text-xs text-muted-foreground">
                       <tr>
                         <th className="px-3 py-2 text-left">Số lượng từ</th>
-                        <th className="px-3 py-2 text-right">Giá / SP</th>
+                        <th className="px-3 py-2 text-right">Giá / sản phẩm</th>
                         <th className="px-3 py-2 text-right">Chênh giá lẻ</th>
                       </tr>
                     </thead>
@@ -280,7 +282,7 @@ export function VolumePricesDialog({
                           <tr key={t.idx} className="border-t">
                             <td className="px-3 py-2">{t.minQty.toLocaleString('vi-VN')}</td>
                             <td className="px-3 py-2 text-right tabular-nums">
-                              {formatVnd(t.price)}đ
+                              {formatVndWithSuffix(t.price)}
                             </td>
                             <td className="px-3 py-2 text-right text-xs text-muted-foreground">
                               {diff === 0 ? '0%' : diff > 0 ? `+${diff}%` : `${diff}%`}

@@ -15,9 +15,11 @@ import {
 } from 'lucide-react'
 
 import type { CustomerListItem, ListCustomersQuery } from '@kiotviet-lite/shared'
+import { formatPhone, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
+import { QueryErrorState } from '@/components/shared/query-error-state'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,7 +76,6 @@ import { CustomerFormDialog } from './CustomerForm'
 const PAGE_SIZE = 20
 const ALL_GROUPS_VALUE = '__ALL__'
 const NO_GROUP_VALUE = 'none'
-const VND_FORMATTER = new Intl.NumberFormat('vi-VN')
 
 function DebtBadge({
   currentDebt,
@@ -88,11 +89,11 @@ function DebtBadge({
   if (currentDebt === 0) {
     return (
       <Badge variant="secondary" className="text-xs">
-        0đ
+        {formatVndWithSuffix(0)}
       </Badge>
     )
   }
-  const formatted = `${VND_FORMATTER.format(currentDebt)}đ`
+  const formatted = formatVndWithSuffix(currentDebt)
   if (effectiveDebtLimit === null || effectiveDebtLimit === 0) {
     return (
       <Badge variant="outline" className="border-yellow-300 bg-yellow-50 text-yellow-700 text-xs">
@@ -284,7 +285,11 @@ export function CustomerList() {
       {customersQuery.isLoading ? (
         <p className="text-sm text-muted-foreground">Đang tải danh sách…</p>
       ) : customersQuery.isError ? (
-        <p className="text-sm text-destructive">Không tải được danh sách khách hàng.</p>
+        <QueryErrorState
+          title="Không tải được danh sách khách hàng."
+          onRetry={() => customersQuery.refetch()}
+          retrying={customersQuery.isFetching}
+        />
       ) : items.length === 0 && !isFiltered ? (
         <EmptyState
           icon={Users}
@@ -305,12 +310,12 @@ export function CustomerList() {
             <TableHeader>
               <TableRow>
                 <TableHead>Tên</TableHead>
-                <TableHead>Mã khách hàng</TableHead>
+                <TableHead className="hidden lg:table-cell">Mã khách hàng</TableHead>
                 <TableHead>Số điện thoại</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Nhóm</TableHead>
-                <TableHead className="text-right">Số đơn</TableHead>
-                <TableHead className="text-right">Tổng mua</TableHead>
+                <TableHead className="hidden lg:table-cell">Email</TableHead>
+                <TableHead className="hidden lg:table-cell">Nhóm</TableHead>
+                <TableHead className="hidden lg:table-cell text-right">Số đơn</TableHead>
+                <TableHead className="hidden lg:table-cell text-right">Tổng mua</TableHead>
                 <TableHead className="text-right">Công nợ</TableHead>
                 <TableHead className="w-32 text-right">Thao tác</TableHead>
               </TableRow>
@@ -327,17 +332,23 @@ export function CustomerList() {
                       {customer.name}
                     </Link>
                   </TableCell>
-                  <TableCell className="font-mono text-sm">{customer.code}</TableCell>
-                  <TableCell className="font-mono text-sm">{customer.phone ?? '—'}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className="hidden lg:table-cell font-mono text-sm">
+                    {customer.code}
+                  </TableCell>
+                  <TableCell className="font-mono text-sm">
+                    {customer.phone ? formatPhone(customer.phone) : '—'}
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                     {customer.email ?? '—'}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                     {customer.groupName ?? '—'}
                   </TableCell>
-                  <TableCell className="text-right">{customer.purchaseCount}</TableCell>
-                  <TableCell className="text-right">
-                    {VND_FORMATTER.format(customer.totalPurchased)} ₫
+                  <TableCell className="hidden lg:table-cell text-right">
+                    {customer.purchaseCount}
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell text-right">
+                    {formatVndWithSuffix(customer.totalPurchased)}
                   </TableCell>
                   <TableCell className="text-right">
                     <DebtBadge
@@ -450,7 +461,7 @@ function DeleteCustomerDialog({ open, onOpenChange, customer }: DeleteCustomerDi
           <AlertDialogTitle>Xoá khách hàng {customer.name}?</AlertDialogTitle>
           <AlertDialogDescription>
             {hasDebt
-              ? `Khách hàng có công nợ ${VND_FORMATTER.format(customer.currentDebt)}đ, không thể xoá.`
+              ? `Khách hàng có công nợ ${formatVndWithSuffix(customer.currentDebt)}, không thể xoá.`
               : 'Khách hàng sẽ bị đánh dấu xoá. Bạn có thể khôi phục trong mục "Đã xoá".'}
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -515,7 +526,9 @@ function TrashedCustomersSheet({ open, onOpenChange }: TrashedCustomersSheetProp
                 <div>
                   <p className="font-medium">{c.name}</p>
                   <p className="font-mono text-xs text-muted-foreground">{c.code}</p>
-                  <p className="text-sm text-muted-foreground">{c.phone ?? '—'}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {c.phone ? formatPhone(c.phone) : '—'}
+                  </p>
                 </div>
                 <Button
                   size="sm"

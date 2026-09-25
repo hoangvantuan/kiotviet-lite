@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
 import { ChevronLeft } from 'lucide-react'
 
+import { QueryErrorState } from '@/components/shared/query-error-state'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CustomerDebtsTab } from '@/features/customers/components/CustomerDebtsTab'
@@ -34,13 +35,18 @@ export function CustomerDetailPage() {
   if (detailQuery.isError || !detailQuery.data) {
     return (
       <div className="container mx-auto p-4 md:p-6">
-        <p className="text-sm text-destructive">Không tải được khách hàng. Thử lại sau.</p>
-        <Button asChild variant="outline" className="mt-3">
-          <Link to="/customers">
-            <ChevronLeft className="size-4 mr-1" />
-            Về danh sách
-          </Link>
-        </Button>
+        <QueryErrorState
+          title="Không tải được khách hàng."
+          onRetry={() => detailQuery.refetch()}
+          retrying={detailQuery.isFetching}
+        >
+          <Button asChild variant="outline">
+            <Link to="/customers">
+              <ChevronLeft className="size-4 mr-1" />
+              Về danh sách
+            </Link>
+          </Button>
+        </QueryErrorState>
       </div>
     )
   }

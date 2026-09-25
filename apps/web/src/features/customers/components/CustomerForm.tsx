@@ -7,6 +7,7 @@ import {
   createCustomerSchema,
   type CustomerDetail,
   type CustomerGroupItem,
+  formatVndWithSuffix,
   type UpdateCustomerInput,
   updateCustomerSchema,
 } from '@kiotviet-lite/shared'
@@ -485,7 +486,7 @@ function DebtLimitField({
         <p className="text-xs text-muted-foreground">
           Nhóm "{selectedGroup.name}": hạn mức{' '}
           {groupDebtLimit !== null && groupDebtLimit > 0
-            ? `${groupDebtLimit.toLocaleString('vi-VN')} ₫`
+            ? formatVndWithSuffix(groupDebtLimit)
             : 'không cho nợ'}
         </p>
       )}

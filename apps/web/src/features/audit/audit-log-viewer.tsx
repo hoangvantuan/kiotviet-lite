@@ -20,6 +20,7 @@ import { formatDateTime } from '@/lib/date'
 import { getActionLabel } from './action-labels'
 import { AuditDetailSheet } from './audit-detail-sheet'
 import { type AuditFilters, AuditFilterSheet } from './audit-filter-sheet'
+import { summariseChanges } from './change-summary'
 import { useAuditLogsQuery } from './use-audit-logs'
 
 const PAGE_SIZE = 20
@@ -181,13 +182,4 @@ function dateInputToIsoEnd(value: string): string | undefined {
   const d = new Date(`${value}T23:59:59.999`)
   if (Number.isNaN(d.getTime())) return undefined
   return d.toISOString()
-}
-
-function summariseChanges(changes: unknown): string {
-  if (!changes) return ''
-  if (typeof changes !== 'object') return String(changes)
-  const obj = changes as Record<string, unknown>
-  const keys = Object.keys(obj)
-  if (keys.length === 0) return ''
-  return keys.slice(0, 3).join(', ') + (keys.length > 3 ? `, +${keys.length - 3}` : '')
 }

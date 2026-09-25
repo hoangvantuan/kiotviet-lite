@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 
 import {
   applyRounding,
+  formatVndWithSuffix,
   type PriceListDetail,
   type PriceListItemListItem,
 } from '@kiotviet-lite/shared'
@@ -19,7 +20,6 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { handleApiError } from '@/lib/api-error'
-import { formatVnd } from '@/lib/currency'
 import { showSuccess } from '@/lib/toast'
 
 import { useUpdatePriceListItemMutation } from '../use-price-lists'
@@ -91,7 +91,7 @@ export function EditPriceListItemDialog({ open, onOpenChange, priceList, item }:
         <form onSubmit={submit} className="space-y-3" noValidate>
           <div className="rounded-md border p-3 text-sm">
             <p className="font-medium">{item.productName}</p>
-            <p className="text-xs text-muted-foreground">SKU {item.productSku}</p>
+            <p className="text-xs text-muted-foreground">Mã hàng {item.productSku}</p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="epi-price">
@@ -103,7 +103,7 @@ export function EditPriceListItemDialog({ open, onOpenChange, priceList, item }:
               onChange={(v) => form.setValue('price', v, { shouldValidate: true })}
             />
             <p className="text-xs text-muted-foreground">
-              Sau làm tròn: {formatVnd(previewRounded)}đ
+              Sau làm tròn: {formatVndWithSuffix(previewRounded)}
             </p>
             {form.formState.errors.price && (
               <p className="text-sm text-destructive">{form.formState.errors.price.message}</p>

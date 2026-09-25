@@ -11,7 +11,7 @@ import { expect, type Page, test } from './fixtures/auth.fixture'
  */
 
 async function addProductToCart(page: Page, name: string) {
-  await page.getByRole('combobox', { name: /Tìm sản phẩm/i }).fill(name)
+  await page.getByRole('combobox', { name: /Tìm theo tên, mã hàng/i }).fill(name)
   await page
     .getByRole('option', { name: new RegExp(name, 'i') })
     .getByRole('button')
@@ -169,7 +169,7 @@ test.describe('Issue #35: POS Price List Selection (Desktop & Mobile)', () => {
     const paymentDialog = page.getByRole('dialog')
     await expect(paymentDialog.getByRole('heading', { name: /Thanh to[aá]n/i })).toBeVisible()
 
-    await paymentDialog.getByRole('button', { name: '173.000 đ' }).click()
+    await paymentDialog.getByRole('button', { name: '173.000\xA0đ' }).click()
     const completeBtn = paymentDialog.getByRole('button', { name: /Hoàn thành|Hoan thanh/i })
     await expect(completeBtn).toBeEnabled({ timeout: 5000 })
     await completeBtn.click()

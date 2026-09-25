@@ -8,6 +8,7 @@ import type {
   PriceOverrideRow,
   PricingReportTab,
 } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -24,10 +25,6 @@ import { usePricingReport } from '../hooks/use-reports'
 import { downloadReportExport } from '../reports-api'
 import { ReportDateRangePicker } from './ReportDateRangePicker'
 import { ReportExportButton } from './ReportExportButton'
-
-function formatVND(n: number) {
-  return new Intl.NumberFormat('vi-VN').format(n)
-}
 
 export function PricingReport() {
   const [tab, setTab] = useState<PricingReportTab>('overrides')
@@ -93,16 +90,16 @@ export function PricingReport() {
                     <TableCell>{r.orderDate?.slice(0, 10)}</TableCell>
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-right font-mono">
-                      {formatVND(r.originalPrice)}
+                      {formatVndWithSuffix(r.originalPrice)}
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      {formatVND(r.overridePrice)}
+                      {formatVndWithSuffix(r.overridePrice)}
                     </TableCell>
                     <TableCell
                       className={`text-right font-mono ${r.difference < 0 ? 'text-red-600' : 'text-green-600'}`}
                     >
                       {r.difference > 0 ? '+' : ''}
-                      {formatVND(r.difference)}
+                      {formatVndWithSuffix(r.difference)}
                     </TableCell>
                     <TableCell>{r.userName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.reason ?? '-'}</TableCell>
@@ -115,7 +112,7 @@ export function PricingReport() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Sản phẩm</TableHead>
-                  <TableHead>SKU</TableHead>
+                  <TableHead>Mã hàng</TableHead>
                   <TableHead className="text-right">Giá vốn</TableHead>
                   {(data as PriceComparisonResponse).priceLists?.map((pl: string) => (
                     <TableHead key={pl} className="text-right">
@@ -129,7 +126,9 @@ export function PricingReport() {
                   <TableRow key={r.productId}>
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.sku}</TableCell>
-                    <TableCell className="text-right font-mono">{formatVND(r.costPrice)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatVndWithSuffix(r.costPrice)}
+                    </TableCell>
                     {r.prices.map((price: number | null, i: number) => {
                       const margin = r.margins[i] ?? null
                       return (
@@ -137,7 +136,7 @@ export function PricingReport() {
                           key={i}
                           className={`text-right font-mono ${margin !== null && margin < 0 ? 'text-red-600 font-bold' : ''}`}
                         >
-                          {price !== null ? formatVND(price) : '-'}
+                          {price !== null ? formatVndWithSuffix(price) : '-'}
                           {margin !== null && (
                             <span className="ml-1 text-xs text-muted-foreground">({margin}%)</span>
                           )}
@@ -154,7 +153,7 @@ export function PricingReport() {
                 <TableRow>
                   <TableHead>Sản phẩm</TableHead>
                   <TableHead>Ngày nhập</TableHead>
-                  <TableHead>NCC</TableHead>
+                  <TableHead>Nhà cung cấp</TableHead>
                   <TableHead className="text-right">Gi�� nhập</TableHead>
                   <TableHead className="text-right">Giá vốn sau</TableHead>
                 </TableRow>
@@ -165,9 +164,11 @@ export function PricingReport() {
                     <TableCell>{r.productName}</TableCell>
                     <TableCell>{r.purchaseDate}</TableCell>
                     <TableCell>{r.supplierName}</TableCell>
-                    <TableCell className="text-right font-mono">{formatVND(r.unitPrice)}</TableCell>
                     <TableCell className="text-right font-mono">
-                      {r.costAfter !== null ? formatVND(r.costAfter) : '-'}
+                      {formatVndWithSuffix(r.unitPrice)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {r.costAfter !== null ? formatVndWithSuffix(r.costAfter) : '-'}
                     </TableCell>
                   </TableRow>
                 ))}

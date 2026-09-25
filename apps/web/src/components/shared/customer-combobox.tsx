@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronsUpDown, Search } from 'lucide-react'
 
+import { formatPhone } from '@kiotviet-lite/shared'
+
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useCustomerQuery, useCustomersQuery } from '@/features/customers/use-customers'
@@ -107,9 +109,7 @@ export function CustomerCombobox({
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{c.name}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {c.phone ? `${c.phone}` : ''}
-                </p>
+                <p className="truncate text-xs text-muted-foreground">{formatPhone(c.phone)}</p>
               </div>
               {c.id === value && <Check className="h-4 w-4 shrink-0" />}
             </button>

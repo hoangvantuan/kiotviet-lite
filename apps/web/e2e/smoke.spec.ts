@@ -23,6 +23,7 @@ test.describe('Kiểm thử khói (Smoke Test) - Đăng nhập và điều hư�
     // 4. Xác nhận chuyển hướng về trang chủ và thấy lời chào người dùng
     await page.waitForURL('**/')
     await expect(page.getByText(`Xin chào, ${owner.name}`)).toBeVisible({ timeout: 10000 })
-    await expect(page.getByText('Chào mừng đến KiotViet Lite')).toBeVisible()
+    await expect(page.getByText('Chào mừng đến với KiotViet Lite')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Xem báo cáo' })).toBeVisible()
   })
 })

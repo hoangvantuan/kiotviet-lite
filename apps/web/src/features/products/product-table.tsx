@@ -29,7 +29,7 @@ export function ProductTable({ items, onEdit, onDelete }: ProductTableProps) {
           <TableRow>
             <TableHead className="w-14">Ảnh</TableHead>
             <TableHead>Tên</TableHead>
-            <TableHead>SKU</TableHead>
+            <TableHead>Mã hàng</TableHead>
             <TableHead>Danh mục</TableHead>
             <TableHead>Thương hiệu</TableHead>
             <TableHead className="text-right">Giá bán</TableHead>

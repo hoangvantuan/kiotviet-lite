@@ -17,7 +17,7 @@ test.describe('Kiểm thử E2E: POS Desktop Multi-line Editor (Issue #33)', () 
     }
 
     // 1. Tìm kiếm theo tên "Cà rốt" và chọn từ gợi ý
-    const searchInput = page.getByPlaceholder(/Tìm sản phẩm, mã SKU, barcode/i)
+    const searchInput = page.getByPlaceholder(/Tìm theo tên, mã hàng hoặc mã vạch/i)
     await expect(searchInput).toBeVisible()
     await searchInput.fill('Cà rốt')
 
@@ -67,7 +67,7 @@ test.describe('Kiểm thử E2E: POS Desktop Multi-line Editor (Issue #33)', () 
     }
 
     // Thêm Khoai tây (SKU KT001, giá seed 30.000đ/kg)
-    const searchInput = page.getByPlaceholder(/Tìm sản phẩm, mã SKU, barcode/i)
+    const searchInput = page.getByPlaceholder(/Tìm theo tên, mã hàng hoặc mã vạch/i)
     await searchInput.fill('Khoai tây')
     const option = page.locator('#pos-search-listbox button').first()
     await expect(option).toBeVisible({ timeout: 5000 })
@@ -92,8 +92,8 @@ test.describe('Kiểm thử E2E: POS Desktop Multi-line Editor (Issue #33)', () 
     await page.keyboard.press('Escape')
 
     // Two units at 30.000đ less the 5.000đ line discount.
-    await expect(discountBtn).toHaveText('-5.000 đ')
-    await expect(row.locator('td').nth(7)).toHaveText('55.000 đ')
+    await expect(discountBtn).toHaveText('-5.000\xA0đ')
+    await expect(row.locator('td').nth(7)).toHaveText('55.000\xA0đ')
 
     // Mở popover ghi chú dòng
     const noteBtn = row.getByLabel(/Ghi chú dòng/i)
@@ -123,7 +123,7 @@ test.describe('Kiểm thử E2E: POS Desktop Multi-line Editor (Issue #33)', () 
     }
 
     // Thêm Cà rốt qua tìm kiếm
-    const searchInput = page.getByPlaceholder(/Tìm sản phẩm, mã SKU, barcode/i)
+    const searchInput = page.getByPlaceholder(/Tìm theo tên, mã hàng hoặc mã vạch/i)
     await searchInput.fill('Cà rốt')
     const option = page.locator('#pos-search-listbox button').first()
     await expect(option).toBeVisible({ timeout: 5000 })
@@ -166,7 +166,7 @@ test.describe('Kiểm thử E2E: POS Desktop Multi-line Editor (Issue #33)', () 
     const paymentDialog = page.getByRole('dialog')
     await expect(paymentDialog.getByRole('heading', { name: /Thanh to[aá]n/i })).toBeVisible()
 
-    await paymentDialog.getByRole('button', { name: '100.000 đ' }).click()
+    await paymentDialog.getByRole('button', { name: '100.000\xA0đ' }).click()
     // Hoàn thành đơn hàng
     const completeBtn = paymentDialog.getByRole('button', { name: /Hoàn thành|Hoan thanh/i })
     await expect(completeBtn).toBeEnabled({ timeout: 5000 })
@@ -194,7 +194,7 @@ test.describe('Kiểm thử E2E: POS Desktop Multi-line Editor (Issue #33)', () 
     }
 
     // Thêm Sữa tươi Vinamilk (SKU SV001, giá cơ bản 7.000đ/Hộp, có quy đổi Thùng 320.000đ)
-    const searchInput = page.getByPlaceholder(/Tìm sản phẩm, mã SKU, barcode/i)
+    const searchInput = page.getByPlaceholder(/Tìm theo tên, mã hàng hoặc mã vạch/i)
     await searchInput.fill('Sữa tươi Vinamilk')
     const option = page.locator('#pos-search-listbox button').first()
     await expect(option).toBeVisible({ timeout: 5000 })
@@ -231,7 +231,7 @@ test.describe('Kiểm thử E2E: POS Desktop Multi-line Editor (Issue #33)', () 
     }
 
     // Tìm kiếm "Cà rốt"
-    const searchInput = page.getByPlaceholder(/Tìm sản phẩm, mã SKU, barcode/i)
+    const searchInput = page.getByPlaceholder(/Tìm theo tên, mã hàng hoặc mã vạch/i)
     await searchInput.fill('Cà rốt')
     const option = page.locator('#pos-search-listbox button').first()
     await expect(option).toBeVisible({ timeout: 5000 })

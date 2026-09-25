@@ -3,10 +3,10 @@ import { Link } from '@tanstack/react-router'
 import { AlertTriangle, CheckCircle, ChevronRight } from 'lucide-react'
 
 import type { LowStockAlert, OverdueDebt } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatVnd } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 
 function AlertCardSkeleton() {
@@ -187,7 +187,9 @@ export function OverdueDebtCard({ data, isLoading, isError }: OverdueDebtCardPro
               Quá hạn {debt.maxOverdueDays} ngày
             </p>
           </div>
-          <p className="text-sm font-mono font-bold shrink-0 ml-2">{formatVnd(debt.totalDebt)} đ</p>
+          <p className="text-sm font-mono font-bold shrink-0 ml-2">
+            {formatVndWithSuffix(debt.totalDebt)}
+          </p>
         </div>
       ))}
     </AlertCardBase>

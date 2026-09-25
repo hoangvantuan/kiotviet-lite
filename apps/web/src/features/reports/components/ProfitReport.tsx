@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import type { ExportFormat } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -16,10 +17,6 @@ import { useProfitReport } from '../hooks/use-reports'
 import { downloadReportExport } from '../reports-api'
 import { ReportDateRangePicker } from './ReportDateRangePicker'
 import { ReportExportButton } from './ReportExportButton'
-
-function formatVND(n: number) {
-  return new Intl.NumberFormat('vi-VN').format(n)
-}
 
 export function ProfitReport() {
   const [from, setFrom] = useState<string | undefined>()
@@ -54,7 +51,9 @@ export function ProfitReport() {
               <CardTitle className="text-sm text-muted-foreground">Doanh thu</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-xl font-bold font-mono">{formatVND(data.summary.totalRevenue)}</p>
+              <p className="text-xl font-bold font-mono">
+                {formatVndWithSuffix(data.summary.totalRevenue)}
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -62,7 +61,9 @@ export function ProfitReport() {
               <CardTitle className="text-sm text-muted-foreground">Giá vốn</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-xl font-bold font-mono">{formatVND(data.summary.totalCogs)}</p>
+              <p className="text-xl font-bold font-mono">
+                {formatVndWithSuffix(data.summary.totalCogs)}
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -70,7 +71,9 @@ export function ProfitReport() {
               <CardTitle className="text-sm text-muted-foreground">Lợi nhuận gộp</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-xl font-bold font-mono">{formatVND(data.summary.grossProfit)}</p>
+              <p className="text-xl font-bold font-mono">
+                {formatVndWithSuffix(data.summary.grossProfit)}
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -95,8 +98,8 @@ export function ProfitReport() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Sản phẩm</TableHead>
-                  <TableHead>SKU</TableHead>
-                  <TableHead className="text-right">SL</TableHead>
+                  <TableHead>Mã hàng</TableHead>
+                  <TableHead className="text-right">Số lượng</TableHead>
                   <TableHead className="text-right">Doanh thu</TableHead>
                   <TableHead className="text-right">Giá vốn</TableHead>
                   <TableHead className="text-right">Lợi nhuận</TableHead>
@@ -109,9 +112,15 @@ export function ProfitReport() {
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.sku}</TableCell>
                     <TableCell className="text-right font-mono">{r.quantity}</TableCell>
-                    <TableCell className="text-right font-mono">{formatVND(r.revenue)}</TableCell>
-                    <TableCell className="text-right font-mono">{formatVND(r.cogs)}</TableCell>
-                    <TableCell className="text-right font-mono">{formatVND(r.profit)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatVndWithSuffix(r.revenue)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatVndWithSuffix(r.cogs)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatVndWithSuffix(r.profit)}
+                    </TableCell>
                     <TableCell className="text-right">{r.marginPercent}%</TableCell>
                   </TableRow>
                 ))}

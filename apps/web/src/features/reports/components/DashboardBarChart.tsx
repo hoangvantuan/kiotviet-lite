@@ -2,9 +2,9 @@ import { BarChart as BarChartIcon } from 'lucide-react'
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 import type { RevenueChartItem } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatVnd } from '@/lib/currency'
 
 function formatAxisValue(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(0)}M`
@@ -25,7 +25,7 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
       <p className="font-medium">
         {data.label} ({data.date})
       </p>
-      <p className="text-muted-foreground">Doanh thu: {formatVnd(data.revenue)} đ</p>
+      <p className="text-muted-foreground">Doanh thu: {formatVndWithSuffix(data.revenue)}</p>
       <p className="text-muted-foreground">Số đơn: {data.orderCount}</p>
     </div>
   )

@@ -5,6 +5,7 @@ import type { ReceiptDetail } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
+import { QueryErrorState } from '@/components/shared/query-error-state'
 import { Button } from '@/components/ui/button'
 import { useDebounced } from '@/hooks/use-debounced'
 import { formatVndWithSuffix } from '@/lib/currency'
@@ -58,14 +59,14 @@ export function ReceiptsManager() {
   const meta = receiptsQuery.data?.meta
   const isLoading = receiptsQuery.isLoading
   const isError = receiptsQuery.isError
-  const isEmpty = !isLoading && items.length === 0
+  const isEmpty = !isLoading && !isError && items.length === 0
   const hasFilter =
     debouncedSearch.trim() !== '' || customerId !== undefined || fromDate !== '' || toDate !== ''
 
   const handleCreated = (receipt: ReceiptDetail) => {
     const debtAfter = receipt.debtAfter ?? 0
     showSuccess(
-      `Đã tạo phiếu thu ${formatVndWithSuffix(receipt.amount)} cho ${receipt.customerName ?? 'KH'}. Nợ còn lại: ${formatVndWithSuffix(debtAfter)}`,
+      `Đã tạo phiếu thu ${formatVndWithSuffix(receipt.amount)} cho ${receipt.customerName ?? 'khách hàng'}. Nợ còn lại: ${formatVndWithSuffix(debtAfter)}`,
     )
     setCreatedReceipt(receipt)
     setSuccessOpen(true)
@@ -122,14 +123,18 @@ export function ReceiptsManager() {
       )}
 
       {isError && (
-        <p className="text-sm text-destructive">Không tải được danh sách. Thử lại sau.</p>
+        <QueryErrorState
+          title="Không tải được danh sách phiếu thu."
+          onRetry={() => receiptsQuery.refetch()}
+          retrying={receiptsQuery.isFetching}
+        />
       )}
 
       {isEmpty && !hasFilter && (
         <EmptyState
           icon={HandCoins}
           title="Chưa có phiếu thu nào"
-          description="Tạo phiếu thu đầu tiên để ghi nhận thu nợ KH"
+          description="Tạo phiếu thu đầu tiên để ghi nhận thu nợ khách hàng"
           actionLabel="Tạo phiếu thu"
           onAction={() => setCreateOpen(true)}
         />
@@ -143,7 +148,7 @@ export function ReceiptsManager() {
         />
       )}
 
-      {!isLoading && !isEmpty && (
+      {!isLoading && !isError && !isEmpty && (
         <>
           <div className="hidden md:block">
             <ReceiptsTable items={items} onView={handleView} />

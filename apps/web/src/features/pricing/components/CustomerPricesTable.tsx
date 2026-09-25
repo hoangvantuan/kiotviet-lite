@@ -1,6 +1,7 @@
 import { Pencil, Trash2 } from 'lucide-react'
 
 import type { CustomerPriceListItem } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,7 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatVnd } from '@/lib/currency'
 
 interface Props {
   items: CustomerPriceListItem[]
@@ -54,13 +54,13 @@ export function CustomerPricesTable({ items, onEdit, onDelete }: Props) {
                 </TableCell>
                 <TableCell className="align-top">
                   <div className="font-medium">{p.productName}</div>
-                  <div className="text-xs text-muted-foreground">SKU {p.productSku}</div>
+                  <div className="text-xs text-muted-foreground">Mã hàng {p.productSku}</div>
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
-                  {formatVnd(p.productSellingPrice)}đ
+                  {formatVndWithSuffix(p.productSellingPrice)}
                 </TableCell>
                 <TableCell className="text-right font-medium tabular-nums">
-                  {formatVnd(p.price)}đ
+                  {formatVndWithSuffix(p.price)}
                 </TableCell>
                 <TableCell className="text-right">
                   <Badge variant={diffVariant}>{diffLabel}</Badge>

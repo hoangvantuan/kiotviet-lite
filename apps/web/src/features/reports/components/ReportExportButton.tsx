@@ -24,7 +24,7 @@ export function ReportExportButton({ onExport, loading }: ReportExportButtonProp
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" disabled={loading}>
           <Download className="mr-2 h-4 w-4" />
-          Export
+          Xuất Excel
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

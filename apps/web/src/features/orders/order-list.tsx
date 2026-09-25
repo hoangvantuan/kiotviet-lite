@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { Receipt, SearchX, Users, X } from 'lucide-react'
 
+import { formatPhone } from '@kiotviet-lite/shared'
+
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
+import { QueryErrorState } from '@/components/shared/query-error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -131,7 +134,7 @@ function CustomerSearchFilter({
       <PopoverContent className="w-64 p-2" align="start">
         <Input
           ref={inputRef}
-          placeholder="Tìm tên hoặc SĐT"
+          placeholder="Tìm theo tên hoặc số điện thoại"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="mb-2 h-8"
@@ -152,7 +155,9 @@ function CustomerSearchFilter({
               }}
             >
               <div className="font-medium">{c.name}</div>
-              {c.phone && <div className="text-xs text-muted-foreground">{c.phone}</div>}
+              {c.phone && (
+                <div className="text-xs text-muted-foreground">{formatPhone(c.phone)}</div>
+              )}
             </button>
           ))}
         </div>
@@ -219,7 +224,7 @@ export function OrderList() {
   const meta = ordersQuery.data?.meta
   const isLoading = ordersQuery.isLoading
   const isError = ordersQuery.isError
-  const isEmpty = !isLoading && items.length === 0
+  const isEmpty = !isLoading && !isError && items.length === 0
   const hasFilter =
     debouncedSearch.trim() !== '' ||
     datePreset !== 'all' ||
@@ -232,8 +237,8 @@ export function OrderList() {
   return (
     <div className="space-y-4 p-4 md:p-6">
       <header>
-        <h1 className="text-2xl font-semibold">Hóa đơn</h1>
-        <p className="text-sm text-muted-foreground">Danh sách hóa đơn bán hàng.</p>
+        <h1 className="text-2xl font-semibold">Đơn hàng</h1>
+        <p className="text-sm text-muted-foreground">Danh sách đơn hàng.</p>
       </header>
 
       {/* Date presets */}
@@ -280,7 +285,7 @@ export function OrderList() {
       {/* Filters */}
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Input
-          placeholder="Tìm theo mã hóa đơn"
+          placeholder="Tìm theo mã đơn hàng"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
         />
@@ -364,25 +369,31 @@ export function OrderList() {
         </div>
       )}
 
-      {isError && <p className="text-sm text-destructive">Không tải được danh sách hóa đơn.</p>}
+      {isError && (
+        <QueryErrorState
+          title="Không tải được danh sách đơn hàng."
+          onRetry={() => ordersQuery.refetch()}
+          retrying={ordersQuery.isFetching}
+        />
+      )}
 
       {isEmpty && !hasFilter && (
         <EmptyState
           icon={Receipt}
-          title="Chưa có hóa đơn nào"
-          description="Hóa đơn sẽ xuất hiện sau khi bán hàng tại POS"
+          title="Chưa có đơn hàng nào"
+          description="Đơn hàng sẽ xuất hiện sau khi bán tại màn bán hàng"
         />
       )}
 
       {isEmpty && hasFilter && (
         <EmptyState
           icon={SearchX}
-          title="Không tìm thấy hóa đơn"
+          title="Không tìm thấy đơn hàng"
           description="Thử thay đổi từ khóa hoặc bộ lọc."
         />
       )}
 
-      {!isLoading && !isEmpty && (
+      {!isLoading && !isError && !isEmpty && (
         <OrderTable
           items={items}
           onRowClick={(id) => navigate({ to: '/orders/$orderId', params: { orderId: id } })}
@@ -396,7 +407,7 @@ export function OrderList() {
           total={meta.total}
           totalPages={meta.totalPages}
           onPageChange={(p) => updateSearch({ page: p })}
-          unitLabel="hóa đơn"
+          unitLabel="đơn hàng"
         />
       )}
     </div>
@@ -417,7 +428,7 @@ function OrderTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Mã HĐ</TableHead>
+              <TableHead>Mã đơn hàng</TableHead>
               <TableHead>Thời gian</TableHead>
               <TableHead>Khách hàng</TableHead>
               <TableHead className="text-right">Tổng tiền</TableHead>

@@ -1,6 +1,7 @@
 import { Pencil, Trash2 } from 'lucide-react'
 
 import type { VolumePricesListItem } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,7 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatVnd } from '@/lib/currency'
 
 interface Props {
   items: VolumePricesListItem[]
@@ -39,10 +39,10 @@ export function VolumePricesTable({ items, onEdit, onClear }: Props) {
             <TableRow key={p.productId}>
               <TableCell className="align-top">
                 <div className="font-medium">{p.productName}</div>
-                <div className="text-xs text-muted-foreground">SKU {p.productSku}</div>
+                <div className="text-xs text-muted-foreground">Mã hàng {p.productSku}</div>
               </TableCell>
               <TableCell className="text-right tabular-nums">
-                {formatVnd(p.productSellingPrice)}đ
+                {formatVndWithSuffix(p.productSellingPrice)}
               </TableCell>
               <TableCell className="text-center">
                 <Badge variant={p.tierCount > 0 ? 'default' : 'secondary'}>{p.tierCount}/5</Badge>
@@ -54,7 +54,7 @@ export function VolumePricesTable({ items, onEdit, onClear }: Props) {
                   <ul className="space-y-0.5 text-xs">
                     {p.topTiers.map((t) => (
                       <li key={t.id}>
-                        Từ {t.minQty.toLocaleString('vi-VN')}: {formatVnd(t.price)}đ
+                        Từ {t.minQty.toLocaleString('vi-VN')}: {formatVndWithSuffix(t.price)}
                       </li>
                     ))}
                   </ul>
@@ -64,10 +64,10 @@ export function VolumePricesTable({ items, onEdit, onClear }: Props) {
                 {p.tierCount === 0 ? (
                   <span className="text-muted-foreground">—</span>
                 ) : p.minPrice === p.maxPrice ? (
-                  <span>{formatVnd(p.minPrice)}đ</span>
+                  <span>{formatVndWithSuffix(p.minPrice)}</span>
                 ) : (
                   <span>
-                    {formatVnd(p.minPrice)}đ – {formatVnd(p.maxPrice)}đ
+                    {formatVndWithSuffix(p.minPrice)} – {formatVndWithSuffix(p.maxPrice)}
                   </span>
                 )}
               </TableCell>

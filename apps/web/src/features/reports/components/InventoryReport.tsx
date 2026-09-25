@@ -8,6 +8,7 @@ import type {
   InventoryReportTab,
   InventorySlowRow,
 } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Pagination } from '@/components/shared/pagination'
 import { Card, CardContent } from '@/components/ui/card'
@@ -29,10 +30,6 @@ import { useCategoriesQuery } from '@/features/categories/use-categories'
 import { useInventoryReport } from '../hooks/use-reports'
 import { downloadReportExport } from '../reports-api'
 import { ReportExportButton } from './ReportExportButton'
-
-function formatVND(n: number) {
-  return new Intl.NumberFormat('vi-VN').format(n)
-}
 
 export function InventoryReport() {
   const [tab, setTab] = useState<InventoryReportTab>('current')
@@ -84,7 +81,7 @@ export function InventoryReport() {
         <div className="grid grid-cols-2 gap-4">
           <Card>
             <CardContent className="pt-4">
-              <p className="text-sm text-muted-foreground">Tổng SP</p>
+              <p className="text-sm text-muted-foreground">Tổng sản phẩm</p>
               <p className="text-2xl font-bold font-mono">
                 {(data as InventoryCurrentResponse).summary.totalProducts}
               </p>
@@ -94,7 +91,7 @@ export function InventoryReport() {
             <CardContent className="pt-4">
               <p className="text-sm text-muted-foreground">Tổng giá trị tồn</p>
               <p className="text-2xl font-bold font-mono">
-                {formatVND((data as InventoryCurrentResponse).summary.totalStockValue)}
+                {formatVndWithSuffix((data as InventoryCurrentResponse).summary.totalStockValue)}
               </p>
             </CardContent>
           </Card>
@@ -112,7 +109,7 @@ export function InventoryReport() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Sản phẩm</TableHead>
-                  <TableHead>SKU</TableHead>
+                  <TableHead>Mã hàng</TableHead>
                   <TableHead className="text-right">Tồn kho</TableHead>
                   <TableHead className="text-right">Giá vốn</TableHead>
                   <TableHead className="text-right">Giá trị tồn</TableHead>
@@ -124,9 +121,11 @@ export function InventoryReport() {
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.sku}</TableCell>
                     <TableCell className="text-right font-mono">{r.currentStock}</TableCell>
-                    <TableCell className="text-right font-mono">{formatVND(r.costPrice)}</TableCell>
                     <TableCell className="text-right font-mono">
-                      {formatVND(r.stockValue)}
+                      {formatVndWithSuffix(r.costPrice)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatVndWithSuffix(r.stockValue)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -137,7 +136,7 @@ export function InventoryReport() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Sản phẩm</TableHead>
-                  <TableHead>SKU</TableHead>
+                  <TableHead>Mã hàng</TableHead>
                   <TableHead className="text-right">Tồn hiện tại</TableHead>
                   <TableHead className="text-right">Định mức</TableHead>
                   <TableHead className="text-right">Cần nhập</TableHead>
@@ -162,7 +161,7 @@ export function InventoryReport() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Sản phẩm</TableHead>
-                  <TableHead>SKU</TableHead>
+                  <TableHead>Mã hàng</TableHead>
                   <TableHead className="text-right">Tồn kho</TableHead>
                   <TableHead>Ngày bán cuối</TableHead>
                   <TableHead className="text-right">Số ngày</TableHead>

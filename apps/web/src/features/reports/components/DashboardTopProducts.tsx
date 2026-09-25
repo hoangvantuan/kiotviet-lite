@@ -1,9 +1,9 @@
 import { ShoppingBag } from 'lucide-react'
 
 import type { TopProduct } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatVnd } from '@/lib/currency'
 
 function TopProductsSkeleton() {
   return (
@@ -70,7 +70,7 @@ export function DashboardTopProducts({ data, isLoading, isError }: DashboardTopP
                   <tr className="border-b text-left text-muted-foreground">
                     <th className="pb-2 pr-2 font-medium">#</th>
                     <th className="pb-2 pr-2 font-medium">Sản phẩm</th>
-                    <th className="pb-2 pr-2 text-right font-medium">SL bán</th>
+                    <th className="pb-2 pr-2 text-right font-medium">Số lượng bán</th>
                     <th className="pb-2 pr-2 text-right font-medium">Doanh thu</th>
                     <th className="pb-2 text-right font-medium">%</th>
                   </tr>
@@ -81,7 +81,9 @@ export function DashboardTopProducts({ data, isLoading, isError }: DashboardTopP
                       <td className="py-2 pr-2 text-muted-foreground">{i + 1}</td>
                       <td className="py-2 pr-2 truncate max-w-[140px]">{p.name}</td>
                       <td className="py-2 pr-2 text-right font-mono">{p.quantity}</td>
-                      <td className="py-2 pr-2 text-right font-mono">{formatVnd(p.revenue)} đ</td>
+                      <td className="py-2 pr-2 text-right font-mono">
+                        {formatVndWithSuffix(p.revenue)}
+                      </td>
                       <td className="py-2 text-right text-muted-foreground">
                         {p.percentage.toFixed(1)}%
                       </td>
@@ -103,8 +105,10 @@ export function DashboardTopProducts({ data, isLoading, isError }: DashboardTopP
                     <span className="text-sm truncate">{p.name}</span>
                   </div>
                   <div className="text-right shrink-0 ml-2">
-                    <p className="text-sm font-mono font-medium">{formatVnd(p.revenue)} đ</p>
-                    <p className="text-xs text-muted-foreground">{p.quantity} SP</p>
+                    <p className="text-sm font-mono font-medium">
+                      {formatVndWithSuffix(p.revenue)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{p.quantity} sản phẩm</p>
                   </div>
                 </div>
               ))}

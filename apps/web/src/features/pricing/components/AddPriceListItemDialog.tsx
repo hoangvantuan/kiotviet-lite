@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import {
   applyRounding,
   type CreatePriceListItemInput,
+  formatVndWithSuffix,
   MAX_PAGE_SIZE,
   type PriceListDetail,
 } from '@kiotviet-lite/shared'
@@ -21,7 +22,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { handleApiError } from '@/lib/api-error'
-import { formatVnd } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
 
 import { useProductsQuery } from '../../products/use-products'
@@ -121,7 +121,7 @@ export function AddPriceListItemDialog({
             <Label htmlFor="apl-search">Tìm sản phẩm</Label>
             <Input
               id="apl-search"
-              placeholder="Tên hoặc SKU"
+              placeholder="Tên hoặc mã hàng"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -144,9 +144,11 @@ export function AddPriceListItemDialog({
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{p.name}</p>
-                    <p className="text-xs text-muted-foreground">SKU {p.sku}</p>
+                    <p className="text-xs text-muted-foreground">Mã hàng {p.sku}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">{formatVnd(p.sellingPrice)}đ</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatVndWithSuffix(p.sellingPrice)}
+                  </p>
                 </button>
               ))
             )}
@@ -163,7 +165,8 @@ export function AddPriceListItemDialog({
                 onChange={(v) => form.setValue('price', v, { shouldValidate: true })}
               />
               <p className="text-xs text-muted-foreground">
-                Sản phẩm: {selectedProduct.name}. Sau làm tròn: {formatVnd(previewRounded)}đ
+                Sản phẩm: {selectedProduct.name}. Sau làm tròn:{' '}
+                {formatVndWithSuffix(previewRounded)}
               </p>
               {form.formState.errors.price && (
                 <p className="text-sm text-destructive">{form.formState.errors.price.message}</p>

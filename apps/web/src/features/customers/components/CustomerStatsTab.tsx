@@ -1,6 +1,7 @@
 import { BarChart3, Package } from 'lucide-react'
 
 import type { CustomerStatsMonthlySale } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import {
@@ -11,7 +12,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatVnd } from '@/lib/currency'
 
 import { useCustomerStats } from '../hooks/use-customer-detail'
 
@@ -38,7 +38,7 @@ function MonthlySalesChart({ data }: { data: CustomerStatsMonthlySale[] }) {
                 <div
                   className="w-full rounded-t bg-blue-500 transition-all hover:bg-blue-600"
                   style={{ height: `${heightPct}%` }}
-                  title={`${formatMonth(item.month)}: ${formatVnd(item.total)} ₫`}
+                  title={`${formatMonth(item.month)}: ${formatVndWithSuffix(item.total)}`}
                 />
               </div>
               <span className="text-[10px] text-muted-foreground">{formatMonth(item.month)}</span>
@@ -100,7 +100,7 @@ export function CustomerStatsTab({ customerId }: CustomerStatsTabProps) {
                     <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
                     <TableCell className="font-medium">{p.productName}</TableCell>
                     <TableCell className="text-right">{p.quantity}</TableCell>
-                    <TableCell className="text-right">{formatVnd(p.total)} ₫</TableCell>
+                    <TableCell className="text-right">{formatVndWithSuffix(p.total)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

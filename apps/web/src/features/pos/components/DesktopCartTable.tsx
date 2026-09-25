@@ -130,7 +130,7 @@ function DesktopCartRow({ item, index }: DesktopCartRowProps) {
         </span>
       </td>
 
-      {/* 3. Tên hàng hóa, biến thể, nguồn giá & cảnh báo */}
+      {/* 3. Tên sản phẩm, biến thể, nguồn giá & cảnh báo */}
       <td className="min-w-[180px] px-3 py-3">
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-1.5">
@@ -324,7 +324,7 @@ function DesktopCartRow({ item, index }: DesktopCartRowProps) {
                 ? item.discountType === DISCOUNT_TYPE.PERCENT
                   ? `-${item.discountValue}%`
                   : `-${formatVndWithSuffix(item.discountAmount)}`
-                : '0 đ'}
+                : formatVndWithSuffix(0)}
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-64 p-3" align="end">
@@ -487,7 +487,7 @@ export function DesktopCartTable() {
             <tr>
               <th className="w-10 px-3 py-2.5 text-center">#</th>
               <th className="w-28 px-3 py-2.5">Mã hàng</th>
-              <th className="min-w-[180px] px-3 py-2.5">Tên hàng hóa</th>
+              <th className="min-w-[180px] px-3 py-2.5">Tên sản phẩm</th>
               <th className="w-32 px-3 py-2.5">Đơn vị</th>
               <th className="w-36 px-3 py-2.5 text-center">Số lượng</th>
               <th className="w-32 px-3 py-2.5 text-right">Đơn giá</th>

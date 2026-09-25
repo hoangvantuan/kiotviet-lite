@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import type { ProductListItem } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -14,7 +15,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { useProductsQuery } from '@/features/products/use-products'
 import { useDebounced } from '@/hooks/use-debounced'
-import { formatVnd } from '@/lib/currency'
 
 interface Props {
   open: boolean
@@ -48,7 +48,7 @@ export function SelectProductForVolumePricesDialog({ open, onOpenChange, onPick 
         </DialogHeader>
         <div className="space-y-3">
           <Input
-            placeholder="Tìm theo tên hoặc SKU…"
+            placeholder="Tìm theo tên hoặc mã hàng…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             autoFocus
@@ -72,10 +72,10 @@ export function SelectProductForVolumePricesDialog({ open, onOpenChange, onPick 
                     >
                       <div className="min-w-0 flex-1">
                         <div className="font-medium">{p.name}</div>
-                        <div className="text-xs text-muted-foreground">SKU {p.sku}</div>
+                        <div className="text-xs text-muted-foreground">Mã hàng {p.sku}</div>
                       </div>
                       <div className="text-right text-sm tabular-nums">
-                        {formatVnd(p.sellingPrice)}đ
+                        {formatVndWithSuffix(p.sellingPrice)}
                       </div>
                     </button>
                   </li>

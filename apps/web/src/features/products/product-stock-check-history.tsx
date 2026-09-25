@@ -41,7 +41,7 @@ export function ProductStockCheckHistory({ productId }: { productId: string }) {
     return (
       <EmptyState
         icon={ClipboardCheck}
-        title="Chưa có lịch sử kiểm kho"
+        title="Chưa có lịch sử kiểm kê"
         description="Sản phẩm này chưa xuất hiện trong phiếu kiểm nào."
       />
     )
@@ -57,7 +57,7 @@ export function ProductStockCheckHistory({ productId }: { productId: string }) {
               <TableHead>Mã phiếu</TableHead>
               <TableHead>Người kiểm</TableHead>
               <TableHead>Biến thể</TableHead>
-              <TableHead className="text-right">Tồn HT</TableHead>
+              <TableHead className="text-right">Tồn kho hệ thống</TableHead>
               <TableHead className="text-right">Thực tế</TableHead>
               <TableHead className="text-right">Chênh lệch</TableHead>
               <TableHead>Ghi chú</TableHead>

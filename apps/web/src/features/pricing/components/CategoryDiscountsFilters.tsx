@@ -32,7 +32,7 @@ export function CategoryDiscountsFilters({ value, onChange }: Props) {
   return (
     <div className="grid gap-2 md:grid-cols-4">
       <Input
-        placeholder="Tìm theo ghi chú, danh mục, KH…"
+        placeholder="Tìm theo ghi chú, danh mục, khách hàng…"
         value={value.search}
         onChange={(e) => onChange({ search: e.target.value })}
       />
@@ -57,10 +57,10 @@ export function CategoryDiscountsFilters({ value, onChange }: Props) {
         onValueChange={(v) => onChange({ customerGroupId: v === 'all' ? '' : v })}
       >
         <SelectTrigger>
-          <SelectValue placeholder="Tất cả nhóm KH" />
+          <SelectValue placeholder="Tất cả nhóm khách hàng" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Tất cả nhóm KH</SelectItem>
+          <SelectItem value="all">Tất cả nhóm khách hàng</SelectItem>
           {groups.map((g) => (
             <SelectItem key={g.id} value={g.id}>
               {g.name}

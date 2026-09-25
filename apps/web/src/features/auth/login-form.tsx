@@ -14,13 +14,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { handleApiError } from '@/lib/api-error'
+import { useAuthStore } from '@/stores/use-auth-store'
 
+import { isNetworkError } from './auth-api'
 import { useLogin } from './use-login'
 
 export function LoginForm() {
   const navigate = useNavigate()
   const search = useSearch({ strict: false }) as { redirect?: string }
   const login = useLogin()
+  const setNetworkError = useAuthStore((s) => s.setNetworkError)
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -43,6 +46,8 @@ export function LoginForm() {
         redirect && redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/'
       navigate({ to: safePath, replace: true })
     } catch (err) {
+      // Máy chủ đã phản hồi thì không còn là mất kết nối; lỗi mạng thì hiện lại banner
+      setNetworkError(isNetworkError(err))
       handleApiError(err, form)
     }
   })

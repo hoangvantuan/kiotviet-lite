@@ -10,6 +10,7 @@ import type {
   RevenueGroupBy,
   RevenueReportTab,
 } from '@kiotviet-lite/shared'
+import { formatPhone, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -21,15 +22,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { formatDate } from '@/lib/date'
 
 import { useRevenueReport } from '../hooks/use-reports'
 import { downloadReportExport } from '../reports-api'
 import { ReportDateRangePicker } from './ReportDateRangePicker'
 import { ReportExportButton } from './ReportExportButton'
-
-function formatVND(n: number) {
-  return new Intl.NumberFormat('vi-VN').format(n)
-}
 
 export function RevenueReport() {
   const [tab, setTab] = useState<RevenueReportTab>('time')
@@ -62,9 +60,9 @@ export function RevenueReport() {
       <Tabs value={tab} onValueChange={(v) => setTab(v as RevenueReportTab)}>
         <TabsList className="h-auto flex-wrap">
           <TabsTrigger value="time">Theo thời gian</TabsTrigger>
-          <TabsTrigger value="product">Theo SP</TabsTrigger>
-          <TabsTrigger value="customer">Theo KH</TabsTrigger>
-          <TabsTrigger value="employee">Theo NV</TabsTrigger>
+          <TabsTrigger value="product">Theo sản phẩm</TabsTrigger>
+          <TabsTrigger value="customer">Theo khách hàng</TabsTrigger>
+          <TabsTrigger value="employee">Theo nhân viên</TabsTrigger>
           <TabsTrigger value="thuong-hieu">Theo thương hiệu</TabsTrigger>
           <TabsTrigger value="danh-muc">Theo danh mục</TabsTrigger>
         </TabsList>
@@ -87,7 +85,9 @@ export function RevenueReport() {
               <CardTitle className="text-sm text-muted-foreground">Tổng doanh thu</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold font-mono">{formatVND(data.summary.totalRevenue)}</p>
+              <p className="text-2xl font-bold font-mono">
+                {formatVndWithSuffix(data.summary.totalRevenue)}
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -111,9 +111,11 @@ export function RevenueReport() {
               <TableBody>
                 {(data.rows as RevenueByTimeRow[]).map((r) => (
                   <TableRow key={r.date}>
-                    <TableCell>{r.date}</TableCell>
+                    <TableCell>{formatDate(r.date)}</TableCell>
                     <TableCell className="text-right font-mono">{r.orderCount}</TableCell>
-                    <TableCell className="text-right font-mono">{formatVND(r.revenue)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatVndWithSuffix(r.revenue)}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -123,8 +125,8 @@ export function RevenueReport() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Sản phẩm</TableHead>
-                  <TableHead>SKU</TableHead>
-                  <TableHead className="text-right">SL</TableHead>
+                  <TableHead>Mã hàng</TableHead>
+                  <TableHead className="text-right">Số lượng</TableHead>
                   <TableHead className="text-right">Doanh thu</TableHead>
                   <TableHead className="text-right">%</TableHead>
                 </TableRow>
@@ -135,7 +137,9 @@ export function RevenueReport() {
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.sku}</TableCell>
                     <TableCell className="text-right font-mono">{r.quantity}</TableCell>
-                    <TableCell className="text-right font-mono">{formatVND(r.revenue)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatVndWithSuffix(r.revenue)}
+                    </TableCell>
                     <TableCell className="text-right">{r.percentage}%</TableCell>
                   </TableRow>
                 ))}
@@ -146,7 +150,7 @@ export function RevenueReport() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Khách hàng</TableHead>
-                  <TableHead>SĐT</TableHead>
+                  <TableHead>Số điện thoại</TableHead>
                   <TableHead className="text-right">Số đơn</TableHead>
                   <TableHead className="text-right">Doanh thu</TableHead>
                   <TableHead className="text-right">Nợ hiện tại</TableHead>
@@ -156,11 +160,15 @@ export function RevenueReport() {
                 {(data.rows as RevenueByCustomerRow[]).map((r, i) => (
                   <TableRow key={r.customerId ?? i}>
                     <TableCell>{r.customerName}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.phone ?? '-'}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {r.phone ? formatPhone(r.phone) : '-'}
+                    </TableCell>
                     <TableCell className="text-right font-mono">{r.orderCount}</TableCell>
-                    <TableCell className="text-right font-mono">{formatVND(r.revenue)}</TableCell>
                     <TableCell className="text-right font-mono">
-                      {formatVND(r.currentDebt)}
+                      {formatVndWithSuffix(r.revenue)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatVndWithSuffix(r.currentDebt)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -179,7 +187,9 @@ export function RevenueReport() {
                 {(data.rows as RevenueByDimensionRow[]).map((r) => (
                   <TableRow key={r.dimensionId ?? 'unclassified'}>
                     <TableCell>{r.name}</TableCell>
-                    <TableCell className="text-right font-mono">{formatVND(r.revenue)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatVndWithSuffix(r.revenue)}
+                    </TableCell>
                     <TableCell className="text-right">{r.percentage}%</TableCell>
                   </TableRow>
                 ))}
@@ -200,7 +210,9 @@ export function RevenueReport() {
                   <TableRow key={r.userId}>
                     <TableCell>{r.userName}</TableCell>
                     <TableCell className="text-right font-mono">{r.orderCount}</TableCell>
-                    <TableCell className="text-right font-mono">{formatVND(r.revenue)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatVndWithSuffix(r.revenue)}
+                    </TableCell>
                     <TableCell className="text-right">{r.percentage}%</TableCell>
                   </TableRow>
                 ))}

@@ -153,7 +153,7 @@ export function CreateCategoryDiscountDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Thêm chiết khấu danh mục</DialogTitle>
           <DialogDescription>
-            Tạo quy tắc giảm giá cho khách hàng cụ thể hoặc cả nhóm KH.
+            Tạo quy tắc giảm giá cho khách hàng cụ thể hoặc cả nhóm khách hàng.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3" noValidate>
@@ -232,11 +232,13 @@ export function CreateCategoryDiscountDialog({ open, onOpenChange }: Props) {
                 onValueChange={(v) => form.setValue('customerGroupId', v, { shouldValidate: true })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Chọn nhóm KH" />
+                  <SelectValue placeholder="Chọn nhóm khách hàng" />
                 </SelectTrigger>
                 <SelectContent>
                   {groups.length === 0 ? (
-                    <div className="px-2 py-2 text-xs text-muted-foreground">Chưa có nhóm KH.</div>
+                    <div className="px-2 py-2 text-xs text-muted-foreground">
+                      Chưa có nhóm khách hàng.
+                    </div>
                   ) : (
                     groups.map((g) => (
                       <SelectItem key={g.id} value={g.id}>

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Search, UserPlus, Users, X } from 'lucide-react'
 
+import { formatPhone } from '@kiotviet-lite/shared'
+
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useCustomersQuery } from '@/features/customers/use-customers'
@@ -97,7 +99,7 @@ export function CustomerSearchCombobox() {
               ref={inputRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm tên, mã hoặc SĐT..."
+              placeholder="Tìm theo tên, mã hoặc số điện thoại..."
               className="h-8 text-sm"
             />
           </div>
@@ -126,7 +128,7 @@ export function CustomerSearchCombobox() {
                   <p className="truncate font-medium">{c.name}</p>
                   <p className="truncate text-xs text-muted-foreground">
                     {c.code}
-                    {c.phone && ` · ${c.phone}`}
+                    {c.phone && ` · ${formatPhone(c.phone)}`}
                     {c.groupName && ` · ${c.groupName}`}
                   </p>
                 </div>
@@ -143,7 +145,7 @@ export function CustomerSearchCombobox() {
               className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-primary transition-colors hover:bg-accent"
             >
               <UserPlus className="h-4 w-4" />
-              Tạo KH mới
+              Tạo khách hàng
             </button>
           </div>
         </PopoverContent>

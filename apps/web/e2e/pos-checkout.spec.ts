@@ -5,7 +5,7 @@ import { expect, type Page, test } from './fixtures/auth.fixture'
  */
 async function addProductToCart(page: Page, productNameRegex: RegExp) {
   const productName = productNameRegex.source.split('|')[0]
-  await page.getByRole('combobox', { name: /Tìm sản phẩm/i }).fill(productName)
+  await page.getByRole('combobox', { name: /Tìm theo tên, mã hàng/i }).fill(productName)
   await page.getByRole('option', { name: productNameRegex }).getByRole('button').click()
   await page.getByRole('button', { name: 'Thêm vào giỏ' }).click()
 }
@@ -54,7 +54,8 @@ test.describe('Kiểm thử E2E: POS Bán hàng (Tiền mặt, Chuyển khoản,
 
     // Đóng dialog hoặc bấm Đơn hàng mới
     const newOrderBtn = page
-      .getByRole('button', { name: /Đơn hàng mới|Đ[oơ]n m[oớ]i|Đ[oó]ng/i })
+      .getByRole('dialog')
+      .getByRole('button', { name: /Đơn hàng mới|Đ[oơ]n m[oớ]i/i })
       .first()
     if (await newOrderBtn.isVisible().catch(() => false)) {
       await newOrderBtn.click()
@@ -95,7 +96,8 @@ test.describe('Kiểm thử E2E: POS Bán hàng (Tiền mặt, Chuyển khoản,
     ).toBeVisible({ timeout: 10000 })
 
     const newOrderBtn = page
-      .getByRole('button', { name: /Đơn hàng mới|Đ[oơ]n m[oớ]i|Đ[oó]ng/i })
+      .getByRole('dialog')
+      .getByRole('button', { name: /Đơn hàng mới|Đ[oơ]n m[oớ]i/i })
       .first()
     if (await newOrderBtn.isVisible().catch(() => false)) {
       await newOrderBtn.click()
@@ -111,7 +113,7 @@ test.describe('Kiểm thử E2E: POS Bán hàng (Tiền mặt, Chuyển khoản,
     const customerSelectBtn = page.getByRole('button', { name: /Kh[aá]ch l[eẻ]/i })
     await customerSelectBtn.click()
 
-    const searchCustomerInput = page.getByPlaceholder(/T[iì]m t[eê]n/i)
+    const searchCustomerInput = page.getByPlaceholder(/m[aã] ho[aặ]c s[oố] đi[eệ]n tho[aạ]i/i)
     await searchCustomerInput.fill('Bùi Thanh Hà')
     const customerOption = page.getByText(/Bùi Thanh Hà|Bui Thanh Ha/i).first()
     await expect(customerOption).toBeVisible({ timeout: 5000 })
@@ -150,7 +152,8 @@ test.describe('Kiểm thử E2E: POS Bán hàng (Tiền mặt, Chuyển khoản,
     ).toBeVisible({ timeout: 10000 })
 
     const newOrderBtn = page
-      .getByRole('button', { name: /Đơn hàng mới|Đ[oơ]n m[oớ]i|Đ[oó]ng/i })
+      .getByRole('dialog')
+      .getByRole('button', { name: /Đơn hàng mới|Đ[oơ]n m[oớ]i/i })
       .first()
     if (await newOrderBtn.isVisible().catch(() => false)) {
       await newOrderBtn.click()
@@ -166,7 +169,7 @@ test.describe('Kiểm thử E2E: POS Bán hàng (Tiền mặt, Chuyển khoản,
     // Chọn khách hàng Bùi Thanh Hà (hạn mức 5.000.000đ)
     const customerSelectBtn = page.getByRole('button', { name: /Kh[aá]ch l[eẻ]/i })
     await customerSelectBtn.click()
-    const searchCustomerInput = page.getByPlaceholder(/T[iì]m t[eê]n/i)
+    const searchCustomerInput = page.getByPlaceholder(/m[aã] ho[aặ]c s[oố] đi[eệ]n tho[aạ]i/i)
     await searchCustomerInput.fill('Bùi Thanh Hà')
     await page
       .getByText(/Bùi Thanh Hà|Bui Thanh Ha/i)

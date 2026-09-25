@@ -2,13 +2,12 @@ import { Link } from '@tanstack/react-router'
 import { ChevronLeft, Mail, Pencil, Phone, Tag } from 'lucide-react'
 
 import type { CustomerDetail } from '@kiotviet-lite/shared'
-import { formatDebtLimitLabel } from '@kiotviet-lite/shared'
+import { formatDebtLimitLabel, formatPhone, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useStoreQuery } from '@/features/settings/use-store-settings'
-import { formatVnd } from '@/lib/currency'
 
 interface CustomerDetailHeaderProps {
   customer: CustomerDetail
@@ -36,7 +35,7 @@ function DebtStatusBadge({
   if (effectiveDebtLimit === null || effectiveDebtLimit === 0) {
     return (
       <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200" variant="outline">
-        {formatVnd(currentDebt)} ₫
+        {formatVndWithSuffix(currentDebt)}
       </Badge>
     )
   }
@@ -44,20 +43,20 @@ function DebtStatusBadge({
   if (ratio > 1) {
     return (
       <Badge className="bg-red-100 text-red-700 border-red-200" variant="outline">
-        {formatVnd(currentDebt)} ₫ (vượt hạn mức)
+        {formatVndWithSuffix(currentDebt)} (vượt hạn mức)
       </Badge>
     )
   }
   if (ratio >= warningRatio) {
     return (
       <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200" variant="outline">
-        {formatVnd(currentDebt)} ₫ ({Math.round(ratio * 100)}%)
+        {formatVndWithSuffix(currentDebt)} ({Math.round(ratio * 100)}%)
       </Badge>
     )
   }
   return (
     <Badge className="bg-blue-100 text-blue-700 border-blue-200" variant="outline">
-      {formatVnd(currentDebt)} ₫
+      {formatVndWithSuffix(currentDebt)}
     </Badge>
   )
 }
@@ -98,7 +97,7 @@ export function CustomerDetailHeader({ customer, onEdit }: CustomerDetailHeaderP
               {customer.phone && (
                 <span className="flex items-center gap-1">
                   <Phone className="size-4" />
-                  <span className="font-mono">{customer.phone}</span>
+                  <span className="font-mono">{formatPhone(customer.phone)}</span>
                 </span>
               )}
               {customer.email && (
@@ -127,7 +126,7 @@ export function CustomerDetailHeader({ customer, onEdit }: CustomerDetailHeaderP
           <div>
             <p className="text-xs text-muted-foreground">Tổng đã mua</p>
             <p className="mt-1 text-lg font-semibold text-foreground">
-              {formatVnd(customer.totalPurchased)} ₫
+              {formatVndWithSuffix(customer.totalPurchased)}
             </p>
           </div>
           <div>

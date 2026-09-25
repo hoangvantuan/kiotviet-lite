@@ -332,7 +332,7 @@ export function VariantSelectionDialog({
             disabled={!canAdd}
             className="h-11 w-full text-sm font-semibold"
           >
-            {isOutOfStock ? 'Hết hàng' : 'Thêm vào giỏ'}
+            {!isVariantReady ? 'Chọn biến thể' : isOutOfStock ? 'Hết hàng' : 'Thêm vào giỏ'}
           </Button>
         </DialogFooter>
       </DialogContent>

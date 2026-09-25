@@ -13,9 +13,11 @@ import {
 } from 'lucide-react'
 
 import type { SupplierHasDebt, SupplierListItem } from '@kiotviet-lite/shared'
+import { formatPhone } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
+import { QueryErrorState } from '@/components/shared/query-error-state'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -81,7 +83,7 @@ function DebtBadge({ currentDebt }: { currentDebt: number }) {
   if (currentDebt === 0) {
     return (
       <Badge variant="secondary" className="text-xs">
-        0đ
+        {formatVndWithSuffix(0)}
       </Badge>
     )
   }
@@ -120,7 +122,7 @@ export function SupplierManager() {
   const meta = suppliersQuery.data?.meta
   const isLoading = suppliersQuery.isLoading
   const isError = suppliersQuery.isError
-  const isEmpty = !isLoading && items.length === 0
+  const isEmpty = !isLoading && !isError && items.length === 0
   const hasFilter = debouncedSearch.trim() !== '' || hasDebt !== 'all'
 
   return (
@@ -128,7 +130,9 @@ export function SupplierManager() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Nhà cung cấp</h1>
-          <p className="text-sm text-muted-foreground">Quản lý danh sách NCC và công nợ phải trả</p>
+          <p className="text-sm text-muted-foreground">
+            Quản lý danh sách nhà cung cấp và công nợ phải trả
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {canExport && (
@@ -162,10 +166,10 @@ export function SupplierManager() {
             </Button>
           )}
           <Button variant="outline" onClick={() => setTrashedOpen(true)}>
-            <Trash2 className="size-4 mr-1" /> NCC đã xoá
+            <Trash2 className="size-4 mr-1" /> Nhà cung cấp đã xoá
           </Button>
           <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="size-4 mr-1" /> Thêm NCC
+            <Plus className="size-4 mr-1" /> Thêm nhà cung cấp
           </Button>
         </div>
       </header>
@@ -207,15 +211,19 @@ export function SupplierManager() {
       )}
 
       {isError && (
-        <p className="text-sm text-destructive">Không tải được danh sách. Thử lại sau.</p>
+        <QueryErrorState
+          title="Không tải được danh sách nhà cung cấp."
+          onRetry={() => suppliersQuery.refetch()}
+          retrying={suppliersQuery.isFetching}
+        />
       )}
 
       {isEmpty && !hasFilter && (
         <EmptyState
           icon={Truck}
           title="Chưa có nhà cung cấp nào"
-          description="Thêm NCC đầu tiên để tạo phiếu nhập"
-          actionLabel="Thêm NCC"
+          description="Thêm nhà cung cấp đầu tiên để tạo phiếu nhập"
+          actionLabel="Thêm nhà cung cấp"
           onAction={() => setCreateOpen(true)}
         />
       )}
@@ -223,12 +231,12 @@ export function SupplierManager() {
       {isEmpty && hasFilter && (
         <EmptyState
           icon={SearchX}
-          title="Không tìm thấy NCC"
+          title="Không tìm thấy nhà cung cấp"
           description="Thử thay đổi từ khoá hoặc bộ lọc."
         />
       )}
 
-      {!isLoading && !isEmpty && (
+      {!isLoading && !isError && !isEmpty && (
         <>
           <div className="hidden md:block">
             <SupplierTable
@@ -300,10 +308,10 @@ function SupplierTable({ items, onEdit, onDelete, onDebt }: SupplierTableProps) 
           <TableRow>
             <TableHead>Tên</TableHead>
             <TableHead>Mã nhà cung cấp</TableHead>
-            <TableHead>SĐT</TableHead>
-            <TableHead className="hidden md:table-cell">Email</TableHead>
+            <TableHead>Số điện thoại</TableHead>
+            <TableHead className="hidden lg:table-cell">Email</TableHead>
             <TableHead>Công nợ</TableHead>
-            <TableHead className="hidden md:table-cell text-right">Số phiếu</TableHead>
+            <TableHead className="hidden lg:table-cell text-right">Số phiếu</TableHead>
             <TableHead className="hidden lg:table-cell text-right">Tổng đã nhập</TableHead>
             <TableHead className="text-right">Hành động</TableHead>
           </TableRow>
@@ -313,8 +321,10 @@ function SupplierTable({ items, onEdit, onDelete, onDebt }: SupplierTableProps) 
             <TableRow key={it.id}>
               <TableCell className="font-medium">{it.name}</TableCell>
               <TableCell className="font-mono text-sm">{it.code}</TableCell>
-              <TableCell className="font-mono text-sm">{it.phone ?? '—'}</TableCell>
-              <TableCell className="hidden md:table-cell text-muted-foreground">
+              <TableCell className="font-mono text-sm">
+                {it.phone ? formatPhone(it.phone) : '—'}
+              </TableCell>
+              <TableCell className="hidden lg:table-cell text-muted-foreground">
                 {it.email ?? '—'}
               </TableCell>
               <TableCell>
@@ -322,7 +332,7 @@ function SupplierTable({ items, onEdit, onDelete, onDebt }: SupplierTableProps) 
                   <DebtBadge currentDebt={it.currentDebt} />
                 </button>
               </TableCell>
-              <TableCell className="hidden md:table-cell text-right">{it.purchaseCount}</TableCell>
+              <TableCell className="hidden lg:table-cell text-right">{it.purchaseCount}</TableCell>
               <TableCell className="hidden lg:table-cell text-right">
                 {formatVndWithSuffix(it.totalPurchased)}
               </TableCell>
@@ -399,7 +409,9 @@ function SupplierCardList({ items, onEdit, onDelete, onDebt }: SupplierCardListP
             <div className="min-w-0 flex-1 space-y-1">
               <p className="truncate font-medium text-foreground">{s.name}</p>
               <p className="truncate font-mono text-xs text-muted-foreground">{s.code}</p>
-              <p className="font-mono text-xs text-muted-foreground">{s.phone ?? '—'}</p>
+              <p className="font-mono text-xs text-muted-foreground">
+                {s.phone ? formatPhone(s.phone) : '—'}
+              </p>
               <div className="flex items-center gap-2">
                 <DebtBadge currentDebt={s.currentDebt} />
                 <span className="text-xs text-muted-foreground">{s.purchaseCount} phiếu</span>
@@ -460,10 +472,10 @@ function DeleteSupplierDialog({ target, onClose }: DeleteSupplierDialogProps) {
     <AlertDialog open={!!target} onOpenChange={(v) => !v && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Xoá NCC {target?.name}?</AlertDialogTitle>
+          <AlertDialogTitle>Xoá nhà cung cấp {target?.name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            NCC sẽ được chuyển vào thùng rác. Có thể khôi phục từ mục NCC đã xoá. Không xoá được NCC
-            còn công nợ hoặc đã có phiếu nhập.
+            Nhà cung cấp sẽ được chuyển vào thùng rác. Có thể khôi phục từ mục Nhà cung cấp đã xoá.
+            Không xoá được nhà cung cấp còn công nợ hoặc đã có phiếu nhập.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -509,8 +521,8 @@ function TrashedSuppliersSheet({ open, onOpenChange }: TrashedSuppliersSheetProp
         <SheetHeader>
           <SheetTitle>Nhà cung cấp đã xoá</SheetTitle>
           <SheetDescription>
-            Khôi phục NCC để dùng lại. Nếu trùng tên hoặc SĐT với NCC khác, hãy đổi trước khi khôi
-            phục.
+            Khôi phục nhà cung cấp để dùng lại. Nếu trùng tên hoặc số điện thoại với nhà cung cấp
+            khác, hãy đổi trước khi khôi phục.
           </SheetDescription>
         </SheetHeader>
         <div className="space-y-2 mt-4">
@@ -526,7 +538,9 @@ function TrashedSuppliersSheet({ open, onOpenChange }: TrashedSuppliersSheetProp
               <div className="min-w-0">
                 <p className="font-medium truncate">{s.name}</p>
                 <p className="font-mono text-xs text-muted-foreground">{s.code}</p>
-                <p className="text-xs text-muted-foreground font-mono">{s.phone ?? '—'}</p>
+                <p className="text-xs text-muted-foreground font-mono">
+                  {s.phone ? formatPhone(s.phone) : '—'}
+                </p>
               </div>
               <Button
                 size="sm"

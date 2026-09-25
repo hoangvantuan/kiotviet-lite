@@ -95,7 +95,9 @@ export function CartPanel({ onPayment }: CartPanelProps) {
       {items.length > 0 && (
         <div className="shrink-0 space-y-2 border-t border-border bg-background p-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Tổng tiền hàng ({totalQty} SP)</span>
+            <span className="text-sm text-muted-foreground">
+              Tổng tiền hàng ({totalQty} sản phẩm)
+            </span>
             <span className="font-mono text-sm text-muted-foreground">
               {formatVndWithSuffix(subtotal)}
             </span>

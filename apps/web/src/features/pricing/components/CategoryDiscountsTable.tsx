@@ -1,6 +1,7 @@
 import { Pencil, Trash2, Users } from 'lucide-react'
 
 import type { CategoryDiscountListItem, EffectiveStatus } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,7 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatVnd } from '@/lib/currency'
 
 interface Props {
   items: CategoryDiscountListItem[]
@@ -35,7 +35,9 @@ const STATUS_VARIANT: Record<EffectiveStatus, 'default' | 'destructive' | 'secon
 }
 
 function formatDiscount(p: CategoryDiscountListItem): string {
-  return p.discountType === 'percent' ? `${p.discountValue}%` : `${formatVnd(p.discountValue)}đ`
+  return p.discountType === 'percent'
+    ? `${p.discountValue}%`
+    : `${formatVndWithSuffix(p.discountValue)}`
 }
 
 function formatEffective(p: CategoryDiscountListItem): string {
@@ -54,7 +56,7 @@ export function CategoryDiscountsTable({ items, onEdit, onDelete }: Props) {
             <TableHead>Danh mục</TableHead>
             <TableHead>Đối tượng</TableHead>
             <TableHead className="text-right">Mức giảm</TableHead>
-            <TableHead className="text-right">SL tối thiểu</TableHead>
+            <TableHead className="text-right">Số lượng tối thiểu</TableHead>
             <TableHead>Hiệu lực</TableHead>
             <TableHead>Trạng thái</TableHead>
             <TableHead>Ghi chú</TableHead>

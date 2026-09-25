@@ -20,9 +20,11 @@ import { CustomerPricesPage } from '@/pages/customer-prices-page'
 import { CustomersGroupsPage } from '@/pages/customers-groups-page'
 import { CustomersPage } from '@/pages/customers-page'
 import { DashboardPage } from '@/pages/dashboard-page'
+import { ForbiddenPage } from '@/pages/forbidden-page'
 import { HomePage } from '@/pages/home-page'
 import { InventoryReportPage } from '@/pages/inventory-report-page'
 import { LoginPage } from '@/pages/login-page'
+import { NotFoundPage } from '@/pages/not-found-page'
 import { OrderDetailPage } from '@/pages/order-detail-page'
 import { OrdersPage } from '@/pages/orders-page'
 import { PosPage } from '@/pages/pos-page'
@@ -63,10 +65,6 @@ const rootRoute = createRootRoute({
 
 const loginSearchSchema = z.object({
   redirect: z.string().optional(),
-})
-
-const homeSearchSchema = z.object({
-  error: z.string().optional(),
 })
 
 const loginRoute = createRoute({
@@ -115,7 +113,7 @@ function requirePermissionGuard(perm: Permission) {
   return () => {
     const role = useAuthStore.getState().user?.role
     if (!role || !hasPermission(role, perm)) {
-      throw redirect({ to: '/', search: { error: 'forbidden' } })
+      throw redirect({ to: '/403' })
     }
   }
 }
@@ -123,7 +121,6 @@ function requirePermissionGuard(perm: Permission) {
 const homeRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/',
-  validateSearch: homeSearchSchema,
   component: HomePage,
 })
 
@@ -412,6 +409,19 @@ const orderDetailRoute = createRoute({
   component: OrderDetailPage,
 })
 
+const forbiddenRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/403',
+  component: ForbiddenPage,
+})
+
+// URL không khớp route nào: hiện 404 tiếng Việt trong layout chung (UX-07)
+const notFoundRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '$',
+  component: NotFoundPage,
+})
+
 const posRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: '/pos',
@@ -425,6 +435,7 @@ const routeTree = rootRoute.addChildren([
   authenticatedRoute.addChildren([
     appLayoutRoute.addChildren([
       homeRoute,
+      forbiddenRoute,
       productsRoute,
       productsCategoriesRoute,
       productsBrandsRoute,
@@ -463,12 +474,16 @@ const routeTree = rootRoute.addChildren([
         settingsStaffRoute,
         settingsAuditRoute,
       ]),
+      notFoundRoute,
     ]),
     posRoute,
   ]),
 ])
 
-export const router = createRouter({ routeTree })
+export const router = createRouter({
+  routeTree,
+  defaultNotFoundComponent: NotFoundPage,
+})
 
 declare module '@tanstack/react-router' {
   interface Register {
@@ -492,9 +507,13 @@ function ResponsiveToaster() {
   const isDesktop = useMediaQueryRoot('(min-width: 768px)')
   return (
     <Toaster
+      // Góc dưới phải đè nút "Thanh toán (F2)" ở POS; đặt trên phải và né header cao 56px (UX-23)
       position={isDesktop ? 'top-right' : 'top-center'}
+      offset={{ top: 64 }}
+      mobileOffset={{ top: 64 }}
       toastOptions={{
         classNames: { toast: 'md:max-w-sm' },
+        closeButtonAriaLabel: 'Đóng thông báo',
       }}
       closeButton
     />

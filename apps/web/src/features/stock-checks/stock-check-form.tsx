@@ -244,7 +244,7 @@ export function StockCheckForm({ mode, initial }: StockCheckFormProps) {
     <div className="space-y-6 p-4 md:p-6 pb-32">
       <header>
         <h1 className="text-2xl font-semibold">
-          {mode === 'edit' && initial ? `Sửa phiếu kiểm ${initial.code}` : 'Tạo phiếu kiểm kho'}
+          {mode === 'edit' && initial ? `Sửa phiếu kiểm ${initial.code}` : 'Tạo phiếu kiểm kê'}
         </h1>
         <p className="text-sm text-muted-foreground">
           {mode === 'create'
@@ -272,7 +272,7 @@ export function StockCheckForm({ mode, initial }: StockCheckFormProps) {
           <EmptyState
             icon={Plus}
             title="Chưa có sản phẩm trong phiếu"
-            description='Bấm "Thêm sản phẩm" để chọn theo Kiểm tất cả, Theo danh mục hoặc Tìm SP.'
+            description='Bấm "Thêm sản phẩm" để chọn theo Kiểm tất cả, Theo danh mục hoặc Tìm sản phẩm.'
           />
         ) : (
           <StockCheckItemsEditor
@@ -292,7 +292,7 @@ export function StockCheckForm({ mode, initial }: StockCheckFormProps) {
           value={note}
           maxLength={500}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Ví dụ: Kiểm kho tháng 4 - tủ kệ A"
+          placeholder="Ví dụ: Kiểm kê tháng 4 - tủ kệ A"
           disabled={isPending}
         />
       </section>
@@ -333,7 +333,7 @@ export function StockCheckForm({ mode, initial }: StockCheckFormProps) {
       <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Xác nhận kiểm kho</DialogTitle>
+            <DialogTitle>Xác nhận kiểm kê</DialogTitle>
             <DialogDescription>
               Hệ thống sẽ cập nhật tồn kho theo chênh lệch của các sản phẩm sau. Hành động này không
               thể hoàn tác.

@@ -62,7 +62,7 @@ export function DesktopCheckoutPanel({ onPayment }: DesktopCheckoutPanelProps) {
       {/* Bottom: Totals and Checkout Button */}
       <div className="shrink-0 space-y-3 border-t border-border pt-3">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Tổng tiền hàng ({totalQty} SP)</span>
+          <span className="text-muted-foreground">Tổng tiền hàng ({totalQty} sản phẩm)</span>
           <span className="font-mono font-medium text-foreground">
             {formatVndWithSuffix(subtotal)}
           </span>

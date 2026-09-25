@@ -13,7 +13,7 @@ test.describe('Kiểm thử E2E: Trạng thái Kết nối và Chỉ báo Giao d
     await page.waitForURL('**/pos')
 
     // 3. Kiểm tra trang POS tải ổn định với danh sách sản phẩm và giỏ hàng sẵn sàng
-    await expect(page.getByRole('combobox', { name: /Tìm sản phẩm/i })).toBeVisible()
+    await expect(page.getByRole('combobox', { name: /Tìm theo tên, mã hàng/i })).toBeVisible()
     await expect(page.getByText('Chưa có sản phẩm trong đơn hàng')).toBeVisible()
 
     // 4. Xác nhận không có cảnh báo lỗi kết nối chặn màn hình

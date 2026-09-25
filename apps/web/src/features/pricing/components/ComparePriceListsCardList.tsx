@@ -1,7 +1,7 @@
 import type { CompareRow } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
-import { formatVnd } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -10,7 +10,7 @@ interface Props {
 
 function formatPriceCell(value: number | null): string {
   if (value === null) return '—'
-  return `${formatVnd(value)}đ`
+  return `${formatVndWithSuffix(value)}`
 }
 
 function formatPercent(value: number | null): string {
@@ -54,7 +54,7 @@ export function ComparePriceListsCardList({ rows }: Props) {
                 <div className="text-xs text-muted-foreground">{row.productSku}</div>
                 {row.productCostPrice !== null && (
                   <div className="text-xs text-muted-foreground mt-1">
-                    Giá vốn: {formatVnd(row.productCostPrice)}đ
+                    Giá vốn: {formatVndWithSuffix(row.productCostPrice)}
                   </div>
                 )}
               </div>

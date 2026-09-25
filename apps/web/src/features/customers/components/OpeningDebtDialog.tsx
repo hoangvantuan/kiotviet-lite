@@ -1,6 +1,6 @@
 import { type SyntheticEvent, useState } from 'react'
 
-import { createOpeningDebtSchema } from '@kiotviet-lite/shared'
+import { createOpeningDebtSchema, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useCreateSupplierOpeningDebtMutation } from '@/features/suppliers/use-suppliers'
 import { ApiClientError } from '@/lib/api-client'
-import { formatVnd } from '@/lib/currency'
 import { showSuccess } from '@/lib/toast'
 
 import { useCreateOpeningDebtMutation } from '../hooks/use-customer-detail'
@@ -57,7 +56,7 @@ export function OpeningDebtDialog({ open, onOpenChange, target }: OpeningDebtDia
     }
     try {
       await mutation.mutateAsync(parsed.data)
-      showSuccess(`Đã nạp nợ đầu kỳ ${formatVnd(parsed.data.amount)} ₫ cho ${target.name}`)
+      showSuccess(`Đã nạp nợ đầu kỳ ${formatVndWithSuffix(parsed.data.amount)} cho ${target.name}`)
       onOpenChange(false)
     } catch (cause) {
       setError(cause instanceof ApiClientError ? cause.message : 'Không nạp được nợ đầu kỳ')

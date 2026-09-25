@@ -1,10 +1,10 @@
 import { Pencil, Trash2, Users } from 'lucide-react'
 
 import type { CategoryDiscountListItem, EffectiveStatus } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { formatVnd } from '@/lib/currency'
 
 interface Props {
   items: CategoryDiscountListItem[]
@@ -42,7 +42,7 @@ export function CategoryDiscountsCardList({ items, onEdit, onDelete }: Props) {
               <div className="mt-1 text-sm">
                 {p.customerName ? (
                   <span>
-                    KH: <span className="font-medium">{p.customerName}</span>
+                    Khách hàng: <span className="font-medium">{p.customerName}</span>
                     {p.customerPhone && (
                       <span className="ml-1 text-xs text-muted-foreground">{p.customerPhone}</span>
                     )}
@@ -59,9 +59,9 @@ export function CategoryDiscountsCardList({ items, onEdit, onDelete }: Props) {
                 <span className="font-semibold">
                   {p.discountType === 'percent'
                     ? `${p.discountValue}%`
-                    : `${formatVnd(p.discountValue)}đ`}
+                    : `${formatVndWithSuffix(p.discountValue)}`}
                 </span>
-                <span className="ml-2 text-xs text-muted-foreground">SL ≥ {p.minQty}</span>
+                <span className="ml-2 text-xs text-muted-foreground">Số lượng ≥ {p.minQty}</span>
               </div>
               <div className="text-xs text-muted-foreground">
                 {p.effectiveFrom || p.effectiveTo

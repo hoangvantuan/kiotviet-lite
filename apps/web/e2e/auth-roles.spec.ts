@@ -14,17 +14,17 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
     const expectedOwnerMenuPatterns = [
       /Tổng quan|Tong quan/i,
       /Bán hàng|Ban hang/i,
-      /Hóa đơn|Hoa don/i,
-      /Hàng hóa|Hang hoa/i,
+      /Đơn hàng|Don hang/i,
+      /Sản phẩm|San pham/i,
       /Danh mục|Danh muc/i,
       /Khách hàng|Khach hang/i,
       /Phiếu thu|Phieu thu/i,
       /Bảng giá|Bang gia/i,
       /Nhà cung cấp|Nha cung cap/i,
-      /Phiếu nhập kho|Phieu nhap kho/i,
-      /Phiếu chi NCC|Phieu chi NCC/i,
-      /Kiểm kho|Kiem kho/i,
-      /Dashboard/i,
+      /Phiếu nhập hàng|Phieu nhap hang/i,
+      /Phiếu chi|Phieu chi/i,
+      /Kiểm kê|Kiem ke/i,
+      /Tổng quan báo cáo|Tong quan bao cao/i,
       /Doanh thu/i,
       /Lợi nhuận|Loi nhuan/i,
       /Tồn kho|Ton kho/i,
@@ -50,17 +50,17 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
     const expectedManagerMenuPatterns = [
       /Tổng quan|Tong quan/i,
       /Bán hàng|Ban hang/i,
-      /Hóa đơn|Hoa don/i,
-      /Hàng hóa|Hang hoa/i,
+      /Đơn hàng|Don hang/i,
+      /Sản phẩm|San pham/i,
       /Danh mục|Danh muc/i,
       /Khách hàng|Khach hang/i,
       /Phiếu thu|Phieu thu/i,
       /Bảng giá|Bang gia/i,
       /Nhà cung cấp|Nha cung cap/i,
-      /Phiếu nhập kho|Phieu nhap kho/i,
-      /Phiếu chi NCC|Phieu chi NCC/i,
-      /Kiểm kho|Kiem kho/i,
-      /Dashboard/i,
+      /Phiếu nhập hàng|Phieu nhap hang/i,
+      /Phiếu chi|Phieu chi/i,
+      /Kiểm kê|Kiem ke/i,
+      /Tổng quan báo cáo|Tong quan bao cao/i,
       /Doanh thu/i,
       /Lợi nhuận|Loi nhuan/i,
       /Tồn kho|Ton kho/i,
@@ -83,11 +83,11 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
     const sidebar = page.locator('aside')
     await expect(sidebar).toBeVisible()
 
-    // Staff chỉ được thấy các menu: Tổng quan, Bán hàng, Hóa đơn, Cài đặt
+    // Staff chỉ được thấy các menu: Tổng quan, Bán hàng, Đơn hàng, Cài đặt
     const allowedStaffMenuPatterns = [
       /Tổng quan|Tong quan/i,
       /Bán hàng|Ban hang/i,
-      /Hóa đơn|Hoa don/i,
+      /Đơn hàng|Don hang/i,
       /Cài đặt|Cai dat/i,
     ]
     for (const pattern of allowedStaffMenuPatterns) {
@@ -96,16 +96,16 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
 
     // Staff không được thấy các menu quản lý hàng hóa, đối tác và báo cáo
     const hiddenStaffMenuPatterns = [
-      /Hàng hóa|Hang hoa/i,
+      /Sản phẩm|San pham/i,
       /Danh mục|Danh muc/i,
       /Khách hàng|Khach hang/i,
       /Phiếu thu|Phieu thu/i,
       /Bảng giá|Bang gia/i,
       /Nhà cung cấp|Nha cung cap/i,
-      /Phiếu nhập kho|Phieu nhap kho/i,
-      /Phiếu chi NCC|Phieu chi NCC/i,
-      /Kiểm kho|Kiem kho/i,
-      /Dashboard/i,
+      /Phiếu nhập hàng|Phieu nhap hang/i,
+      /Phiếu chi|Phieu chi/i,
+      /Kiểm kê|Kiem ke/i,
+      /Tổng quan báo cáo|Tong quan bao cao/i,
       /Doanh thu/i,
       /Lợi nhuận|Loi nhuan/i,
       /Tồn kho|Ton kho/i,

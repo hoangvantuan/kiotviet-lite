@@ -55,9 +55,9 @@ export function ProductPurchaseHistory({ productId }: { productId: string }) {
             <TableRow>
               <TableHead>Ngày nhập</TableHead>
               <TableHead>Mã phiếu</TableHead>
-              <TableHead>NCC</TableHead>
+              <TableHead>Nhà cung cấp</TableHead>
               <TableHead>Biến thể</TableHead>
-              <TableHead className="text-right">SL</TableHead>
+              <TableHead className="text-right">Số lượng</TableHead>
               <TableHead className="text-right">Đơn giá</TableHead>
               <TableHead className="text-right">CK</TableHead>
               <TableHead className="text-right">Thành tiền</TableHead>
@@ -113,7 +113,7 @@ export function ProductPurchaseHistory({ productId }: { productId: string }) {
             <div className="text-sm text-muted-foreground mt-1">{it.supplierName}</div>
             <div className="flex justify-between text-sm mt-1">
               <span>
-                SL: {it.quantity} × {formatVnd(it.unitPrice)}
+                Số lượng: {it.quantity} × {formatVnd(it.unitPrice)}
               </span>
               <span className="font-medium">{formatVndWithSuffix(it.lineTotal)}</span>
             </div>
