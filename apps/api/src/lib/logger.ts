@@ -6,15 +6,21 @@ import pino from 'pino'
 import { env } from './env.js'
 
 type RequestLogContext = {
-  requestId: string
+  requestId?: string
   storeId?: string
   actorId?: string
+  jobId?: string
 }
 
 const requestContext = new AsyncLocalStorage<RequestLogContext>()
 
 export function withRequestLogContext<T>(requestId: string, work: () => T): T {
   return requestContext.run({ requestId }, work)
+}
+
+// Tác vụ nền (job nhập hàng loạt) không có request; gắn jobId để mọi log của job đối chiếu được.
+export function withLogContext<T>(context: { jobId: string }, work: () => T): T {
+  return requestContext.run({ ...requestContext.getStore(), ...context }, work)
 }
 
 export function setRequestLogActor(storeId: string, actorId: string): void {

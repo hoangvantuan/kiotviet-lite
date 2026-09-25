@@ -423,6 +423,38 @@ export async function cancelBulkImportJob(args: {
   return job
 }
 
+// GL-11: khi máy chủ tắt êm, runner dừng job tại ranh giới dòng và transaction rollback,
+// nên chưa có dòng nghiệp vụ nào được ghi. Trả job về hàng đợi để lần khởi động sau chạy lại
+// từ đầu (preflight vẫn so digest nên dữ liệu cửa hàng đổi thì job sẽ thất bại rõ ràng).
+export async function requeueInterruptedBulkImportJob(args: {
+  db: BulkImportJobDb
+  storeId: string
+  id: string
+}) {
+  assertUuid(args.storeId)
+  assertUuid(args.id)
+  const [job] = await args.db
+    .update(bulkImportJobs)
+    .set({
+      status: 'queued',
+      processedRows: 0,
+      succeededRows: 0,
+      failedRows: 0,
+      startedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(bulkImportJobs.storeId, args.storeId),
+        eq(bulkImportJobs.id, args.id),
+        eq(bulkImportJobs.status, 'running'),
+      ),
+    )
+    .returning()
+  if (!job) throw new ApiError('CONFLICT', 'Tác vụ không còn chạy')
+  return job
+}
+
 // Only running jobs were interrupted; queued jobs remain available for the next runner.
 export async function recoverInterruptedBulkImportJobs(
   db: BulkImportJobDb,

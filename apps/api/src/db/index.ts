@@ -17,6 +17,7 @@ export const db = drizzle(client, {
   casing: 'snake_case',
 })
 
-export const closeDbPool = () => client.end()
+// Không chờ vô hạn truy vấn đang chạy khi tắt: quá 5 s thì đóng kết nối cưỡng bức.
+export const closeDbPool = () => client.end({ timeout: 5 })
 
 export type Db = typeof db
