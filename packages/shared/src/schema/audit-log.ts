@@ -4,6 +4,7 @@ import { userRoleSchema } from './auth.js'
 import { paginationSchema } from './pagination.js'
 
 export const auditActionSchema = z.enum([
+  'login',
   'user.created',
   'user.updated',
   'user.locked',

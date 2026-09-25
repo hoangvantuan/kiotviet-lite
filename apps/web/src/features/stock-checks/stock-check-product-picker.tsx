@@ -225,7 +225,7 @@ export function StockCheckProductPicker({
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                placeholder="Tìm theo tên hoặc SKU"
+                placeholder="Tìm theo tên hoặc mã hàng"
                 className="pl-8"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -236,7 +236,7 @@ export function StockCheckProductPicker({
                 renderList(searchItems, searchQuery.isLoading, 'Không có kết quả phù hợp.')
               ) : (
                 <p className="text-sm text-muted-foreground p-3">
-                  Nhập tên hoặc SKU để bắt đầu tìm.
+                  Nhập tên hoặc mã hàng để bắt đầu tìm.
                 </p>
               )}
             </div>

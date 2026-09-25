@@ -1,4 +1,5 @@
 import type { CompareRow } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import {
@@ -24,7 +25,7 @@ function formatPercent(value: number | null): string {
 
 function formatPriceCell(value: number | null): string {
   if (value === null) return '—'
-  return `${formatVnd(value)}đ`
+  return `${formatVndWithSuffix(value)}`
 }
 
 function diffPercentClass(row: CompareRow): string {
@@ -78,7 +79,7 @@ export function ComparePriceListsTable({ rows }: Props) {
                   <div className="text-xs text-muted-foreground">{row.productSku}</div>
                 </TableCell>
                 <TableCell className="text-right tabular-nums text-muted-foreground">
-                  {row.productCostPrice === null ? '—' : `${formatVnd(row.productCostPrice)}đ`}
+                  {row.productCostPrice === null ? '—' : `${formatVndWithSuffix(row.productCostPrice)}`}
                 </TableCell>
                 <TableCell
                   className={cn(
@@ -115,7 +116,7 @@ export function ComparePriceListsTable({ rows }: Props) {
                   {row.marginB === null ? '—' : `${row.marginB.toFixed(2)}%`}
                 </TableCell>
                 <TableCell className="text-right tabular-nums text-muted-foreground">
-                  {row.diffAmount === null ? '—' : `${formatVnd(row.diffAmount)}đ`}
+                  {row.diffAmount === null ? '—' : `${formatVndWithSuffix(row.diffAmount)}`}
                 </TableCell>
                 <TableCell className={cn('text-right tabular-nums', diffPercentClass(row))}>
                   {onlyInLabel ?? formatPercent(row.diffPercent)}

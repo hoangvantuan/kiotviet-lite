@@ -1,5 +1,7 @@
 import { format, startOfMonth, startOfQuarter, subDays } from 'date-fns'
 
+
+
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -51,21 +53,21 @@ export function ReportDateRangePicker({ from, to, onChange }: ReportDateRangePic
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex items-center gap-1">
-        <Input
+        <Input aria-label="Ngày" 
           type="date"
           value={from ?? ''}
           onChange={(e) => onChange(e.target.value || undefined, to)}
           className="h-8 w-36"
         />
         <span className="text-muted-foreground text-sm">~</span>
-        <Input
+        <Input aria-label="Ngày" 
           type="date"
           value={to ?? ''}
           onChange={(e) => onChange(from, e.target.value || undefined)}
           className="h-8 w-36"
         />
       </div>
-      <div className="flex gap-1">
+      <div className="flex flex-wrap gap-1">
         {presets.map((p) => (
           <Button
             key={p.label}

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { AlertTriangle, CheckCircle2, Clock, PenLine, Wallet } from 'lucide-react'
 
-import { debtSourceLabel, formatDebtLimitLabel } from '@kiotviet-lite/shared'
+import { debtSourceLabel, formatDebtLimitLabel, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Badge } from '@/components/ui/badge'
@@ -113,7 +113,7 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
           <div>
             <p className="text-xs text-muted-foreground">Tổng công nợ hiện tại</p>
             <div className="mt-1 flex items-center gap-3">
-              <p className="text-2xl font-semibold text-foreground">{formatVnd(currentDebt)} ₫</p>
+              <p className="text-2xl font-semibold text-foreground">{formatVndWithSuffix(currentDebt)}</p>
               {isOwner && (
                 <Button variant="outline" size="sm" onClick={() => setAdjustDialogOpen(true)}>
                   <PenLine className="mr-1 size-4" />
@@ -204,15 +204,15 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDate(debt.date)}
                     </TableCell>
-                    <TableCell className="text-right">{formatVnd(debt.originalAmount)} ₫</TableCell>
+                    <TableCell className="text-right">{formatVndWithSuffix(debt.originalAmount)}</TableCell>
                     <TableCell className="text-right text-green-700">
-                      {formatVnd(debt.paidAmount)} ₫
+                      {formatVndWithSuffix(debt.paidAmount)}
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground">
-                      {formatVnd(debt.reducedAmount)} ₫
+                      {formatVndWithSuffix(debt.reducedAmount)}
                     </TableCell>
                     <TableCell className="text-right font-medium text-red-700">
-                      {formatVnd(debt.remainingAmount)} ₫
+                      {formatVndWithSuffix(debt.remainingAmount)}
                     </TableCell>
                     <TableCell>
                       {(() => {

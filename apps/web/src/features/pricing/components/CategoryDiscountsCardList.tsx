@@ -1,6 +1,7 @@
 import { Pencil, Trash2, Users } from 'lucide-react'
 
 import type { CategoryDiscountListItem, EffectiveStatus } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -59,7 +60,7 @@ export function CategoryDiscountsCardList({ items, onEdit, onDelete }: Props) {
                 <span className="font-semibold">
                   {p.discountType === 'percent'
                     ? `${p.discountValue}%`
-                    : `${formatVnd(p.discountValue)}đ`}
+                    : `${formatVndWithSuffix(p.discountValue)}`}
                 </span>
                 <span className="ml-2 text-xs text-muted-foreground">SL ≥ {p.minQty}</span>
               </div>

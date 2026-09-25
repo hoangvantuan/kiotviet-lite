@@ -701,7 +701,7 @@ function BasicSection<T extends FieldValues & ProductFormFields>({
           )}
         </div>
         <div className="space-y-1">
-          <Label htmlFor="p-sku">SKU</Label>
+          <Label htmlFor="p-sku">Mã hàng</Label>
           <div className="flex gap-2">
             <Input
               id="p-sku"
@@ -728,7 +728,7 @@ function BasicSection<T extends FieldValues & ProductFormFields>({
         </div>
         {!hideBarcode && (
           <div className="space-y-1">
-            <Label htmlFor="p-barcode">Barcode</Label>
+            <Label htmlFor="p-barcode">Mã vạch</Label>
             <Input
               id="p-barcode"
               placeholder="VD: 8934567890123"

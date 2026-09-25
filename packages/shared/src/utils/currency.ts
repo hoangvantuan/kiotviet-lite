@@ -28,9 +28,8 @@ export function formatVnd(value: number | null | undefined): string {
  */
 export function formatVndWithSuffix(
   value: number | null | undefined,
-  suffix: string = ' đ',
+  suffix: string = '\xA0đ',
 ): string {
-  const formatted = formatVnd(value)
   if (!formatted) return ''
   return `${formatted}${suffix}`
 }
@@ -40,8 +39,7 @@ export function formatVndWithSuffix(
  * Thích hợp cho hiển thị báo cáo, thông báo lỗi công nợ trong API.
  */
 export function formatCurrencyVnd(value: number | null | undefined): string {
-  const formatted = formatVnd(value ?? 0)
-  return `${formatted || '0'}đ`
+  return formatVndWithSuffix(value ?? 0)
 }
 
 /**

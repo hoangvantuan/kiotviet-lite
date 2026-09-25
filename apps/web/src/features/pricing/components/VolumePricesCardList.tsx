@@ -1,6 +1,7 @@
 import { Pencil, Trash2 } from 'lucide-react'
 
 import type { VolumePricesListItem } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,7 +23,7 @@ export function VolumePricesCardList({ items, onEdit, onClear }: Props) {
               <div className="font-medium">{p.productName}</div>
               <div className="text-xs text-muted-foreground">SKU {p.productSku}</div>
               <div className="mt-1 text-xs text-muted-foreground">
-                Giá lẻ chuẩn: {formatVnd(p.productSellingPrice)}đ
+                Giá lẻ chuẩn: {formatVndWithSuffix(p.productSellingPrice)}
               </div>
               <div className="mt-2 flex items-center gap-2">
                 <Badge variant={p.tierCount > 0 ? 'default' : 'secondary'}>
@@ -31,8 +32,8 @@ export function VolumePricesCardList({ items, onEdit, onClear }: Props) {
                 {p.tierCount > 0 && (
                   <span className="text-xs text-muted-foreground">
                     {p.minPrice === p.maxPrice
-                      ? `${formatVnd(p.minPrice)}đ`
-                      : `${formatVnd(p.minPrice)}đ – ${formatVnd(p.maxPrice)}đ`}
+                      ? `${formatVndWithSuffix(p.minPrice)}`
+                      : `${formatVndWithSuffix(p.minPrice)} – ${formatVndWithSuffix(p.maxPrice)}`}
                   </span>
                 )}
               </div>
@@ -40,7 +41,7 @@ export function VolumePricesCardList({ items, onEdit, onClear }: Props) {
                 <ul className="mt-2 space-y-0.5 text-xs">
                   {p.topTiers.map((t) => (
                     <li key={t.id}>
-                      Từ {t.minQty.toLocaleString('vi-VN')}: {formatVnd(t.price)}đ
+                      Từ {t.minQty.toLocaleString('vi-VN')}: {formatVndWithSuffix(t.price)}
                     </li>
                   ))}
                 </ul>

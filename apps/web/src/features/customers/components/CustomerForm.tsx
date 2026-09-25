@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 import {
   type CreateCustomerInput,
   createCustomerSchema,
@@ -485,7 +486,7 @@ function DebtLimitField({
         <p className="text-xs text-muted-foreground">
           Nhóm "{selectedGroup.name}": hạn mức{' '}
           {groupDebtLimit !== null && groupDebtLimit > 0
-            ? `${groupDebtLimit.toLocaleString('vi-VN')} ₫`
+            ? formatVndWithSuffix(groupDebtLimit)
             : 'không cho nợ'}
         </p>
       )}

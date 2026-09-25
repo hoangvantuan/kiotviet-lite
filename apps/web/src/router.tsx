@@ -2,15 +2,17 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
-  Outlet,
+  Link, Outlet,
   redirect,
 } from '@tanstack/react-router'
+import { FileQuestion } from 'lucide-react'
 import { z } from 'zod'
 
 import { hasPermission, type Permission } from '@kiotviet-lite/shared'
 
 import { AppLayout } from '@/components/layout/app-layout'
 import { ErrorBoundary } from '@/components/layout/error-boundary'
+import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/sonner'
 import { useMediaQuery as useMediaQueryRoot } from '@/hooks/use-media-query'
 import { useNetworkStatus } from '@/hooks/use-network-status'
@@ -115,7 +117,7 @@ function requirePermissionGuard(perm: Permission) {
   return () => {
     const role = useAuthStore.getState().user?.role
     if (!role || !hasPermission(role, perm)) {
-      throw redirect({ to: '/', search: { error: 'forbidden' } })
+      throw redirect({ to: '/403' })
     }
   }
 }
@@ -412,6 +414,14 @@ const orderDetailRoute = createRoute({
   component: OrderDetailPage,
 })
 
+import { ForbiddenPage } from './pages/forbidden-page'
+
+const forbiddenRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/403',
+  component: ForbiddenPage,
+})
+
 const posRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: '/pos',
@@ -425,6 +435,7 @@ const routeTree = rootRoute.addChildren([
   authenticatedRoute.addChildren([
     appLayoutRoute.addChildren([
       homeRoute,
+      forbiddenRoute,
       productsRoute,
       productsCategoriesRoute,
       productsBrandsRoute,
@@ -468,7 +479,23 @@ const routeTree = rootRoute.addChildren([
   ]),
 ])
 
-export const router = createRouter({ routeTree })
+function NotFoundComponent() {
+  return (
+    <div className="flex h-screen w-full flex-col items-center justify-center gap-4 bg-background px-4 text-center">
+      <FileQuestion className="h-16 w-16 text-muted-foreground" />
+      <h1 className="text-2xl font-semibold">404 - Not Found</h1>
+      <p className="text-muted-foreground">Trang bạn tìm kiếm không tồn tại.</p>
+      <Button asChild className="mt-4">
+        <Link to="/">Về trang chủ</Link>
+      </Button>
+    </div>
+  )
+}
+
+export const router = createRouter({
+  routeTree,
+  defaultNotFoundComponent: NotFoundComponent,
+})
 
 declare module '@tanstack/react-router' {
   interface Register {
@@ -492,7 +519,7 @@ function ResponsiveToaster() {
   const isDesktop = useMediaQueryRoot('(min-width: 768px)')
   return (
     <Toaster
-      position={isDesktop ? 'top-right' : 'top-center'}
+      position={isDesktop ? 'bottom-right' : 'top-center'}
       toastOptions={{
         classNames: { toast: 'md:max-w-sm' },
       }}

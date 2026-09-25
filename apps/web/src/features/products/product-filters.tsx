@@ -123,7 +123,7 @@ export function ProductFilters({ value, onChange, categories, brands }: ProductF
     <div className="relative flex-1">
       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
-        placeholder="Tìm theo tên, SKU hoặc barcode"
+        placeholder="Tìm theo tên, mã hàng hoặc mã vạch"
         value={value.search}
         onChange={(e) => onChange({ search: e.target.value })}
         className="pl-9"

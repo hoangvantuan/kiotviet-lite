@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
-import { Receipt, SearchX, Users, X } from 'lucide-react'
+import { AlertCircle, Receipt, SearchX, Users, X } from 'lucide-react'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
@@ -219,7 +219,7 @@ export function OrderList() {
   const meta = ordersQuery.data?.meta
   const isLoading = ordersQuery.isLoading
   const isError = ordersQuery.isError
-  const isEmpty = !isLoading && items.length === 0
+  const isEmpty = !isLoading && !isError && items.length === 0
   const hasFilter =
     debouncedSearch.trim() !== '' ||
     datePreset !== 'all' ||
@@ -232,8 +232,8 @@ export function OrderList() {
   return (
     <div className="space-y-4 p-4 md:p-6">
       <header>
-        <h1 className="text-2xl font-semibold">Hóa đơn</h1>
-        <p className="text-sm text-muted-foreground">Danh sách hóa đơn bán hàng.</p>
+        <h1 className="text-2xl font-semibold">Đơn hàng</h1>
+        <p className="text-sm text-muted-foreground">Danh sách đơn hàng.</p>
       </header>
 
       {/* Date presets */}
@@ -280,7 +280,7 @@ export function OrderList() {
       {/* Filters */}
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Input
-          placeholder="Tìm theo mã hóa đơn"
+          placeholder="Tìm theo mã đơn hàng"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
         />
@@ -364,7 +364,15 @@ export function OrderList() {
         </div>
       )}
 
-      {isError && <p className="text-sm text-destructive">Không tải được danh sách hóa đơn.</p>}
+      {isError && (
+        <EmptyState
+          icon={AlertCircle}
+          title="Không tải được danh sách"
+          description="Vui lòng thử lại sau."
+          actionLabel="Thử lại"
+          onAction={() => ordersQuery.refetch()}
+        />
+      )}
 
       {isEmpty && !hasFilter && (
         <EmptyState
@@ -417,7 +425,7 @@ function OrderTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Mã HĐ</TableHead>
+              <TableHead>Mã đơn hàng</TableHead>
               <TableHead>Thời gian</TableHead>
               <TableHead>Khách hàng</TableHead>
               <TableHead className="text-right">Tổng tiền</TableHead>

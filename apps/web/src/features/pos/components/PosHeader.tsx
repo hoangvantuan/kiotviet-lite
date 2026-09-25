@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useCartStore } from '@/stores/use-cart-store'
 
+import { KeyboardShortcutsTooltip } from './KeyboardShortcutsTooltip'
+
 interface PosHeaderProps {
   showProductGrid?: boolean
   onToggleProductGrid?: () => void
@@ -72,6 +74,8 @@ export function PosHeader({ showProductGrid, onToggleProductGrid }: PosHeaderPro
             Chọn KH
           </button>
         </div>
+        
+        <KeyboardShortcutsTooltip />
       </div>
     </header>
   )

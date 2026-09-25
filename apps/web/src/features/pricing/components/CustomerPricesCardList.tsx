@@ -1,6 +1,7 @@
 import { Pencil, Trash2 } from 'lucide-react'
 
 import type { CustomerPriceListItem } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Button } from '@/components/ui/button'
 import { formatVnd } from '@/lib/currency'
@@ -31,9 +32,9 @@ export function CustomerPricesCardList({ items, onEdit, onDelete }: Props) {
                   <span className="ml-2 text-xs text-muted-foreground">SKU {p.productSku}</span>
                 </div>
                 <div className="mt-1 text-sm">
-                  Giá riêng: <span className="font-semibold">{formatVnd(p.price)}đ</span>
+                  Giá riêng: <span className="font-semibold">{formatVndWithSuffix(p.price)}</span>
                   <span className="ml-2 text-xs text-muted-foreground">
-                    (Giá lẻ {formatVnd(p.productSellingPrice)}đ
+                    (Giá lẻ {formatVndWithSuffix(p.productSellingPrice)}
                     {diff !== 0 ? `, ${diff > 0 ? '+' : ''}${diff}%` : ''})
                   </span>
                 </div>

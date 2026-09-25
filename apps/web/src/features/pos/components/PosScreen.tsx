@@ -33,7 +33,6 @@ import { CartTabBar } from './CartTabBar'
 import { CategoryFilter } from './CategoryFilter'
 import { DesktopCartTable } from './DesktopCartTable'
 import { DesktopCheckoutPanel } from './DesktopCheckoutPanel'
-import { KeyboardShortcutsTooltip } from './KeyboardShortcutsTooltip'
 import { OrderCompletionDialog } from './OrderCompletionDialog'
 import { PaymentDialog } from './PaymentDialog'
 import { PosHeader } from './PosHeader'
@@ -344,7 +343,7 @@ export function PosScreen() {
       ) : (
         <div className="flex min-h-0 flex-1">
           {/* Product area on mobile */}
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col min-w-0">
             <div className="space-y-3 p-3 pb-0">
               <PosSearchBar
                 searchRef={searchRef}
@@ -460,7 +459,6 @@ export function PosScreen() {
       />
 
       {/* Story 3.3: Keyboard shortcuts help */}
-      <KeyboardShortcutsTooltip />
     </div>
   )
 }

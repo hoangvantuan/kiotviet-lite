@@ -1,6 +1,7 @@
 export * from './currency.js'
 export * from './debt-limit.js'
 export * from './order-refund.js'
+export * from './phone.js'
 export * from './price-list-compare.js'
 export * from './pricing.js'
 export * from './pricing-formulas.js'

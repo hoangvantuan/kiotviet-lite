@@ -34,7 +34,7 @@ describe('formatVnd', () => {
 
 describe('formatVndWithSuffix', () => {
   it('append suffix " đ"', () => {
-    expect(formatVndWithSuffix(150000)).toBe('150.000 đ')
+    expect(formatVndWithSuffix(150000)).toBe('150.000 đ')
   })
 
   it('null trả chuỗi rỗng (không suffix)', () => {

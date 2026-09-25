@@ -1,5 +1,6 @@
 import { type SyntheticEvent, useState } from 'react'
 
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 import { createOpeningDebtSchema } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
@@ -57,7 +58,7 @@ export function OpeningDebtDialog({ open, onOpenChange, target }: OpeningDebtDia
     }
     try {
       await mutation.mutateAsync(parsed.data)
-      showSuccess(`Đã nạp nợ đầu kỳ ${formatVnd(parsed.data.amount)} ₫ cho ${target.name}`)
+      showSuccess(`Đã nạp nợ đầu kỳ ${formatVndWithSuffix(parsed.data.amount)} cho ${target.name}`)
       onOpenChange(false)
     } catch (cause) {
       setError(cause instanceof ApiClientError ? cause.message : 'Không nạp được nợ đầu kỳ')

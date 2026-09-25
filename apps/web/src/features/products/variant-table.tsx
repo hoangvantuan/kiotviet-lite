@@ -83,8 +83,8 @@ export function VariantTable({
                   />
                 </TableHead>
                 <TableHead>Tên biến thể</TableHead>
-                <TableHead>SKU</TableHead>
-                <TableHead>Barcode</TableHead>
+                <TableHead>Mã hàng</TableHead>
+                <TableHead>Mã vạch</TableHead>
                 <TableHead className="text-right">Giá bán</TableHead>
                 <TableHead className="text-right">Giá vốn</TableHead>
                 {trackInventory && <TableHead className="text-right">Tồn kho ban đầu</TableHead>}
@@ -226,7 +226,7 @@ export function VariantTable({
             </div>
             <div className="grid gap-2">
               <div>
-                <span className="text-xs text-muted-foreground">SKU</span>
+                <span className="text-xs text-muted-foreground">Mã hàng</span>
                 <Input
                   value={v.sku}
                   onChange={(e) => update(i, { sku: e.target.value })}
@@ -235,7 +235,7 @@ export function VariantTable({
                 />
               </div>
               <div>
-                <span className="text-xs text-muted-foreground">Barcode</span>
+                <span className="text-xs text-muted-foreground">Mã vạch</span>
                 <Input
                   value={v.barcode}
                   onChange={(e) => update(i, { barcode: e.target.value })}

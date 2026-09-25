@@ -65,7 +65,7 @@ const NO_PRICE_LIST = '__NONE__'
 function formatDebtLimit(value: number | null): string {
   // ADR-0009: nhóm không đặt hạn mức thì khách trong nhóm không được nợ
   if (value === null || value === 0) return 'Không cho nợ'
-  return formatVndWithSuffix(value, ' ₫')
+  return formatVndWithSuffix(value)
 }
 
 export function CustomerGroupManager() {

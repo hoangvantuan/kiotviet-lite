@@ -36,7 +36,7 @@ function DebtStatusBadge({
   if (effectiveDebtLimit === null || effectiveDebtLimit === 0) {
     return (
       <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200" variant="outline">
-        {formatVnd(currentDebt)} ₫
+        {formatVndWithSuffix(currentDebt)}
       </Badge>
     )
   }
@@ -44,20 +44,20 @@ function DebtStatusBadge({
   if (ratio > 1) {
     return (
       <Badge className="bg-red-100 text-red-700 border-red-200" variant="outline">
-        {formatVnd(currentDebt)} ₫ (vượt hạn mức)
+        {formatVndWithSuffix(currentDebt)} (vượt hạn mức)
       </Badge>
     )
   }
   if (ratio >= warningRatio) {
     return (
       <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200" variant="outline">
-        {formatVnd(currentDebt)} ₫ ({Math.round(ratio * 100)}%)
+        {formatVndWithSuffix(currentDebt)} ({Math.round(ratio * 100)}%)
       </Badge>
     )
   }
   return (
     <Badge className="bg-blue-100 text-blue-700 border-blue-200" variant="outline">
-      {formatVnd(currentDebt)} ₫
+      {formatVndWithSuffix(currentDebt)}
     </Badge>
   )
 }
@@ -127,7 +127,7 @@ export function CustomerDetailHeader({ customer, onEdit }: CustomerDetailHeaderP
           <div>
             <p className="text-xs text-muted-foreground">Tổng đã mua</p>
             <p className="mt-1 text-lg font-semibold text-foreground">
-              {formatVnd(customer.totalPurchased)} ₫
+              {formatVndWithSuffix(customer.totalPurchased)}
             </p>
           </div>
           <div>

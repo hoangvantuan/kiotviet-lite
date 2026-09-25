@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Receipt } from 'lucide-react'
 
 import type { CustomerOrderStatus, ListCustomerOrdersQuery } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
@@ -165,7 +166,7 @@ export function CustomerOrdersTab({ customerId }: CustomerOrdersTabProps) {
                   <TableCell className="text-sm text-muted-foreground">
                     {formatDate(order.date)}
                   </TableCell>
-                  <TableCell className="text-right">{formatVnd(order.total)} ₫</TableCell>
+                  <TableCell className="text-right">{formatVndWithSuffix(order.total)}</TableCell>
                   <TableCell>
                     <StatusBadge status={order.status} />
                   </TableCell>

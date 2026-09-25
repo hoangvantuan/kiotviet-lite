@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import type { ProductListItem } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -75,7 +76,7 @@ export function SelectProductForVolumePricesDialog({ open, onOpenChange, onPick 
                         <div className="text-xs text-muted-foreground">SKU {p.sku}</div>
                       </div>
                       <div className="text-right text-sm tabular-nums">
-                        {formatVnd(p.sellingPrice)}đ
+                        {formatVndWithSuffix(p.sellingPrice)}
                       </div>
                     </button>
                   </li>

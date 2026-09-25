@@ -487,7 +487,7 @@ export function DesktopCartTable() {
             <tr>
               <th className="w-10 px-3 py-2.5 text-center">#</th>
               <th className="w-28 px-3 py-2.5">Mã hàng</th>
-              <th className="min-w-[180px] px-3 py-2.5">Tên hàng hóa</th>
+              <th className="min-w-[180px] px-3 py-2.5">Tên sản phẩm</th>
               <th className="w-32 px-3 py-2.5">Đơn vị</th>
               <th className="w-36 px-3 py-2.5 text-center">Số lượng</th>
               <th className="w-32 px-3 py-2.5 text-right">Đơn giá</th>

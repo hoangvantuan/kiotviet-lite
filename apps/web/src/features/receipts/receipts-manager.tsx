@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { HandCoins, Plus, SearchX } from 'lucide-react'
+import { AlertCircle, HandCoins, Plus, SearchX } from 'lucide-react'
 
 import type { ReceiptDetail } from '@kiotviet-lite/shared'
 
@@ -58,7 +58,7 @@ export function ReceiptsManager() {
   const meta = receiptsQuery.data?.meta
   const isLoading = receiptsQuery.isLoading
   const isError = receiptsQuery.isError
-  const isEmpty = !isLoading && items.length === 0
+  const isEmpty = !isLoading && !isError && items.length === 0
   const hasFilter =
     debouncedSearch.trim() !== '' || customerId !== undefined || fromDate !== '' || toDate !== ''
 
@@ -122,7 +122,13 @@ export function ReceiptsManager() {
       )}
 
       {isError && (
-        <p className="text-sm text-destructive">Không tải được danh sách. Thử lại sau.</p>
+        <EmptyState
+          icon={AlertCircle}
+          title="Không tải được danh sách"
+          description="Vui lòng thử lại sau."
+          actionLabel="Thử lại"
+          onAction={() => receiptsQuery.refetch()}
+        />
       )}
 
       {isEmpty && !hasFilter && (

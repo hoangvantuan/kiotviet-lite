@@ -3,6 +3,7 @@ import { useFieldArray, useForm } from 'react-hook-form'
 import { Plus, Trash2 } from 'lucide-react'
 
 import type { ReplaceVolumePricesInput } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
 import { Button } from '@/components/ui/button'
@@ -147,8 +148,8 @@ export function VolumePricesDialog({
           <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
             <div className="font-medium">{displayName}</div>
             <div className="text-xs text-muted-foreground">
-              SKU {displaySku} • Giá lẻ chuẩn: {formatVnd(displaySellingPrice)}đ
-              {displayCostPrice !== null ? ` • Giá vốn: ${formatVnd(displayCostPrice)}đ` : ''}
+              SKU {displaySku} • Giá lẻ chuẩn: {formatVndWithSuffix(displaySellingPrice)}
+              {displayCostPrice !== null ? ` • Giá vốn: ${formatVndWithSuffix(displayCostPrice)}` : ''}
             </div>
           </div>
         )}
@@ -222,7 +223,7 @@ export function VolumePricesDialog({
                         )}
                         {tierWarning && (
                           <p className="text-xs text-destructive">
-                            ⚠ Giá thấp hơn giá vốn ({formatVnd(displayCostPrice!)}đ).
+                            ⚠ Giá thấp hơn giá vốn ({formatVndWithSuffix(displayCostPrice!)}).
                           </p>
                         )}
                       </div>
@@ -280,7 +281,7 @@ export function VolumePricesDialog({
                           <tr key={t.idx} className="border-t">
                             <td className="px-3 py-2">{t.minQty.toLocaleString('vi-VN')}</td>
                             <td className="px-3 py-2 text-right tabular-nums">
-                              {formatVnd(t.price)}đ
+                              {formatVndWithSuffix(t.price)}
                             </td>
                             <td className="px-3 py-2 text-right text-xs text-muted-foreground">
                               {diff === 0 ? '0%' : diff > 0 ? `+${diff}%` : `${diff}%`}

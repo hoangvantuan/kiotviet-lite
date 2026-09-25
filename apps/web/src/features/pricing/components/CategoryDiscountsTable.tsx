@@ -1,6 +1,7 @@
 import { Pencil, Trash2, Users } from 'lucide-react'
 
 import type { CategoryDiscountListItem, EffectiveStatus } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -35,7 +36,7 @@ const STATUS_VARIANT: Record<EffectiveStatus, 'default' | 'destructive' | 'secon
 }
 
 function formatDiscount(p: CategoryDiscountListItem): string {
-  return p.discountType === 'percent' ? `${p.discountValue}%` : `${formatVnd(p.discountValue)}đ`
+  return p.discountType === 'percent' ? `${p.discountValue}%` : `${formatVndWithSuffix(p.discountValue)}`
 }
 
 function formatEffective(p: CategoryDiscountListItem): string {

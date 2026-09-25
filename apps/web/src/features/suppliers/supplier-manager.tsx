@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 
 import type { SupplierHasDebt, SupplierListItem } from '@kiotviet-lite/shared'
+import { formatPhone } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
@@ -313,7 +314,7 @@ function SupplierTable({ items, onEdit, onDelete, onDebt }: SupplierTableProps) 
             <TableRow key={it.id}>
               <TableCell className="font-medium">{it.name}</TableCell>
               <TableCell className="font-mono text-sm">{it.code}</TableCell>
-              <TableCell className="font-mono text-sm">{it.phone ?? '—'}</TableCell>
+              <TableCell className="font-mono text-sm">{it.phone ? formatPhone(it.phone) : '—'}</TableCell>
               <TableCell className="hidden md:table-cell text-muted-foreground">
                 {it.email ?? '—'}
               </TableCell>
@@ -399,7 +400,7 @@ function SupplierCardList({ items, onEdit, onDelete, onDebt }: SupplierCardListP
             <div className="min-w-0 flex-1 space-y-1">
               <p className="truncate font-medium text-foreground">{s.name}</p>
               <p className="truncate font-mono text-xs text-muted-foreground">{s.code}</p>
-              <p className="font-mono text-xs text-muted-foreground">{s.phone ?? '—'}</p>
+              <p className="font-mono text-xs text-muted-foreground">{s.phone ? formatPhone(s.phone) : '—'}</p>
               <div className="flex items-center gap-2">
                 <DebtBadge currentDebt={s.currentDebt} />
                 <span className="text-xs text-muted-foreground">{s.purchaseCount} phiếu</span>
@@ -526,7 +527,7 @@ function TrashedSuppliersSheet({ open, onOpenChange }: TrashedSuppliersSheetProp
               <div className="min-w-0">
                 <p className="font-medium truncate">{s.name}</p>
                 <p className="font-mono text-xs text-muted-foreground">{s.code}</p>
-                <p className="text-xs text-muted-foreground font-mono">{s.phone ?? '—'}</p>
+                <p className="text-xs text-muted-foreground font-mono">{s.phone ? formatPhone(s.phone) : '—'}</p>
               </div>
               <Button
                 size="sm"

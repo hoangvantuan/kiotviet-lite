@@ -1,4 +1,4 @@
-import { debtSourceLabel, type ReceiptDetail } from '@kiotviet-lite/shared'
+import { debtSourceLabel, formatVndWithSuffix, type ReceiptDetail } from '@kiotviet-lite/shared'
 
 import { formatVnd } from '@/lib/currency'
 import { formatDateTime } from '@/lib/date'
@@ -55,9 +55,9 @@ export function ReceiptPrintTemplate({ receipt, store }: ReceiptPrintTemplatePro
           })}
         </tbody>
       </table>
-      <p className="text-right text-base font-bold">Tổng thu: {formatVnd(receipt.amount)}đ</p>
+      <p className="text-right text-base font-bold">Tổng thu: {formatVndWithSuffix(receipt.amount)}</p>
       {receipt.debtAfter !== null && (
-        <p className="text-right text-sm">Nợ còn lại: {formatVnd(receipt.debtAfter)}đ</p>
+        <p className="text-right text-sm">Nợ còn lại: {formatVndWithSuffix(receipt.debtAfter)}</p>
       )}
       {receipt.note && <p className="mt-2 text-sm">Ghi chú: {receipt.note}</p>}
       <p className="mt-2 text-sm">Người thu: {receipt.createdByName ?? '—'}</p>

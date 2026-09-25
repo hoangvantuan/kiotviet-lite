@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 
 import type { CreateCustomerPriceInput } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
 import { CustomerCombobox } from '@/components/shared/customer-combobox'
@@ -141,9 +142,9 @@ export function CreateCustomerPriceDialog({
             )}
             {selectedProduct && (
               <p className="text-xs text-muted-foreground">
-                Giá lẻ chuẩn: {formatVnd(selectedProduct.sellingPrice)}đ
+                Giá lẻ chuẩn: {formatVndWithSuffix(selectedProduct.sellingPrice)}
                 {selectedProduct.costPrice !== null
-                  ? ` • Giá vốn: ${formatVnd(selectedProduct.costPrice)}đ`
+                  ? ` • Giá vốn: ${formatVndWithSuffix(selectedProduct.costPrice)}`
                   : ''}
               </p>
             )}
@@ -214,7 +215,7 @@ function PriceWarning({ price, sellingPrice, costPrice }: PriceWarningProps) {
   if (costPrice !== null && price < costPrice) {
     return (
       <div className="rounded-md border border-destructive/50 bg-destructive/5 p-2 text-xs text-destructive">
-        ⚠ Giá thấp hơn giá vốn ({formatVnd(costPrice)}đ). Bạn có chắc muốn đặt giá dưới vốn?
+        ⚠ Giá thấp hơn giá vốn ({formatVndWithSuffix(costPrice)}). Bạn có chắc muốn đặt giá dưới vốn?
       </div>
     )
   }
@@ -222,7 +223,7 @@ function PriceWarning({ price, sellingPrice, costPrice }: PriceWarningProps) {
     const diff = price - sellingPrice
     return (
       <div className="rounded-md border bg-muted/50 p-2 text-xs text-muted-foreground">
-        ℹ Giá cao hơn giá lẻ chuẩn ({formatVnd(diff)}đ tăng).
+        ℹ Giá cao hơn giá lẻ chuẩn ({formatVndWithSuffix(diff)} tăng).
       </div>
     )
   }
@@ -230,7 +231,7 @@ function PriceWarning({ price, sellingPrice, costPrice }: PriceWarningProps) {
     const pct = Math.round(((sellingPrice - price) / sellingPrice) * 100)
     return (
       <div className="rounded-md border bg-muted/50 p-2 text-xs text-muted-foreground">
-        Giảm {pct}% so với giá lẻ chuẩn ({formatVnd(sellingPrice)}đ).
+        Giảm {pct}% so với giá lẻ chuẩn ({formatVndWithSuffix(sellingPrice)}).
       </div>
     )
   }

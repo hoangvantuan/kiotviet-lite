@@ -23,8 +23,8 @@ export function HomePage() {
       <h2 className="mb-4 text-xl font-semibold text-foreground">Xin chào, {user?.name || 'bạn'}</h2>
       <EmptyState
         icon={LayoutDashboard}
-        title="Chào mừng đến KiotViet Lite"
-        description="Dashboard tổng quan sẽ hiển thị khi có dữ liệu bán hàng."
+        title="Chào mừng đến với KiotViet Lite"
+        description="Chào mừng đến với KiotViet Lite. Bạn có thể xem báo cáo chi tiết ở mục Báo cáo."
       />
     </div>
   )

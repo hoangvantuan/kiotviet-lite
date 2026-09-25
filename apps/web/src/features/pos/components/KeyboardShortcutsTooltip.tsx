@@ -18,7 +18,7 @@ export function KeyboardShortcutsTooltip() {
         <TooltipTrigger asChild>
           <button
             type="button"
-            className="fixed bottom-4 right-4 z-50 flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
             aria-label="Phím tắt"
           >
             <HelpCircle className="h-4 w-4" />

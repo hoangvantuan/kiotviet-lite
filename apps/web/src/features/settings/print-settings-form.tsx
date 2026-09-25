@@ -41,7 +41,7 @@ const TOGGLE_FIELDS: ToggleField[] = [
   { name: 'showCustomerName', label: 'Tên khách hàng' },
   { name: 'showCustomerPhone', label: 'SĐT khách hàng' },
   { name: 'showDiscount', label: 'Chiết khấu' },
-  { name: 'showSku', label: 'Mã SKU' },
+  { name: 'showSku', label: 'Mã hàng' },
   { name: 'showOldDebt', label: 'Nợ trước đơn' },
   { name: 'showNewDebt', label: 'Nợ mới' },
   { name: 'showCostPrice', label: 'Giá vốn' },

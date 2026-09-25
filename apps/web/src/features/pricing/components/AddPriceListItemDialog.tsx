@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 import {
   applyRounding,
   type CreatePriceListItemInput,
@@ -146,7 +147,7 @@ export function AddPriceListItemDialog({
                     <p className="truncate text-sm font-medium">{p.name}</p>
                     <p className="text-xs text-muted-foreground">SKU {p.sku}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">{formatVnd(p.sellingPrice)}đ</p>
+                  <p className="text-xs text-muted-foreground">{formatVndWithSuffix(p.sellingPrice)}</p>
                 </button>
               ))
             )}
@@ -163,7 +164,7 @@ export function AddPriceListItemDialog({
                 onChange={(v) => form.setValue('price', v, { shouldValidate: true })}
               />
               <p className="text-xs text-muted-foreground">
-                Sản phẩm: {selectedProduct.name}. Sau làm tròn: {formatVnd(previewRounded)}đ
+                Sản phẩm: {selectedProduct.name}. Sau làm tròn: {formatVndWithSuffix(previewRounded)}
               </p>
               {form.formState.errors.price && (
                 <p className="text-sm text-destructive">{form.formState.errors.price.message}</p>

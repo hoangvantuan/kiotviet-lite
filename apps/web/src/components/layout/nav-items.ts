@@ -45,8 +45,8 @@ export function findActivePath(currentPath: string, paths: string[]): string | n
 export const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Tổng quan', icon: LayoutDashboard },
   { path: '/pos', label: 'Bán hàng', icon: ShoppingCart, requiredPermission: 'pos.sell' },
-  { path: '/orders', label: 'Hóa đơn', icon: Receipt, requiredPermission: 'orders.view' },
-  { path: '/products', label: 'Hàng hóa', icon: Package, requiredPermission: 'products.manage' },
+  { path: '/orders', label: 'Đơn hàng', icon: Receipt, requiredPermission: 'orders.view' },
+  { path: '/products', label: 'Sản phẩm', icon: Package, requiredPermission: 'products.manage' },
   {
     path: '/products/categories',
     label: 'Danh mục',

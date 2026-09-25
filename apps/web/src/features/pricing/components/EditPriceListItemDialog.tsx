@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 import {
   applyRounding,
   type PriceListDetail,
@@ -103,7 +104,7 @@ export function EditPriceListItemDialog({ open, onOpenChange, priceList, item }:
               onChange={(v) => form.setValue('price', v, { shouldValidate: true })}
             />
             <p className="text-xs text-muted-foreground">
-              Sau làm tròn: {formatVnd(previewRounded)}đ
+              Sau làm tròn: {formatVndWithSuffix(previewRounded)}
             </p>
             {form.formState.errors.price && (
               <p className="text-sm text-destructive">{form.formState.errors.price.message}</p>

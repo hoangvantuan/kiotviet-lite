@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { ChevronLeft } from 'lucide-react'
 
 import type { PaymentStatus } from '@kiotviet-lite/shared'
+import { formatPhone } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -108,7 +109,7 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
           <h2 className="text-sm font-medium text-muted-foreground">Nhà cung cấp</h2>
           <p className="font-medium mt-1">{order.supplier.name}</p>
           {order.supplier.phone && (
-            <p className="text-sm text-muted-foreground font-mono">{order.supplier.phone}</p>
+            <p className="text-sm text-muted-foreground font-mono">{formatPhone(order.supplier.phone)}</p>
           )}
         </div>
         <div className="rounded-md border p-3">

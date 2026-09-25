@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, Download, FileSpreadsheet, Wallet } from 'lucide-react'
 
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
+
 import { EmptyState } from '@/components/shared/empty-state'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -94,11 +96,11 @@ export function DebtSummaryReport({ query }: DebtSummaryReportProps) {
             <ArrowDownLeft className="size-4 text-blue-500" />
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-2xl font-bold text-blue-700">{formatVnd(receivable.totalDebt)} ₫</p>
+            <p className="text-2xl font-bold text-blue-700">{formatVndWithSuffix(receivable.totalDebt)}</p>
             <StatRow label="Số KH còn nợ" value={String(receivable.customerCount)} />
             <StatRow
               label="Tổng đã thu (trong kỳ)"
-              value={`${formatVnd(receivable.totalCollected)} ₫`}
+              value={`${formatVndWithSuffix(receivable.totalCollected)}`}
               className="text-green-700"
             />
             <StatRow label="Số phiếu thu" value={String(receivable.receiptCount)} />
@@ -111,11 +113,11 @@ export function DebtSummaryReport({ query }: DebtSummaryReportProps) {
             <ArrowUpRight className="size-4 text-orange-500" />
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-2xl font-bold text-orange-700">{formatVnd(payable.totalDebt)} ₫</p>
+            <p className="text-2xl font-bold text-orange-700">{formatVndWithSuffix(payable.totalDebt)}</p>
             <StatRow label="Số NCC còn nợ" value={String(payable.supplierCount)} />
             <StatRow
               label="Tổng đã trả (trong kỳ)"
-              value={`${formatVnd(payable.totalPaid)} ₫`}
+              value={`${formatVndWithSuffix(payable.totalPaid)}`}
               className="text-red-700"
             />
             <StatRow label="Số phiếu chi" value={String(payable.paymentCount)} />
@@ -135,16 +137,16 @@ export function DebtSummaryReport({ query }: DebtSummaryReportProps) {
               )}
             >
               {cashFlow.net >= 0 ? '+' : ''}
-              {formatVnd(cashFlow.net)} ₫
+              {formatVndWithSuffix(cashFlow.net)}
             </p>
             <StatRow
               label="Tổng thu"
-              value={`${formatVnd(cashFlow.totalIn)} ₫`}
+              value={`${formatVndWithSuffix(cashFlow.totalIn)}`}
               className="text-green-700"
             />
             <StatRow
               label="Tổng chi"
-              value={`${formatVnd(cashFlow.totalOut)} ₫`}
+              value={`${formatVndWithSuffix(cashFlow.totalOut)}`}
               className="text-red-700"
             />
           </CardContent>

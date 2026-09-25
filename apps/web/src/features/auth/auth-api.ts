@@ -22,7 +22,7 @@ export function meApi() {
   return apiClient.get<ApiEnvelope<AuthUser>>('/api/v1/me')
 }
 
-export async function refreshApi(): Promise<{ accessToken: string; expiresIn: number } | null> {
+export async function refreshApi(): Promise<{ accessToken: string; expiresIn: number } | { error: string } | null> {
   try {
     const response = await apiClient.post<ApiEnvelope<{ accessToken: string; expiresIn: number }>>(
       '/api/v1/auth/refresh',
@@ -30,7 +30,10 @@ export async function refreshApi(): Promise<{ accessToken: string; expiresIn: nu
       { auth: false, skipRefresh: true },
     )
     return response.data
-  } catch {
+  } catch (err: any) {
+    if (err.message === 'Không thể kết nối đến máy chủ') {
+      return { error: 'network' }
+    }
     return null
   }
 }

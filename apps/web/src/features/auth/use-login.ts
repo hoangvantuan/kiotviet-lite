@@ -14,5 +14,6 @@ export function useLogin() {
     onSuccess: (res) => {
       setAuth({ user: res.data.user, accessToken: res.data.accessToken })
     },
+    meta: { skipGlobalError: true },
   })
 }

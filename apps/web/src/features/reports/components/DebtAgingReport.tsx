@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { AlertTriangle, Download, FileSpreadsheet } from 'lucide-react'
 
-import { formatDebtLimitLabel } from '@kiotviet-lite/shared'
+import { formatDebtLimitLabel, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Badge } from '@/components/ui/badge'
@@ -120,11 +120,11 @@ export function DebtAgingReport({ query }: DebtAgingReportProps) {
                     {formatDebtLimitLabel(row.debtLimit)}
                   </TableCell>
                   <TableCell className="text-right font-medium text-red-700">
-                    {formatVnd(row.totalDebt)} ₫
+                    {formatVndWithSuffix(row.totalDebt)}
                   </TableCell>
                   {row.buckets.map((amount, i) => (
                     <TableCell key={bucketLabels[i]} className="text-right text-sm">
-                      {amount > 0 ? `${formatVnd(amount)} ₫` : '-'}
+                      {amount > 0 ? `${formatVndWithSuffix(amount)}` : '-'}
                     </TableCell>
                   ))}
                   <TableCell className="text-right">
@@ -156,11 +156,11 @@ export function DebtAgingReport({ query }: DebtAgingReportProps) {
                 Tổng cộng
               </TableCell>
               <TableCell className="text-right font-semibold text-red-700">
-                {formatVnd(totals.totalDebt)} ₫
+                {formatVndWithSuffix(totals.totalDebt)}
               </TableCell>
               {totals.buckets.map((amount, i) => (
                 <TableCell key={bucketLabels[i]} className="text-right font-semibold">
-                  {amount > 0 ? `${formatVnd(amount)} ₫` : '-'}
+                  {amount > 0 ? `${formatVndWithSuffix(amount)}` : '-'}
                 </TableCell>
               ))}
               <TableCell />

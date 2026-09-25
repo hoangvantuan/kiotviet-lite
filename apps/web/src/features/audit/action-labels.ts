@@ -1,6 +1,7 @@
 import type { AuditAction } from '@kiotviet-lite/shared'
 
 export const ACTION_LABELS: Record<AuditAction, string> = {
+  'login': 'Đăng nhập',
   'user.created': 'Tạo nhân viên',
   'user.updated': 'Sửa nhân viên',
   'user.locked': 'Khoá nhân viên',
@@ -107,7 +108,7 @@ export const ACTION_GROUPS: ActionGroup[] = [
   },
   {
     label: 'Xác thực',
-    actions: ['auth.pin_failed', 'auth.pin_locked'],
+    actions: ['login', 'auth.pin_failed', 'auth.pin_locked'],
   },
   {
     label: 'Danh mục',

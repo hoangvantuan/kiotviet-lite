@@ -197,7 +197,7 @@ export function PosSearchBar({ searchRef, onOpenScanner, onSelectProduct }: PosS
               setIsOpen(true)
             }
           }}
-          placeholder="Tìm sản phẩm, mã SKU, barcode..."
+          placeholder="Tìm theo tên, mã hàng hoặc mã vạch"
           className="h-11 w-full rounded-lg border border-input bg-background pl-10 pr-12 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         />
         {isFetching && (

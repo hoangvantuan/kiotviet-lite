@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 
 import type { CustomerPriceListItem, UpdateCustomerPriceInput } from '@kiotviet-lite/shared'
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
 import { Button } from '@/components/ui/button'
@@ -89,12 +90,12 @@ export function EditCustomerPriceDialog({ open, onOpenChange, customerPrice }: P
           <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
             <div>
               Giá lẻ chuẩn:{' '}
-              <span className="font-medium">{formatVnd(customerPrice.productSellingPrice)}đ</span>
+              <span className="font-medium">{formatVndWithSuffix(customerPrice.productSellingPrice)}</span>
             </div>
             {customerPrice.productCostPrice !== null && (
               <div>
                 Giá vốn:{' '}
-                <span className="font-medium">{formatVnd(customerPrice.productCostPrice)}đ</span>
+                <span className="font-medium">{formatVndWithSuffix(customerPrice.productCostPrice)}</span>
               </div>
             )}
           </div>
@@ -112,7 +113,7 @@ export function EditCustomerPriceDialog({ open, onOpenChange, customerPrice }: P
               price !== null &&
               price < customerPrice.productCostPrice && (
                 <p className="text-xs text-destructive">
-                  ⚠ Giá thấp hơn giá vốn ({formatVnd(customerPrice.productCostPrice)}đ).
+                  ⚠ Giá thấp hơn giá vốn ({formatVndWithSuffix(customerPrice.productCostPrice)}).
                 </p>
               )}
           </div>

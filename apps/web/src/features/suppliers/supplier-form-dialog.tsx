@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 
+import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 import {
   type CreateSupplierInput,
   createSupplierSchema,
@@ -198,7 +199,7 @@ function EditSupplierDialog({
           <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Công nợ NCC</span>
-              <span className="font-medium">{formatVnd(supplier.currentDebt)} đ</span>
+              <span className="font-medium">{formatVndWithSuffix(supplier.currentDebt)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Số phiếu nhập</span>
@@ -206,7 +207,7 @@ function EditSupplierDialog({
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Tổng đã nhập</span>
-              <span className="font-medium">{formatVnd(supplier.totalPurchased)} đ</span>
+              <span className="font-medium">{formatVndWithSuffix(supplier.totalPurchased)}</span>
             </div>
             <p className="text-xs text-muted-foreground pt-1">
               Các trường trên tự cập nhật từ phiếu nhập, không sửa được trực tiếp.
