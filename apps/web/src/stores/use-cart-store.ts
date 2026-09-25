@@ -182,7 +182,7 @@ function recomputeOrderDiscount(tab: TabState): TabState {
   return { ...tab, orderDiscountAmount }
 }
 
-function createEmptyTab(): TabState {
+export function createEmptyTab(): TabState {
   return {
     items: [],
     orderDiscountType: null,
@@ -198,7 +198,7 @@ function createEmptyTab(): TabState {
   }
 }
 
-function createInitialTabs(): Record<number, TabState> {
+export function createInitialTabs(): Record<number, TabState> {
   const tabs: Record<number, TabState> = {}
   for (let i = 1; i <= MAX_CART_TABS; i++) {
     tabs[i] = createEmptyTab()
