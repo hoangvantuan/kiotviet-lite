@@ -26,6 +26,7 @@ import { useAuthStore } from '@/stores/use-auth-store'
 import { OrderInvoiceA4, OrderInvoiceA5, OrderInvoiceThermal } from './order-invoice-template'
 import { PrintButton } from './print-button'
 import { ReturnDialog } from './return-dialog'
+import { useInvoiceStoreInfo } from './use-invoice-store-info'
 import { useOrderQuery, useOrderReturnsQuery } from './use-orders'
 import {
   type PrintFormat,
@@ -54,11 +55,11 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
   const canReturn = user?.role === 'owner' || user?.role === 'manager'
   const { printOrder } = usePrintOrder()
   const printSettingsQuery = usePrintSettingsQuery()
+  const storeInfo = useInvoiceStoreInfo()
 
   function handlePrint(format: PrintFormat) {
     const order = query.data
     if (!order) return
-    const storeInfo = { name: user?.name ?? 'Cửa hàng' }
     printOrder({
       order: toThermalOrder(withSaleSnapshot(order)),
       store: storeInfo,
@@ -403,9 +404,24 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
       />
 
       {/* Print templates (hidden, only visible during window.print) */}
-      <OrderInvoiceThermal order={invoiceOrder} isReprint printSettings={printSettingsQuery.data} />
-      <OrderInvoiceA4 order={invoiceOrder} isReprint printSettings={printSettingsQuery.data} />
-      <OrderInvoiceA5 order={invoiceOrder} isReprint printSettings={printSettingsQuery.data} />
+      <OrderInvoiceThermal
+        order={invoiceOrder}
+        store={storeInfo}
+        isReprint
+        printSettings={printSettingsQuery.data}
+      />
+      <OrderInvoiceA4
+        order={invoiceOrder}
+        store={storeInfo}
+        isReprint
+        printSettings={printSettingsQuery.data}
+      />
+      <OrderInvoiceA5
+        order={invoiceOrder}
+        store={storeInfo}
+        isReprint
+        printSettings={printSettingsQuery.data}
+      />
     </div>
   )
 }

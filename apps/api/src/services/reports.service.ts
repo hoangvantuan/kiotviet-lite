@@ -7,7 +7,6 @@ import {
   type DebtAgingRow,
   debts,
   type DebtSummaryReport,
-  formatVnd,
   receipts,
   resolveEffectiveDebtLimit,
   stores,
@@ -16,7 +15,8 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
-import { parseDateRangeBoundary } from '../lib/timezone.js'
+import { localDaysSinceSql, parseDateRangeBoundary } from '../lib/timezone.js'
+import { buildCsv, buildCsvFromLines } from './export.service.js'
 
 interface ReportQuery {
   from?: string
@@ -68,7 +68,8 @@ export async function getDebtAgingReport({
       groupDebtLimit: customerGroups.debtLimit,
       debtId: debts.id,
       remaining: debts.remaining,
-      daysSince: sql<number>`EXTRACT(DAY FROM NOW() - ${debts.createdAt})`.as('days_since'),
+      // Tuổi nợ theo ngày lịch của cửa hàng (TIEN-112), không theo 24 giờ trôi qua
+      daysSince: sql<number>`${localDaysSinceSql(debts.createdAt)}`.as('days_since'),
     })
     .from(debts)
     .innerJoin(customers, eq(debts.customerId, customers.id))
@@ -154,9 +155,11 @@ export async function getDebtSummaryReport({
   storeId: string
   query: ReportQuery
 }): Promise<DebtSummaryReport> {
+  // BC-14: nhận YYYY-MM-DD theo ngày cửa hàng (to bao cả ngày) như các báo cáo khác
   const now = new Date()
-  const fromDate = query.from ? new Date(query.from) : new Date(now.getTime() - 30 * 86400000)
-  const toDate = query.to ? new Date(query.to) : now
+  const fromDate =
+    parseDateRangeBoundary(query.from, 'start') ?? new Date(now.getTime() - 30 * 86400000)
+  const toDate = parseDateRangeBoundary(query.to, 'end') ?? now
 
   const [receivableResult, payableResult, receiptsResult, paymentsResult] = await Promise.all([
     db
@@ -248,65 +251,44 @@ export async function getDebtSummaryReport({
   }
 }
 
+// BC-12: tiền ghi số nguyên (không phải chuỗi "270.000") để Excel cộng được
 export function buildAgingCsv(report: DebtAgingReport): string {
-  const BOM = '﻿'
   const header = ['Khách hàng', 'Điện thoại', 'Hạn mức', 'Tổng nợ', ...report.bucketLabels]
-  const lines = [header.join(',')]
-
-  for (const row of report.rows) {
-    lines.push(
-      [
-        `"${row.customerName}"`,
-        row.customerPhone ?? '',
-        row.debtLimit === null
-          ? 'Không giới hạn'
-          : row.debtLimit === 0
-            ? 'Không cho nợ'
-            : formatVnd(row.debtLimit),
-        formatVnd(row.totalDebt),
-        ...row.buckets.map(formatVnd),
-      ].join(','),
-    )
-  }
-
-  lines.push(
-    [
-      '"Tổng cộng"',
-      '',
-      '',
-      formatVnd(report.totals.totalDebt),
-      ...report.totals.buckets.map(formatVnd),
-    ].join(','),
-  )
-
-  return BOM + lines.join('\n')
+  const rows: (string | number | null)[][] = report.rows.map((row) => [
+    row.customerName,
+    row.customerPhone,
+    row.debtLimit === null
+      ? 'Không giới hạn'
+      : row.debtLimit === 0
+        ? 'Không cho nợ'
+        : row.debtLimit,
+    row.totalDebt,
+    ...row.buckets,
+  ])
+  rows.push(['Tổng cộng', null, null, report.totals.totalDebt, ...report.totals.buckets])
+  return buildCsv(header, rows)
 }
 
 export function buildSummaryCsv(report: DebtSummaryReport): string {
-  const BOM = '﻿'
-  const lines: string[] = []
-
-  lines.push('PHẢI THU (KHÁCH HÀNG)')
-  lines.push('Chỉ tiêu,Giá trị')
-  lines.push(`Tổng nợ phải thu,${formatVnd(report.receivable.totalDebt)}`)
-  lines.push(`Số khách hàng còn nợ,${report.receivable.customerCount}`)
-  lines.push(`Tổng đã thu (trong kỳ),${formatVnd(report.receivable.totalCollected)}`)
-  lines.push(`Số phiếu thu,${report.receivable.receiptCount}`)
-  lines.push('')
-
-  lines.push('PHẢI TRẢ (NHÀ CUNG CẤP)')
-  lines.push('Chỉ tiêu,Giá trị')
-  lines.push(`Tổng nợ phải trả,${formatVnd(report.payable.totalDebt)}`)
-  lines.push(`Số NCC còn nợ,${report.payable.supplierCount}`)
-  lines.push(`Tổng đã trả (trong kỳ),${formatVnd(report.payable.totalPaid)}`)
-  lines.push(`Số phiếu chi,${report.payable.paymentCount}`)
-  lines.push('')
-
-  lines.push('SỔ QUỸ (TRONG KỲ)')
-  lines.push('Chỉ tiêu,Giá trị')
-  lines.push(`Tổng thu,${formatVnd(report.cashFlow.totalIn)}`)
-  lines.push(`Tổng chi,${formatVnd(report.cashFlow.totalOut)}`)
-  lines.push(`Chênh lệch,${formatVnd(report.cashFlow.net)}`)
-
-  return BOM + lines.join('\n')
+  return buildCsvFromLines([
+    ['PHẢI THU (KHÁCH HÀNG)'],
+    ['Chỉ tiêu', 'Giá trị'],
+    ['Tổng nợ phải thu', report.receivable.totalDebt],
+    ['Số khách hàng còn nợ', report.receivable.customerCount],
+    ['Tổng đã thu (trong kỳ)', report.receivable.totalCollected],
+    ['Số phiếu thu', report.receivable.receiptCount],
+    [],
+    ['PHẢI TRẢ (NHÀ CUNG CẤP)'],
+    ['Chỉ tiêu', 'Giá trị'],
+    ['Tổng nợ phải trả', report.payable.totalDebt],
+    ['Số nhà cung cấp còn nợ', report.payable.supplierCount],
+    ['Tổng đã trả (trong kỳ)', report.payable.totalPaid],
+    ['Số phiếu chi', report.payable.paymentCount],
+    [],
+    ['SỔ QUỸ (TRONG KỲ)'],
+    ['Chỉ tiêu', 'Giá trị'],
+    ['Tổng thu', report.cashFlow.totalIn],
+    ['Tổng chi', report.cashFlow.totalOut],
+    ['Chênh lệch', report.cashFlow.net],
+  ])
 }

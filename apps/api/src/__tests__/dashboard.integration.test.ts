@@ -285,11 +285,11 @@ describe('GET /api/v1/reports/dashboard', () => {
     const body = (await res.json()) as { data: DashboardResponse }
     expect(body.data.topProducts).toHaveLength(2)
 
-    // Sorted by quantity: SP B (4) first, SP A (3) second
-    expect(body.data.topProducts[0]!.name).toBe('Sản phẩm B')
-    expect(body.data.topProducts[0]!.quantity).toBe(4)
-    expect(body.data.topProducts[1]!.name).toBe('Sản phẩm A')
-    expect(body.data.topProducts[1]!.quantity).toBe(3)
+    // BC-17: xếp theo doanh thu, SP A (600k, 3 cái) trước SP B (400k, 4 cái)
+    expect(body.data.topProducts[0]!.name).toBe('Sản phẩm A')
+    expect(body.data.topProducts[0]!.quantity).toBe(3)
+    expect(body.data.topProducts[1]!.name).toBe('Sản phẩm B')
+    expect(body.data.topProducts[1]!.quantity).toBe(4)
 
     // Percentage
     expect(body.data.topProducts[0]!.percentage).toBeGreaterThan(0)

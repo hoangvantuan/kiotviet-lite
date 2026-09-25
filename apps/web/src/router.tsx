@@ -285,6 +285,15 @@ const reportsDashboardRoute = createRoute({
   component: DashboardPage,
 })
 
+// BC-17: /dashboard gõ tay từng ra trang trống; chuyển về trang tổng quan thật
+const dashboardAliasRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/dashboard',
+  beforeLoad: () => {
+    throw redirect({ to: '/reports/dashboard' })
+  },
+})
+
 const reportsRevenueRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/reports/revenue',
@@ -460,6 +469,7 @@ const routeTree = rootRoute.addChildren([
       ordersRoute,
       orderDetailRoute,
       reportsDashboardRoute,
+      dashboardAliasRoute,
       reportsRevenueRoute,
       reportsProfitRoute,
       reportsInventoryRoute,

@@ -372,7 +372,11 @@ describe('KHO-12: báo cáo tồn kho lọc theo danh mục', () => {
     const r = await call(reportsApp, 'GET', `/inventory?tab=current&categoryId=${s.rauCu.id}`)
     expect(r.status).toBe(200)
     expect(r.body.data.rows.map((x: { productId: string }) => x.productId)).toEqual([s.carrot.id])
-    expect(r.body.data.summary).toEqual({ totalProducts: 1, totalStockValue: 150_000 })
+    expect(r.body.data.summary).toEqual({
+      totalProducts: 1,
+      totalQuantity: 10,
+      totalStockValue: 150_000,
+    })
   })
 
   it('Lọc danh mục cha gồm cả danh mục con; "none" là hàng chưa phân loại', async () => {

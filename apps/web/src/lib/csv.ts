@@ -1,11 +1,7 @@
-import { slugify as sharedSlugify } from '@kiotviet-lite/shared'
+import { escapeCsvField, slugify as sharedSlugify } from '@kiotviet-lite/shared'
 
-export function escapeCsvField(value: unknown): string {
-  if (value === null || value === undefined) return ''
-  const s = String(value)
-  if (/[,"\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`
-  return s
-}
+// Mã hóa ô dùng chung với API (BC-12): giữ số 0 đầu SĐT, chặn chèn công thức
+export { escapeCsvField }
 
 export function buildCsv(headers: string[], rows: (string | number | null)[][]): string {
   const lines: string[] = []

@@ -16,7 +16,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
-import { parseDateRangeLocal } from '../lib/timezone.js'
+import { localDateKey, parseDateRangeLocal } from '../lib/timezone.js'
 
 export async function getPriceOverrides(
   db: Db,
@@ -195,7 +195,7 @@ export async function getPriceHistory(
   const rows = result.map((r) => ({
     productId: r.productId,
     productName: r.productName,
-    purchaseDate: r.purchaseDate.toISOString().slice(0, 10),
+    purchaseDate: localDateKey(r.purchaseDate),
     supplierName: r.supplierName,
     // Đơn giá nhập quy về đơn vị tính để so được với giá vốn (KHO-10)
     unitPrice: Math.round(Number(r.unitPrice) / r.conversionFactor),

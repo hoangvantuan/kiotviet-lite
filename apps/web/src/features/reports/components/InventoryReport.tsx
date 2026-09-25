@@ -16,6 +16,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -78,12 +79,20 @@ export function InventoryReport() {
       </div>
 
       {data && 'summary' in data && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           <Card>
             <CardContent className="pt-4">
               <p className="text-sm text-muted-foreground">Tổng sản phẩm</p>
               <p className="text-2xl font-bold font-mono">
                 {(data as InventoryCurrentResponse).summary.totalProducts}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <p className="text-sm text-muted-foreground">Tổng số lượng tồn</p>
+              <p className="text-2xl font-bold font-mono">
+                {(data as InventoryCurrentResponse).summary.totalQuantity}
               </p>
             </CardContent>
           </Card>
@@ -130,6 +139,21 @@ export function InventoryReport() {
                   </TableRow>
                 ))}
               </TableBody>
+              {/* UAT 04 mục 4.3: dòng tổng theo toàn bộ bộ lọc, không chỉ trang đang xem */}
+              <TableFooter>
+                <TableRow className="font-semibold">
+                  <TableCell colSpan={2}>Tổng cộng</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {(data as InventoryCurrentResponse).summary.totalQuantity}
+                  </TableCell>
+                  <TableCell />
+                  <TableCell className="text-right font-mono">
+                    {formatVndWithSuffix(
+                      (data as InventoryCurrentResponse).summary.totalStockValue,
+                    )}
+                  </TableCell>
+                </TableRow>
+              </TableFooter>
             </Table>
           ) : tab === 'reorder' ? (
             <Table>

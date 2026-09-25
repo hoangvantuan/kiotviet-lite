@@ -3,6 +3,7 @@ import type { PrintSettingsResponse } from '@kiotviet-lite/shared'
 import { PAYMENT_METHOD_LABELS } from '@/lib/constants'
 import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
 import { formatDateTime } from '@/lib/date'
+import { formatQuantityWithUnit, invoiceDebtLines, invoiceItemName } from '@/lib/invoice-lines'
 import { numberToVietnameseWords } from '@/lib/number-to-words'
 import { usePrintStore } from '@/stores/use-print-store'
 
@@ -132,12 +133,14 @@ export function OrderInvoiceThermal({ order, store, isReprint, printSettings }: 
           <ThermalRow label="Chuyển khoản" value={formatVnd(order.transferAmount)} />
         )}
         {order.change > 0 && <ThermalRow label="Tiền thừa" value={formatVnd(order.change)} />}
-        {showOldDebt && order.oldDebt != null && order.oldDebt > 0 && (
-          <ThermalRow label="Nợ trước đơn" value={formatVnd(order.oldDebt)} />
-        )}
-        {showNewDebt && order.debtAmount > 0 && (
-          <ThermalRow label="Còn nợ" value={formatVnd(order.debtAmount)} />
-        )}
+        {invoiceDebtLines(order, { showOldDebt, showNewDebt }).map((line) => (
+          <ThermalRow
+            key={line.key}
+            label={line.label}
+            value={formatVnd(line.value)}
+            bold={line.emphasis}
+          />
+        ))}
         {showCostPrice && totalCost > 0 && (
           <ThermalRow label="Giá vốn" value={formatVnd(totalCost)} />
         )}
@@ -171,17 +174,13 @@ function ThermalRow({ label, value, bold }: { label: string; value: string; bold
 }
 
 function ThermalItemRow({ item, showSku }: { item: OrderDetailItem; showSku: boolean }) {
-  let name = item.variantName ? `${item.productName} (${item.variantName})` : item.productName
-  if (showSku && item.sku) {
-    name = `[${item.sku}] ${name}`
-  }
-
+  // BC-09: tên hàng xuống dòng thay vì cắt cụt; số lượng kèm đơn vị tính
   return (
     <div>
-      <p className="truncate">{name}</p>
+      <p className="break-words">{invoiceItemName(item, showSku)}</p>
       <div className="flex justify-between pl-2">
         <span>
-          {item.quantity} x {formatVnd(item.unitPrice)}
+          {formatQuantityWithUnit(item.quantity, item.unit)} x {formatVnd(item.unitPrice)}
         </span>
         <span>{formatVnd(item.lineTotal)}</span>
       </div>
@@ -315,12 +314,11 @@ export function OrderInvoiceA4({ order, store, isReprint, printSettings }: Invoi
       <div className="text-sm space-y-1 mb-6">
         <p>Thanh toán: {PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}</p>
         <p>Đã trả: {formatVndWithSuffix(order.paidAmount)}</p>
-        {showOldDebt && order.oldDebt != null && order.oldDebt > 0 && (
-          <p>Nợ trước đơn: {formatVndWithSuffix(order.oldDebt)}</p>
-        )}
-        {showNewDebt && order.debtAmount > 0 && (
-          <p className="font-medium">Còn nợ: {formatVndWithSuffix(order.debtAmount)}</p>
-        )}
+        {invoiceDebtLines(order, { showOldDebt, showNewDebt }).map((line) => (
+          <p key={line.key} className={line.emphasis ? 'font-medium' : undefined}>
+            {line.label}: {formatVndWithSuffix(line.value)}
+          </p>
+        ))}
         {showCostPrice && totalCost > 0 && (
           <p className="text-gray-500 text-xs">Tổng giá vốn: {formatVnd(totalCost)}</p>
         )}
@@ -456,6 +454,7 @@ export function OrderInvoiceA5({ order, store, isReprint, printSettings }: Invoi
           <tr className="bg-gray-100">
             <th className="text-center w-6">STT</th>
             <th className="text-left">Sản phẩm</th>
+            <th className="text-center">ĐVT</th>
             <th className="text-right">SL</th>
             <th className="text-right">Đơn giá</th>
             <th className="text-right">T.Tiền</th>
@@ -474,6 +473,7 @@ export function OrderInvoiceA5({ order, store, isReprint, printSettings }: Invoi
                   <span className="text-[10px] text-gray-500"> ({item.variantName})</span>
                 )}
               </td>
+              <td className="text-center">{item.unit ?? ''}</td>
               <td className="text-right">{item.quantity}</td>
               <td className="text-right">{formatVnd(item.unitPrice)}</td>
               <td className="text-right">{formatVnd(item.lineTotal)}</td>
@@ -511,12 +511,11 @@ export function OrderInvoiceA5({ order, store, isReprint, printSettings }: Invoi
           TT: {PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod} | Đã trả:{' '}
           {formatVndWithSuffix(order.paidAmount)}
         </p>
-        {showOldDebt && order.oldDebt != null && order.oldDebt > 0 && (
-          <p>Nợ trước đơn: {formatVndWithSuffix(order.oldDebt)}</p>
-        )}
-        {showNewDebt && order.debtAmount > 0 && (
-          <p className="font-medium">Còn nợ: {formatVndWithSuffix(order.debtAmount)}</p>
-        )}
+        {invoiceDebtLines(order, { showOldDebt, showNewDebt }).map((line) => (
+          <p key={line.key} className={line.emphasis ? 'font-medium' : undefined}>
+            {line.label}: {formatVndWithSuffix(line.value)}
+          </p>
+        ))}
         {showCostPrice && totalCost > 0 && (
           <p className="text-gray-500 text-[10px]">Giá vốn: {formatVnd(totalCost)}</p>
         )}

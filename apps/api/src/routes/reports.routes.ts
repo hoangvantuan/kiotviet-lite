@@ -13,6 +13,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { localDateKey } from '../lib/timezone.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
@@ -99,7 +100,7 @@ export function createReportsRoutes({ db }: { db: Db }) {
     })
     const report = await getDebtAgingReport({ db, storeId: auth.storeId, query })
     const csv = buildAgingCsv(report)
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localDateKey()
     c.header('Content-Type', 'text/csv; charset=utf-8')
     c.header('Content-Disposition', `attachment; filename="bao-cao-tuoi-no-${today}.csv"`)
     return c.body(csv)
@@ -125,7 +126,7 @@ export function createReportsRoutes({ db }: { db: Db }) {
     })
     const report = await getDebtSummaryReport({ db, storeId: auth.storeId, query })
     const csv = buildSummaryCsv(report)
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localDateKey()
     c.header('Content-Type', 'text/csv; charset=utf-8')
     c.header('Content-Disposition', `attachment; filename="bao-cao-tong-hop-cong-no-${today}.csv"`)
     return c.body(csv)
@@ -172,7 +173,7 @@ export function createReportsRoutes({ db }: { db: Db }) {
       groupBy: c.req.query('groupBy') || undefined,
     })
     const format = exportFormatSchema.parse(c.req.query('format'))
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const today = localDateKey().replace(/-/g, '')
 
     let headers: string[]
     let rows: (string | number | null)[][]
@@ -247,10 +248,18 @@ export function createReportsRoutes({ db }: { db: Db }) {
       to: c.req.query('to') || undefined,
     })
     const format = exportFormatSchema.parse(c.req.query('format'))
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const today = localDateKey().replace(/-/g, '')
     const data = await getProfitReport(db, auth.storeId, query.from, query.to)
 
-    const headers = ['Sản phẩm', 'SKU', 'Số lượng', 'Doanh thu', 'Giá vốn', 'Lợi nhuận', 'Margin %']
+    const headers = [
+      'Sản phẩm',
+      'SKU',
+      'Số lượng',
+      'Doanh thu',
+      'Giá vốn',
+      'Lợi nhuận',
+      'Tỷ suất lợi nhuận (%)',
+    ]
     const rows = data.rows.map((r) => [
       r.productName,
       r.sku,
@@ -306,7 +315,7 @@ export function createReportsRoutes({ db }: { db: Db }) {
     })
     const options = { categoryId: query.categoryId }
     const format = exportFormatSchema.parse(c.req.query('format'))
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const today = localDateKey().replace(/-/g, '')
 
     let headers: string[]
     let rows: (string | number | null)[][]
@@ -395,7 +404,7 @@ export function createReportsRoutes({ db }: { db: Db }) {
       productId: c.req.query('productId') || undefined,
     })
     const format = exportFormatSchema.parse(c.req.query('format'))
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const today = localDateKey().replace(/-/g, '')
 
     let headers: string[]
     let rows: (string | number | null)[][]
@@ -415,7 +424,7 @@ export function createReportsRoutes({ db }: { db: Db }) {
         ]
         rows = data.rows.map((r) => [
           r.orderNumber,
-          r.orderDate.slice(0, 10),
+          localDateKey(new Date(r.orderDate)),
           r.productName,
           r.originalPrice,
           r.overridePrice,

@@ -1,51 +1,13 @@
-import { format, startOfMonth, startOfQuarter, subDays } from 'date-fns'
-
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+
+import { REPORT_DATE_PRESETS } from '../date-presets'
 
 interface ReportDateRangePickerProps {
   from?: string
   to?: string
   onChange: (from: string | undefined, to: string | undefined) => void
 }
-
-const presets = [
-  {
-    label: 'Hôm nay',
-    getRange: () => ({
-      from: format(new Date(), 'yyyy-MM-dd'),
-      to: format(new Date(), 'yyyy-MM-dd'),
-    }),
-  },
-  {
-    label: '7 ngày',
-    getRange: () => ({
-      from: format(subDays(new Date(), 7), 'yyyy-MM-dd'),
-      to: format(new Date(), 'yyyy-MM-dd'),
-    }),
-  },
-  {
-    label: '30 ngày',
-    getRange: () => ({
-      from: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
-      to: format(new Date(), 'yyyy-MM-dd'),
-    }),
-  },
-  {
-    label: 'Tháng này',
-    getRange: () => ({
-      from: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
-      to: format(new Date(), 'yyyy-MM-dd'),
-    }),
-  },
-  {
-    label: 'Quý này',
-    getRange: () => ({
-      from: format(startOfQuarter(new Date()), 'yyyy-MM-dd'),
-      to: format(new Date(), 'yyyy-MM-dd'),
-    }),
-  },
-]
 
 export function ReportDateRangePicker({ from, to, onChange }: ReportDateRangePickerProps) {
   return (
@@ -68,7 +30,7 @@ export function ReportDateRangePicker({ from, to, onChange }: ReportDateRangePic
         />
       </div>
       <div className="flex flex-wrap gap-1">
-        {presets.map((p) => (
+        {REPORT_DATE_PRESETS.map((p) => (
           <Button
             key={p.label}
             variant="ghost"

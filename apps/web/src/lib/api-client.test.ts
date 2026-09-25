@@ -159,3 +159,54 @@ describe('R4 UX-03: request ghi mất phản hồi báo "chưa rõ đã lưu hay
     expect((fetchMock.mock.calls[0]![1].headers as Headers).get('Idempotency-Key')).toBeNull()
   })
 })
+
+describe('apiFetch 401 do PIN sai (POS-10)', () => {
+  it('không làm mới phiên và không gửi lại request, một lần nhập sai chỉ tính một lần', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Mã PIN không đúng',
+            details: { remaining: 4, reason: 'pin_invalid' },
+          },
+        }),
+        { status: 401 },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      apiFetch('/api/v1/users/verify-pin', { method: 'POST', body: { pin: '000000' } }),
+    ).rejects.toMatchObject({ status: 401, code: 'UNAUTHORIZED' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('401 do token hết hạn vẫn làm mới phiên rồi gửi lại', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'UNAUTHORIZED',
+              message: 'Token đã hết hạn',
+              details: { reason: 'expired' },
+            },
+          }),
+          { status: 401 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { accessToken: 'new-token', user: null } }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: 1 }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await apiFetch('/api/v1/products').catch(() => undefined)
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(String(fetchMock.mock.calls[1]![0])).toContain('/refresh')
+  })
+})

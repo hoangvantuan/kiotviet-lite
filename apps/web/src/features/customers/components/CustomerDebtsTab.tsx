@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/use-auth-store'
 
 import { useCustomerDebts } from '../hooks/use-customer-detail'
+import { getDebtStatusBadge } from './debt-status'
 import { DebtAdjustmentDialog } from './DebtAdjustmentDialog'
 import { DebtAdjustmentHistory } from './DebtAdjustmentHistory'
 import { OpeningDebtDialog } from './OpeningDebtDialog'
@@ -35,35 +36,6 @@ function parseOverdueDays(raw: string): number[] {
     .map((s) => Number(s.trim()))
     .filter((n) => !Number.isNaN(n) && n > 0)
     .sort((a, b) => a - b)
-}
-
-function getDebtStatusBadge(dateIso: string, remaining: number, overdueDays: number[]) {
-  if (remaining < 0) {
-    return { label: 'Còn tiền trả trước', className: 'border-blue-200 bg-blue-50 text-blue-700' }
-  }
-  if (remaining === 0) {
-    return { label: 'Đã tất toán', className: 'border-gray-200 bg-gray-50 text-gray-600' }
-  }
-  const daysSince = Math.floor((Date.now() - new Date(dateIso).getTime()) / 86400000)
-  if (daysSince <= (overdueDays[0] ?? 30)) {
-    return { label: 'Trong hạn', className: 'border-green-200 bg-green-50 text-green-700' }
-  }
-  if (daysSince <= (overdueDays[1] ?? 60)) {
-    return {
-      label: `Quá hạn ${daysSince} ngày`,
-      className: 'border-yellow-200 bg-yellow-50 text-yellow-700',
-    }
-  }
-  if (daysSince <= (overdueDays[2] ?? 90)) {
-    return {
-      label: `Quá hạn ${daysSince} ngày`,
-      className: 'border-orange-200 bg-orange-50 text-orange-700',
-    }
-  }
-  return {
-    label: `Quá hạn ${daysSince} ngày`,
-    className: 'border-red-200 bg-red-50 text-red-700',
-  }
 }
 
 function DebtProgressBar({
@@ -146,8 +118,8 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
               Khách trả trước
             </Badge>
             <span className="text-sm text-muted-foreground">
-              Khách còn {formatVndWithSuffix(-currentDebt)} tiền trả trước, tự trừ vào khoản nợ phát sinh
-              sau.
+              Khách còn {formatVndWithSuffix(-currentDebt)} tiền trả trước, tự trừ vào khoản nợ phát
+              sinh sau.
             </span>
           </div>
         ) : currentDebt === 0 ? (

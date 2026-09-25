@@ -31,7 +31,13 @@ test.describe('Kiểm thử E2E: Cài đặt Mẫu in Hóa đơn và Hiệu lự
       await showSkuSwitch.click()
     }
 
-    // 5. Bật toggle Nợ trước đơn (showOldDebt)
+    // 4b. Chọn khổ giấy Thermal 80mm (BC-07)
+    const paperSelect = page.getByRole('combobox', { name: 'Khổ giấy mặc định' })
+    await paperSelect.click()
+    await page.getByRole('option', { name: 'Thermal 80mm' }).click()
+    await expect(paperSelect).toContainText('Thermal 80mm')
+
+    // 5. Bật toggle Công nợ trước đơn (showOldDebt)
     const showOldDebtSwitch = page.locator('#showOldDebt')
     const isOldDebtChecked = await showOldDebtSwitch.getAttribute('aria-checked')
     if (isOldDebtChecked !== 'true') {
@@ -47,11 +53,26 @@ test.describe('Kiểm thử E2E: Cài đặt Mẫu in Hóa đơn và Hiệu lự
     const saveBtn = page.getByRole('button', { name: /L[uư]u c[aà]i đ[aặ]t/i })
     await expect(saveBtn).toBeEnabled({ timeout: 5000 })
     await saveBtn.click()
+    await expect(page.getByText('Đã lưu cài đặt mẫu in')).toBeVisible()
 
     // 8. Tải lại trang (F5) và xác nhận cài đặt vẫn được lưu giữ thành công
     await page.reload()
     await expect(page.locator('#slogan')).toHaveValue(uniqueSlogan)
     await expect(page.locator('#footerText')).toHaveValue(uniqueFooter)
     await expect(page.locator('#showSku')).toHaveAttribute('aria-checked', 'true')
+
+    // 9. BC-07: khổ giấy còn sau F5, chưa sửa gì thì nút lưu tắt
+    await expect(paperSelect).toContainText('Thermal 80mm')
+    await expect(saveBtn).toBeDisabled()
+
+    // 10. BC-07: sửa slogan sau khi tải lại vẫn lưu được và có thông báo
+    const secondSlogan = `${uniqueSlogan} (lần 2)`
+    await page.locator('#slogan').fill(secondSlogan)
+    await expect(saveBtn).toBeEnabled()
+    await saveBtn.click()
+    await expect(page.getByText('Đã lưu cài đặt mẫu in')).toBeVisible()
+    await page.reload()
+    await expect(page.locator('#slogan')).toHaveValue(secondSlogan)
+    await expect(paperSelect).toContainText('Thermal 80mm')
   })
 })

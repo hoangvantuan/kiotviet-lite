@@ -1,19 +1,19 @@
 import * as XLSX from 'xlsx'
 
-function escapeCsvValue(v: string | number | null | undefined): string {
-  if (v === null || v === undefined) return ''
-  const s = String(v)
-  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-    return `"${s.replace(/"/g, '""')}"`
-  }
-  return s
+import { toCsvLine } from '@kiotviet-lite/shared'
+
+/**
+ * CSV có BOM để Excel đọc đúng tiếng Việt. Mọi ô đi qua `escapeCsvField` dùng chung (BC-12):
+ * giữ số 0 đầu SĐT, chặn chèn công thức.
+ */
+export function buildCsv(headers: string[], rows: (string | number | null)[][]): string {
+  return buildCsvFromLines([headers, ...rows])
 }
 
-export function buildCsv(headers: string[], rows: (string | number | null)[][]): string {
+/** CSV nhiều khối (ví dụ báo cáo tổng hợp), mỗi phần tử là một dòng; dòng rỗng là dòng trống. */
+export function buildCsvFromLines(lines: readonly (readonly unknown[])[]): string {
   const BOM = '﻿'
-  const headerLine = headers.map(escapeCsvValue).join(',')
-  const dataLines = rows.map((row) => row.map(escapeCsvValue).join(','))
-  return BOM + [headerLine, ...dataLines].join('\n')
+  return BOM + lines.map(toCsvLine).join('\n')
 }
 
 export function buildXlsx(

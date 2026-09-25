@@ -184,7 +184,7 @@ export function OverdueDebtCard({ data, isLoading, isError }: OverdueDebtCardPro
           <div className="min-w-0">
             <p className="text-sm truncate">{debt.name}</p>
             <p className={cn('text-xs', getOverdueColor(debt.maxOverdueDays))}>
-              Quá hạn {debt.maxOverdueDays} ngày
+              Nợ đã {debt.maxOverdueDays} ngày
             </p>
           </div>
           <p className="text-sm font-mono font-bold shrink-0 ml-2">

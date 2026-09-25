@@ -1,4 +1,3 @@
-import { subDays } from 'date-fns'
 import { and, eq, gt, isNull, type SQL, sql } from 'drizzle-orm'
 
 import {
@@ -9,22 +8,15 @@ import {
   orderItems,
   orders,
   products,
-  productVariants,
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { effectiveStockSql, effectiveStockValueSql } from '../lib/effective-stock.js'
 import { revenueStatusFilter } from '../lib/order-status.js'
+import { daysBetweenDateKeys, localDateKey, localDateSql } from '../lib/timezone.js'
 
-/**
- * Giá trị tồn của một sản phẩm (BC-11). Sản phẩm có biến thể cộng tồn × giá vốn từng biến thể còn
- * hoạt động, biến thể chưa có giá vốn riêng lấy giá vốn cha (ADR-0007, như `getEffectiveCostPrice`).
- * Không dùng tồn cha × giá vốn cha: giá vốn cha chỉ là số tóm tắt, không tính lại khi bán, trả, kiểm kê.
- */
-const stockValueExpr = sql`CASE WHEN ${products.hasVariants} THEN (
-  SELECT coalesce(sum(${productVariants.stockQuantity}::bigint * coalesce(${productVariants.costPrice}, ${products.costPrice}, 0)), 0)
-  FROM ${productVariants}
-  WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL
-) ELSE ${products.currentStock}::bigint * coalesce(${products.costPrice}, 0) END`
+const stockExpr = effectiveStockSql()
+const stockValueExpr = effectiveStockValueSql()
 
 export interface InventoryReportOptions {
   page?: number
@@ -64,7 +56,7 @@ export async function getInventoryCurrent(
       productId: products.id,
       productName: products.name,
       sku: products.sku,
-      currentStock: products.currentStock,
+      currentStock: sql<number>`${stockExpr}`.as('current_stock'),
       stockValue: sql<number>`${stockValueExpr}`.as('stock_value'),
       costPrice: sql<number>`coalesce(${products.costPrice}, 0)`.as('cost_price'),
       hasVariants: products.hasVariants,
@@ -78,6 +70,7 @@ export async function getInventoryCurrent(
     db
       .select({
         totalProducts: sql<number>`count(*)::int`,
+        totalQuantity: sql<number>`coalesce(sum(${stockExpr}), 0)::bigint`,
         totalStockValue: sql<number>`coalesce(sum(${stockValueExpr}), 0)::bigint`,
       })
       .from(products)
@@ -85,6 +78,7 @@ export async function getInventoryCurrent(
   ])
 
   const total = Number(summaryResult[0]?.totalProducts ?? 0)
+  const totalQuantity = Number(summaryResult[0]?.totalQuantity ?? 0)
   const totalStockValue = Number(summaryResult[0]?.totalStockValue ?? 0)
 
   const rows = result.map((r) => ({
@@ -102,7 +96,7 @@ export async function getInventoryCurrent(
 
   return {
     rows,
-    summary: { totalProducts: total, totalStockValue },
+    summary: { totalProducts: total, totalQuantity, totalStockValue },
     pagination: {
       page: isPaged ? page : 1,
       pageSize: isPaged ? pageSize : total,
@@ -123,7 +117,7 @@ export async function getInventoryReorder(
     eq(products.storeId, storeId),
     isNull(products.deletedAt),
     gt(products.minStock, 0),
-    sql`${products.currentStock} <= ${products.minStock}`,
+    sql`${stockExpr} <= ${products.minStock}`,
     categoryCondition(storeId, categoryId),
   )
 
@@ -132,12 +126,12 @@ export async function getInventoryReorder(
       productId: products.id,
       productName: products.name,
       sku: products.sku,
-      currentStock: products.currentStock,
+      currentStock: sql<number>`${stockExpr}`.as('current_stock'),
       minStock: products.minStock,
     })
     .from(products)
     .where(whereCondition)
-    .orderBy(sql`${products.currentStock} - ${products.minStock} ASC`)
+    .orderBy(sql`current_stock - ${products.minStock} ASC`)
 
   const [result, countResult] = await Promise.all([
     isPaged ? query.limit(pageSize).offset(offset) : query,
@@ -155,9 +149,9 @@ export async function getInventoryReorder(
     productId: r.productId,
     productName: r.productName,
     sku: r.sku,
-    currentStock: r.currentStock,
+    currentStock: Number(r.currentStock),
     minStock: r.minStock,
-    reorderQuantity: r.minStock - r.currentStock,
+    reorderQuantity: r.minStock - Number(r.currentStock),
   }))
 
   return {
@@ -178,12 +172,16 @@ export async function getInventorySlow(
 ): Promise<InventorySlowResponse> {
   const isPaged = page !== undefined && pageSize !== undefined
   const offset = isPaged ? (page - 1) * pageSize : 0
-  const thirtyDaysAgo = subDays(new Date(), 30)
+  // Mốc 30 ngày và "ngày bán cuối" theo lịch cửa hàng (BC-14), không theo ngày UTC
+  const today = localDateKey()
+  const thirtyDaysAgo = localDateKey(new Date(Date.parse(`${today}T12:00:00Z`) - 30 * 86_400_000))
 
   const lastSoldSubquery = db
     .select({
       productId: orderItems.productId,
-      lastSoldDate: sql<string>`max(${orderItems.createdAt})::date`.as('last_sold_date'),
+      lastSoldDate: sql<string>`max(${localDateSql(orderItems.createdAt)})::text`.as(
+        'last_sold_date',
+      ),
     })
     .from(orderItems)
     .innerJoin(orders, eq(orderItems.orderId, orders.id))
@@ -194,8 +192,8 @@ export async function getInventorySlow(
   const whereCondition = and(
     eq(products.storeId, storeId),
     isNull(products.deletedAt),
-    gt(products.currentStock, 0),
-    sql`(${lastSoldSubquery.lastSoldDate} IS NULL OR ${lastSoldSubquery.lastSoldDate} < ${thirtyDaysAgo.toISOString().slice(0, 10)})`,
+    sql`${stockExpr} > 0`,
+    sql`(${lastSoldSubquery.lastSoldDate} IS NULL OR ${lastSoldSubquery.lastSoldDate} < ${thirtyDaysAgo})`,
     categoryCondition(storeId, categoryId),
   )
 
@@ -204,7 +202,7 @@ export async function getInventorySlow(
       productId: products.id,
       productName: products.name,
       sku: products.sku,
-      currentStock: products.currentStock,
+      currentStock: sql<number>`${stockExpr}`.as('current_stock'),
       lastSoldDate: lastSoldSubquery.lastSoldDate,
     })
     .from(products)
@@ -224,17 +222,14 @@ export async function getInventorySlow(
   ])
 
   const total = Number(countResult[0]?.total ?? 0)
-  const now = new Date()
   const rows = result.map((r) => {
-    const lastSold = r.lastSoldDate ? String(r.lastSoldDate) : null
-    const daysSince = lastSold
-      ? Math.floor((now.getTime() - new Date(lastSold).getTime()) / (1000 * 60 * 60 * 24))
-      : 9999
+    const lastSold = r.lastSoldDate ? String(r.lastSoldDate).slice(0, 10) : null
+    const daysSince = lastSold ? daysBetweenDateKeys(lastSold, today) : 9999
     return {
       productId: r.productId,
       productName: r.productName,
       sku: r.sku,
-      currentStock: r.currentStock,
+      currentStock: Number(r.currentStock),
       lastSoldDate: lastSold,
       daysSinceLastSold: daysSince,
     }
