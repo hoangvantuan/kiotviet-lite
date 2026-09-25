@@ -9,6 +9,7 @@ import type { Db } from '../db/index.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
+import { createUserRateLimit } from '../middleware/rate-limit.middleware.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import { verifyPin } from '../services/pin.service.js'
@@ -49,7 +50,7 @@ export function createUsersRoutes({ db }: UsersRoutesDeps) {
     return c.json({ data })
   })
 
-  app.post('/', requirePermission('users.manage'), async (c) => {
+  app.post('/', requirePermission('users.manage'), createUserRateLimit, async (c) => {
     const auth = c.get('auth')
     const input = await parseJson(c, createUserSchema)
     const data = await createUser({

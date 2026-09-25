@@ -31,33 +31,74 @@ export const authRateLimit = rateLimiter({
  * Lấy số điện thoại trong body đăng nhập làm khóa giới hạn. Hono đệm body nên
  * handler phía sau vẫn đọc lại được. Body lỗi dùng chung một khóa, handler sẽ trả 400.
  */
-const getLoginPhoneKey = async (c: Context): Promise<string> => {
+const getLoginPhone = async (c: Context): Promise<string> => {
   try {
     const body = (await c.req.json()) as { phone?: unknown }
     if (typeof body.phone === 'string' && body.phone.trim().length > 0) {
-      return `phone:${body.phone.trim()}`
+      return body.phone.trim()
     }
   } catch {
     // body không phải JSON
   }
-  return 'phone:invalid'
+  return 'invalid'
 }
 
+const LOGIN_PHONE_WINDOW_MS = 15 * 60_000
+
 /**
- * Rate limit đăng nhập theo tài khoản: 10 lần SAI / 15 phút / số điện thoại, bất kể IP.
- * Chặn dò mật khẩu phân tán qua nhiều IP. Đăng nhập thành công không bị tính.
- * Đánh đổi: kẻ xấu biết số điện thoại có thể làm chủ tài khoản chờ tối đa 15 phút.
+ * Rate limit đăng nhập theo cặp (số điện thoại, IP): 10 lần SAI / 15 phút.
+ * Chặn một nguồn dò mật khẩu một tài khoản mà không làm vạ lây chủ tài khoản ở IP khác.
+ * Đăng nhập thành công không bị tính. Nguồn bị chặn chờ tối đa 15 phút kể từ lần sai đầu của cửa sổ.
  */
-export const authPhoneRateLimit = rateLimiter({
-  windowMs: 15 * 60_000,
+export const authPhoneIpRateLimit = rateLimiter({
+  windowMs: LOGIN_PHONE_WINDOW_MS,
   limit: 10,
-  keyGenerator: getLoginPhoneKey,
+  keyGenerator: async (c) => `phone-ip:${await getLoginPhone(c)}|${getClientIp(c)}`,
   skipSuccessfulRequests: true,
   skip: isRateLimitDisabled,
   message: {
     error: {
       code: 'RATE_LIMITED',
       message: 'Đăng nhập sai quá nhiều lần, vui lòng thử lại sau 15 phút',
+    },
+  },
+})
+
+/**
+ * Rate limit đăng nhập tổng theo số điện thoại: 50 lần SAI / 15 phút, bất kể IP.
+ * Chặn dò mật khẩu phân tán qua nhiều IP, cao hơn nhiều ngưỡng theo cặp để một IP không khóa được
+ * tài khoản người khác. Phải đặt SAU `authPhoneIpRateLimit` để request đã bị chặn theo cặp không cộng vào đây.
+ * Đánh đổi: kẻ xấu có từ 5 IP trở lên vẫn giữ được khóa bằng cách gửi đủ 50 lần sai mỗi 15 phút;
+ * khi đó chủ tài khoản bị 429 chừng nào đợt tấn công còn tiếp diễn.
+ */
+export const authPhoneRateLimit = rateLimiter({
+  windowMs: LOGIN_PHONE_WINDOW_MS,
+  limit: 50,
+  keyGenerator: async (c) => `phone:${await getLoginPhone(c)}`,
+  skipSuccessfulRequests: true,
+  skip: isRateLimitDisabled,
+  message: {
+    error: {
+      code: 'RATE_LIMITED',
+      message: 'Tài khoản đang bị đăng nhập sai nhiều lần, vui lòng thử lại sau',
+    },
+  },
+})
+
+/**
+ * Rate limit tạo nhân viên: 20 lần / giờ / người dùng. Số điện thoại là duy nhất toàn hệ thống nên
+ * POST /users buộc phải trả 409 khi trùng; giới hạn này làm chậm việc dùng 409 để dò số đã đăng ký.
+ * Phải đặt sau `requireAuth` để có `auth.userId`.
+ */
+export const createUserRateLimit = rateLimiter({
+  windowMs: 3_600_000,
+  limit: 20,
+  keyGenerator: (c) => `create-user:${c.get('auth').userId}`,
+  skip: isRateLimitDisabled,
+  message: {
+    error: {
+      code: 'RATE_LIMITED',
+      message: 'Tạo nhân viên quá nhiều lần, vui lòng thử lại sau',
     },
   },
 })

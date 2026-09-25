@@ -13,7 +13,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { customers, orders } from '@kiotviet-lite/shared'
+import { auditLogs, customers, orders } from '@kiotviet-lite/shared'
 
 import { errorHandler } from '../middleware/error-handler.js'
 import { createOrdersRoutes } from '../routes/orders.routes.js'
@@ -118,7 +118,8 @@ describe('BM-02: đơn không được tham chiếu khách của cửa hàng kh�
     expect(body.error.message).toBe('Không tìm thấy khách hàng')
   })
 
-  it('POST /sync/push đơn tiền mặt với customerId của A trả kết quả error NOT_FOUND', async () => {
+  it('POST /sync/push đơn tiền mặt với khách của A: nhận đơn, hạ khách về null, ghi audit và cảnh báo', async () => {
+    // Đơn ngoại tuyến đã bán xong tại quầy; từ chối vĩnh viễn sẽ kẹt đơn trên thiết bị (ADR-0002)
     const res = await post('/sync/push', {
       orders: [
         {
@@ -130,10 +131,62 @@ describe('BM-02: đơn không được tham chiếu khách của cửa hàng kh�
     })
     expect(res.status).toBe(200)
     const body = (await res.json()) as {
-      data: { results: Array<{ status: string; error?: { code: string } }> }
+      data: {
+        results: Array<{
+          status: string
+          serverId?: string
+          warnings?: Array<{ code: string; message: string }>
+        }>
+      }
+    }
+    const result = body.data.results[0]
+    expect(result?.status).toBe('synced')
+    expect(result?.warnings?.map((w) => w.code)).toEqual(['CUSTOMER_NOT_IN_STORE'])
+
+    const [row] = await env.db
+      .select({ customerId: orders.customerId })
+      .from(orders)
+      .where(eq(orders.id, result?.serverId ?? ''))
+    expect(row?.customerId).toBeNull()
+
+    const [audit] = await env.db
+      .select({ storeId: auditLogs.storeId, changes: auditLogs.changes })
+      .from(auditLogs)
+      .where(
+        and(
+          eq(auditLogs.action, 'order.customer_mismatch_dropped'),
+          eq(auditLogs.targetId, result?.serverId ?? ''),
+        ),
+      )
+    expect(audit?.storeId).toBe(storeB)
+    expect(audit?.changes).toMatchObject({
+      customerDiscrepancy: { requestedCustomerId: customerA },
+    })
+  })
+
+  it('POST /sync/push đơn ghi nợ với khách của A bị từ chối BUSINESS_RULE_VIOLATION, không tạo đơn', async () => {
+    const res = await post('/sync/push', {
+      orders: [
+        {
+          clientId: '00000000-0000-4000-8000-0000000000b3',
+          createdAt: new Date().toISOString(),
+          orderData: {
+            ...cashOrder(customerA),
+            paymentMethod: 'debt',
+            paymentStatus: 'unpaid',
+            cashAmount: 0,
+            debtAmount: 1000,
+          },
+        },
+      ],
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      data: { results: Array<{ status: string; error?: { code: string; message: string } }> }
     }
     expect(body.data.results[0]?.status).toBe('error')
-    expect(body.data.results[0]?.error?.code).toBe('NOT_FOUND')
+    expect(body.data.results[0]?.error?.code).toBe('BUSINESS_RULE_VIOLATION')
+    expect(body.data.results[0]?.error?.message).toContain('không thể ghi nợ')
 
     const leaked = await env.db
       .select({ id: orders.id })
@@ -190,7 +243,7 @@ describe('BM-02: đơn không được tham chiếu khách của cửa hàng kh�
 })
 
 describe('BM-02: migration khóa ngoại ghép an toàn với dữ liệu sai có sẵn', () => {
-  it('gỡ liên kết chéo cửa hàng rồi thêm được ràng buộc, liên kết đúng giữ nguyên', async () => {
+  it('sao lưu rồi gỡ liên kết chéo cửa hàng, thêm được ràng buộc, liên kết đúng giữ nguyên', async () => {
     const migrationsDir = resolve(dirname(fileURLToPath(import.meta.url)), '../db/migrations')
     const file = readdirSync(migrationsDir).find((f) =>
       readFileSync(resolve(migrationsDir, f), 'utf8').includes('fk_orders_store_customer'),
@@ -247,6 +300,24 @@ describe('BM-02: migration khóa ngoại ghép an toàn với dữ liệu sai c�
         .where(eq(orders.storeId, otherStore.id))
       expect(rows.find((r) => r.id === bad?.id)?.customerId).toBeNull()
       expect(rows.find((r) => r.id === good?.id)?.customerId).toBe(customerOther.id)
+
+      // Giá trị cũ được sao lưu để đảo lại được; đơn đúng không bị chép
+      const backup = await local.pglite.query<{
+        order_id: string
+        store_id: string
+        old_customer_id: string | null
+        old_price_list_id: string | null
+      }>(
+        'SELECT order_id, store_id, old_customer_id, old_price_list_id FROM orders_cross_store_link_backup',
+      )
+      expect(backup.rows).toEqual([
+        {
+          order_id: bad?.id,
+          store_id: otherStore.id,
+          old_customer_id: customerA.id,
+          old_price_list_id: null,
+        },
+      ])
     } finally {
       await local.close()
     }

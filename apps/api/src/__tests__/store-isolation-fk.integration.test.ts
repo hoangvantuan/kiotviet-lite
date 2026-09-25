@@ -15,7 +15,7 @@
  *
  * Bảng route ghi có khóa ngoại được bao phủ (X = có test ở file này):
  *  - POST /pos/orders                     customerId, productId, variantId, unitConversionId, priceListId
- *  - POST /sync/push                      customerId (đơn tiền mặt + đơn ghi nợ), productId
+ *  - POST /sync/push                      customerId (tiền mặt: hạ về null theo ADR-0002; ghi nợ: từ chối), productId
  *  - POST /category-discounts             categoryId, customerGroupId
  *  - POST /customer-prices                customerId, productId
  *  - POST /debt-adjustments               customerId
@@ -675,8 +675,7 @@ describe('POST /sync/push: khóa ngoại: customerId, productId (luôn trả HTT
     expect(body.data.results[0]?.status).toBe('synced')
   })
 
-  it('customerId thuộc A, đơn tiền mặt -> results[0].status=error, code NOT_FOUND, không tạo đơn cho B', async () => {
-    const before = await countOrdersForStore(fx.base.db, fx.storeB.id)
+  it('customerId thuộc A, đơn tiền mặt -> vẫn nhận đơn nhưng hạ khách về null, kèm cảnh báo (ADR-0002)', async () => {
     const res = await call(
       fx.app,
       'POST',
@@ -693,13 +692,18 @@ describe('POST /sync/push: khóa ngoại: customerId, productId (luôn trả HTT
     )
     expect(res.status).toBe(200)
     const body = (await res.json()) as SyncPushEnvelope
-    expect(body.data.results[0]?.status).toBe('error')
-    expect(body.data.results[0]?.error?.code).toBe('NOT_FOUND')
-    const after = await countOrdersForStore(fx.base.db, fx.storeB.id)
-    expect(after).toBe(before)
+    const result = body.data.results[0]
+    expect(result?.status).toBe('synced')
+    expect(result?.warnings?.map((w) => w.code)).toEqual(['CUSTOMER_NOT_IN_STORE'])
+    const [row] = await fx.base.db
+      .select({ storeId: orders.storeId, customerId: orders.customerId })
+      .from(orders)
+      .where(eq(orders.id, result?.serverId ?? ''))
+    expect(row).toEqual({ storeId: fx.storeB.id, customerId: null })
   })
 
-  it('customerId thuộc A, đơn ghi nợ -> results[0].status=error, code NOT_FOUND', async () => {
+  it('customerId thuộc A, đơn ghi nợ -> results[0].status=error, code BUSINESS_RULE_VIOLATION, không tạo đơn', async () => {
+    const before = await countOrdersForStore(fx.base.db, fx.storeB.id)
     const res = await call(
       fx.app,
       'POST',
@@ -717,7 +721,8 @@ describe('POST /sync/push: khóa ngoại: customerId, productId (luôn trả HTT
     expect(res.status).toBe(200)
     const body = (await res.json()) as SyncPushEnvelope
     expect(body.data.results[0]?.status).toBe('error')
-    expect(body.data.results[0]?.error?.code).toBe('NOT_FOUND')
+    expect(body.data.results[0]?.error?.code).toBe('BUSINESS_RULE_VIOLATION')
+    expect(await countOrdersForStore(fx.base.db, fx.storeB.id)).toBe(before)
   })
 
   it('productId thuộc A -> results[0].status=error, code NOT_FOUND', async () => {

@@ -14,6 +14,7 @@ import { ApiError } from '../lib/errors.js'
 import { parseJson } from '../lib/http.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import {
+  authPhoneIpRateLimit,
   authPhoneRateLimit,
   authRateLimit,
   refreshRateLimit,
@@ -49,7 +50,7 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
     return c.json(body, 201)
   })
 
-  app.post('/login', authRateLimit, authPhoneRateLimit, async (c) => {
+  app.post('/login', authRateLimit, authPhoneIpRateLimit, authPhoneRateLimit, async (c) => {
     const input = await parseJson(c, loginSchema)
     const ip = getClientIp(c)
     const userAgent = c.req.header('user-agent')

@@ -223,6 +223,7 @@ export function createSyncRoutes({ db }: { db: Db }) {
           clientId: offlineOrder.clientId,
           serverId: order.id,
           status: order.isDuplicate ? 'duplicate' : 'synced',
+          ...(order.warnings ? { warnings: order.warnings } : {}),
         })
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error'
