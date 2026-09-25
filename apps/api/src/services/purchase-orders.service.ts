@@ -6,8 +6,7 @@ import {
   inventoryTransactions,
   type ListPurchaseOrdersQuery,
   type PaymentStatus,
-  products,
-  productVariants,
+  productUnitConversions,
   type PurchaseOrderDetail,
   type PurchaseOrderItemDetail,
   purchaseOrderItems,
@@ -24,11 +23,8 @@ import { logger } from '../lib/logger.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
-import {
-  aggregateVariantStock,
-  loadProductForUpdate,
-  loadVariantForUpdate,
-} from './products-lock.helper.js'
+import { allocateProportionally, receiveStock } from './inventory-cost.helper.js'
+import { loadProductForUpdate, loadVariantForUpdate } from './products-lock.helper.js'
 
 export interface PurchaseOrdersActor {
   userId: string
@@ -63,19 +59,8 @@ export function determinePaymentStatus(totalAmount: number, paidAmount: number):
   return 'partial'
 }
 
-export function computeWac(args: {
-  costBefore: number | null
-  stockBefore: number
-  quantity: number
-  unitCost: number
-}): number {
-  const { costBefore, stockBefore, quantity, unitCost } = args
-  if (costBefore === null || stockBefore <= 0) {
-    return unitCost
-  }
-  const newStock = stockBefore + quantity
-  return Math.round((stockBefore * costBefore + quantity * unitCost) / newStock)
-}
+// Giới hạn số lượng một dòng sau khi quy ra đơn vị tính, cùng mức với schema dòng nhập
+const MAX_BASE_QUANTITY = 1_000_000
 
 const MAX_DAILY_PO_SEQUENCE = 9999
 
@@ -168,23 +153,26 @@ export async function createPurchaseOrder({
       throw new ApiError('NOT_FOUND', 'Không tìm thấy nhà cung cấp')
     }
 
-    // Process items: lock products/variants, validate, compute lineTotal + WAC
-    interface ProcessedItem {
+    // Bước 1: khóa và kiểm tra từng dòng, quy đổi đơn vị, tính thành tiền dòng.
+    // Chưa ghi tồn hay giá vốn: chiết khấu phiếu phải biết trước khi tính giá vốn (KHO-04).
+    interface PreparedItem {
       productId: string
       variantId: string | null
       productNameSnapshot: string
       productSkuSnapshot: string
       variantLabelSnapshot: string | null
+      unitConversionId: string | null
+      unitNameSnapshot: string | null
+      conversionFactor: number
+      baseQuantity: number
       quantity: number
       unitPrice: number
       discountType: DiscountType
       discountValue: number
       discountAmount: number
       lineTotal: number
-      costAfter: number
-      stockAfter: number
     }
-    const processed: ProcessedItem[] = []
+    const prepared: PreparedItem[] = []
     let subtotal = 0
 
     for (const item of input.items) {
@@ -203,9 +191,6 @@ export async function createPurchaseOrder({
       }
 
       let variantLabelSnapshot: string | null = null
-      let stockBefore: number
-      let variantStockAfter: number | null = null
-
       if (product.hasVariants && variantId) {
         const variant = await loadVariantForUpdate({
           tx: txDb,
@@ -215,15 +200,43 @@ export async function createPurchaseOrder({
         variantLabelSnapshot = variant.attribute2Value
           ? `${variant.attribute1Value} - ${variant.attribute2Value}`
           : variant.attribute1Value
-        // WAC dùng tổng tồn cấp product (sum variants) cho công thức
-        stockBefore = await aggregateVariantStock({ tx: txDb, productId: item.productId })
-        variantStockAfter = variant.stockQuantity + item.quantity
-        await tx
-          .update(productVariants)
-          .set({ stockQuantity: variantStockAfter })
-          .where(eq(productVariants.id, variantId))
-      } else {
-        stockBefore = product.currentStock
+      }
+
+      // KHO-10: nhập theo đơn vị quy đổi đã khai báo của sản phẩm
+      const unitConversionId = item.unitConversionId ?? null
+      let unitNameSnapshot: string | null = null
+      let conversionFactor = 1
+      if (unitConversionId) {
+        const convRows = await tx
+          .select({
+            unit: productUnitConversions.unit,
+            conversionFactor: productUnitConversions.conversionFactor,
+          })
+          .from(productUnitConversions)
+          .where(
+            and(
+              eq(productUnitConversions.id, unitConversionId),
+              eq(productUnitConversions.productId, item.productId),
+              eq(productUnitConversions.storeId, actor.storeId),
+            ),
+          )
+          .limit(1)
+        const conv = convRows[0]
+        if (!conv) {
+          throw new ApiError(
+            'VALIDATION_ERROR',
+            'Đơn vị quy đổi không hợp lệ hoặc không thuộc sản phẩm/cửa hàng này',
+          )
+        }
+        unitNameSnapshot = conv.unit
+        conversionFactor = Number(conv.conversionFactor)
+      }
+      const baseQuantity = item.quantity * conversionFactor
+      if (baseQuantity > MAX_BASE_QUANTITY) {
+        throw new ApiError(
+          'BUSINESS_RULE_VIOLATION',
+          'Số lượng quy ra đơn vị tính vượt giới hạn 1.000.000',
+        )
       }
 
       const lineSubtotal = item.quantity * item.unitPrice
@@ -237,37 +250,22 @@ export async function createPurchaseOrder({
       }
       const lineTotal = lineSubtotal - discountAmount
 
-      const costBefore = product.costPrice === null ? null : Number(product.costPrice)
-      const costAfter = computeWac({
-        costBefore,
-        stockBefore,
-        quantity: item.quantity,
-        unitCost: item.unitPrice,
-      })
-
-      const productUpdates: Partial<typeof products.$inferInsert> = { costPrice: costAfter }
-      const newProductStock = stockBefore + item.quantity
-      if (!product.hasVariants) {
-        productUpdates.currentStock = newProductStock
-      }
-      await tx.update(products).set(productUpdates).where(eq(products.id, item.productId))
-
-      const stockAfterSnapshot = product.hasVariants ? variantStockAfter! : newProductStock
-
-      processed.push({
+      prepared.push({
         productId: item.productId,
         variantId,
         productNameSnapshot: product.name,
         productSkuSnapshot: product.sku,
         variantLabelSnapshot,
+        unitConversionId,
+        unitNameSnapshot,
+        conversionFactor,
+        baseQuantity,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         discountType: item.discountType,
         discountValue: item.discountValue,
         discountAmount,
         lineTotal,
-        costAfter,
-        stockAfter: stockAfterSnapshot,
       })
       subtotal += lineTotal
     }
@@ -286,6 +284,40 @@ export async function createPurchaseOrder({
       throw new ApiError('BUSINESS_RULE_VIOLATION', 'Số tiền đã trả vượt quá tổng phiếu')
     }
     const paymentStatus = determinePaymentStatus(totalAmount, input.paidAmount)
+
+    // Bước 2 (KHO-04, VAS 02 đoạn 06): chiết khấu phiếu phân bổ theo tỷ lệ thành tiền dòng,
+    // tổng phân bổ khớp đúng discountTotal. Tiền hàng thực của dòng = lineTotal - phần phân bổ,
+    // dùng cho giá vốn bình quân và sổ giao dịch kho. Tổng tiền hàng thực = totalAmount.
+    const allocations = allocateProportionally(
+      prepared.map((p) => p.lineTotal),
+      discountTotal,
+    )
+
+    interface ProcessedItem extends PreparedItem {
+      orderDiscountAllocated: number
+      unitCost: number
+      costAfter: number
+      stockAfter: number
+    }
+    const processed: ProcessedItem[] = []
+    for (const [index, p] of prepared.entries()) {
+      const orderDiscountAllocated = allocations[index] ?? 0
+      const received = await receiveStock({
+        tx: txDb,
+        storeId: actor.storeId,
+        productId: p.productId,
+        variantId: p.variantId,
+        quantity: p.baseQuantity,
+        totalCost: p.lineTotal - orderDiscountAllocated,
+      })
+      processed.push({
+        ...p,
+        orderDiscountAllocated,
+        unitCost: received.unitCost,
+        costAfter: received.costAfter,
+        stockAfter: received.stockAfter,
+      })
+    }
 
     // Generate code with retry on unique violation
     let code = await generatePurchaseOrderCode({ tx: txDb, storeId: actor.storeId, purchaseDate })
@@ -357,6 +389,11 @@ export async function createPurchaseOrder({
         discountType: p.discountType,
         discountValue: p.discountValue,
         lineTotal: p.lineTotal,
+        unitConversionId: p.unitConversionId,
+        unitNameSnapshot: p.unitNameSnapshot,
+        conversionFactor: p.conversionFactor,
+        orderDiscountAllocated: p.orderDiscountAllocated,
+        unitCost: p.unitCost,
         costAfter: p.costAfter,
         stockAfter: p.stockAfter,
       })
@@ -366,8 +403,8 @@ export async function createPurchaseOrder({
         productId: p.productId,
         variantId: p.variantId,
         type: 'purchase',
-        quantity: p.quantity,
-        unitCost: p.unitPrice,
+        quantity: p.baseQuantity,
+        unitCost: p.unitCost,
         costAfter: p.costAfter,
         stockAfter: p.stockAfter,
         note: code,
@@ -508,12 +545,19 @@ export async function getPurchaseOrder({
     productNameSnapshot: it.productNameSnapshot,
     productSkuSnapshot: it.productSkuSnapshot,
     variantLabelSnapshot: it.variantLabelSnapshot,
+    unitConversionId: it.unitConversionId,
+    unitName: it.unitNameSnapshot,
+    conversionFactor: it.conversionFactor,
+    baseQuantity: it.quantity * it.conversionFactor,
     quantity: it.quantity,
     unitPrice: Number(it.unitPrice),
     discountAmount: Number(it.discountAmount),
     discountType: it.discountType as DiscountType,
     discountValue: Number(it.discountValue),
     lineTotal: Number(it.lineTotal),
+    orderDiscountAllocated:
+      it.orderDiscountAllocated === null ? null : Number(it.orderDiscountAllocated),
+    unitCost: it.unitCost === null ? null : Number(it.unitCost),
     costAfter: it.costAfter === null ? null : Number(it.costAfter),
     stockAfter: it.stockAfter,
   }))

@@ -31,6 +31,7 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'product.unit_conversion_updated': 'Sửa đơn vị quy đổi',
   'product.unit_conversion_deleted': 'Xoá đơn vị quy đổi',
   'inventory.purchase_recorded': 'Ghi nhận nhập hàng',
+  'inventory.cost_recalculated': 'Tính lại giá vốn',
   'inventory.manual_adjusted': 'Điều chỉnh tồn kho thủ công',
   'customer.created': 'Tạo khách hàng',
   'customer.updated': 'Sửa khách hàng',
@@ -129,7 +130,11 @@ export const ACTION_GROUPS: ActionGroup[] = [
   },
   {
     label: 'Tồn kho',
-    actions: ['inventory.purchase_recorded', 'inventory.manual_adjusted'],
+    actions: [
+      'inventory.purchase_recorded',
+      'inventory.manual_adjusted',
+      'inventory.cost_recalculated',
+    ],
   },
   {
     label: 'Khách hàng',

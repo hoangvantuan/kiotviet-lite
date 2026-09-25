@@ -16,12 +16,9 @@ import {
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { logAction, type RequestMeta } from './audit.service.js'
+import { receiveStock, syncParentFromVariants } from './inventory-cost.helper.js'
 import { getProduct } from './products.service.js'
-import {
-  aggregateVariantStock,
-  loadProductForUpdate,
-  loadVariantForUpdate,
-} from './products-lock.helper.js'
+import { loadProductForUpdate, loadVariantForUpdate } from './products-lock.helper.js'
 
 export interface InventoryActor {
   userId: string
@@ -85,60 +82,17 @@ export async function recordPurchaseTransaction({
   }
 
   const txResult = await db.transaction(async (tx) => {
-    const product = await loadProductForUpdate({
+    const variantId = input.variantId ?? null
+    // KHO-05: giá vốn bình quân theo biến thể và đồng bộ tồn cha dùng chung với phiếu nhập
+    const received = await receiveStock({
       tx: tx as unknown as Db,
       storeId: actor.storeId,
       productId,
+      variantId,
+      quantity: input.quantity,
+      totalCost: input.quantity * input.unitCost,
     })
-
-    const variantId = input.variantId ?? null
-    if (product.hasVariants && !variantId) {
-      throw new ApiError('VALIDATION_ERROR', 'Sản phẩm có biến thể, vui lòng chọn biến thể nhập')
-    }
-    if (!product.hasVariants && variantId) {
-      throw new ApiError('VALIDATION_ERROR', 'Sản phẩm không có biến thể')
-    }
-
-    let stockBefore: number
-    let variantStockAfter: number | null = null
-
-    if (product.hasVariants && variantId) {
-      const variant = await loadVariantForUpdate({
-        tx: tx as unknown as Db,
-        productId,
-        variantId,
-      })
-      stockBefore = await aggregateVariantStock({
-        tx: tx as unknown as Db,
-        productId,
-      })
-      variantStockAfter = variant.stockQuantity + input.quantity
-      await tx
-        .update(productVariants)
-        .set({ stockQuantity: variantStockAfter })
-        .where(eq(productVariants.id, variantId))
-    } else {
-      stockBefore = product.currentStock
-    }
-
-    const costBefore = product.costPrice === null ? null : Number(product.costPrice)
-    const newStock = stockBefore + input.quantity
-    let costAfter: number
-    if (costBefore === null || stockBefore <= 0) {
-      costAfter = input.unitCost
-    } else {
-      costAfter = Math.round(
-        (stockBefore * costBefore + input.quantity * input.unitCost) / newStock,
-      )
-    }
-
-    const productUpdates: Partial<typeof products.$inferInsert> = { costPrice: costAfter }
-    if (!product.hasVariants) {
-      productUpdates.currentStock = newStock
-    }
-    await tx.update(products).set(productUpdates).where(eq(products.id, productId))
-
-    const stockAfterSnapshot = product.hasVariants ? variantStockAfter : newStock
+    const { costBefore, costAfter, stockBefore, stockAfter } = received
 
     const [txRow] = await tx
       .insert(inventoryTransactions)
@@ -150,7 +104,7 @@ export async function recordPurchaseTransaction({
         quantity: input.quantity,
         unitCost: input.unitCost,
         costAfter,
-        stockAfter: stockAfterSnapshot,
+        stockAfter,
         note: input.note ?? null,
         createdBy: actor.userId,
       })
@@ -169,11 +123,10 @@ export async function recordPurchaseTransaction({
         variantId,
         quantity: input.quantity,
         unitCost: input.unitCost,
-        // stockBefore/stockAfter ở cấp product (sum khi hasVariants)
+        // stockBefore/stockAfter/cost ở đúng cấp nhận hàng (biến thể nếu có)
         stockBefore,
-        stockAfter: newStock,
-        // Snapshot cấp variant để khớp với inventory_transactions.stockAfter
-        variantStockAfter,
+        stockAfter,
+        productStockAfter: received.productStockAfter,
         costBefore,
         costAfter,
       },
@@ -251,6 +204,12 @@ export async function recordManualAdjustment({
         .update(productVariants)
         .set({ stockQuantity: stockAfter })
         .where(eq(productVariants.id, variantId))
+      // Đồng bộ tồn cha ngay như các luồng bán, trả, kiểm kê
+      await syncParentFromVariants({
+        tx: tx as unknown as Db,
+        productId,
+        fallbackCost: product.costPrice === null ? null : Number(product.costPrice),
+      })
     } else {
       stockBefore = product.currentStock
       stockAfter = stockBefore + input.delta

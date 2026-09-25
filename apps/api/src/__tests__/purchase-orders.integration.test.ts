@@ -619,7 +619,7 @@ describe('PO với sản phẩm có biến thể (variant flow)', () => {
     await env.base.close()
   })
 
-  it('PO với 1 variant item → variant.stockQuantity tăng, product.currentStock giữ nguyên 0', async () => {
+  it('PO với 1 variant item → variant.stockQuantity và costPrice tăng, tồn cha đồng bộ ngay (KHO-05)', async () => {
     const supplier = await createSupplierFixture(env)
     const product = await createVariantProductFixture(env)
     const variants = product.variantsConfig?.variants ?? []
@@ -653,14 +653,15 @@ describe('PO với sản phẩm có biến thể (variant flow)', () => {
       .from(productVariants)
       .where(eq(productVariants.id, v0.id))
     expect(variantRow?.stockQuantity).toBe(5)
+    expect(variantRow?.costPrice).toBe(80_000)
 
     const [productRow] = await env.base.db
       .select()
       .from(products)
       .where(eq(products.id, product.id))
-    // hasVariants → product.currentStock KHÔNG thay đổi
-    expect(productRow?.currentStock).toBe(0)
-    // costPrice cấp product được update theo WAC của tổng tồn
+    // KHO-05: tồn cha = tổng tồn biến thể, đồng bộ ngay trong transaction nhập
+    expect(productRow?.currentStock).toBe(5)
+    // Giá vốn cha = bình quân giá vốn biến thể theo tồn
     expect(productRow?.costPrice).toBe(80_000)
   })
 
@@ -704,14 +705,16 @@ describe('PO với sản phẩm có biến thể (variant flow)', () => {
     const byId = new Map(variantRows.map((v) => [v.id, v]))
     expect(byId.get(v0!.id)?.stockQuantity).toBe(3)
     expect(byId.get(v1!.id)?.stockQuantity).toBe(7)
+    // Mỗi biến thể có giá vốn riêng theo lô của nó
+    expect(byId.get(v0!.id)?.costPrice).toBe(80_000)
+    expect(byId.get(v1!.id)?.costPrice).toBe(100_000)
 
     const [productRow] = await env.base.db
       .select()
       .from(products)
       .where(eq(products.id, product.id))
-    expect(productRow?.currentStock).toBe(0)
-    // WAC sau item 2: stockBefore=3, costBefore=80_000, qty=7, unitCost=100_000
-    // → (3*80_000 + 7*100_000) / 10 = (240_000 + 700_000)/10 = 94_000
+    expect(productRow?.currentStock).toBe(10)
+    // Giá vốn cha = (3*80_000 + 7*100_000) / 10 = 94_000
     expect(productRow?.costPrice).toBe(94_000)
   })
 })

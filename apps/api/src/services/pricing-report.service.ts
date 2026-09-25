@@ -183,6 +183,7 @@ export async function getPriceHistory(
       purchaseDate: purchaseOrders.purchaseDate,
       supplierName: suppliers.name,
       unitPrice: purchaseOrderItems.unitPrice,
+      conversionFactor: purchaseOrderItems.conversionFactor,
       costAfter: purchaseOrderItems.costAfter,
     })
     .from(purchaseOrderItems)
@@ -196,7 +197,8 @@ export async function getPriceHistory(
     productName: r.productName,
     purchaseDate: r.purchaseDate.toISOString().slice(0, 10),
     supplierName: r.supplierName,
-    unitPrice: Number(r.unitPrice),
+    // Đơn giá nhập quy về đơn vị tính để so được với giá vốn (KHO-10)
+    unitPrice: Math.round(Number(r.unitPrice) / r.conversionFactor),
     costAfter: r.costAfter !== null ? Number(r.costAfter) : null,
   }))
 
