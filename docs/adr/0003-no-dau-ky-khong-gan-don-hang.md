@@ -58,6 +58,8 @@ với thực tế.
 - Công nợ khách hàng vốn đã có hai nguồn sự thật song song: con số tổng trên hồ sơ khách
   và tổng các khoản nợ chưa trả hết. Nợ đầu kỳ phải ghi vào cả hai, nếu không phiếu thu
   sẽ báo còn tiền để thu mà không tìm ra khoản nào để trừ, hoặc ngược lại.
+  Đã thay bằng [ADR-0008](0008-so-cong-no-khach-duy-nhat.md): khoản nợ là nguồn sự thật duy
+  nhất, con số tổng chỉ được đổi qua sổ công nợ và được kiểm khớp mỗi lần ghi.
 - Ngày phát sinh gõ tay là số liệu do người nhập chịu trách nhiệm. Sai ngày thì báo cáo
   tuổi nợ sai theo, hệ thống không có cách nào tự phát hiện.
 - Phía nhà cung cấp hiện chưa có bảng khoản nợ để phân bổ: nợ đầu kỳ là một bản ghi

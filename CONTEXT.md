@@ -152,8 +152,12 @@ Tổng số tiền một khách hàng còn nợ cửa hàng, hoặc cửa hàng 
 _Tránh dùng_: dư nợ, tiền nợ, nợ
 
 **Khoản nợ**:
-Một món nợ riêng lẻ với số tiền phát sinh, số tiền đã trả và số tiền còn lại.
+Một món nợ riêng lẻ với số tiền phát sinh, số tiền đã trả, số tiền giảm trừ và số tiền còn lại; phát sinh luôn bằng đã trả cộng giảm trừ cộng còn lại. Công nợ của khách hàng là tổng số còn lại của các khoản nợ.
 _Tránh dùng_: dòng nợ, món nợ
+
+**Giảm trừ**:
+Phần khoản nợ được xoá mà khách không trả tiền, do trả hàng cấn nợ hoặc điều chỉnh giảm nợ. Khác với đã trả: đã trả chỉ là tiền thực thu qua phiếu thu.
+_Tránh dùng_: khấu trừ, trả bằng hàng
 
 **Nợ đầu kỳ**:
 Khoản nợ đã có từ trước khi cửa hàng dùng phần mềm này, không sinh ra từ đơn hàng nào trong hệ thống.
@@ -180,7 +184,7 @@ Chứng từ ghi nhận cửa hàng trả tiền nợ cho nhà cung cấp.
 _Tránh dùng_: phiếu chi tiền, thanh toán NCC
 
 **Điều chỉnh nợ**:
-Việc sửa thẳng con số công nợ vì một lý do nằm ngoài mua bán và thu chi, ví dụ xóa nợ hay ghi nhận sai sót.
+Bút toán tăng hoặc giảm công nợ một số tiền chênh lệch, kèm lý do, vì một việc nằm ngoài mua bán và thu chi, ví dụ chiết khấu cuối kỳ hay ghi nhận sai sót. Tăng nợ tạo một khoản nợ mới; giảm nợ giảm trừ các khoản nợ cũ nhất trước. Không gõ thẳng số công nợ mới.
 _Tránh dùng_: sửa nợ, chỉnh nợ
 
 ### Chuyển dữ liệu

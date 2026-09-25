@@ -35,7 +35,7 @@ curl http://localhost:8080/api/v1/health
 ### Kiểm tra sau migration 0047 (sổ công nợ R3)
 
 Migration `0047_debt_ledger_backfill` đưa dữ liệu công nợ cũ về sổ công nợ duy nhất
-([ADR-0007](adr/0007-so-cong-no-khach-duy-nhat.md)). Công nợ khách (`customers.current_debt`)
+([ADR-0008](adr/0008-so-cong-no-khach-duy-nhat.md)). Công nợ khách (`customers.current_debt`)
 giữ nguyên; migration chỉ sửa khoản nợ: chuyển phần `paid` không có phiếu thu sang giảm trừ,
 tạo khoản "Điều chỉnh tăng nợ" cho phần công nợ lớn hơn tổng khoản nợ, và giảm trừ FIFO khi
 tổng khoản nợ lớn hơn công nợ. Mỗi khách bị điều chỉnh có một dòng nhật ký thao tác
