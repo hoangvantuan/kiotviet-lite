@@ -29,7 +29,7 @@ import { logger } from '../lib/logger.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
-import { addCustomerDebt } from './customer-debt-ledger.service.js'
+import { addCustomerDebt, lockCustomerForDebt } from './customer-debt-ledger.service.js'
 import { emitEvent } from './notification-emitter.js'
 import { verifyPin } from './pin.service.js'
 import { resolveProductPrice } from './pricing.service.js'
@@ -37,6 +37,7 @@ import {
   aggregateVariantStock,
   loadProductForUpdate,
   loadVariantForUpdate,
+  lockProductsInIdOrder,
 } from './products-lock.helper.js'
 import { assertStoreOwned } from './store-scope.js'
 
@@ -416,6 +417,12 @@ export async function createOrder({
     const result = await db.transaction(async (tx) => {
       const txDb = tx as unknown as Db
 
+      // TIEN-103: thứ tự khóa chung customers, debts, products (customer-debt-ledger.service.ts).
+      // Đơn ghi nợ khóa khách trước khi đụng tới kho, thay vì chỉ khóa lúc ghi nợ ở cuối.
+      if (debtAmount > 0 && input.customerId) {
+        await lockCustomerForDebt(txDb, { storeId: actor.storeId, customerId: input.customerId })
+      }
+
       // Generate order number with retry on unique violation
       let orderNumber = await generateOrderNumber({ tx: txDb, storeId: actor.storeId })
       let createdId: string | null = null
@@ -497,6 +504,12 @@ export async function createOrder({
         devicePriceSourceDetail: string | null
         serverPriceSourceDetail: string | null
       }> = []
+
+      await lockProductsInIdOrder({
+        tx: txDb,
+        storeId: actor.storeId,
+        productIds: input.items.map((item) => item.productId),
+      })
 
       for (const item of input.items) {
         const product = await loadProductForUpdate({

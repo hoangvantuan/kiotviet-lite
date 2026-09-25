@@ -29,6 +29,7 @@ import {
   aggregateVariantStock,
   loadProductForUpdate,
   loadVariantForUpdate,
+  lockProductsInIdOrder,
 } from './products-lock.helper.js'
 
 export interface ReturnsActor {
@@ -356,7 +357,7 @@ export async function createReturn({
     let refundAmount = 0
     let debtReductionAmount = 0
 
-    // TIEN-103: khóa khách trước khoản nợ (orders, customers, debts), cùng thứ tự với phiếu thu
+    // TIEN-103: thứ tự khóa chung orders, customers, debts, products (customer-debt-ledger.service.ts)
     if (order.customerId) {
       await lockCustomerForDebt(txDb, { storeId: actor.storeId, customerId: order.customerId })
     }
@@ -375,6 +376,13 @@ export async function createReturn({
       .limit(1)
 
     const debt = debtRows[0]
+
+    // Khóa sản phẩm theo id sau khoản nợ, trước khi chèn dòng trả (khóa ngoại tới products)
+    await lockProductsInIdOrder({
+      tx: txDb,
+      storeId: actor.storeId,
+      productIds: validatedItems.map((item) => item.productId),
+    })
 
     if (debt && Number(debt.remaining) > 0) {
       debtReductionAmount = Math.min(totalAmount, Number(debt.remaining))

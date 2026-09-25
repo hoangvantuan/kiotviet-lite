@@ -3,14 +3,14 @@ import { drizzle as pgliteDrizzle } from 'drizzle-orm/pglite'
 import type { Hono } from 'hono'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { customers, debtAdjustments, debts } from '@kiotviet-lite/shared'
+import { type CreateOrderInput, customers, debtAdjustments, debts } from '@kiotviet-lite/shared'
 import * as schema from '@kiotviet-lite/shared/schema'
 
 import type { Db } from '../db/index.js'
 import { createCustomersRoutes } from '../routes/customers.routes.js'
 import { createDebtAdjustmentsRoutes } from '../routes/debt-adjustments.routes.js'
 import { createDebtAdjustment } from '../services/debt-adjustments.service.js'
-import { getOrderDetail } from '../services/orders.service.js'
+import { createOrder, getOrderDetail } from '../services/orders.service.js'
 import { createReceipt, listCustomerOpenDebts } from '../services/receipts.service.js'
 import { getDebtAgingReport, getDebtSummaryReport } from '../services/reports.service.js'
 import { createReturn } from '../services/returns.service.js'
@@ -343,6 +343,107 @@ describe('TIEN-103: mọi luồng tiền khóa customers trước debts', () => 
       },
     })
     expectCustomerLockedBeforeDebts(adjustLog.queries)
+  })
+})
+
+/**
+ * Thứ tự khóa toàn hệ thống (xem customer-debt-ledger.service.ts): customers, debts, products,
+ * product_variants. Lấy lần đầu mỗi bảng bị khóa (SELECT FOR UPDATE hoặc UPDATE dòng có sẵn)
+ * và kiểm các lần đầu đó đi đúng thứ tự.
+ */
+const LOCK_RANK = ['customers', 'debts', 'products', 'product_variants'] as const
+
+function firstLockOrder(queries: string[]): string[] {
+  const seen: string[] = []
+  for (const q of queries) {
+    for (const table of LOCK_RANK) {
+      const locks =
+        new RegExp(`from "${table}"[\\s\\S]*for update`, 'i').test(q) ||
+        new RegExp(`^update "${table}"`, 'i').test(q)
+      if (locks && !seen.includes(table)) seen.push(table)
+    }
+  }
+  return seen
+}
+
+function expectGlobalLockOrder(queries: string[], mustLock: string[]) {
+  const order = firstLockOrder(queries)
+  for (const table of mustLock) expect(order).toContain(table)
+  const ranks = order.map((t) => LOCK_RANK.indexOf(t as (typeof LOCK_RANK)[number]))
+  expect(ranks).toEqual([...ranks].sort((a, b) => a - b))
+}
+
+describe('TIEN-103: một thứ tự khóa chung cho bán, trả, thu, điều chỉnh', () => {
+  function loggingDb() {
+    const queries: string[] = []
+    const db = pgliteDrizzle(env.pglite, {
+      schema,
+      casing: 'snake_case',
+      logger: { logQuery: (query) => queries.push(query) },
+    }) as unknown as Db
+    return { db, queries }
+  }
+
+  it('bán ghi nợ khóa khách trước sản phẩm', async () => {
+    const product = await createProduct(env)
+    const customer = await createCustomer(env)
+    const { db, queries } = loggingDb()
+    await createOrder({
+      db,
+      actor: ownerActor(),
+      input: {
+        customerId: customer.id,
+        subtotal: 100_000,
+        discountType: null,
+        discountValue: 0,
+        discountAmount: 0,
+        total: 100_000,
+        paymentMethod: 'debt',
+        paymentStatus: 'unpaid',
+        debtAmount: 100_000,
+        debtLimitOverridden: false,
+        note: null,
+        items: [
+          {
+            productId: product.id,
+            variantId: null,
+            productName: product.name,
+            variantName: null,
+            unit: 'cái',
+            unitPrice: 100_000,
+            quantity: 1,
+            discountType: null,
+            discountValue: 0,
+            discountAmount: 0,
+            lineTotal: 100_000,
+            note: null,
+            unitConversionId: null,
+            originalPrice: null,
+            priceOverride: false,
+            priceOverrideReason: null,
+            priceOverridePinUsed: false,
+          },
+        ],
+      } as CreateOrderInput,
+    })
+    expectGlobalLockOrder(queries, ['customers', 'products'])
+  })
+
+  it('trả hàng đơn nợ khóa khách, khoản nợ rồi mới tới sản phẩm', async () => {
+    const product = await createProduct(env)
+    const customer = await createCustomer(env)
+    const { order, items } = await createDebtOrder(env, product.id, customer.id)
+    const { db, queries } = loggingDb()
+    await createReturn({
+      db,
+      actor: ownerActor(),
+      orderId: order.id,
+      input: {
+        items: [{ orderItemId: items[0]!.id, quantity: 1, reason: 'defective' }],
+        note: null,
+      },
+    })
+    expectGlobalLockOrder(queries, ['customers', 'debts', 'products'])
   })
 })
 

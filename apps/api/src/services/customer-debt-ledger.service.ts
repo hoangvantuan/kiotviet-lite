@@ -11,9 +11,18 @@ import { logger } from '../lib/logger.js'
  * `debts`. `current_debt` chỉ là tổng giữ sẵn của `debts.remaining`; mọi bút toán (phát sinh,
  * thu, giảm trừ) đi qua đây để hai số luôn đi cùng nhau và được kiểm ngay trong transaction.
  *
- * Thứ tự khóa (TIEN-103): luôn khóa dòng `customers` trước rồi mới tới `debts`. Luồng nào đã
- * khóa `orders` (trả hàng) thì khóa theo thứ tự orders, customers, debts. Mọi hàm ghi ở đây tự
- * khóa khách trước, nên người gọi chỉ cần không khóa `debts` trước khi gọi `lockCustomerForDebt`.
+ * Thứ tự khóa toàn hệ thống (TIEN-103), áp cho bán, trả hàng, phiếu thu, điều chỉnh nợ:
+ *
+ *   1. `orders`: chứng từ gốc đang được sửa (trả hàng khóa đơn bị trả)
+ *   2. `customers`
+ *   3. `debts`, theo id tăng dần
+ *   4. `products`, theo id tăng dần (`lockProductsInIdOrder`)
+ *   5. `product_variants`, luôn sau sản phẩm của nó
+ *
+ * Luồng nào cần bảng đứng sau thì phải khóa xong các bảng đứng trước mà nó sẽ đụng tới, kể cả
+ * khóa ngầm: chèn dòng có khóa ngoại tới một bảng sẽ lấy `FOR KEY SHARE` trên dòng được trỏ tới,
+ * rồi nâng lên `FOR UPDATE` sau đó là một kiểu khóa ngược. Mọi hàm ghi ở đây tự khóa khách
+ * trước, nên người gọi chỉ cần không khóa `debts` hay `products` trước khi gọi vào sổ.
  *
  * Các hàm nhận `db` là transaction của người gọi; gọi ngoài transaction thì không có bảo đảm.
  */

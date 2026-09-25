@@ -1,9 +1,33 @@
-import { and, eq, isNull, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 
 import { products, productVariants } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
+
+/**
+ * Khóa trước mọi sản phẩm của chứng từ theo id tăng dần (thứ tự khóa chung, xem
+ * customer-debt-ledger.service.ts). Nhờ đó hai chứng từ có cùng các sản phẩm nhưng khác thứ tự
+ * dòng không khóa chéo nhau; các lần `loadProductForUpdate` sau đó chỉ đọc lại dòng đã khóa.
+ */
+export async function lockProductsInIdOrder({
+  tx,
+  storeId,
+  productIds,
+}: {
+  tx: Db
+  storeId: string
+  productIds: string[]
+}) {
+  const ids = [...new Set(productIds)].sort()
+  if (ids.length === 0) return
+  await tx
+    .select({ id: products.id })
+    .from(products)
+    .where(and(inArray(products.id, ids), eq(products.storeId, storeId)))
+    .orderBy(asc(products.id))
+    .for('update')
+}
 
 export async function loadProductForUpdate({
   tx,

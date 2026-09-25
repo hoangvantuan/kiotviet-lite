@@ -7,6 +7,7 @@ import postgres from 'postgres'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import {
+  type CreateOrderInput,
   customers,
   debts,
   orderItems,
@@ -18,12 +19,13 @@ import {
 import * as schema from '@kiotviet-lite/shared/schema'
 
 import type { Db } from '../db/index.js'
+import { createOrder } from '../services/orders.service.js'
 import { createReceipt } from '../services/receipts.service.js'
 import { createReturn } from '../services/returns.service.js'
 import { expectDebtLedgerConsistent } from './helpers/debt-ledger.js'
 
 /**
- * TIEN-103 cần hai kết nối thật chạy song song, PGlite chỉ có một kết nối nên không tái hiện
+ * TIEN-103 cần nhiều kết nối thật chạy song song, PGlite chỉ có một kết nối nên không tái hiện
  * được deadlock. Test chạy khi có `TEST_PG_URL` (Postgres dùng riêng cho test, cần quyền
  * CREATE DATABASE); mỗi lần chạy tạo một database tạm rồi xoá.
  */
@@ -31,11 +33,14 @@ const adminUrl = process.env.TEST_PG_URL
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const migrationsFolder = resolve(__dirname, '../db/migrations')
 
-describe.skipIf(!adminUrl)('TIEN-103: phiếu thu và trả hàng đồng thời trên Postgres thật', () => {
+const UNIT_PRICE = 3_500
+
+describe.skipIf(!adminUrl)('TIEN-103: thứ tự khóa công nợ trên Postgres thật', () => {
   const dbName = `kvl_tien103_${Date.now()}_${Math.floor(Math.random() * 1e6)}`
   let admin: postgres.Sql
   let client: postgres.Sql
   let db: Db
+  let seq = 0
 
   beforeAll(async () => {
     admin = postgres(adminUrl!, { max: 1, onnotice: () => {} })
@@ -53,13 +58,30 @@ describe.skipIf(!adminUrl)('TIEN-103: phiếu thu và trả hàng đồng thời
     await admin?.end()
   })
 
-  it('15 cặp phiếu thu 1.000 và trả 1 gói chạy cùng lúc: không deadlock, công nợ khớp', async () => {
-    const [store] = await db.insert(stores).values({ name: 'Cửa hàng' }).returning()
+  /** Cửa hàng riêng cho mỗi test: một khách đang nợ một đơn 200 gói, sản phẩm tồn 50. */
+  async function seedDebtOrder() {
+    const n = ++seq
+    const [store] = await db
+      .insert(stores)
+      .values({ name: `Cửa hàng ${n}` })
+      .returning()
     const [owner, manager] = await db
       .insert(users)
       .values([
-        { storeId: store!.id, name: 'Chủ', phone: '0901000001', passwordHash: 'x', role: 'owner' },
-        { storeId: store!.id, name: 'QL', phone: '0901000002', passwordHash: 'x', role: 'manager' },
+        {
+          storeId: store!.id,
+          name: 'Chủ',
+          phone: `09010${n}0001`,
+          passwordHash: 'x',
+          role: 'owner',
+        },
+        {
+          storeId: store!.id,
+          name: 'QL',
+          phone: `09010${n}0002`,
+          passwordHash: 'x',
+          role: 'manager',
+        },
       ])
       .returning()
     const [customer] = await db
@@ -71,9 +93,9 @@ describe.skipIf(!adminUrl)('TIEN-103: phiếu thu và trả hàng đồng thời
       .values({
         storeId: store!.id,
         name: 'Mì M3001',
-        sku: 'M3001',
+        sku: `M3001-${n}`,
         unit: 'gói',
-        sellingPrice: 3_500,
+        sellingPrice: UNIT_PRICE,
         costPrice: 2_000,
         currentStock: 50,
         trackInventory: true,
@@ -103,7 +125,7 @@ describe.skipIf(!adminUrl)('TIEN-103: phiếu thu và trả hàng đồng thời
         productId: product!.id,
         productName: 'Mì M3001',
         unit: 'gói',
-        unitPrice: 3_500,
+        unitPrice: UNIT_PRICE,
         quantity: 200,
         discountAmount: 0,
         lineTotal: 700_000,
@@ -119,33 +141,113 @@ describe.skipIf(!adminUrl)('TIEN-103: phiếu thu và trả hàng đồng thời
         remaining: 700_000,
       })
       .returning()
+    return {
+      store: store!,
+      owner: owner!,
+      manager: manager!,
+      customer: customer!,
+      product: product!,
+      order: order!,
+      item: item!,
+      debt: debt!,
+    }
+  }
 
+  function returnOne(s: Awaited<ReturnType<typeof seedDebtOrder>>) {
+    return createReturn({
+      db,
+      actor: { userId: s.manager.id, storeId: s.store.id, role: 'manager' },
+      orderId: s.order.id,
+      input: { items: [{ orderItemId: s.item.id, quantity: 1, reason: 'defective' }], note: null },
+    })
+  }
+
+  function rejectedReasons(results: PromiseSettledResult<unknown>[]) {
+    return results
+      .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+      .map((r) => `${String(r.reason)} | ${String((r.reason as { cause?: unknown }).cause ?? '')}`)
+  }
+
+  it('15 cặp phiếu thu 1.000 và trả 1 gói chạy cùng lúc: không deadlock, công nợ khớp', async () => {
+    const s = await seedDebtOrder()
     const pairs = Array.from({ length: 15 }, () => [
       createReceipt({
         db,
-        actor: { userId: owner!.id, storeId: store!.id, role: 'owner' },
+        actor: { userId: s.owner.id, storeId: s.store.id, role: 'owner' },
         input: {
-          customerId: customer!.id,
+          customerId: s.customer.id,
           amount: 1_000,
           allocationMode: 'fifo',
-          allocations: [{ debtId: debt!.id, amount: 1_000 }],
+          allocations: [{ debtId: s.debt.id, amount: 1_000 }],
         },
       }),
-      createReturn({
-        db,
-        actor: { userId: manager!.id, storeId: store!.id, role: 'manager' },
-        orderId: order!.id,
-        input: { items: [{ orderItemId: item!.id, quantity: 1, reason: 'defective' }], note: null },
-      }),
+      returnOne(s),
     ]).flat()
 
-    const results = await Promise.allSettled(pairs)
-    const failures = results.filter((r) => r.status === 'rejected')
-    expect(failures.map((f) => String((f as PromiseRejectedResult).reason))).toEqual([])
+    expect(rejectedReasons(await Promise.allSettled(pairs))).toEqual([])
 
-    const [after] = await db.select().from(debts).where(eq(debts.id, debt!.id))
+    const [after] = await db.select().from(debts).where(eq(debts.id, s.debt.id))
     // 15 phiếu thu × 1.000 + 15 phiếu trả × 3.500 cấn nợ
     expect(after).toMatchObject({ paid: 15_000, reduced: 52_500, remaining: 632_500 })
-    await expectDebtLedgerConsistent(db, store!.id)
+    await expectDebtLedgerConsistent(db, s.store.id)
+  })
+
+  it('20 đơn bán ghi nợ đan xen 20 phiếu trả cùng khách, cùng sản phẩm: không deadlock, kho và nợ khớp', async () => {
+    const s = await seedDebtOrder()
+    const saleInput = {
+      customerId: s.customer.id,
+      subtotal: UNIT_PRICE,
+      discountType: null,
+      discountValue: 0,
+      discountAmount: 0,
+      total: UNIT_PRICE,
+      paymentMethod: 'debt',
+      paymentStatus: 'unpaid',
+      debtAmount: UNIT_PRICE,
+      debtLimitOverridden: false,
+      note: null,
+      items: [
+        {
+          productId: s.product.id,
+          variantId: null,
+          productName: 'Mì M3001',
+          variantName: null,
+          unit: 'gói',
+          unitPrice: UNIT_PRICE,
+          quantity: 1,
+          discountType: null,
+          discountValue: 0,
+          discountAmount: 0,
+          lineTotal: UNIT_PRICE,
+          note: null,
+          unitConversionId: null,
+          originalPrice: null,
+          priceOverride: false,
+          priceOverrideReason: null,
+          priceOverridePinUsed: false,
+        },
+      ],
+    } as CreateOrderInput
+
+    // Đơn bán chạy nối tiếp nhau (hai đơn bán song song trùng mã đơn, lỗi riêng ngoài phạm vi
+    // công nợ), phiếu trả chạy nối tiếp ở luồng thứ hai; hai luồng đan xen nhau từng bước.
+    const ROUNDS = 20
+    const actor = { userId: s.owner.id, storeId: s.store.id, role: 'owner' as const }
+    const sales = (async () => {
+      for (let i = 0; i < ROUNDS; i++) await createOrder({ db, actor, input: saleInput })
+    })()
+    const returnsStream = (async () => {
+      for (let i = 0; i < ROUNDS; i++) await returnOne(s)
+    })()
+    const pairs = [sales, returnsStream]
+
+    expect(rejectedReasons(await Promise.allSettled(pairs))).toEqual([])
+
+    const [customer] = await db.select().from(customers).where(eq(customers.id, s.customer.id))
+    // +20 đơn nợ 3.500, -20 phiếu trả cấn 3.500 vào đơn cũ
+    expect(Number(customer!.currentDebt)).toBe(700_000)
+    const [product] = await db.select().from(products).where(eq(products.id, s.product.id))
+    expect(Number(product!.currentStock)).toBe(50)
+    await expectDebtLedgerConsistent(db, s.store.id)
   })
 })
