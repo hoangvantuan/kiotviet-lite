@@ -55,27 +55,37 @@ export function DebtAdjustmentFormDialog({
   onOpenChange,
   title,
   description,
+  ...formProps
+}: DebtAdjustmentFormDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        {/* Form nằm trong DialogContent nên bị gỡ khi đóng: mỗi lần mở là một form mới, trống,
+            ở bước nhập, bất kể đóng do lưu xong, Huỷ hay do nơi gọi đổi `open` */}
+        <DebtAdjustmentForm {...formProps} onClose={() => onOpenChange(false)} />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function DebtAdjustmentForm({
   currentDebt,
   onSubmit,
   onConflict,
-}: DebtAdjustmentFormDialogProps) {
+  onClose,
+}: Pick<DebtAdjustmentFormDialogProps, 'currentDebt' | 'onSubmit' | 'onConflict'> & {
+  onClose: () => void
+}) {
   const [direction, setDirection] = useState<DebtAdjustmentDirection | null>(null)
   const [amount, setAmount] = useState<number | null>(null)
   const [reason, setReason] = useState('')
   const [error, setError] = useState('')
   const [confirming, setConfirming] = useState(false)
   const [pending, setPending] = useState(false)
-
-  const handleOpenChange = (next: boolean) => {
-    if (next) {
-      setDirection(null)
-      setAmount(null)
-      setReason('')
-      setError('')
-      setConfirming(false)
-    }
-    onOpenChange(next)
-  }
 
   const validate = (): string | null => {
     if (!direction) return 'Vui lòng chọn tăng nợ hoặc giảm nợ'
@@ -114,7 +124,7 @@ export function DebtAdjustmentFormDialog({
         expectedCurrentDebt: currentDebt,
         reason: reason.trim(),
       })
-      onOpenChange(false)
+      onClose()
     } catch (cause) {
       setConfirming(false)
       if (cause instanceof ApiClientError) {
@@ -128,137 +138,125 @@ export function DebtAdjustmentFormDialog({
     }
   }
 
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-
-        {confirming && newDebt !== null ? (
-          <div className="space-y-4">
-            <div className="rounded-md border bg-muted/50 p-4 text-sm">
-              <p className="font-medium">
-                {direction === 'increase' ? 'Tăng nợ' : 'Giảm nợ'}{' '}
-                {formatVndWithSuffix(amount ?? 0)}
-              </p>
-              <p className="mt-2">
-                Nợ trước: <span className="font-medium">{formatVndWithSuffix(currentDebt)}</span>
-              </p>
-              <p>
-                Nợ sau:{' '}
-                <span
-                  className={cn(
-                    'font-semibold',
-                    direction === 'increase' ? 'text-red-700' : 'text-green-700',
-                  )}
-                >
-                  {formatVndWithSuffix(newDebt)}
-                </span>
-              </p>
-              <p className="mt-2 text-muted-foreground">Lý do: {reason.trim()}</p>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Điều chỉnh không thể sửa hoặc xoá sau khi lưu.
-            </p>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={pending}
-                onClick={() => setConfirming(false)}
-              >
-                Quay lại
-              </Button>
-              <Button type="button" disabled={pending} onClick={confirm}>
-                {pending ? 'Đang lưu...' : 'Xác nhận điều chỉnh'}
-              </Button>
-            </DialogFooter>
-          </div>
-        ) : (
-          <form onSubmit={goConfirm} className="space-y-4">
-            <div className="grid gap-1">
-              <Label className="text-muted-foreground">Nợ hiện tại</Label>
-              <p className="text-base font-medium">{formatVndWithSuffix(currentDebt)}</p>
-            </div>
-
-            <div className="grid gap-2">
-              <Label>
-                Loại điều chỉnh <span className="text-destructive">*</span>
-              </Label>
-              <div className="flex gap-2" role="group" aria-label="Loại điều chỉnh">
-                {DIRECTIONS.map((d) => (
-                  <Button
-                    key={d.value}
-                    type="button"
-                    variant={direction === d.value ? 'default' : 'outline'}
-                    aria-pressed={direction === d.value}
-                    onClick={() => {
-                      setDirection(d.value)
-                      setError('')
-                    }}
-                  >
-                    {d.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="debt-adjustment-amount">
-                Số tiền điều chỉnh <span className="text-destructive">*</span>
-              </Label>
-              <CurrencyInput
-                id="debt-adjustment-amount"
-                value={amount}
-                placeholder="Nhập số tiền tăng hoặc giảm"
-                onChange={(value) => {
-                  setAmount(value)
-                  setError('')
-                }}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="debt-adjustment-reason">
-                Lý do <span className="text-destructive">*</span>
-              </Label>
-              <Textarea
-                id="debt-adjustment-reason"
-                rows={3}
-                maxLength={500}
-                value={reason}
-                placeholder="VD: Chiết khấu cuối kỳ, phí vận chuyển tính thêm"
-                onChange={(event) => {
-                  setReason(event.target.value)
-                  setError('')
-                }}
-              />
-              <p className="text-right text-xs text-muted-foreground">{reason.length}/500</p>
-            </div>
-
-            {newDebt !== null && (
-              <p className="rounded-md border bg-muted/50 p-3 text-sm">
-                Nợ trước {formatVndWithSuffix(currentDebt)}, nợ sau {formatVndWithSuffix(newDebt)}
-              </p>
+  return confirming && newDebt !== null ? (
+    <div className="space-y-4">
+      <div className="rounded-md border bg-muted/50 p-4 text-sm">
+        <p className="font-medium">
+          {direction === 'increase' ? 'Tăng nợ' : 'Giảm nợ'} {formatVndWithSuffix(amount ?? 0)}
+        </p>
+        <p className="mt-2">
+          Nợ trước: <span className="font-medium">{formatVndWithSuffix(currentDebt)}</span>
+        </p>
+        <p>
+          Nợ sau:{' '}
+          <span
+            className={cn(
+              'font-semibold',
+              direction === 'increase' ? 'text-red-700' : 'text-green-700',
             )}
+          >
+            {formatVndWithSuffix(newDebt)}
+          </span>
+        </p>
+        <p className="mt-2 text-muted-foreground">Lý do: {reason.trim()}</p>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Điều chỉnh không thể sửa hoặc xoá sau khi lưu.
+      </p>
+      <DialogFooter>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={pending}
+          onClick={() => setConfirming(false)}
+        >
+          Quay lại
+        </Button>
+        <Button type="button" disabled={pending} onClick={confirm}>
+          {pending ? 'Đang lưu...' : 'Xác nhận điều chỉnh'}
+        </Button>
+      </DialogFooter>
+    </div>
+  ) : (
+    <form onSubmit={goConfirm} className="space-y-4">
+      <div className="grid gap-1">
+        <Label className="text-muted-foreground">Nợ hiện tại</Label>
+        <p className="text-base font-medium">{formatVndWithSuffix(currentDebt)}</p>
+      </div>
 
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
+      <div className="grid gap-2">
+        <Label>
+          Loại điều chỉnh <span className="text-destructive">*</span>
+        </Label>
+        <div className="flex gap-2" role="group" aria-label="Loại điều chỉnh">
+          {DIRECTIONS.map((d) => (
+            <Button
+              key={d.value}
+              type="button"
+              variant={direction === d.value ? 'default' : 'outline'}
+              aria-pressed={direction === d.value}
+              onClick={() => {
+                setDirection(d.value)
+                setError('')
+              }}
+            >
+              {d.label}
+            </Button>
+          ))}
+        </div>
+      </div>
 
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-                Huỷ
-              </Button>
-              <Button type="submit">Tiếp tục</Button>
-            </DialogFooter>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
+      <div className="grid gap-2">
+        <Label htmlFor="debt-adjustment-amount">
+          Số tiền điều chỉnh <span className="text-destructive">*</span>
+        </Label>
+        <CurrencyInput
+          id="debt-adjustment-amount"
+          value={amount}
+          placeholder="Nhập số tiền tăng hoặc giảm"
+          onChange={(value) => {
+            setAmount(value)
+            setError('')
+          }}
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="debt-adjustment-reason">
+          Lý do <span className="text-destructive">*</span>
+        </Label>
+        <Textarea
+          id="debt-adjustment-reason"
+          rows={3}
+          maxLength={500}
+          value={reason}
+          placeholder="VD: Chiết khấu cuối kỳ, phí vận chuyển tính thêm"
+          onChange={(event) => {
+            setReason(event.target.value)
+            setError('')
+          }}
+        />
+        <p className="text-right text-xs text-muted-foreground">{reason.length}/500</p>
+      </div>
+
+      {newDebt !== null && (
+        <p className="rounded-md border bg-muted/50 p-3 text-sm">
+          Nợ trước {formatVndWithSuffix(currentDebt)}, nợ sau {formatVndWithSuffix(newDebt)}
+        </p>
+      )}
+
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
+
+      <DialogFooter>
+        <Button type="button" variant="ghost" onClick={onClose}>
+          Huỷ
+        </Button>
+        <Button type="submit">Tiếp tục</Button>
+      </DialogFooter>
+    </form>
   )
 }
