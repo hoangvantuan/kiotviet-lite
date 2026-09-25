@@ -46,6 +46,7 @@ import {
   loadLineUnitCosts,
   priceViolation,
   resolveDebtLimitApproval,
+  resolveOfflineSoldAt,
 } from './order-policy.js'
 import { resolveProductPrice } from './pricing.service.js'
 import {
@@ -160,16 +161,9 @@ export interface CreateOrderDeps {
   source?: 'pos' | 'offline_sync'
   clientId?: string | null
   offlineCreatedAt?: string
+  /** OFF-05: người đồng bộ đơn ngoại tuyến khi khác người bán (actor là người bán) */
+  syncedByUserId?: string | null
   skipDebtLimitCheck?: boolean
-}
-
-/** Giờ bán của đơn ngoại tuyến; thiếu, sai hay ở tương lai (đồng hồ máy lệch) thì lấy giờ máy chủ. */
-function offlineSoldAt(offlineCreatedAt: string | undefined): Date {
-  const now = new Date()
-  if (!offlineCreatedAt) return now
-  const soldAt = new Date(offlineCreatedAt)
-  if (Number.isNaN(soldAt.getTime()) || soldAt > now) return now
-  return soldAt
 }
 
 export async function createOrder({
@@ -181,6 +175,7 @@ export async function createOrder({
   source = 'pos',
   clientId: explicitClientId,
   offlineCreatedAt,
+  syncedByUserId = null,
   skipDebtLimitCheck = false,
 }: CreateOrderDeps): Promise<OrderDetail> {
   const db = serviceDb(rootDb, transaction)
@@ -305,6 +300,11 @@ export async function createOrder({
   const debtLimitApprover = await resolveDebtLimitApproval({ db, actor, input, source, meta })
   // ADR-0009: đơn ngoại tuyến vi phạm chính sách vẫn nhận (hàng đã giao) nhưng chờ chủ duyệt
   const policyViolations: OrderPolicyViolation[] = []
+  // OFF-11 (ADR-0012): đơn ngoại tuyến ghi theo giờ bán trên máy bán, đã kiểm giới hạn
+  const receivedAt = new Date()
+  const offlineSale =
+    source === 'offline_sync' ? resolveOfflineSoldAt(offlineCreatedAt, receivedAt) : null
+  if (offlineSale?.violation) policyViolations.push(offlineSale.violation)
   const priceIssue = priceViolation(priceApproval)
   if (priceIssue) policyViolations.push(priceIssue)
   const canViewCost = hasPermission(actor.role, 'products.viewCost')
@@ -390,9 +390,9 @@ export async function createOrder({
       // POS-06: gắn ca trước mọi khóa khác (thứ tự khóa: ca, customers, debts, products). Đơn POS
       // bị chặn khi cửa hàng dùng ca mà người bán chưa mở ca; đơn ngoại tuyến gắn theo giờ bán,
       // không khớp ca nào thì để trống và hiện ở đối soát.
-      // BC-06: đơn ngoại tuyến lưu giờ bán để báo cáo tính đúng ngày; đơn trực tuyến để cột lấy
-      // mặc định now(), bằng created_at
-      const soldAt = source === 'offline_sync' ? offlineSoldAt(offlineCreatedAt) : undefined
+      // BC-06, OFF-11 (ADR-0014): đơn ngoại tuyến dùng một giờ bán hiệu lực (đã kẹp theo giờ nhận)
+      // cho cả sold_at, created_at và ca; đơn trực tuyến để hai cột lấy mặc định now()
+      const soldAt = offlineSale?.soldAt
       const shiftId = soldAt
         ? await resolveShiftAt(txDb, actor.storeId, actor.userId, soldAt)
         : await requireShiftForSale(txDb, actor.storeId, actor.userId)
@@ -408,13 +408,22 @@ export async function createOrder({
         db: txDb,
         storeId: actor.storeId,
         kind: 'order',
+        // Mã đơn theo ngày bán, khớp với ngày đơn nằm trong báo cáo
+        ...(offlineSale ? { date: offlineSale.soldAt } : {}),
       })
       const [row] = await tx
         .insert(orders)
         .values({
           storeId: actor.storeId,
           orderNumber,
-          ...(soldAt ? { soldAt } : {}),
+          ...(offlineSale
+            ? {
+                createdAt: offlineSale.soldAt,
+                soldAt: offlineSale.soldAt,
+                syncedAt: receivedAt,
+                syncedByUserId,
+              }
+            : {}),
           customerId: input.customerId ?? null,
           userId: actor.userId,
           priceListId: effectivePriceListId,
@@ -1348,6 +1357,12 @@ export async function createOrder({
           paymentStatus: payment.paymentStatus,
           source,
           clientId,
+          ...(offlineSale
+            ? {
+                soldAt: offlineSale.soldAt.toISOString(),
+                syncedByUserId: syncedByUserId ?? actor.userId,
+              }
+            : {}),
         },
         ipAddress: meta?.ipAddress,
         userAgent: meta?.userAgent,

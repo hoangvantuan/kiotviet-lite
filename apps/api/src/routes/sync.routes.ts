@@ -6,6 +6,7 @@ import {
   PGLITE_SCHEMA_VERSION,
   syncIncrementalQuerySchema,
   syncInitialQuerySchema,
+  syncPushOrderSchema,
   syncPushRequestSchema,
   type SyncPushResult,
   type UserRole,
@@ -14,12 +15,14 @@ import {
   categories,
   customerGroups,
   customers,
+  orders,
   priceListItems,
   priceLists,
   printSettings,
   products,
   productUnitConversions,
   productVariants,
+  users,
 } from '@kiotviet-lite/shared/schema'
 
 import type { Db } from '../db/index.js'
@@ -31,7 +34,7 @@ import { errorHandler } from '../middleware/error-handler.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import { emitEvent } from '../services/notification-emitter.js'
-import { createOrder } from '../services/orders.service.js'
+import { createOrder, type OrdersActor } from '../services/orders.service.js'
 
 async function getStorePriceListIds(db: Db, storeId: string) {
   const lists = await db
@@ -55,6 +58,56 @@ function stripCost<T extends { costPrice: unknown }>(
     delete copy.costPrice
     return copy as Omit<T, 'costPrice'>
   })
+}
+
+/**
+ * OFF-05: người bán gốc của đơn ngoại tuyến. Máy khách gửi, nên máy chủ kiểm: phải cùng cửa hàng
+ * với người đồng bộ (đơn của cửa hàng khác không bao giờ vào cửa hàng này), còn hoạt động và còn
+ * quyền bán. Không đạt thì từ chối đơn, không ghi đơn cho người đồng bộ.
+ */
+async function resolveSeller(
+  db: Db,
+  auth: { userId: string; storeId: string; role: string },
+  sellerId: string,
+): Promise<OrdersActor> {
+  if (sellerId === auth.userId) {
+    return { userId: auth.userId, storeId: auth.storeId, role: auth.role as UserRole }
+  }
+  const [seller] = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      storeId: users.storeId,
+      role: users.role,
+      isActive: users.isActive,
+    })
+    .from(users)
+    .where(and(eq(users.id, sellerId), eq(users.storeId, auth.storeId)))
+    .limit(1)
+  if (!seller) {
+    throw new ApiError(
+      'FORBIDDEN',
+      'Đơn được bán bằng tài khoản không thuộc cửa hàng đang đăng nhập. Đăng nhập tài khoản của cửa hàng đã bán để đồng bộ đơn này',
+      { reason: 'seller_not_in_store' },
+    )
+  }
+  if (!seller.isActive || !hasPermission(seller.role, 'pos.sell')) {
+    throw new ApiError(
+      'BUSINESS_RULE_VIOLATION',
+      `Tài khoản người bán "${seller.name}" đã bị khóa hoặc không còn quyền bán hàng. Chủ cửa hàng mở lại tài khoản rồi đồng bộ lại đơn này`,
+      { reason: 'seller_inactive' },
+    )
+  }
+  return { userId: seller.id, storeId: seller.storeId, role: seller.role }
+}
+
+async function findSyncedOrder(db: Db, storeId: string, clientId: string) {
+  const [row] = await db
+    .select({ id: orders.id, orderNumber: orders.orderNumber })
+    .from(orders)
+    .where(and(eq(orders.storeId, storeId), eq(orders.clientId, clientId)))
+    .limit(1)
+  return row ?? null
 }
 
 // Track consecutive sync push failures per store
@@ -217,30 +270,65 @@ export function createSyncRoutes({ db }: { db: Db }) {
     const auth = c.get('auth')
     const input = await parseJson(c, syncPushRequestSchema)
     const storeId = auth.storeId
-    const userId = auth.userId
-    const role = auth.role as UserRole
     const meta = getRequestMeta(c)
     const results: SyncPushResult[] = []
+    const sellers = new Map<string, Promise<OrdersActor>>()
 
-    for (const offlineOrder of input.orders) {
+    // OFF-10: mỗi đơn có kết quả riêng, một đơn sai không chặn các đơn còn lại trong lô
+    for (const raw of input.orders) {
+      const parsed = syncPushOrderSchema.safeParse(raw)
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0]
+        results.push({
+          clientId: raw.clientId,
+          status: 'error',
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: `Dữ liệu đơn không hợp lệ${issue ? ` (${issue.path.join('.')}: ${issue.message})` : ''}`,
+          },
+        })
+        continue
+      }
+      const offlineOrder = parsed.data
       try {
+        // OFF-05: đơn ghi cho người bán lúc bán, không phải người đang đồng bộ
+        const sellerId = offlineOrder.sellerUserId ?? auth.userId
+        let seller = sellers.get(sellerId)
+        if (!seller) {
+          seller = resolveSeller(db, auth, sellerId)
+          sellers.set(sellerId, seller)
+        }
+        const actor = await seller.catch(async (err: unknown) => {
+          // Đơn đã có trên máy chủ (lần đồng bộ trước mất phản hồi) thì vẫn báo trùng
+          const existing = await findSyncedOrder(db, storeId, offlineOrder.clientId)
+          if (existing) return { duplicate: existing }
+          throw err
+        })
+        if ('duplicate' in actor) {
+          results.push({
+            clientId: offlineOrder.clientId,
+            serverId: actor.duplicate.id,
+            orderNumber: actor.duplicate.orderNumber,
+            status: 'duplicate',
+          })
+          continue
+        }
+
         const order = await createOrder({
           db,
-          actor: {
-            userId,
-            storeId,
-            role,
-          },
+          actor,
           input: offlineOrder.orderData,
           meta,
           source: 'offline_sync',
           clientId: offlineOrder.clientId,
           offlineCreatedAt: offlineOrder.createdAt,
+          syncedByUserId: actor.userId === auth.userId ? null : auth.userId,
         })
 
         results.push({
           clientId: offlineOrder.clientId,
           serverId: order.id,
+          orderNumber: order.orderNumber,
           status: order.isDuplicate ? 'duplicate' : 'synced',
           ...(order.warnings ? { warnings: order.warnings } : {}),
           ...(order.reviewStatus && order.reviewStatus !== 'none'
@@ -248,8 +336,10 @@ export function createSyncRoutes({ db }: { db: Db }) {
             : {}),
         })
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error'
-        const code = err instanceof ApiError ? err.code : 'INTERNAL_ERROR'
+        // OFF-08, OFF-14: lỗi không phải ApiError (lỗi SQL, lỗi lập trình) không được lộ ra máy
+        // khách. Máy khách coi INTERNAL_ERROR là lỗi tạm thời và tự thử lại sau.
+        const apiError = err instanceof ApiError ? err : null
+        const reason = (apiError?.details as { reason?: unknown } | undefined)?.reason
         logger.error(
           { entity: 'order', action: 'sync_push', storeId, clientId: offlineOrder.clientId, err },
           'sync push order failed',
@@ -257,7 +347,12 @@ export function createSyncRoutes({ db }: { db: Db }) {
         results.push({
           clientId: offlineOrder.clientId,
           status: 'error',
-          error: { code, message },
+          error: {
+            code: apiError?.code ?? 'INTERNAL_ERROR',
+            message:
+              apiError?.message ?? 'Máy chủ gặp lỗi khi ghi đơn này, hệ thống sẽ tự thử lại sau',
+            ...(typeof reason === 'string' ? { reason } : {}),
+          },
         })
       }
     }

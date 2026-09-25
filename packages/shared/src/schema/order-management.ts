@@ -24,6 +24,8 @@ export const orderPolicyViolationCodeSchema = z.enum([
   'debt_limit_exceeded',
   // Ghi nợ cho khách không được nợ (hạn mức 0 hoặc chưa đặt, như khách tạo nhanh)
   'no_credit',
+  // OFF-11: giờ bán máy khách gửi lệch quá giới hạn (ở tương lai, hoặc cũ hơn số ngày cho phép)
+  'sold_at_suspect',
 ])
 
 export interface OrderPolicyViolation {

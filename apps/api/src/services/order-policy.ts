@@ -10,6 +10,8 @@ import {
   products,
   productUnitConversions,
   productVariants,
+  SYNC_SOLD_AT_MAX_AGE_DAYS,
+  SYNC_SOLD_AT_MAX_FUTURE_MS,
   type UserRole,
   users,
 } from '@kiotviet-lite/shared'
@@ -532,6 +534,46 @@ export function debtLimitViolation(params: {
     message: `Ghi nợ vượt hạn mức: nợ sau đơn ${params.debtAfter.toLocaleString('vi-VN')}đ, hạn mức ${params.effectiveDebtLimit.toLocaleString('vi-VN')}đ`,
     requiredPermissions: ['pos.overrideDebtLimit'],
   }
+}
+
+/**
+ * OFF-11 (ADR-0012): giờ bán của đơn ngoại tuyến do máy bán gửi, không tin được hoàn toàn. Lệch
+ * về tương lai quá SYNC_SOLD_AT_MAX_FUTURE_MS thì dùng giờ nhận đơn (đồng hồ máy sai, hoặc sửa để
+ * dời doanh thu sang ngày sau); cũ hơn SYNC_SOLD_AT_MAX_AGE_DAYS thì giữ giờ bán. Cả hai trường
+ * hợp đều gắn cờ để chủ đối chiếu, vì báo cáo ngày cũ có thể đã chốt.
+ */
+export function resolveOfflineSoldAt(
+  claimed: string | undefined,
+  receivedAt: Date,
+): { soldAt: Date; violation: OrderPolicyViolation | null } {
+  const parsed = claimed ? new Date(claimed) : null
+  if (!parsed || Number.isNaN(parsed.getTime())) return { soldAt: receivedAt, violation: null }
+  if (parsed.getTime() - receivedAt.getTime() > SYNC_SOLD_AT_MAX_FUTURE_MS) {
+    return {
+      soldAt: receivedAt,
+      violation: {
+        code: 'sold_at_suspect',
+        message: `Giờ bán trên máy (${formatVnDateTime(parsed)}) ở sau giờ máy chủ nhận đơn, đơn được ghi theo giờ nhận`,
+        requiredPermissions: ['pos.editPrice'],
+      },
+    }
+  }
+  const maxAgeMs = SYNC_SOLD_AT_MAX_AGE_DAYS * 24 * 60 * 60 * 1000
+  if (receivedAt.getTime() - parsed.getTime() > maxAgeMs) {
+    return {
+      soldAt: parsed,
+      violation: {
+        code: 'sold_at_suspect',
+        message: `Đơn bán lúc ${formatVnDateTime(parsed)}, đồng bộ sau hơn ${SYNC_SOLD_AT_MAX_AGE_DAYS} ngày. Kiểm lại báo cáo và chốt quỹ của ngày bán`,
+        requiredPermissions: ['pos.editPrice'],
+      },
+    }
+  }
+  return { soldAt: parsed, violation: null }
+}
+
+function formatVnDateTime(date: Date): string {
+  return date.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false })
 }
 
 /** Quyền được liệt kê người duyệt; cũng là tập quyền hợp lệ cho `/verify-pin` của người khác. */
