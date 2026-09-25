@@ -2,7 +2,7 @@ import type { PGlite } from '@electric-sql/pglite'
 
 import { useOfflineStore } from '@/stores/use-offline-store'
 
-import { apiFetch } from './api-client'
+import { apiFetch, reportBrowserFailure } from './api-client'
 import {
   getErrorOrders,
   getOrderCounts,
@@ -61,6 +61,7 @@ export async function pushPendingOrders(
 
     store.setLastSynced(json.data.syncedAt)
   } catch (err) {
+    reportBrowserFailure('order_sync', err, pending.length === 1 ? pending[0]!.clientId : undefined)
     for (const o of pending) {
       await markOrderError(pglite, o.clientId, err instanceof Error ? err.message : 'Network error')
     }
@@ -115,11 +116,13 @@ export async function startSyncCycle(
   const pushResult = await pushPendingOrders(pglite)
 
   let newWatermark = lastSyncedAt ?? new Date(0).toISOString()
+  let incrementalFailureId: string | null = null
   if (lastSyncedAt) {
     try {
       newWatermark = await runIncrementalSync(pglite, lastSyncedAt)
-    } catch {
-      // Incremental sync failure should not block order push
+    } catch (error) {
+      // Keep the previous watermark so a later cycle can retry the pull.
+      incrementalFailureId = reportBrowserFailure('incremental_sync', error)
     }
   }
 
@@ -133,15 +136,26 @@ export async function startSyncCycle(
     }
   }
 
+  if (incrementalFailureId && pushResult.errors === 0) {
+    store.setError(`Đồng bộ dữ liệu mới thất bại (Mã lỗi: ${incrementalFailureId})`)
+  }
   return newWatermark
 }
 
 let syncInterval: ReturnType<typeof setInterval> | null = null
+export function reportSyncCycleFailure(error: unknown, event: 'auto_sync' | 'manual_sync'): void {
+  const requestId = reportBrowserFailure(event, error)
+  useOfflineStore
+    .getState()
+    .setError(`Không thể đồng bộ dữ liệu (Mã lỗi: ${requestId}). Vui lòng thử lại.`)
+}
 
 export function startAutoSync(pglite: PGlite): () => void {
   const handleOnline = () => {
     const store = useOfflineStore.getState()
-    startSyncCycle(pglite, undefined, undefined, store.lastSyncedAt).catch(() => {})
+    startSyncCycle(pglite, undefined, undefined, store.lastSyncedAt).catch((error: unknown) =>
+      reportSyncCycleFailure(error, 'auto_sync'),
+    )
   }
 
   window.addEventListener('online', handleOnline)
@@ -150,7 +164,9 @@ export function startAutoSync(pglite: PGlite): () => void {
     if (!navigator.onLine) return
     const store = useOfflineStore.getState()
     if (store.pendingOrderCount > 0 || store.status === 'error') {
-      startSyncCycle(pglite, undefined, undefined, store.lastSyncedAt).catch(() => {})
+      startSyncCycle(pglite, undefined, undefined, store.lastSyncedAt).catch((error: unknown) =>
+        reportSyncCycleFailure(error, 'auto_sync'),
+      )
     }
   }, 60_000)
 

@@ -2,7 +2,7 @@ import { Writable } from 'node:stream'
 import pino from 'pino'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { REDACT_PATHS } from './logger.js'
+import { loggerOptions, withRequestLogContext } from './logger.js'
 
 function createTestLogger(opts?: pino.LoggerOptions) {
   const lines: string[] = []
@@ -12,21 +12,7 @@ function createTestLogger(opts?: pino.LoggerOptions) {
       callback()
     },
   })
-  const logger = pino(
-    {
-      level: 'trace',
-      formatters: {
-        level: (label) => ({ level: label }),
-      },
-      timestamp: pino.stdTimeFunctions.isoTime,
-      redact: {
-        paths: REDACT_PATHS,
-        censor: '[Redacted]',
-      },
-      ...opts,
-    },
-    stream,
-  )
+  const logger = pino({ ...loggerOptions, level: 'trace', ...opts }, stream)
   return { logger, lines }
 }
 
@@ -146,5 +132,35 @@ describe('logger module', () => {
     const parsed = JSON.parse(lines[0]!)
     expect(parsed.requestId).toBe('abc-123')
     expect(parsed.msg).toBe('child msg')
+  })
+
+  it('không mang field của log trước sang request khác', async () => {
+    const { logger, lines } = createTestLogger()
+    await withRequestLogContext('first-request', async () => {
+      logger.info({ supplierName: 'Private supplier' }, 'first')
+      await Promise.resolve()
+      logger.info('second')
+    })
+    await withRequestLogContext('next-request', async () => {
+      logger.info('third')
+    })
+    logger.flush()
+
+    const [first, second, third] = lines.map((line) => JSON.parse(line))
+    expect(first.requestId).toBe('first-request')
+    expect(second).toMatchObject({ requestId: 'first-request', msg: 'second' })
+    expect(second.supplierName).toBeUndefined()
+    expect(third).toMatchObject({ requestId: 'next-request', msg: 'third' })
+    expect(third.supplierName).toBeUndefined()
+  })
+
+  it('không ghi thông điệp lỗi có dữ liệu nhạy cảm', () => {
+    const { logger, lines } = createTestLogger()
+    logger.error({ err: new Error('PIN 123456 của khách hàng') }, 'unhandled error')
+    logger.flush()
+
+    const entry = JSON.parse(lines[0]!)
+    expect(entry.err.type).toBe('Error')
+    expect(JSON.stringify(entry)).not.toContain('123456')
   })
 })

@@ -280,7 +280,6 @@ export async function createDebtAdjustment({
         storeId: actor.storeId,
         actorId: actor.userId,
         customerId: input.customerId,
-        customerName: customer.name,
         oldAmount,
         newAmount: input.newAmount,
         adjustmentId: adjustmentRow.id,

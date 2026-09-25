@@ -92,6 +92,37 @@ describe('notify integration', () => {
     expect(deliveries[0]!.attempts).toBe(1)
   })
 
+  it('does not report acceptance when a successful send cannot be recorded', async () => {
+    const event = makeEvent()
+    const failingDb = new Proxy(db, {
+      get(target, property, receiver) {
+        if (property === 'insert') {
+          return (table: unknown) =>
+            table === notificationDeliveries
+              ? {
+                  values: async () => {
+                    throw new Error('sensitive database detail')
+                  },
+                }
+              : target.insert(table as typeof notificationDeliveries)
+        }
+        return Reflect.get(target, property, receiver)
+      },
+    })
+    const results = await notify(failingDb, event)
+    expect(results).toEqual([
+      {
+        ok: false,
+        error: 'Delivery log failed',
+        attempts: 1,
+        retriable: false,
+        channelId,
+        status: 'unrecorded',
+        errorCode: 'DELIVERY_LOG_FAILED',
+      },
+    ])
+  })
+
   it('skips event with non-matching severity', async () => {
     const event = makeEvent({ id: uuidv7(), severity: 'info' })
     const results = await notify(db, event)

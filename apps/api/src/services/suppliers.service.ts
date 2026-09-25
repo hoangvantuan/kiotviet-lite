@@ -423,7 +423,6 @@ export async function createSupplier({
         storeId: actor.storeId,
         actorId: actor.userId,
         supplierId: createdId,
-        name: input.name,
       },
       'supplier.created',
     )
@@ -639,7 +638,6 @@ export async function deleteSupplier({
         storeId: actor.storeId,
         actorId: actor.userId,
         supplierId: targetId,
-        name: target.name,
       },
       'supplier.deleted',
     )
@@ -729,7 +727,6 @@ export async function restoreSupplier({
         storeId: actor.storeId,
         actorId: actor.userId,
         supplierId: targetId,
-        name: target.name,
       },
       'supplier.restored',
     )

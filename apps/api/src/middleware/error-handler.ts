@@ -13,9 +13,9 @@ export const errorHandler: ErrorHandler = (err, c) => {
 
   if (err instanceof ApiError) {
     if (err.status >= 500) {
-      reqLogger.error({ err }, err.message)
+      reqLogger.error({ err, code: err.code, status: err.status }, 'api error')
     } else {
-      reqLogger.warn({ err }, err.message)
+      reqLogger.warn({ code: err.code, status: err.status }, 'request rejected')
     }
     return c.json(
       { error: { code: err.code, message: err.message, details: err.details } },
@@ -23,7 +23,10 @@ export const errorHandler: ErrorHandler = (err, c) => {
     )
   }
   if (err instanceof ZodError) {
-    reqLogger.warn({ zodIssues: formatZodIssues(err) }, 'validation error')
+    reqLogger.warn(
+      { issueCount: err.issues.length, fields: err.issues.map((issue) => issue.path.join('.')) },
+      'validation error',
+    )
     return c.json(
       {
         error: {
@@ -45,14 +48,9 @@ export const errorHandler: ErrorHandler = (err, c) => {
       type: 'system.error.unhandled',
       severity: 'critical',
       title: 'Lỗi hệ thống không xác định',
-      body: err instanceof Error ? err.message : 'Unknown error',
+      body: 'Yêu cầu gặp lỗi hệ thống. Tra cứu log bằng mã yêu cầu.',
       context: {
-        errorMessage: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack?.slice(0, 500) : undefined,
-        requestId:
-          (c.get('requestId') as string | undefined) ??
-          (reqLogger as unknown as { bindings?: () => { requestId?: string } })?.bindings?.()
-            ?.requestId,
+        requestId: c.get('requestId'),
       },
     })
   }

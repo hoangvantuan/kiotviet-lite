@@ -1,8 +1,10 @@
 import type { MiddlewareHandler } from 'hono'
+import { routePath } from 'hono/route'
 import type pino from 'pino'
 
-import { logger } from '../lib/logger.js'
+import { logger, withRequestLogContext } from '../lib/logger.js'
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 declare module 'hono' {
   interface ContextVariableMap {
     logger: pino.Logger
@@ -10,27 +12,29 @@ declare module 'hono' {
   }
 }
 
-export const requestLoggerMiddleware: MiddlewareHandler = async (c, next) => {
-  const requestId = c.req.header('x-request-id') || crypto.randomUUID()
+export const requestLoggerMiddleware: MiddlewareHandler = (c, next) => {
+  const incomingId = c.req.header('x-request-id')
+  const requestId = incomingId && UUID.test(incomingId) ? incomingId : crypto.randomUUID()
   const start = performance.now()
-  const reqLogger = logger.child({ requestId })
 
   c.set('requestId', requestId)
-  c.set('logger', reqLogger)
+  c.set('logger', logger)
   c.header('X-Request-Id', requestId)
 
-  reqLogger.info(
-    { method: c.req.method, path: c.req.path, userAgent: c.req.header('user-agent') },
-    'request started',
-  )
-
-  try {
-    await next()
-  } finally {
-    const duration = Math.round(performance.now() - start)
-    reqLogger.info(
-      { method: c.req.method, path: c.req.path, status: c.res.status, duration },
-      'request completed',
-    )
-  }
+  return withRequestLogContext(requestId, async () => {
+    logger.info({ method: c.req.method }, 'request started')
+    try {
+      await next()
+    } finally {
+      logger.info(
+        {
+          method: c.req.method,
+          route: routePath(c),
+          status: c.res.status,
+          durationMs: Math.round(performance.now() - start),
+        },
+        'request completed',
+      )
+    }
+  })
 }

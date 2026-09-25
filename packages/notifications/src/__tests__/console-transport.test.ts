@@ -19,17 +19,23 @@ function makeEvent(overrides: Partial<NotificationEvent> = {}): NotificationEven
 }
 
 describe('ConsoleTransport', () => {
-  it('writes formatted output to stdout', async () => {
+  it('writes event identifiers without business content to stdout', async () => {
     const transport = new ConsoleTransport()
     const writeSpy = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+    const event = makeEvent({ title: 'Tên khách hàng bí mật', body: 'PIN 123456' })
 
-    await transport.send(makeEvent(), {})
+    await transport.send(event, {})
 
-    expect(writeSpy).toHaveBeenCalled()
     const output = writeSpy.mock.calls[0]?.[0] as string
-    expect(output).toContain('[ERROR]')
-    expect(output).toContain('Tồn kho âm')
-
+    const diagnostic = JSON.parse(output)
+    expect(diagnostic).toMatchObject({
+      eventId: event.id,
+      storeId: event.storeId,
+      eventType: event.type,
+      severity: event.severity,
+    })
+    expect(output).not.toContain('Tên khách hàng bí mật')
+    expect(output).not.toContain('123456')
     writeSpy.mockRestore()
   })
 

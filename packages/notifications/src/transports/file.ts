@@ -31,12 +31,18 @@ export class FileTransport implements Transport {
     }
 
     try {
-      const line = JSON.stringify(event) + '\n'
-      await appendFile(resolve(filePath), line, 'utf8')
+      const diagnostic = {
+        eventId: event.id,
+        storeId: event.storeId,
+        eventType: event.type,
+        severity: event.severity,
+        correlationId: event.correlationId,
+        occurredAt: event.occurredAt,
+      }
+      await appendFile(resolve(filePath), JSON.stringify(diagnostic) + '\n', 'utf8')
       return { ok: true, attempts: 1 }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      return { ok: false, error: message, attempts: 1, retriable: true }
+    } catch {
+      return { ok: false, error: 'FILE_WRITE_FAILED', attempts: 1, retriable: true }
     }
   }
 }

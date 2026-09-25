@@ -1,6 +1,6 @@
 import { and, eq, gt, isNull } from 'drizzle-orm'
 
-import { brands, bulkImportJobs, categories } from '@kiotviet-lite/shared'
+import { brands, type BulkImportJob, bulkImportJobs, categories } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
@@ -29,12 +29,17 @@ type RunArgs = { db: Db; storageRoot: string; storeId: string; id: string }
 
 /** Claims once. Domain writes, audits, and the completed state commit together or all roll back. */
 export async function runBulkImportJob({ db, storageRoot, storeId, id }: RunArgs) {
+  let claimed: BulkImportJob
   try {
-    await claimBulkImportJob({ db, storeId, id })
+    claimed = await claimBulkImportJob({ db, storeId, id })
   } catch (error) {
     if (error instanceof ApiError && error.code === 'CONFLICT') return
     throw error
   }
+  logger.info(
+    { jobId: id, storeId, status: 'running', jobType: claimed.type },
+    'Import job started',
+  )
   try {
     const { job, bytes } = await loadBulkImportJobFile({ db, storageRoot, storeId, id })
     const actor: AuthContext = { storeId, userId: job.createdBy, role: 'owner' }
@@ -198,19 +203,37 @@ export async function runBulkImportJob({ db, storageRoot, storeId, id }: RunArgs
       }
       await finishBulkImportJob({ db: tx, storeId, id, status: 'completed' })
     })
+    logger.info(
+      { jobId: id, storeId, status: 'completed', jobType: claimed.type },
+      'Import job completed',
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    const errorCode = error instanceof ApiError ? error.code : 'UNEXPECTED_ERROR'
     try {
-      return await finishBulkImportJob({
+      await finishBulkImportJob({
         db,
         storeId,
         id,
         status: 'failed',
         errorMessage: message.slice(0, 2000),
       })
+      logger.error(
+        { jobId: id, storeId, status: 'failed', jobType: claimed.type, errorCode },
+        'Import job failed',
+      )
     } catch (finishError) {
       // A concurrent owner cancellation wins; no domain writes survive the failed final CAS.
       if (finishError instanceof ApiError && finishError.code === 'CONFLICT') return
+      logger.error(
+        {
+          jobId: id,
+          storeId,
+          status: 'running',
+          errorCode: finishError instanceof ApiError ? finishError.code : 'UNEXPECTED_ERROR',
+        },
+        'Import job status update failed',
+      )
       throw finishError
     }
   } finally {
@@ -220,8 +243,15 @@ export async function runBulkImportJob({ db, storageRoot, storeId, id }: RunArgs
 
 export function startBulkImportRunner(args: RunArgs): void {
   setImmediate(() => {
-    void runBulkImportJob(args).catch((err: unknown) =>
-      logger.error({ err, id: args.id }, 'Import runner failed'),
+    void runBulkImportJob(args).catch((error: unknown) =>
+      logger.error(
+        {
+          jobId: args.id,
+          storeId: args.storeId,
+          errorCode: error instanceof ApiError ? error.code : 'UNEXPECTED_ERROR',
+        },
+        'Import runner failed',
+      ),
     )
   })
 }
@@ -241,12 +271,18 @@ export async function runQueuedBulkImportJobs({
 }
 
 export function pollBulkImportQueue(args: { db: Db; storageRoot: string }): void {
-  void runQueuedBulkImportJobs(args).catch((err: unknown) =>
-    logger.error({ err }, 'Import queue poll failed'),
+  void runQueuedBulkImportJobs(args).catch((error: unknown) =>
+    logger.error(
+      { errorCode: error instanceof ApiError ? error.code : 'UNEXPECTED_ERROR' },
+      'Import queue poll failed',
+    ),
   )
   setInterval(() => {
-    void runQueuedBulkImportJobs(args).catch((err: unknown) =>
-      logger.error({ err }, 'Import queue poll failed'),
+    void runQueuedBulkImportJobs(args).catch((error: unknown) =>
+      logger.error(
+        { errorCode: error instanceof ApiError ? error.code : 'UNEXPECTED_ERROR' },
+        'Import queue poll failed',
+      ),
     )
   }, QUEUE_POLL_MS).unref()
 }

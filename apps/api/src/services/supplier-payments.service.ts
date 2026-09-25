@@ -289,7 +289,6 @@ export async function createSupplierPayment({
         storeId: actor.storeId,
         actorId: actor.userId,
         supplierId: input.supplierId,
-        supplierName: supplier.name,
         amount: input.amount,
         debtBefore,
         debtAfter: debtAfterValue,

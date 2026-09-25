@@ -1,5 +1,3 @@
-import { ZodError } from 'zod'
-
 import {
   notificationDeliveries,
   type NotificationEvent,
@@ -28,20 +26,22 @@ export interface NotifyOptions {
   configKey?: string
 }
 
+export type DeliveryResult = SendResult & {
+  channelId: string
+  status: 'sent' | 'dead' | 'throttled' | 'unrecorded'
+  errorCode?: string
+}
+
 export async function notify(
   db: NotificationDb,
   event: NotificationEvent,
   options: NotifyOptions = {},
-): Promise<SendResult[]> {
+): Promise<DeliveryResult[]> {
   let validated: NotificationEvent
   try {
     validated = notificationEventSchema.parse(event)
   } catch (err) {
-    const message =
-      err instanceof ZodError
-        ? `Invalid notification event: ${err.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`
-        : 'Invalid notification event'
-    throw new Error(message, { cause: err })
+    throw new Error('Invalid notification event', { cause: err })
   }
 
   const matchedRules = await findMatchingRules(
@@ -51,7 +51,37 @@ export async function notify(
     validated.severity,
   )
 
-  async function deliverRule(rule: MatchedRule): Promise<SendResult> {
+  async function deliverRule(rule: MatchedRule): Promise<DeliveryResult> {
+    async function record(
+      result: SendResult,
+      status: 'sent' | 'dead' | 'throttled',
+      errorCode?: string,
+    ): Promise<DeliveryResult> {
+      try {
+        await db.insert(notificationDeliveries).values({
+          eventId: validated.id,
+          channelId: rule.channelId,
+          storeId: validated.storeId,
+          eventType: validated.type,
+          status,
+          attempts: result.attempts,
+          retriable: result.ok ? null : result.retriable,
+          error: errorCode ?? null,
+        })
+        return { ...result, channelId: rule.channelId, status, errorCode }
+      } catch {
+        // A delivery may already have been sent; never retry it just because recording failed.
+        return {
+          ok: false,
+          error: 'Delivery log failed',
+          attempts: result.attempts,
+          retriable: false,
+          channelId: rule.channelId,
+          status: 'unrecorded',
+          errorCode: 'DELIVERY_LOG_FAILED',
+        }
+      }
+    }
     const throttled = await isThrottled(
       db,
       validated.storeId,
@@ -61,128 +91,79 @@ export async function notify(
     )
 
     if (throttled) {
-      try {
-        await db.insert(notificationDeliveries).values({
-          eventId: validated.id,
-          channelId: rule.channelId,
-          storeId: validated.storeId,
-          eventType: validated.type,
-          status: 'throttled',
-          attempts: 0,
-          retriable: null,
-        })
-      } catch (err) {
-        console.error('[notifications] delivery log insert failed', err)
-      }
-      return { ok: true, attempts: 0 }
+      return record({ ok: true, attempts: 0 }, 'throttled')
     }
 
     const transport = transports[rule.transport]
     if (!transport) {
-      try {
-        await db.insert(notificationDeliveries).values({
-          eventId: validated.id,
-          channelId: rule.channelId,
-          storeId: validated.storeId,
-          eventType: validated.type,
-          status: 'dead',
-          attempts: 0,
-          retriable: false,
-          error: `Unknown transport: ${rule.transport}`,
-        })
-      } catch (err) {
-        console.error('[notifications] delivery log insert failed', err)
-      }
-      return {
-        ok: false,
-        error: `Unknown transport: ${rule.transport}`,
-        attempts: 0,
-        retriable: false,
-      }
+      return record(
+        { ok: false, error: 'Unknown transport', attempts: 0, retriable: false },
+        'dead',
+        'UNKNOWN_TRANSPORT',
+      )
     }
 
     let config: Record<string, unknown> = {}
     if (rule.configEncrypted) {
       if (!options.configKey) {
-        try {
-          await db.insert(notificationDeliveries).values({
-            eventId: validated.id,
-            channelId: rule.channelId,
-            storeId: validated.storeId,
-            eventType: validated.type,
-            status: 'dead',
-            attempts: 0,
-            retriable: false,
-            error: 'Config key required but not provided',
-          })
-        } catch (err) {
-          console.error('[notifications] delivery log insert failed', err)
-        }
-        return {
-          ok: false,
-          error: 'Config key required but not provided',
-          attempts: 0,
-          retriable: false,
-        }
+        return record(
+          { ok: false, error: 'Config key required', attempts: 0, retriable: false },
+          'dead',
+          'CONFIG_KEY_MISSING',
+        )
       }
       try {
         config = decrypt(rule.configEncrypted, options.configKey)
-      } catch (err) {
-        console.error('[notifications] config decrypt failed', { channelId: rule.channelId, err })
-        try {
-          await db.insert(notificationDeliveries).values({
-            eventId: validated.id,
-            channelId: rule.channelId,
-            storeId: validated.storeId,
-            eventType: validated.type,
-            status: 'dead',
-            attempts: 1,
-            retriable: false,
-            error: 'Failed to decrypt channel config',
-          })
-        } catch (err2) {
-          console.error('[notifications] delivery log insert failed', err2)
-        }
-        return {
-          ok: false,
-          error: 'Failed to decrypt channel config',
-          attempts: 1,
-          retriable: false,
-        }
+      } catch {
+        return record(
+          { ok: false, error: 'Failed to decrypt channel config', attempts: 1, retriable: false },
+          'dead',
+          'CONFIG_DECRYPT_FAILED',
+        )
       }
     }
 
-    const result = await withRetry(() => transport.send(validated, config))
-
+    let attempts = 0
     try {
-      await db.insert(notificationDeliveries).values({
-        eventId: validated.id,
-        channelId: rule.channelId,
-        storeId: validated.storeId,
-        eventType: validated.type,
-        status: result.ok ? 'sent' : 'dead',
-        attempts: result.attempts,
-        retriable: result.ok ? null : result.retriable,
-        error: result.ok ? null : result.error,
+      const result = await withRetry(() => {
+        attempts++
+        return transport.send(validated, config)
       })
-    } catch (err) {
-      console.error('[notifications] delivery log insert failed', err)
+      if (result.ok) return record(result, 'sent')
+      return record(
+        {
+          ok: false,
+          error: 'Transport failed',
+          attempts: result.attempts,
+          retriable: result.retriable,
+        },
+        'dead',
+        'TRANSPORT_FAILED',
+      )
+    } catch {
+      return record(
+        { ok: false, error: 'Transport failed', attempts, retriable: false },
+        'dead',
+        'TRANSPORT_THROWN',
+      )
     }
-
-    return result
   }
 
   const settled = await Promise.allSettled(matchedRules.map(deliverRule))
 
-  return settled.map((outcome) =>
-    outcome.status === 'fulfilled'
-      ? outcome.value
-      : {
-          ok: false,
-          error: outcome.reason instanceof Error ? outcome.reason.message : 'Delivery failed',
-          attempts: 0,
-          retriable: true,
-        },
+  return settled.map(
+    (outcome, index): DeliveryResult =>
+      outcome.status === 'fulfilled'
+        ? outcome.value
+        : {
+            ok: false,
+            error: 'Delivery failed',
+            attempts: 0,
+            retriable: true,
+            channelId: matchedRules[index]!.channelId,
+            status: 'unrecorded',
+            errorCode: 'DELIVERY_FAILED',
+          },
   )
 }
 

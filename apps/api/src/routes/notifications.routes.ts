@@ -1,4 +1,4 @@
-import { notify, type SendResult } from '@kiotviet-lite/notifications'
+import { type DeliveryResult, notify } from '@kiotviet-lite/notifications'
 import { Hono } from 'hono'
 import { rateLimiter } from 'hono-rate-limiter'
 import { uuidv7 } from 'uuidv7'
@@ -9,6 +9,7 @@ import { notificationSeverityValues, notificationTypeValues } from '@kiotviet-li
 import type { Db } from '../db/index.js'
 import { env } from '../lib/env.js'
 import { parseJson } from '../lib/http.js'
+import { logger } from '../lib/logger.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
@@ -87,16 +88,53 @@ export function createNotificationRoutes({ db }: NotificationRoutesDeps) {
       correlationId,
     }
 
-    let results: SendResult[]
+    let results: DeliveryResult[]
     try {
       results = await notify(db, event, { configKey: env.notificationConfigKey })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Invalid notification event'
-      return c.json({ error: message }, 400)
+    } catch (error) {
+      const invalidEvent = error instanceof Error && error.cause instanceof z.ZodError
+      logger.error(
+        {
+          eventId: event.id,
+          storeId: event.storeId,
+          eventType: event.type,
+          status: 'failed',
+          errorCode: invalidEvent ? 'INVALID_EVENT' : 'ROUTING_FAILED',
+        },
+        'Notification emit failed',
+      )
+      return c.json(
+        { error: invalidEvent ? 'Invalid notification event' : 'Notification routing failed' },
+        invalidEvent ? 400 : 503,
+      )
     }
 
-    const safeResults = results.map((r) => (r.ok ? { ok: true as const } : { ok: false as const }))
-    return c.json({ data: { accepted: true, results: safeResults } })
+    if (results.length === 0) {
+      logger.warn(
+        { eventId: event.id, storeId: event.storeId, eventType: event.type },
+        'Notification had no matching rules',
+      )
+    }
+    for (const result of results) {
+      const fields = {
+        eventId: event.id,
+        storeId: event.storeId,
+        eventType: event.type,
+        channelId: result.channelId,
+        status: result.status,
+        attempts: result.attempts,
+        ...(result.errorCode ? { errorCode: result.errorCode } : {}),
+      }
+      if (result.ok) logger.info(fields, 'Notification delivery outcome')
+      else logger.error(fields, 'Notification delivery outcome')
+    }
+    const safeResults = results.map(({ ok, status, attempts }) => ({ ok, status, attempts }))
+    return c.json({
+      data: {
+        accepted: results.length > 0 && results.every((result) => result.ok),
+        results: safeResults,
+      },
+    })
   })
 
   return app

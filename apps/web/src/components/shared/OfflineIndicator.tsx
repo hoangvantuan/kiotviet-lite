@@ -5,7 +5,12 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { getErrorOrders, type OfflineOrder } from '@/lib/offline-orders'
-import { retryErrorOrders, retrySingleOrder, startSyncCycle } from '@/lib/order-sync'
+import {
+  reportSyncCycleFailure,
+  retryErrorOrders,
+  retrySingleOrder,
+  startSyncCycle,
+} from '@/lib/order-sync'
 import { getPGliteClient } from '@/lib/pglite'
 import { useOfflineStore } from '@/stores/use-offline-store'
 
@@ -42,8 +47,8 @@ export function OfflineIndicator() {
     setSyncing(true)
     try {
       await startSyncCycle(pglite, undefined, undefined, lastSyncedAt)
-    } catch {
-      // error handled in sync engine
+    } catch (error) {
+      reportSyncCycleFailure(error, 'manual_sync')
     } finally {
       await loadErrorOrders()
       setSyncing(false)
@@ -57,8 +62,8 @@ export function OfflineIndicator() {
     setSyncing(true)
     try {
       await retryErrorOrders(pglite)
-    } catch {
-      // error handled in sync engine
+    } catch (error) {
+      reportSyncCycleFailure(error, 'manual_sync')
     } finally {
       await loadErrorOrders()
       setSyncing(false)
@@ -72,8 +77,8 @@ export function OfflineIndicator() {
     setRetryingClientId(clientId)
     try {
       await retrySingleOrder(pglite, clientId)
-    } catch {
-      // error handled in sync engine
+    } catch (error) {
+      reportSyncCycleFailure(error, 'manual_sync')
     } finally {
       await loadErrorOrders()
       setRetryingClientId(null)

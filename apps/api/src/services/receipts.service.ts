@@ -501,7 +501,6 @@ export async function createReceipt({
         actorId: actor.userId,
         receiptId: receiptRow.id,
         customerId: input.customerId,
-        customerName: customer.name,
         amount: input.amount,
         debtBefore,
         debtAfter,

@@ -42,18 +42,49 @@ ingress:
 
 Nginx chỉ bind `127.0.0.1` nên không truy cập được từ internet trực tiếp.
 
-## 4. Log
+## 4. Log và điều tra sự cố
 
-| Loại           | Vị trí                          | Rotation                                      |
-| -------------- | ------------------------------- | --------------------------------------------- |
-| App log (JSON) | `./data/logs/api/app.*.log`     | pino-roll: theo ngày, 100MB/file, giữ 30 file |
-| Log container  | `docker compose logs <service>` | json-file: 10MB/file, giữ 3 file              |
+| Loại                                                   | Vị trí                                                     | Giữ log                                                                                                                                                                                                |
+| ------------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| API JSON (nguồn tra cứu chính)                         | `./data/logs/api/app.*.log`                                | Xoay hằng ngày hoặc khi đạt 100 MB/file; xóa file quá 30 ngày khi API khởi động và mỗi ngày. Tối đa 300 file cũ + file hiện tại (~30 GB). Nếu vượt giới hạn file trước 30 ngày, log cũ sẽ mất sớm hơn. |
+| Container (Postgres, migrate, API stdout, web, backup) | `docker compose -f docker-compose.prod.yml logs <service>` | Docker json-file: 10 MB/file, tối đa 30 file/service; giới hạn theo dung lượng, **không đảm bảo 30 ngày**, nhất là container `migrate` có thể được tạo lại khi deploy.                                 |
 
 ```bash
-# Theo dõi file log api mới nhất (pino-roll đặt tên app.<số>.log)
-tail -f "data/logs/api/$(ls -t data/logs/api | head -1)"
 docker compose -f docker-compose.prod.yml logs -f api
+docker compose -f docker-compose.prod.yml logs --since 24h backup
+# Xem file API hiện hành:
+tail -f "data/logs/api/$(ls -t data/logs/api | head -1)"
 ```
+
+Log API có `requestId` (trả về trong header `X-Request-Id`), `storeId`/`actorId` sau khi xác thực,
+`route`, `status`, `durationMs`; các thao tác ghi `clientId`, `jobId`, `eventId` và trạng thái.
+Không ghi URL thô hay request/response body: đăng nhập trả token, đơn ngoại tuyến có PIN lồng
+trong dữ liệu, tệp nhập là nhị phân; mask chung dễ bỏ sót trường mới và phải sao chép body/response.
+Thay vào đó ghi trường chẩn đoán được chọn sau khi xử lý (mã lỗi, đường dẫn field validation,
+ID và trạng thái); tra cứu bản ghi nghiệp vụ có phân quyền bằng ID. Log nghiệp vụ trong DB không
+thay thế log kỹ thuật. Kênh thông báo console/file chỉ ghi metadata sự kiện, không ghi nội dung.
+Lỗi từ trình duyệt được gửi lên `POST /api/v1/client-diagnostics` với loại lỗi, ID và mã lỗi tối
+thiểu; khi mất mạng/chưa đăng nhập, trình duyệt xếp tối đa 50 mục để gửi sau. Console trình duyệt
+chỉ tồn tại trong phiên đang mở, không phải nguồn tra cứu lâu dài.
+
+```bash
+# Cần jq trên host. Đổi mã ID từ phản hồi lỗi hoặc màn hình đồng bộ.
+RID=<request-id>
+jq -c --arg id "$RID" 'select(.requestId == $id or .relatedRequestId == $id)' data/logs/api/app.*.log
+ID=<client-id-or-job-id-or-event-id>
+jq -c --arg id "$ID" 'select(.clientId == $id or .jobId == $id or .eventId == $id)' data/logs/api/app.*.log
+```
+
+Điều tra đơn ngoại tuyến: tra `clientId` ở máy bán → log `sync push order failed` hoặc
+`client diagnostic` → `requestId`/`relatedRequestId` → trạng thái đơn và nhật ký nghiệp vụ.
+Nhập liệu hàng loạt: tra `jobId` và trạng thái `running/completed/failed` trong log, đối chiếu
+trạng thái công việc ở API. Thông báo: tra `eventId`, `channelId`, `status`, `attempts` và
+`errorCode`; nội dung sự kiện không được ghi vào log chẩn đoán.
+
+**Giới hạn trước go-live:** chưa có hộp thư sự cố hoặc giám sát/cảnh báo bên ngoài. API/host
+ngừng chạy và backup lỗi không tự báo cho người vận hành; cần kiểm tra `docker compose ps`,
+`docker compose logs backup` và dung lượng `du -sh data/logs data/backups` thủ công. Log API
+có mục tiêu 30 ngày nhưng giới hạn dung lượng có thể rút ngắn thời gian thực tế khi lưu lượng tăng.
 
 ## 5. Lưu trữ tệp nhập Excel
 

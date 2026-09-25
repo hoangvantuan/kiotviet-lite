@@ -33,7 +33,38 @@ export function emitEvent(db: Db, event: EmitEventInput): void {
         : event.body,
   }
 
-  void notify(db, fullEvent, { configKey: env.notificationConfigKey || undefined }).catch((err) => {
-    logger.error({ err, eventType: fullEvent.type, storeId: fullEvent.storeId }, 'notify failed')
-  })
+  void notify(db, fullEvent, { configKey: env.notificationConfigKey || undefined })
+    .then((results) => {
+      if (results.length === 0) {
+        logger.warn(
+          { eventId: fullEvent.id, storeId: fullEvent.storeId, eventType: fullEvent.type },
+          'Notification had no matching rules',
+        )
+      }
+      for (const result of results) {
+        const fields = {
+          eventId: fullEvent.id,
+          storeId: fullEvent.storeId,
+          eventType: fullEvent.type,
+          channelId: result.channelId,
+          status: result.status,
+          attempts: result.attempts,
+          ...(result.errorCode ? { errorCode: result.errorCode } : {}),
+        }
+        if (result.ok) logger.info(fields, 'Notification delivery outcome')
+        else logger.error(fields, 'Notification delivery outcome')
+      }
+    })
+    .catch(() => {
+      logger.error(
+        {
+          eventId: fullEvent.id,
+          storeId: fullEvent.storeId,
+          eventType: fullEvent.type,
+          status: 'failed',
+          errorCode: 'ROUTING_FAILED',
+        },
+        'Notification emit failed',
+      )
+    })
 }

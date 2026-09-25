@@ -49,19 +49,41 @@ export function createBulkImportJobsRoutes(args: { db: Db; storageRoot?: string 
       : mkdir(storageRoot, { recursive: true, mode: 0o700 })
   )
     .then(() => verifyImportStorageRoot(storageRoot))
-    .then(() => recoverInterruptedBulkImportJobs(db))
+    .then(async () => {
+      const recovered = await recoverInterruptedBulkImportJobs(db)
+      for (const job of recovered) {
+        logger.warn(
+          {
+            jobId: job.id,
+            storeId: job.storeId,
+            status: 'failed',
+            jobType: job.type,
+            errorCode: 'INTERRUPTED',
+          },
+          'Import job recovered after interruption',
+        )
+      }
+    })
     .then(() => {
       pollBulkImportQueue({ db, storageRoot })
       return cleanupExpired()
     })
     .then(() => {
       setInterval(() => {
-        void cleanupExpired().catch((err: unknown) =>
-          logger.error({ err }, 'Import retention failed'),
+        void cleanupExpired().catch((error: unknown) =>
+          logger.error(
+            { errorCode: error instanceof ApiError ? error.code : 'UNEXPECTED_ERROR' },
+            'Import retention failed',
+          ),
         )
       }, RETENTION_INTERVAL_MS).unref()
     })
-  void ready.catch((err: unknown) => logger.error({ err }, 'Import storage startup failed'))
+  void ready.catch((error: unknown) =>
+    logger.error(
+      { errorCode: error instanceof ApiError ? error.code : 'UNEXPECTED_ERROR' },
+      'Import storage startup failed',
+    ),
+  )
 
   app.use('*', requireAuth)
   app.use('*', async (c, next) => {

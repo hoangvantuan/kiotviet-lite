@@ -4,6 +4,7 @@ import type { UserRole } from '@kiotviet-lite/shared'
 
 import { ApiError } from '../lib/errors.js'
 import { verifyAccessToken } from '../lib/jwt.js'
+import { setRequestLogActor } from '../lib/logger.js'
 
 export interface AuthContext {
   userId: string
@@ -32,5 +33,6 @@ export const requireAuth: MiddlewareHandler = async (c, next) => {
     storeId: payload.storeId,
     role: payload.role,
   })
+  setRequestLogActor(payload.storeId, payload.sub)
   await next()
 }

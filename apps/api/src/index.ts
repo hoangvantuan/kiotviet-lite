@@ -2,11 +2,14 @@ import { serve } from '@hono/node-server'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { rateLimiter } from 'hono-rate-limiter'
+import { z } from 'zod'
 
 import { users } from '@kiotviet-lite/shared'
 
 import { closeDbPool, db } from './db/index.js'
 import { setupGracefulShutdown } from './lib/graceful-shutdown.js'
+import { parseJson } from './lib/http.js'
 import { initLogger, logger } from './lib/logger.js'
 import { requireAuth } from './middleware/auth.middleware.js'
 import { errorHandler } from './middleware/error-handler.js'
@@ -60,7 +63,8 @@ app.use(
   cors({
     origin: (origin) => (origin && ALLOWED_ORIGINS.includes(origin) ? origin : null),
     credentials: true,
-    allowHeaders: ['Authorization', 'Content-Type'],
+    allowHeaders: ['Authorization', 'Content-Type', 'X-Request-Id'],
+    exposeHeaders: ['X-Request-Id'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   }),
 )
@@ -77,6 +81,49 @@ app.get('/', (c) => {
 app.get('/api/v1/health', (c) => {
   return c.json({ status: 'ok' })
 })
+
+const clientDiagnosticSchema = z
+  .object({
+    kind: z.enum([
+      'render_error',
+      'offline_sync_error',
+      'incremental_sync_error',
+      'response_parse_error',
+      'request_network_error',
+    ]),
+    requestId: z.string().uuid().optional(),
+    clientId: z.string().uuid().optional(),
+    status: z.number().int().min(100).max(599).optional(),
+    code: z
+      .string()
+      .regex(/^[A-Z][A-Z0-9_]{0,63}$/)
+      .optional(),
+  })
+  .strict()
+
+app.post(
+  '/api/v1/client-diagnostics',
+  requireAuth,
+  rateLimiter({
+    windowMs: 60_000,
+    limit: 60,
+    keyGenerator: (c) => c.get('auth').userId,
+  }),
+  async (c) => {
+    const diagnostic = await parseJson(c, clientDiagnosticSchema)
+    c.get('logger').warn(
+      {
+        kind: diagnostic.kind,
+        relatedRequestId: diagnostic.requestId,
+        clientId: diagnostic.clientId,
+        status: diagnostic.status,
+        code: diagnostic.code,
+      },
+      'client diagnostic',
+    )
+    return c.body(null, 204)
+  },
+)
 
 app.route('/api/v1/auth', createAuthRoutes({ db }))
 app.route('/api/v1/users', createUsersRoutes({ db }))
@@ -133,11 +180,11 @@ const port = Number(process.env.PORT) || 3000
 if (process.env.NODE_ENV !== 'test') {
   initLogger()
     .catch((err) => {
-      console.error('Failed to initialize logger, using fallback:', err)
+      logger.error({ err }, 'logger initialization failed; using stdout fallback')
     })
     .then(() => {
       const server = serve({ fetch: app.fetch, port }, (info) => {
-        console.log(`API server running at http://localhost:${info.port}`)
+        logger.info({ port: info.port }, 'api server listening')
       })
 
       setupGracefulShutdown({

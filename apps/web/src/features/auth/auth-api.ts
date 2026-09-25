@@ -24,15 +24,12 @@ export function meApi() {
 
 export async function refreshApi(): Promise<{ accessToken: string; expiresIn: number } | null> {
   try {
-    const API_BASE_URL =
-      (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000'
-    const res = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-    })
-    if (!res.ok) return null
-    const json = (await res.json()) as { data: { accessToken: string; expiresIn: number } }
-    return json.data
+    const response = await apiClient.post<ApiEnvelope<{ accessToken: string; expiresIn: number }>>(
+      '/api/v1/auth/refresh',
+      undefined,
+      { auth: false, skipRefresh: true },
+    )
+    return response.data
   } catch {
     return null
   }

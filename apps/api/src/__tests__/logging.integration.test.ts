@@ -40,6 +40,21 @@ describe('request logging middleware', () => {
     expect(id2).toBeTruthy()
     expect(id1).not.toBe(id2)
   })
+  it('giữ mã yêu cầu hợp lệ từ browser để tra cứu log', async () => {
+    const app = createTestApp()
+    const sent = crypto.randomUUID()
+    const res = await app.request('/api/v1/health', { headers: { 'X-Request-Id': sent } })
+    expect(res.headers.get('X-Request-Id')).toBe(sent)
+  })
+
+  it('không tin mã yêu cầu tùy ý do bên gọi cung cấp', async () => {
+    const app = createTestApp()
+    const res = await app.request('/api/v1/health', {
+      headers: { 'X-Request-Id': 'customer-phone-0901234567' },
+    })
+    expect(res.headers.get('X-Request-Id')).toMatch(UUID_REGEX)
+    expect(res.headers.get('X-Request-Id')).not.toBe('customer-phone-0901234567')
+  })
 
   it('request tới endpoint không tồn tại vẫn có X-Request-Id', async () => {
     const app = createTestApp()
