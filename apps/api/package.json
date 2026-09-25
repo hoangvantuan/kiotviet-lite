@@ -31,7 +31,7 @@
     "pino-roll": "^4.0.0",
     "postgres": "^3.4.0",
     "uuidv7": "^1.2.1",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "xlsx": "file:vendor/xlsx-0.20.3.tgz",
     "zod": "^3.25.76"
   },
   "devDependencies": {

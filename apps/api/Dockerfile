@@ -12,6 +12,8 @@ FROM base AS build
 # Chỉ copy manifest trước để tận dụng layer cache khi source đổi
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/
+# xlsx bản vá được vendor (không có trên npm), lockfile ghi integrity sha512
+COPY apps/api/vendor/ apps/api/vendor/
 COPY packages/shared/package.json packages/shared/
 COPY packages/notifications/package.json packages/notifications/
 
