@@ -330,15 +330,16 @@ export function PurchaseOrderForm() {
         <h2 className="text-base font-semibold">Thông tin chung</h2>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
-            <Label>Nhà cung cấp</Label>
+            <Label htmlFor="po-supplier">Nhà cung cấp</Label>
             <Input
-              placeholder="Tìm NCC theo tên hoặc SĐT"
+              aria-label="Tìm nhà cung cấp"
+              placeholder="Tìm nhà cung cấp theo tên hoặc số điện thoại"
               value={supplierSearch}
               onChange={(e) => setSupplierSearch(e.target.value)}
             />
             <Select value={supplierId} onValueChange={setSupplierId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Chọn NCC" />
+              <SelectTrigger id="po-supplier">
+                <SelectValue placeholder="Chọn nhà cung cấp" />
               </SelectTrigger>
               <SelectContent>
                 {supplierItems.map((s) => (
@@ -415,7 +416,7 @@ export function PurchaseOrderForm() {
                 <TableRow>
                   <TableHead className="w-12">STT</TableHead>
                   <TableHead>Sản phẩm</TableHead>
-                  <TableHead className="hidden md:table-cell">SKU</TableHead>
+                  <TableHead className="hidden lg:table-cell">SKU</TableHead>
                   <TableHead className="w-32">SL</TableHead>
                   <TableHead className="w-36">Đơn giá</TableHead>
                   <TableHead className="w-44">Chiết khấu</TableHead>
@@ -446,11 +447,12 @@ export function PurchaseOrderForm() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="hidden md:table-cell font-mono text-xs">
+                      <TableCell className="hidden lg:table-cell font-mono text-xs">
                         {it.productSku}
                       </TableCell>
                       <TableCell>
                         <Input
+                          aria-label="Số lượng"
                           type="number"
                           min={1}
                           value={it.quantity}
@@ -485,7 +487,8 @@ export function PurchaseOrderForm() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <CurrencyInput aria-label="Giá trị" 
+                        <CurrencyInput
+                          aria-label="Đơn giá nhập"
                           value={it.unitPrice}
                           onChange={(v) => updateItem(it.tempId, { unitPrice: v ?? 0 })}
                         />
@@ -493,6 +496,7 @@ export function PurchaseOrderForm() {
                       <TableCell>
                         <div className="flex gap-1">
                           <Input
+                            aria-label="Chiết khấu dòng"
                             type="number"
                             min={0}
                             max={it.discountType === 'percent' ? 100 : undefined}
@@ -517,7 +521,7 @@ export function PurchaseOrderForm() {
                               })
                             }
                           >
-                            <SelectTrigger aria-label="Đơn vị" className="w-20">
+                            <SelectTrigger aria-label="Loại chiết khấu dòng" className="w-20">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -561,6 +565,7 @@ export function PurchaseOrderForm() {
               <span className="text-muted-foreground shrink-0">Chiết khấu phiếu</span>
               <div className="flex gap-1">
                 <Input
+                  aria-label="Chiết khấu phiếu"
                   type="number"
                   min={0}
                   max={discountTotalType === 'percent' ? 100 : undefined}
@@ -580,7 +585,7 @@ export function PurchaseOrderForm() {
                     setDiscountTotalValue(0)
                   }}
                 >
-                  <SelectTrigger aria-label="Đơn vị" className="w-20">
+                  <SelectTrigger aria-label="Loại chiết khấu phiếu" className="w-20">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -596,9 +601,9 @@ export function PurchaseOrderForm() {
             </div>
           </div>
           <div className="space-y-2 text-sm">
-            <Label>Trạng thái thanh toán</Label>
+            <Label htmlFor="po-payment-status">Trạng thái thanh toán</Label>
             <Select value={paymentSelect} onValueChange={(v: PaymentStatus) => setPaymentSelect(v)}>
-              <SelectTrigger>
+              <SelectTrigger id="po-payment-status">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -607,8 +612,9 @@ export function PurchaseOrderForm() {
                 <SelectItem value="paid">Trả đủ</SelectItem>
               </SelectContent>
             </Select>
-            <Label>Số tiền đã trả</Label>
-            <CurrencyInput aria-label="Giá trị" 
+            <Label htmlFor="po-paid-amount">Số tiền đã trả</Label>
+            <CurrencyInput
+              id="po-paid-amount"
               value={paidAmount}
               onChange={(v) => setPaidAmount(v ?? 0)}
               disabled={paymentSelect !== 'partial'}

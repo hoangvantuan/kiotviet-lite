@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 
 import type { CustomerListItem, ListCustomersQuery } from '@kiotviet-lite/shared'
+import { formatPhone } from '@kiotviet-lite/shared'
 import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
@@ -305,12 +306,12 @@ export function CustomerList() {
             <TableHeader>
               <TableRow>
                 <TableHead>Tên</TableHead>
-                <TableHead className="hidden md:table-cell">Mã KH</TableHead>
+                <TableHead className="hidden lg:table-cell">Mã khách hàng</TableHead>
                 <TableHead>Số điện thoại</TableHead>
-                <TableHead className="hidden md:table-cell">Email</TableHead>
-                <TableHead className="hidden md:table-cell">Nhóm</TableHead>
-                <TableHead className="hidden md:table-cell text-right">Số đơn</TableHead>
-                <TableHead className="hidden md:table-cell text-right">Tổng mua</TableHead>
+                <TableHead className="hidden lg:table-cell">Email</TableHead>
+                <TableHead className="hidden lg:table-cell">Nhóm</TableHead>
+                <TableHead className="hidden lg:table-cell text-right">Số đơn</TableHead>
+                <TableHead className="hidden lg:table-cell text-right">Tổng mua</TableHead>
                 <TableHead className="text-right">Công nợ</TableHead>
                 <TableHead className="w-32 text-right">Thao tác</TableHead>
               </TableRow>
@@ -327,16 +328,22 @@ export function CustomerList() {
                       {customer.name}
                     </Link>
                   </TableCell>
-                  <TableCell className="hidden md:table-cell font-mono text-sm">{customer.code}</TableCell>
-                  <TableCell className="font-mono text-sm">{customer.phone ?? '—'}</TableCell>
-                  <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                  <TableCell className="hidden lg:table-cell font-mono text-sm">
+                    {customer.code}
+                  </TableCell>
+                  <TableCell className="font-mono text-sm">
+                    {customer.phone ? formatPhone(customer.phone) : '—'}
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                     {customer.email ?? '—'}
                   </TableCell>
-                  <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                  <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                     {customer.groupName ?? '—'}
                   </TableCell>
-                  <TableCell className="hidden md:table-cell text-right">{customer.purchaseCount}</TableCell>
-                  <TableCell className="hidden md:table-cell text-right">
+                  <TableCell className="hidden lg:table-cell text-right">
+                    {customer.purchaseCount}
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell text-right">
                     {formatVndWithSuffix(customer.totalPurchased)}
                   </TableCell>
                   <TableCell className="text-right">
@@ -515,7 +522,9 @@ function TrashedCustomersSheet({ open, onOpenChange }: TrashedCustomersSheetProp
                 <div>
                   <p className="font-medium">{c.name}</p>
                   <p className="font-mono text-xs text-muted-foreground">{c.code}</p>
-                  <p className="text-sm text-muted-foreground">{c.phone ?? '—'}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {c.phone ? formatPhone(c.phone) : '—'}
+                  </p>
                 </div>
                 <Button
                   size="sm"

@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { ChevronLeft, Mail, Pencil, Phone, Tag } from 'lucide-react'
 
 import type { CustomerDetail } from '@kiotviet-lite/shared'
-import { formatDebtLimitLabel } from '@kiotviet-lite/shared'
+import { formatDebtLimitLabel, formatPhone } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -97,7 +97,7 @@ export function CustomerDetailHeader({ customer, onEdit }: CustomerDetailHeaderP
               {customer.phone && (
                 <span className="flex items-center gap-1">
                   <Phone className="size-4" />
-                  <span className="font-mono">{customer.phone}</span>
+                  <span className="font-mono">{formatPhone(customer.phone)}</span>
                 </span>
               )}
               {customer.email && (

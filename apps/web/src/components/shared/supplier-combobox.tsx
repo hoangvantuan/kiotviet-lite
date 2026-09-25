@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronsUpDown, Search } from 'lucide-react'
 
+import { formatPhone } from '@kiotviet-lite/shared'
+
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useSupplierQuery, useSuppliersQuery } from '@/features/suppliers/use-suppliers'
@@ -115,7 +117,7 @@ export function SupplierCombobox({
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{s.name}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {s.phone ? `${s.phone}` : ''}
+                  {formatPhone(s.phone)}
                   {showDebt && ` - Nợ: ${formatVndWithSuffix(s.currentDebt)}`}
                 </p>
               </div>

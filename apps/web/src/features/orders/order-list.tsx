@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AlertCircle, Receipt, SearchX, Users, X } from 'lucide-react'
 
+import { formatPhone } from '@kiotviet-lite/shared'
+
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
 import { Badge } from '@/components/ui/badge'
@@ -152,7 +154,9 @@ function CustomerSearchFilter({
               }}
             >
               <div className="font-medium">{c.name}</div>
-              {c.phone && <div className="text-xs text-muted-foreground">{c.phone}</div>}
+              {c.phone && (
+                <div className="text-xs text-muted-foreground">{formatPhone(c.phone)}</div>
+              )}
             </button>
           ))}
         </div>

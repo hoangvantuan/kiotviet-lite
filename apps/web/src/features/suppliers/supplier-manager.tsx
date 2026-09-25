@@ -302,9 +302,9 @@ function SupplierTable({ items, onEdit, onDelete, onDebt }: SupplierTableProps) 
             <TableHead>Tên</TableHead>
             <TableHead>Mã nhà cung cấp</TableHead>
             <TableHead>SĐT</TableHead>
-            <TableHead className="hidden md:table-cell">Email</TableHead>
+            <TableHead className="hidden lg:table-cell">Email</TableHead>
             <TableHead>Công nợ</TableHead>
-            <TableHead className="hidden md:table-cell text-right">Số phiếu</TableHead>
+            <TableHead className="hidden lg:table-cell text-right">Số phiếu</TableHead>
             <TableHead className="hidden lg:table-cell text-right">Tổng đã nhập</TableHead>
             <TableHead className="text-right">Hành động</TableHead>
           </TableRow>
@@ -314,8 +314,10 @@ function SupplierTable({ items, onEdit, onDelete, onDebt }: SupplierTableProps) 
             <TableRow key={it.id}>
               <TableCell className="font-medium">{it.name}</TableCell>
               <TableCell className="font-mono text-sm">{it.code}</TableCell>
-              <TableCell className="font-mono text-sm">{it.phone ? formatPhone(it.phone) : '—'}</TableCell>
-              <TableCell className="hidden md:table-cell text-muted-foreground">
+              <TableCell className="font-mono text-sm">
+                {it.phone ? formatPhone(it.phone) : '—'}
+              </TableCell>
+              <TableCell className="hidden lg:table-cell text-muted-foreground">
                 {it.email ?? '—'}
               </TableCell>
               <TableCell>
@@ -323,7 +325,7 @@ function SupplierTable({ items, onEdit, onDelete, onDebt }: SupplierTableProps) 
                   <DebtBadge currentDebt={it.currentDebt} />
                 </button>
               </TableCell>
-              <TableCell className="hidden md:table-cell text-right">{it.purchaseCount}</TableCell>
+              <TableCell className="hidden lg:table-cell text-right">{it.purchaseCount}</TableCell>
               <TableCell className="hidden lg:table-cell text-right">
                 {formatVndWithSuffix(it.totalPurchased)}
               </TableCell>
@@ -400,7 +402,9 @@ function SupplierCardList({ items, onEdit, onDelete, onDebt }: SupplierCardListP
             <div className="min-w-0 flex-1 space-y-1">
               <p className="truncate font-medium text-foreground">{s.name}</p>
               <p className="truncate font-mono text-xs text-muted-foreground">{s.code}</p>
-              <p className="font-mono text-xs text-muted-foreground">{s.phone ? formatPhone(s.phone) : '—'}</p>
+              <p className="font-mono text-xs text-muted-foreground">
+                {s.phone ? formatPhone(s.phone) : '—'}
+              </p>
               <div className="flex items-center gap-2">
                 <DebtBadge currentDebt={s.currentDebt} />
                 <span className="text-xs text-muted-foreground">{s.purchaseCount} phiếu</span>
@@ -527,7 +531,9 @@ function TrashedSuppliersSheet({ open, onOpenChange }: TrashedSuppliersSheetProp
               <div className="min-w-0">
                 <p className="font-medium truncate">{s.name}</p>
                 <p className="font-mono text-xs text-muted-foreground">{s.code}</p>
-                <p className="text-xs text-muted-foreground font-mono">{s.phone ? formatPhone(s.phone) : '—'}</p>
+                <p className="text-xs text-muted-foreground font-mono">
+                  {s.phone ? formatPhone(s.phone) : '—'}
+                </p>
               </div>
               <Button
                 size="sm"

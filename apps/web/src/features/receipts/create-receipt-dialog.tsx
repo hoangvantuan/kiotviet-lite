@@ -4,6 +4,7 @@ import { Search, X } from 'lucide-react'
 import {
   type CreateReceiptInput,
   debtSourceLabel,
+  formatPhone,
   type OpenDebtItem,
   type ReceiptDetail,
 } from '@kiotviet-lite/shared'
@@ -187,7 +188,7 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
                   <p className="text-xs text-muted-foreground font-mono">{selectedCustomer.code}</p>
                   {selectedCustomer.phone && (
                     <p className="text-xs text-muted-foreground font-mono">
-                      {selectedCustomer.phone}
+                      {formatPhone(selectedCustomer.phone)}
                     </p>
                   )}
                   <p className="text-sm mt-1">
@@ -242,7 +243,9 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
                           <p className="font-medium truncate">{c.name}</p>
                           <p className="text-xs text-muted-foreground font-mono">{c.code}</p>
                           {c.phone && (
-                            <p className="text-xs text-muted-foreground font-mono">{c.phone}</p>
+                            <p className="text-xs text-muted-foreground font-mono">
+                              {formatPhone(c.phone)}
+                            </p>
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground shrink-0">

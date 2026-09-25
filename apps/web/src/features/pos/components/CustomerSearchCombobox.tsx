@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Search, UserPlus, Users, X } from 'lucide-react'
 
+import { formatPhone } from '@kiotviet-lite/shared'
+
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useCustomersQuery } from '@/features/customers/use-customers'
@@ -126,7 +128,7 @@ export function CustomerSearchCombobox() {
                   <p className="truncate font-medium">{c.name}</p>
                   <p className="truncate text-xs text-muted-foreground">
                     {c.code}
-                    {c.phone && ` · ${c.phone}`}
+                    {c.phone && ` · ${formatPhone(c.phone)}`}
                     {c.groupName && ` · ${c.groupName}`}
                   </p>
                 </div>
