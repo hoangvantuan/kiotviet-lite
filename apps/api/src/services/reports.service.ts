@@ -1,6 +1,7 @@
 import { and, eq, gte, isNull, lte, sql } from 'drizzle-orm'
 
 import {
+  customerGroups,
   customers,
   type DebtAgingReport,
   type DebtAgingRow,
@@ -8,6 +9,7 @@ import {
   type DebtSummaryReport,
   formatVnd,
   receipts,
+  resolveEffectiveDebtLimit,
   stores,
   supplierPayments,
   suppliers,
@@ -61,13 +63,16 @@ export async function getDebtAgingReport({
       customerId: customers.id,
       customerName: customers.name,
       customerPhone: customers.phone,
-      debtLimit: customers.debtLimit,
+      customerDebtLimit: customers.debtLimit,
+      debtUnlimited: customers.debtUnlimited,
+      groupDebtLimit: customerGroups.debtLimit,
       debtId: debts.id,
       remaining: debts.remaining,
       daysSince: sql<number>`EXTRACT(DAY FROM NOW() - ${debts.createdAt})`.as('days_since'),
     })
     .from(debts)
     .innerJoin(customers, eq(debts.customerId, customers.id))
+    .leftJoin(customerGroups, eq(customers.groupId, customerGroups.id))
     .where(
       and(
         eq(debts.storeId, storeId),
@@ -89,7 +94,12 @@ export async function getDebtAgingReport({
       entry = {
         name: row.customerName,
         phone: row.customerPhone,
-        debtLimit: row.debtLimit,
+        // Hạn mức hiệu lực (ADR-0009): null chỉ khi khách được đặt không giới hạn
+        debtLimit: resolveEffectiveDebtLimit({
+          debtUnlimited: row.debtUnlimited,
+          customerDebtLimit: row.customerDebtLimit,
+          groupDebtLimit: row.groupDebtLimit,
+        }),
         buckets: Array.from({ length: bucketCount }, () => 0),
       }
       grouped.set(row.customerId, entry)
@@ -248,7 +258,11 @@ export function buildAgingCsv(report: DebtAgingReport): string {
       [
         `"${row.customerName}"`,
         row.customerPhone ?? '',
-        row.debtLimit !== null ? formatVnd(row.debtLimit) : 'Không giới hạn',
+        row.debtLimit === null
+          ? 'Không giới hạn'
+          : row.debtLimit === 0
+            ? 'Không cho nợ'
+            : formatVnd(row.debtLimit),
         formatVnd(row.totalDebt),
         ...row.buckets.map(formatVnd),
       ].join(','),

@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PinDialog } from '@/features/auth/pin-dialog'
+import { usePermissions } from '@/features/auth/use-permissions'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
 import { type CartItem, useCartStore } from '@/stores/use-cart-store'
@@ -29,7 +30,11 @@ interface EditUnitPriceDialogProps {
 export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceDialogProps) {
   const updateUnitPrice = useCartStore((s) => s.updateUnitPrice)
   const setPriceOverridePin = useCartStore((s) => s.setPriceOverridePin)
-  const cost = useCartItemCost(item, open)
+  const permissions = usePermissions()
+  // BC-13: chỉ người có quyền xem giá vốn mới thấy số giá vốn và cảnh báo dưới vốn
+  const canViewCost = permissions.has('products.viewCost')
+  const canSellBelowCost = permissions.has('pos.editPriceBelowCost')
+  const cost = useCartItemCost(item, open && canViewCost)
 
   const [draftPrice, setDraftPrice] = useState<number | null>(null)
   const [reason, setReason] = useState('')
@@ -53,6 +58,10 @@ export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceD
   const isCostUnknown = cost.status === 'none'
   const isCostUnavailable = cost.status === 'unavailable'
   const isBelowCost = cost.status === 'known' && draftPrice !== null && draftPrice < cost.costPrice
+  // Dưới giá vốn cần người giữ pos.editPriceBelowCost duyệt (quản lý phải nhờ chủ cửa hàng)
+  const approvalPermissions: Array<'pos.editPrice' | 'pos.editPriceBelowCost'> = isBelowCost
+    ? ['pos.editPrice', 'pos.editPriceBelowCost']
+    : ['pos.editPrice']
 
   function applyEdit(price: number, reasonText: string | null, pinUsed: boolean) {
     updateUnitPrice(item!.id, price, {
@@ -76,14 +85,15 @@ export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceD
     setPinOpen(true)
   }
 
-  function handlePinVerified(pin?: string) {
+  function handlePinVerified(pin?: string, approverId?: string) {
     const price = pendingPriceRef.current
     const reasonText = pendingReasonRef.current
     if (price === null) return
-    if (pin) {
-      setPriceOverridePin(pin)
-    }
+    // Sửa giá trước rồi mới gắn PIN: giỏ đổi sau khi gắn PIN sẽ làm PIN bị bỏ
     applyEdit(price, reasonText, true)
+    if (pin) {
+      setPriceOverridePin(pin, approverId ?? null)
+    }
   }
 
   return (
@@ -106,16 +116,18 @@ export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceD
                   {formatVndWithSuffix(item.originalPrice ?? item.unitPrice)}
                 </span>
               </div>
-              <div className="mt-1 flex justify-between">
-                <span className="text-muted-foreground">Giá vốn:</span>
-                <span className="font-mono font-medium">
-                  {cost.status === 'known'
-                    ? formatVndWithSuffix(cost.costPrice)
-                    : cost.status === 'loading'
-                      ? 'Đang tải...'
-                      : '—'}
-                </span>
-              </div>
+              {canViewCost && (
+                <div className="mt-1 flex justify-between">
+                  <span className="text-muted-foreground">Giá vốn:</span>
+                  <span className="font-mono font-medium">
+                    {cost.status === 'known'
+                      ? formatVndWithSuffix(cost.costPrice)
+                      : cost.status === 'loading'
+                        ? 'Đang tải...'
+                        : '—'}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -127,27 +139,31 @@ export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceD
                 placeholder="Nhập giá bán mới"
                 autoFocus
               />
-              {isCostUnknown && (
+              {canViewCost && isCostUnknown && (
                 <p className="flex items-center gap-1.5 text-xs text-amber-600">
                   <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
                   Chưa có giá vốn, không thể xác minh giá dưới vốn.
                 </p>
               )}
-              {isCostUnavailable && (
+              {canViewCost && isCostUnavailable && (
                 <p className="flex items-center gap-1.5 text-xs text-amber-600">
                   <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
                   Không tải được giá vốn, không thể xác minh giá dưới vốn.
                 </p>
               )}
-              {isBelowCost && (
+              {canViewCost && isBelowCost && (
                 <p className="flex items-center gap-1.5 text-xs text-amber-600">
                   <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
-                  Giá thấp hơn giá vốn.
+                  {canSellBelowCost
+                    ? 'Giá thấp hơn giá vốn.'
+                    : 'Giá thấp hơn giá vốn, cần chủ cửa hàng duyệt bằng mã PIN.'}
                 </p>
               )}
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Shield className="h-3.5 w-3.5" aria-hidden="true" />
-                Sửa giá bán yêu cầu xác thực PIN.
+                {canViewCost
+                  ? 'Sửa giá bán yêu cầu xác thực PIN.'
+                  : 'Sửa giá bán yêu cầu PIN người duyệt. Bán dưới giá vốn cần chủ cửa hàng duyệt.'}
               </p>
             </div>
 
@@ -179,7 +195,8 @@ export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceD
         onOpenChange={setPinOpen}
         onVerified={handlePinVerified}
         title="Xác thực PIN"
-        description="Vui lòng nhập PIN để xác nhận giá bán đã sửa."
+        description="Người duyệt nhập PIN của mình để xác nhận giá bán đã sửa."
+        approvalPermissions={approvalPermissions}
       />
     </>
   )

@@ -313,7 +313,8 @@ describe('M17 — 3 tab chi tiết khách hàng: đơn hàng, công nợ, thốn
         targetId: customer!.id,
       })
       expect(debtData.currentDebt).toBe(0)
-      expect(debtData.effectiveDebtLimit).toBeNull()
+      // ADR-0009: không đặt hạn mức (khách lẫn nhóm) nghĩa là hạn mức 0, không cho nợ
+      expect(debtData.effectiveDebtLimit).toBe(0)
       expect(debtData.usagePercent).toBe(0)
       expect(debtData.items).toHaveLength(0)
     })

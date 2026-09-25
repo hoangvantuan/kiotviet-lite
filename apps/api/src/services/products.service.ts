@@ -2038,7 +2038,10 @@ export async function restoreProduct({
 
 export type { PosProductItem, PosUnitConversion, PosVariantItem }
 
-function mapVariantToPosItem(v: typeof productVariants.$inferSelect): PosVariantItem {
+function mapVariantToPosItem(
+  v: typeof productVariants.$inferSelect,
+  includeCost: boolean,
+): PosVariantItem {
   const attrs: Record<string, string> = {}
   if (v.attribute1Name) attrs[v.attribute1Name] = v.attribute1Value
   if (v.attribute2Name && v.attribute2Value) attrs[v.attribute2Name] = v.attribute2Value
@@ -2048,7 +2051,7 @@ function mapVariantToPosItem(v: typeof productVariants.$inferSelect): PosVariant
     sku: v.sku,
     barcode: v.barcode,
     price: Number(v.sellingPrice),
-    costPrice: v.costPrice === null ? null : Number(v.costPrice),
+    ...(includeCost ? { costPrice: v.costPrice === null ? null : Number(v.costPrice) } : {}),
     stockQuantity: v.stockQuantity,
     attributes: attrs,
   }
@@ -2059,6 +2062,8 @@ export interface SearchProductsForPosDeps {
   storeId: string
   search?: string
   categoryId?: string
+  /** BC-13: chỉ trả giá vốn cho người có quyền products.viewCost */
+  includeCost: boolean
 }
 
 export async function searchProductsForPos({
@@ -2066,6 +2071,7 @@ export async function searchProductsForPos({
   storeId,
   search,
   categoryId,
+  includeCost,
 }: SearchProductsForPosDeps): Promise<PosProductItem[]> {
   // Build conditions
   const conds: SQL[] = [
@@ -2130,7 +2136,7 @@ export async function searchProductsForPos({
 
     for (const v of variantRows) {
       const list = variantsMap.get(v.productId) ?? []
-      list.push(mapVariantToPosItem(v))
+      list.push(mapVariantToPosItem(v, includeCost))
       variantsMap.set(v.productId, list)
     }
   }
@@ -2197,7 +2203,7 @@ export async function searchProductsForPos({
 
       for (const v of extraVariantRows) {
         const list = variantsMap.get(v.productId) ?? []
-        list.push(mapVariantToPosItem(v))
+        list.push(mapVariantToPosItem(v, includeCost))
         variantsMap.set(v.productId, list)
       }
     }
@@ -2239,7 +2245,7 @@ export async function searchProductsForPos({
     barcode: row.barcode,
     unit: row.unit,
     basePrice: Number(row.sellingPrice),
-    costPrice: row.costPrice === null ? null : Number(row.costPrice),
+    ...(includeCost ? { costPrice: row.costPrice === null ? null : Number(row.costPrice) } : {}),
     imageUrl: row.imageUrl,
     trackInventory: row.trackInventory,
     stockQuantity: row.hasVariants ? (variantStockMap.get(row.id) ?? 0) : row.currentStock,

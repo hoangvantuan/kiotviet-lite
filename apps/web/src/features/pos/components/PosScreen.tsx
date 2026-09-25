@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LayoutGrid, ShoppingCart, WifiOff, X } from 'lucide-react'
 
+import type { ApprovalPermissionInput } from '@kiotviet-lite/shared'
+
 import {
   Sheet,
   SheetContent,
@@ -8,11 +10,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { PinDialog } from '@/features/auth/pin-dialog'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { ApiClientError } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { initializeOfflineDB } from '@/lib/pglite'
 import { showError, showSuccess } from '@/lib/toast'
+import { useAuthStore } from '@/stores/use-auth-store'
 import { useCartStore } from '@/stores/use-cart-store'
 import { useOfflineStore } from '@/stores/use-offline-store'
 
@@ -21,6 +25,7 @@ import { useAddToCart } from '../hooks/use-add-to-cart'
 import { useCheckoutMutation } from '../hooks/use-checkout'
 import { usePosKeyboard } from '../hooks/use-pos-keyboard'
 import { usePosProducts } from '../hooks/use-pos-products'
+import { priceApprovalFromError, requiredPriceApproval } from '../price-approval'
 import type { OrderDetail, PosProductItem } from '../types'
 import { BarcodeScanner } from './BarcodeScanner'
 import { CartPanel } from './CartPanel'
@@ -35,6 +40,16 @@ import { PosHeader } from './PosHeader'
 import { PosSearchBar } from './PosSearchBar'
 import { ProductGrid } from './ProductGrid'
 import { VariantSelectionDialog } from './VariantSelectionDialog'
+
+interface PaymentPayload {
+  paymentMethod: string
+  cashAmount?: number
+  transferAmount?: number
+  debtAmount?: number
+  debtLimitOverridden?: boolean
+  debtLimitOverridePin?: string
+  debtLimitApproverId?: string
+}
 
 export function PosScreen() {
   const isDesktop = useMediaQuery('(min-width: 1024px)')
@@ -52,6 +67,13 @@ export function PosScreen() {
   >('cash')
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false)
   const [completionOrder, setCompletionOrder] = useState<OrderDetail | null>(null)
+  // POS-01: đơn chờ người duyệt nhập PIN cho sửa giá hay chiết khấu vượt quyền người bán
+  const [priceApproval, setPriceApproval] = useState<{
+    permissions: ApprovalPermissionInput[]
+    payload: PaymentPayload
+  } | null>(null)
+  const userRole = useAuthStore((s) => s.user?.role)
+  const setPriceOverridePin = useCartStore((s) => s.setPriceOverridePin)
 
   const offlineStatus = useOfflineStore((s) => s.status)
   useEffect(() => {
@@ -114,16 +136,17 @@ export function PosScreen() {
     setPaymentDialogOpen(true)
   }, [cartCount, cartGrandTotal, cartCustomerId])
 
-  function handlePaymentComplete(payload: {
-    paymentMethod: string
-    cashAmount?: number
-    transferAmount?: number
-    debtAmount?: number
-    debtLimitOverridden?: boolean
-    debtLimitOverridePin?: string
-  }) {
-    const tab = tabs[activeTab]
+  function handlePaymentComplete(payload: PaymentPayload) {
+    // Đọc trạng thái mới nhất: lần gọi lại sau khi duyệt PIN phải thấy PIN vừa lưu
+    const cart = useCartStore.getState()
+    const tab = cart.tabs[cart.activeTab]
     if (!tab || tab.items.length === 0) return
+
+    const approvalPerms = requiredPriceApproval(tab, userRole, isOffline)
+    if (approvalPerms) {
+      setPriceApproval({ permissions: approvalPerms, payload })
+      return
+    }
 
     const subtotal = tab.items.reduce((sum, i) => sum + i.lineTotal, 0)
     const total = subtotal - tab.orderDiscountAmount
@@ -152,7 +175,9 @@ export function PosScreen() {
         debtAmount: debtAmount > 0 ? debtAmount : undefined,
         debtLimitOverridden: payload.debtLimitOverridden ?? false,
         debtLimitOverridePin: payload.debtLimitOverridePin,
+        debtLimitApproverId: payload.debtLimitApproverId,
         priceOverridePin: tab.priceOverridePin ?? undefined,
+        priceApproverId: tab.priceApproverId ?? undefined,
         note: null,
         items: tab.items.map((item) => ({
           productId: item.productId,
@@ -184,6 +209,14 @@ export function PosScreen() {
           showSuccess('Đơn hàng đã hoàn thành!')
         },
         onError: (err) => {
+          if (err instanceof ApiClientError) {
+            const perms = priceApprovalFromError(err.code, err.details)
+            if (perms) {
+              // PIN cũ không đủ quyền (vd bán dưới giá vốn cần chủ cửa hàng): xin duyệt lại
+              setPriceOverridePin(null)
+              setPriceApproval({ permissions: perms, payload })
+            }
+          }
           const msg =
             err instanceof ApiClientError
               ? err.message
@@ -395,6 +428,27 @@ export function PosScreen() {
         defaultMethod={paymentDefaultMethod}
         onComplete={handlePaymentComplete}
         isLoading={checkoutMutation.isPending}
+      />
+
+      <PinDialog
+        open={priceApproval !== null}
+        onOpenChange={(o) => {
+          if (!o) setPriceApproval(null)
+        }}
+        onVerified={(pin, approverId) => {
+          const pending = priceApproval
+          setPriceApproval(null)
+          if (!pin || !pending) return
+          setPriceOverridePin(pin, approverId ?? null)
+          handlePaymentComplete(pending.payload)
+        }}
+        title="Duyệt giá và chiết khấu"
+        description={
+          priceApproval?.permissions.includes('pos.editPriceBelowCost')
+            ? 'Đơn bán dưới giá vốn. Chủ cửa hàng nhập mã PIN của mình để duyệt.'
+            : 'Đơn có sửa giá hoặc chiết khấu vượt quyền của bạn. Người có quyền nhập mã PIN để duyệt.'
+        }
+        approvalPermissions={priceApproval?.permissions}
       />
 
       {/* Story 3.3: Order completion dialog */}

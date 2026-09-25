@@ -17,16 +17,20 @@ const MATRIX: Record<Permission, Record<UserRole, boolean>> = {
   'orders.view': { owner: true, manager: true, staff: true },
   'customers.view': { owner: true, manager: true, staff: true },
   'customers.manage': { owner: true, manager: true, staff: false },
+  'customers.setUnlimitedDebt': { owner: true, manager: false, staff: false },
   'pricing.view': { owner: true, manager: true, staff: true },
   'pricing.manage': { owner: true, manager: true, staff: false },
   'inventory.manage': { owner: true, manager: true, staff: false },
   'pos.editPrice': { owner: true, manager: true, staff: false },
   'pos.editPriceBelowCost': { owner: true, manager: false, staff: false },
+  'pos.overrideDebtLimit': { owner: true, manager: true, staff: false },
+  'orders.reviewPolicy': { owner: true, manager: true, staff: false },
+  'products.viewCost': { owner: true, manager: true, staff: false },
   'orders.return': { owner: true, manager: true, staff: false },
 }
 
 describe('PERMISSIONS map', () => {
-  it('khai báo đầy đủ permission keys (8 base + 2 customer + 2 pricing + 1 inventory + 2 pos.editPrice)', () => {
+  it('khai báo đầy đủ permission keys (8 base + 2 customer + 2 pricing + 1 inventory + 2 pos.editPrice + quyền duyệt nợ, xem giá vốn, nợ không giới hạn)', () => {
     const keys = Object.keys(PERMISSIONS).sort()
     expect(keys).toEqual(
       [
@@ -34,16 +38,20 @@ describe('PERMISSIONS map', () => {
         'audit.viewOwn',
         'audit.viewTeam',
         'customers.manage',
+        'customers.setUnlimitedDebt',
         'customers.view',
         'inventory.manage',
         'orders.return',
+        'orders.reviewPolicy',
         'orders.view',
         'pos.editPrice',
         'pos.editPriceBelowCost',
+        'pos.overrideDebtLimit',
         'pos.sell',
         'pricing.manage',
         'pricing.view',
         'products.manage',
+        'products.viewCost',
         'reports.view',
         'store.manage',
         'users.manage',

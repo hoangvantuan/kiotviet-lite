@@ -12,6 +12,7 @@ import { DashboardBarChart } from './DashboardBarChart'
 import { DashboardMetricCard } from './DashboardMetricCard'
 import { DashboardPeriodSelector } from './DashboardPeriodSelector'
 import { DashboardTopProducts } from './DashboardTopProducts'
+import { PendingReviewAlert } from './PendingReviewAlert'
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('vi-VN').format(value)
@@ -80,6 +81,8 @@ export function Dashboard() {
           </Button>
         </div>
       </div>
+
+      <PendingReviewAlert />
 
       {/* Row 1: 4 MetricCards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

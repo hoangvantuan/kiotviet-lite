@@ -40,6 +40,7 @@ describe('Orders detail and print data fields', () => {
         storeId: env.storeId,
         name: 'Nguyễn Văn Test',
         phone: '0988888888',
+        debtLimit: 10_000_000,
         currentDebt: 150_000,
       })
       .returning()

@@ -129,13 +129,15 @@ function DebtBadge({
   )
 }
 
+type DebtFilter = 'all' | 'yes' | 'no' | 'unlimited'
+
 export function CustomerList() {
   const role = useAuthStore((state) => state.user?.role)
   const canExport = role === 'owner' || role === 'manager'
   const { downloading, download } = useBulkExportDownload('customers', 'khach-hang')
   const [search, setSearch] = useState('')
   const [groupFilter, setGroupFilter] = useState<string>(ALL_GROUPS_VALUE)
-  const [debtFilter, setDebtFilter] = useState<'all' | 'yes' | 'no'>('all')
+  const [debtFilter, setDebtFilter] = useState<DebtFilter>('all')
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -154,7 +156,9 @@ export function CustomerList() {
     if (groupFilter !== ALL_GROUPS_VALUE) {
       q.groupId = groupFilter === NO_GROUP_VALUE ? 'none' : groupFilter
     }
-    if (debtFilter !== 'all') q.hasDebt = debtFilter
+    // ADR-0009: "Không giới hạn nợ" để chủ rà lại những khách được migration bật cờ
+    if (debtFilter === 'unlimited') q.debtUnlimited = 'yes'
+    else if (debtFilter !== 'all') q.hasDebt = debtFilter
     return q
   }, [page, debouncedSearch, groupFilter, debtFilter])
 
@@ -260,7 +264,7 @@ export function CustomerList() {
           <Select
             value={debtFilter}
             onValueChange={(v) => {
-              setDebtFilter(v as 'all' | 'yes' | 'no')
+              setDebtFilter(v as DebtFilter)
               setPage(1)
             }}
           >
@@ -271,6 +275,7 @@ export function CustomerList() {
               <SelectItem value="all">Tất cả</SelectItem>
               <SelectItem value="yes">Có công nợ</SelectItem>
               <SelectItem value="no">Không có công nợ</SelectItem>
+              {canExport && <SelectItem value="unlimited">Không giới hạn nợ</SelectItem>}
             </SelectContent>
           </Select>
         </div>

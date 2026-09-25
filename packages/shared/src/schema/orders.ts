@@ -3,6 +3,7 @@ import {
   boolean,
   foreignKey,
   index,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -13,6 +14,7 @@ import {
 import { uuidv7 } from 'uuidv7'
 
 import { customers } from './customers.js'
+import type { OrderPolicyViolation } from './order-management.js'
 import { priceLists } from './price-lists.js'
 import { stores } from './stores.js'
 import { users } from './users.js'
@@ -48,6 +50,13 @@ export const orders = pgTable(
     clientId: uuid(),
     status: varchar({ length: 16 }).notNull().default('completed'),
     debtLimitExceeded: boolean().notNull().default(false),
+    // ADR-0009: đơn ngoại tuyến vi phạm chính sách (giá, chiết khấu, giá vốn, hạn mức nợ) vẫn được
+    // nhận vì hàng đã giao, nhưng nằm ở 'pending_review' cho tới khi chủ hoặc quản lý duyệt.
+    reviewStatus: varchar({ length: 16 }).notNull().default('none'),
+    policyViolations: jsonb().$type<OrderPolicyViolation[]>(),
+    reviewedBy: uuid().references(() => users.id),
+    reviewedAt: timestamp({ withTimezone: true }),
+    reviewNote: text(),
     priceListId: uuid().references(() => priceLists.id, { onDelete: 'set null' }),
     priceListName: varchar({ length: 100 }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -76,6 +85,7 @@ export const orders = pgTable(
     index('idx_orders_store_status').on(table.storeId, table.status),
     index('idx_orders_store_customer').on(table.storeId, table.customerId),
     index('idx_orders_store_payment_status').on(table.storeId, table.paymentStatus),
+    index('idx_orders_store_review_status').on(table.storeId, table.reviewStatus),
     index('idx_orders_store_status_created').on(table.storeId, table.status, table.createdAt),
     index('idx_orders_store_cust_status_date').on(
       table.storeId,

@@ -207,6 +207,8 @@ test.describe('Kiểm thử E2E: POS Bán hàng (Tiền mặt, Chuyển khoản,
     // Nhập PIN của chủ cửa hàng: 111111 qua OTP input
     const otpInput = pinDialog.locator('input').first()
     if (await otpInput.isVisible().catch(() => false)) {
+      // Ô PIN chỉ bật khi đã tải xong danh sách người duyệt (ADR-0009)
+      await expect(otpInput).toBeEnabled({ timeout: 10000 })
       await otpInput.focus()
       await otpInput.pressSequentially('111111', { delay: 80 })
     } else {

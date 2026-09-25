@@ -165,3 +165,57 @@ describe('useCartStore - unit conversion & desktop controls', () => {
     expect(useCartStore.getState().activeTab).toBe(2)
   })
 })
+
+describe('useCartStore - PIN duyệt gắn với đúng giỏ lúc duyệt', () => {
+  const item = {
+    productId: 'prod-milk',
+    variantId: null,
+    productName: 'Sữa',
+    variantName: null,
+    sku: 'MILK-001',
+    unitPrice: 100_000,
+    imageUrl: null,
+    notes: null,
+    unitName: 'Hộp',
+    unitConversionId: null,
+    baseUnit: 'Hộp',
+    baseUnitPrice: 100_000,
+    baseStockQuantity: 10,
+    trackInventory: true,
+    stockQuantity: 10,
+    unitConversions: [],
+  }
+
+  beforeEach(() => {
+    useCartStore.getState().setActiveTab(1)
+    useCartStore.getState().clearCart()
+    useCartStore.getState().addItem(item, 1)
+    useCartStore.getState().updateOrderDiscount('amount', 5_000)
+    useCartStore.getState().setPriceOverridePin('1234', 'manager-1')
+  })
+
+  const tab = () => useCartStore.getState().tabs[1]!
+
+  it('đổi chiết khấu đơn sau khi duyệt thì bỏ PIN và người duyệt', () => {
+    expect(tab().priceOverridePin).toBe('1234')
+    useCartStore.getState().updateOrderDiscount('percent', 100)
+    expect(tab().priceOverridePin).toBeNull()
+    expect(tab().priceApproverId).toBeNull()
+  })
+
+  it('đổi số lượng hay chiết khấu dòng sau khi duyệt thì bỏ PIN', () => {
+    useCartStore.getState().updateQuantity('prod-milk', 3)
+    expect(tab().priceOverridePin).toBeNull()
+
+    useCartStore.getState().setPriceOverridePin('1234', 'manager-1')
+    useCartStore.getState().updateLineDiscount('prod-milk', 'amount', 50_000)
+    expect(tab().priceOverridePin).toBeNull()
+  })
+
+  it('đổi phần không ảnh hưởng giá (ghi chú dòng) thì giữ PIN', () => {
+    expect(tab().priceOverridePin).toBe('1234')
+    useCartStore.getState().updateLineNotes('prod-milk', 'giao sau')
+    expect(tab().priceOverridePin).toBe('1234')
+    expect(tab().priceApproverId).toBe('manager-1')
+  })
+})

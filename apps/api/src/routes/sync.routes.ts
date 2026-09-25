@@ -2,6 +2,7 @@ import { and, eq, gt, inArray } from 'drizzle-orm'
 import { Hono } from 'hono'
 
 import {
+  hasPermission,
   PGLITE_SCHEMA_VERSION,
   syncIncrementalQuerySchema,
   syncInitialQuerySchema,
@@ -40,6 +41,22 @@ async function getStorePriceListIds(db: Db, storeId: string) {
   return lists.map((l) => l.id)
 }
 
+/**
+ * BC-13: bỏ cột giá vốn khỏi dòng sản phẩm và biến thể khi người đồng bộ không có quyền
+ * products.viewCost. Thiết bị của nhân viên không bao giờ nhận giá vốn, kể cả khi ngoại tuyến.
+ */
+function stripCost<T extends { costPrice: unknown }>(
+  rows: T[],
+  canViewCost: boolean,
+): Array<Omit<T, 'costPrice'>> {
+  if (canViewCost) return rows
+  return rows.map((row) => {
+    const copy: Partial<T> = { ...row }
+    delete copy.costPrice
+    return copy as Omit<T, 'costPrice'>
+  })
+}
+
 // Track consecutive sync push failures per store
 const syncFailureCounters = new Map<string, { count: number; lastError: string }>()
 
@@ -53,6 +70,7 @@ export function createSyncRoutes({ db }: { db: Db }) {
     const query = syncInitialQuerySchema.parse(c.req.query())
     const limit = query.limit
     const storeId = auth.storeId
+    const canViewCost = hasPermission(auth.role, 'products.viewCost')
 
     const plIds = await getStorePriceListIds(db, storeId)
 
@@ -90,8 +108,8 @@ export function createSyncRoutes({ db }: { db: Db }) {
 
     return c.json({
       data: {
-        products: productsData,
-        variants: variantsData,
+        products: stripCost(productsData, canViewCost),
+        variants: stripCost(variantsData, canViewCost),
         categories: categoriesData,
         customers: customersData,
         customerGroups: customerGroupsData,
@@ -111,6 +129,7 @@ export function createSyncRoutes({ db }: { db: Db }) {
     const query = syncIncrementalQuerySchema.parse(c.req.query())
     const since = new Date(query.since)
     const storeId = auth.storeId
+    const canViewCost = hasPermission(auth.role, 'products.viewCost')
 
     const plIds = await getStorePriceListIds(db, storeId)
 
@@ -174,8 +193,8 @@ export function createSyncRoutes({ db }: { db: Db }) {
 
     return c.json({
       data: {
-        products: productsData,
-        variants: variantsData,
+        products: stripCost(productsData, canViewCost),
+        variants: stripCost(variantsData, canViewCost),
         categories: categoriesData,
         customers: customersData,
         customerGroups: customerGroupsData,
@@ -224,6 +243,9 @@ export function createSyncRoutes({ db }: { db: Db }) {
           serverId: order.id,
           status: order.isDuplicate ? 'duplicate' : 'synced',
           ...(order.warnings ? { warnings: order.warnings } : {}),
+          ...(order.reviewStatus && order.reviewStatus !== 'none'
+            ? { reviewStatus: order.reviewStatus }
+            : {}),
         })
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error'

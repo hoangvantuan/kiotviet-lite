@@ -44,9 +44,27 @@ export const updateUserSchema = z
     { message: 'Cần ít nhất một trường để cập nhật' },
   )
 
-export const verifyPinSchema = z.object({
-  pin: pinSchema,
-})
+// POS-01, POS-04: quyền mà một người duyệt có thể dùng PIN của mình để cho phép
+export const approvalPermissionSchema = z.enum([
+  'pos.editPrice',
+  'pos.editPriceBelowCost',
+  'pos.overrideDebtLimit',
+])
+
+// userId bỏ trống: kiểm PIN của chính người đang đăng nhập.
+// userId có giá trị: kiểm PIN của người duyệt cùng cửa hàng, người đó phải có đủ `permissions`.
+export const verifyPinSchema = z
+  .object({
+    pin: pinSchema,
+    userId: z.string().uuid('Người duyệt không hợp lệ').optional(),
+    permissions: z.array(approvalPermissionSchema).max(3).optional(),
+  })
+  // Kiểm PIN của một người cụ thể chỉ để duyệt một thao tác: phải nói rõ quyền cần duyệt, không
+  // thì endpoint thành chỗ dò PIN của bất kỳ ai trong cửa hàng
+  .refine((d) => !d.userId || (d.permissions?.length ?? 0) > 0, {
+    message: 'Kiểm PIN người duyệt cần nêu quyền cần duyệt',
+    path: ['permissions'],
+  })
 
 export const userListItemSchema = z.object({
   id: z.string().uuid(),
@@ -61,4 +79,5 @@ export type AssignableRole = z.infer<typeof assignableRoleSchema>
 export type CreateUserInput = z.infer<typeof createUserSchema>
 export type UpdateUserInput = z.infer<typeof updateUserSchema>
 export type VerifyPinInput = z.infer<typeof verifyPinSchema>
+export type ApprovalPermissionInput = z.infer<typeof approvalPermissionSchema>
 export type UserListItem = z.infer<typeof userListItemSchema>

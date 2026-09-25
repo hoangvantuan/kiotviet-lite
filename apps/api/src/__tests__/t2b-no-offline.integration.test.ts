@@ -350,6 +350,7 @@ describe('Task T2b: Đơn ngoại tuyến vượt hạn mức nợ ghi nhận th
       db: env.db,
       storeId: env.storeId,
       orderId,
+      canViewCost: true,
     })
     expect(orderDetail.debtLimitExceeded).toBe(true)
 

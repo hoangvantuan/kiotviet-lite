@@ -86,7 +86,14 @@ describe.skipIf(!adminUrl)('TIEN-103: thứ tự khóa công nợ trên Postgres
       .returning()
     const [customer] = await db
       .insert(customers)
-      .values({ storeId: store!.id, code: 'KH000010', name: 'Khách nợ', currentDebt: 700_000 })
+      .values({
+        storeId: store!.id,
+        code: 'KH000010',
+        name: 'Khách nợ',
+        currentDebt: 700_000,
+        // ADR-0009: khách không có hạn mức thì không được nợ thêm
+        debtUnlimited: true,
+      })
       .returning()
     const [product] = await db
       .insert(products)

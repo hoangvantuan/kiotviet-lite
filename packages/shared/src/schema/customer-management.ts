@@ -89,6 +89,8 @@ export const createCustomerSchema = z.object({
   taxId: customerTaxIdSchema.nullable().optional(),
   notes: z.string().trim().max(1000, 'Ghi chú tối đa 1000 ký tự').nullable().optional(),
   debtLimit: debtLimitSchema.nullable().optional(),
+  // Cờ "không giới hạn nợ" (ADR-0009), chỉ chủ cửa hàng được bật hay tắt
+  debtUnlimited: z.boolean().optional(),
   groupId: z.string().uuid('Nhóm khách hàng không hợp lệ').nullable().optional(),
 })
 
@@ -102,6 +104,7 @@ export const updateCustomerSchema = z
     taxId: customerTaxIdSchema.nullable().optional(),
     notes: z.string().trim().max(1000).nullable().optional(),
     debtLimit: debtLimitSchema.nullable().optional(),
+    debtUnlimited: z.boolean().optional(),
     groupId: z.string().uuid('Nhóm khách hàng không hợp lệ').nullable().optional(),
   })
   .refine((d) => Object.keys(d).length > 0, {
@@ -117,6 +120,8 @@ export const listCustomersQuerySchema = paginationSchema.extend({
   search: z.string().trim().optional(),
   groupId: z.union([z.string().uuid(), z.literal('none')]).optional(),
   hasDebt: z.enum(['yes', 'no', 'all']).default('all'),
+  // ADR-0009: chủ cửa hàng rà danh sách khách đang được nợ không giới hạn (migration bật cờ này)
+  debtUnlimited: z.enum(['yes', 'all']).default('all'),
 })
 
 export const customerListItemSchema = z.object({
@@ -129,6 +134,8 @@ export const customerListItemSchema = z.object({
   taxId: z.string().nullable(),
   notes: z.string().nullable(),
   debtLimit: z.number().nullable(),
+  debtUnlimited: z.boolean(),
+  // Hạn mức đang áp: null khi và chỉ khi khách có cờ không giới hạn; 0 là không được nợ (ADR-0009)
   effectiveDebtLimit: z.number().nullable(),
   groupId: z.string().uuid().nullable(),
   groupName: z.string().nullable(),

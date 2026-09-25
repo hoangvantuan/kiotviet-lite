@@ -7,15 +7,19 @@ import {
   customers,
   debts,
   formatCurrencyVnd as formatVnd,
+  hasPermission,
   inventoryTransactions,
   type ListOrdersQuery,
   orderItems,
+  type OrderPolicyViolation,
+  type OrderReviewStatus,
   orders,
   priceLists,
   type PriceSource,
   products,
   productUnitConversions,
   productVariants,
+  resolveEffectiveDebtLimit,
   stores,
   type UserRole,
   users,
@@ -31,7 +35,15 @@ import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import { addCustomerDebt, lockCustomerForDebt } from './customer-debt-ledger.service.js'
 import { emitEvent } from './notification-emitter.js'
-import { verifyPin } from './pin.service.js'
+import {
+  assertDiscountAmounts,
+  debtLimitViolation,
+  derivePayment,
+  evaluatePriceApproval,
+  loadLineUnitCosts,
+  priceViolation,
+  resolveDebtLimitApproval,
+} from './order-policy.js'
 import { resolveProductPrice } from './pricing.service.js'
 import {
   aggregateVariantStock,
@@ -69,7 +81,10 @@ export interface OrderDetailItem {
   priceSource?: PriceSource | null
   priceSourceDetail?: string | null
   sku?: string | null
+  /** Chỉ có khi người xem có quyền products.viewCost (BC-13) */
   costPrice?: number | null
+  /** Máy chủ xác định dòng sửa giá hay chiết khấu xuống dưới giá vốn, thay cho con số giá vốn */
+  belowCost?: boolean
 }
 
 export interface OrderDetail {
@@ -98,6 +113,9 @@ export interface OrderDetail {
   customerCurrentDebt?: number | null
   isDuplicate?: boolean
   debtLimitExceeded?: boolean
+  /** ADR-0009: đơn ngoại tuyến vi phạm chính sách nằm ở 'pending_review' chờ chủ duyệt */
+  reviewStatus?: OrderReviewStatus
+  policyViolations?: OrderPolicyViolation[] | null
   /** Sai lệch máy chủ đã tự xử lý khi nhận đơn ngoại tuyến, trả về để máy khách hiển thị. */
   warnings?: OrderSyncWarning[]
 }
@@ -228,6 +246,7 @@ export async function createOrder({
         note: orders.note,
         status: orders.status,
         debtLimitExceeded: orders.debtLimitExceeded,
+        reviewStatus: orders.reviewStatus,
         createdAt: orders.createdAt,
       })
       .from(orders)
@@ -256,6 +275,7 @@ export async function createOrder({
         createdAt: existing.createdAt.toISOString(),
         isDuplicate: true,
         debtLimitExceeded: Boolean(existing.debtLimitExceeded),
+        reviewStatus: existing.reviewStatus as OrderReviewStatus,
       }
     }
   }
@@ -295,49 +315,31 @@ export async function createOrder({
     variant: input.items.map((item) => item.variantId),
   })
 
-  // SF-1: Khi debtLimitOverridden=true, verify PIN server-side trước khi vào transaction.
-  // Zod refine đã đảm bảo có debtLimitOverridePin khi debtLimitOverridden=true.
-  if (input.debtLimitOverridden && input.debtLimitOverridePin) {
-    await verifyPin({
-      db,
-      userId: actor.userId,
-      storeId: actor.storeId,
-      pin: input.debtLimitOverridePin,
-      meta,
-    })
-  }
-  // T10: Xác minh mã PIN sửa giá (priceOverridePin) nếu có
-  const hasPriceOverride = input.items.some((i) => i.priceOverride)
-  let verifiedPriceOverridePin = false
-  if (hasPriceOverride) {
-    if (input.priceOverridePin) {
-      await verifyPin({
-        db,
-        userId: actor.userId,
-        storeId: actor.storeId,
-        pin: input.priceOverridePin,
-        meta,
-      })
-      verifiedPriceOverridePin = true
-    } else if (source === 'pos') {
-      throw new ApiError('VALIDATION_ERROR', 'Sửa giá yêu cầu mã PIN')
-    }
-  }
+  // R1: lớp chính sách đơn hàng. Trạng thái thanh toán, tiền thừa, chiết khấu và quyền do máy
+  // chủ tự xác định (order-policy.ts), không tin số và cờ máy khách gửi.
+  const payment = derivePayment(input)
+  const debtAmount = payment.debtAmount
+  const change = payment.change
+  // Số học chiết khấu kiểm cho cả đơn ngoại tuyến: lệch là payload bị sửa, từ chối để đơn nằm lại
+  // hàng đợi đồng bộ kèm lỗi thay vì ghi một khoản giảm giá không có thật (ADR-0009)
+  assertDiscountAmounts(input)
 
-  const debtAmount = input.debtAmount ?? 0
-
-  // Calculate change amount before insert
-  let change = 0
-  if (input.paymentMethod === 'cash' && input.cashAmount != null) {
-    change = input.cashAmount - input.total
-  } else if (input.paymentMethod === 'combined') {
-    const cashPart = input.cashAmount ?? 0
-    const transferPart = input.transferAmount ?? 0
-    change = cashPart + transferPart - input.total
-  } else if (input.paymentMethod === 'debt' && input.cashAmount != null) {
-    change = input.cashAmount - (input.total - debtAmount)
-  }
-  change = Math.max(0, change)
+  const unitCosts = await loadLineUnitCosts(db, actor.storeId, input.items)
+  const priceApproval = await evaluatePriceApproval({
+    db,
+    actor,
+    input,
+    source,
+    unitCosts,
+    meta,
+  })
+  // POS-04: vượt hạn mức cần PIN của người giữ pos.overrideDebtLimit, không phải PIN người bán
+  const debtLimitApprover = await resolveDebtLimitApproval({ db, actor, input, source, meta })
+  // ADR-0009: đơn ngoại tuyến vi phạm chính sách vẫn nhận (hàng đã giao) nhưng chờ chủ duyệt
+  const policyViolations: OrderPolicyViolation[] = []
+  const priceIssue = priceViolation(priceApproval)
+  if (priceIssue) policyViolations.push(priceIssue)
+  const canViewCost = hasPermission(actor.role, 'products.viewCost')
 
   // Validate manual price list if selected
   let snapshotPriceListName: string | null = null
@@ -446,7 +448,7 @@ export async function createOrder({
               discountAmount: input.discountAmount,
               total: input.total,
               paymentMethod: input.paymentMethod,
-              paymentStatus: input.paymentStatus,
+              paymentStatus: payment.paymentStatus,
               cashAmount: input.cashAmount ?? null,
               transferAmount: input.transferAmount ?? null,
               change,
@@ -511,7 +513,7 @@ export async function createOrder({
         productIds: input.items.map((item) => item.productId),
       })
 
-      for (const item of input.items) {
+      for (const [itemIdx, item] of input.items.entries()) {
         const product = await loadProductForUpdate({
           tx: txDb,
           storeId: actor.storeId,
@@ -579,17 +581,10 @@ export async function createOrder({
         })
 
         const effectivePriceOverride = item.priceOverride ?? false
-        let effectivePriceOverridePinUsed = item.priceOverridePinUsed ?? false
-
-        if (effectivePriceOverride) {
-          if (verifiedPriceOverridePin) {
-            effectivePriceOverridePinUsed = true
-          } else if (source === 'offline_sync') {
-            effectivePriceOverridePinUsed = false
-          }
-        } else {
-          effectivePriceOverridePinUsed = false
-        }
+        // Cờ PIN do máy chủ đặt theo kết quả duyệt, không theo cờ máy khách gửi (ADR-0002)
+        const effectivePriceOverridePinUsed = effectivePriceOverride && priceApproval.pinVerified
+        const lineBelowCost = priceApproval.belowCostLines.has(itemIdx)
+        const lineUnitCost = unitCosts[itemIdx] ?? null
 
         let effectiveUnitPrice = item.unitPrice
         let effectiveLineTotal = item.lineTotal
@@ -720,6 +715,11 @@ export async function createOrder({
               unitPrice: effectiveUnitPrice,
               reason: item.priceOverrideReason ?? null,
               pinUsed: effectivePriceOverridePinUsed,
+              belowCost: lineBelowCost,
+              sellerId: actor.userId,
+              sellerRole: actor.role,
+              approvedBy: priceApproval.approver?.userId ?? null,
+              approvedByRole: priceApproval.approver?.role ?? null,
             },
             ipAddress: meta?.ipAddress,
             userAgent: meta?.userAgent,
@@ -742,25 +742,27 @@ export async function createOrder({
               },
             })
           }
+        }
 
-          // audit.price_override: warn when selling below cost
-          if (product.costPrice != null && effectiveUnitPrice < product.costPrice) {
-            emitEvent(db, {
-              storeId: actor.storeId,
-              type: 'audit.price_override',
-              severity: 'warn',
-              title: `Bán dưới giá vốn: ${item.productName}`,
-              body: `Sản phẩm ${item.productName} được bán ${effectiveUnitPrice.toLocaleString('vi-VN')}đ, thấp hơn giá vốn ${product.costPrice.toLocaleString('vi-VN')}đ`,
-              context: {
-                orderId: createdId,
-                productName: item.productName,
-                originalPrice: item.originalPrice ?? null,
-                newPrice: effectiveUnitPrice,
-                costPrice: product.costPrice,
-                userId: actor.userId,
-              },
-            })
-          }
+        // audit.price_override: cảnh báo chủ cửa hàng khi sửa giá hay chiết khấu xuống dưới giá vốn
+        if (lineBelowCost && lineUnitCost !== null) {
+          emitEvent(db, {
+            storeId: actor.storeId,
+            type: 'audit.price_override',
+            severity: 'warn',
+            title: `Bán dưới giá vốn: ${item.productName}`,
+            body: `Sản phẩm ${item.productName} được bán ${formatVnd(effectiveLineTotal)} cho ${item.quantity} đơn vị, thấp hơn giá vốn ${formatVnd(lineUnitCost * item.quantity)}`,
+            context: {
+              orderId: createdId,
+              productName: item.productName,
+              originalPrice: item.originalPrice ?? null,
+              newPrice: effectiveUnitPrice,
+              lineTotal: effectiveLineTotal,
+              costPrice: lineUnitCost,
+              userId: actor.userId,
+              approvedBy: priceApproval.approver?.userId ?? null,
+            },
+          })
         }
 
         processedItems.push({
@@ -781,7 +783,9 @@ export async function createOrder({
           priceSource: itemPriceSource,
           priceSourceDetail: itemPriceSourceDetail,
           sku: itemSku,
-          costPrice: itemCostPrice,
+          // BC-13: chỉ người có quyền xem giá vốn nhận con số; người khác chỉ nhận cờ
+          ...(canViewCost ? { costPrice: itemCostPrice } : {}),
+          belowCost: lineBelowCost,
         })
 
         // Stock deduction
@@ -916,6 +920,88 @@ export async function createOrder({
         })
       }
 
+      if (priceApproval.hasDiscount) {
+        // POS-01: chiết khấu ghi lại cả người bán lẫn người duyệt
+        await logAction({
+          db: txDb,
+          storeId: actor.storeId,
+          actorId: actor.userId,
+          actorRole: actor.role,
+          action: 'order.discount_applied',
+          targetType: 'order',
+          targetId: createdId,
+          changes: {
+            orderId: createdId,
+            orderNumber,
+            orderDiscountType: input.discountType ?? null,
+            orderDiscountValue: input.discountValue,
+            orderDiscountAmount: input.discountAmount,
+            orderBelowCost: priceApproval.orderBelowCost,
+            lines: input.items.flatMap((item, idx) =>
+              item.discountAmount > 0
+                ? [
+                    {
+                      productId: item.productId,
+                      variantId: item.variantId ?? null,
+                      discountType: item.discountType ?? null,
+                      discountValue: item.discountValue,
+                      discountAmount: item.discountAmount,
+                      belowCost: priceApproval.belowCostLines.has(idx),
+                    },
+                  ]
+                : [],
+            ),
+            sellerId: actor.userId,
+            sellerRole: actor.role,
+            approvedBy: priceApproval.approver?.userId ?? null,
+            approvedByRole: priceApproval.approver?.role ?? null,
+            approved: priceApproval.approved,
+            source,
+          },
+          ipAddress: meta?.ipAddress,
+          userAgent: meta?.userAgent,
+        })
+      }
+
+      if (!priceApproval.approved) {
+        // Chỉ đơn ngoại tuyến tới được đây: đã bán tại quầy nên nhận đơn, ghi thiếu duyệt để đối soát
+        await logAction({
+          db: txDb,
+          storeId: actor.storeId,
+          actorId: actor.userId,
+          actorRole: actor.role,
+          action: 'order.approval_missing',
+          targetType: 'order',
+          targetId: createdId,
+          changes: {
+            orderId: createdId,
+            orderNumber,
+            requiredPermissions: priceApproval.required,
+            reason: priceApproval.missingReason,
+            sellerId: actor.userId,
+            sellerRole: actor.role,
+            source,
+          },
+          ipAddress: meta?.ipAddress,
+          userAgent: meta?.userAgent,
+        })
+        // Dòng sửa giá đã có cảnh báo riêng ở trên, chỉ cảnh báo thêm khi đơn chỉ có chiết khấu
+        if (!priceApproval.hasOverride)
+          emitEvent(db, {
+            storeId: actor.storeId,
+            type: 'audit.price_override',
+            severity: 'warn',
+            title: `Đơn ngoại tuyến chiết khấu chưa được duyệt: ${orderNumber}`,
+            body: `Đơn ${orderNumber} có chiết khấu vượt quyền người bán mà chưa được duyệt (${priceApproval.missingReason ?? 'không rõ lý do'}). Tổng tiền đã chốt: ${formatVnd(input.total)}.`,
+            context: {
+              orderId: createdId,
+              orderNumber,
+              requiredPermissions: priceApproval.required,
+              userId: actor.userId,
+            },
+          })
+      }
+
       if (customerDiscrepancy) {
         await logAction({
           db: txDb,
@@ -972,6 +1058,7 @@ export async function createOrder({
           .select({
             currentDebt: customers.currentDebt,
             debtLimit: customers.debtLimit,
+            debtUnlimited: customers.debtUnlimited,
             groupId: customers.groupId,
             code: customers.code,
             phone: customers.phone,
@@ -996,25 +1083,23 @@ export async function createOrder({
         }
 
         printCustomer = customer
-        // Resolve effective debt limit: customer.debtLimit ?? group.debtLimit ?? null
-        const effectiveDebtLimit: number | null =
-          customer.debtLimit !== null ? customer.debtLimit : (customer.groupDebtLimit ?? null)
+        // ADR-0009: null chỉ khi khách có cờ không giới hạn; không có hạn mức nào áp thì là 0
+        const effectiveDebtLimit = resolveEffectiveDebtLimit({
+          debtUnlimited: customer.debtUnlimited,
+          customerDebtLimit: customer.debtLimit,
+          groupDebtLimit: customer.groupDebtLimit ?? null,
+        })
 
         const debtBefore = customer.currentDebt
         const debtAfter = debtBefore + debtAmount
         oldDebt = debtBefore
         customerCurrentDebt = debtAfter
 
-        // Check limit nếu không có skipDebtLimitCheck: null hoặc 0 = không giới hạn
+        // Kiểm hạn mức (POS-12, TIEN-106): hạn mức 0 hay chưa đặt nghĩa là không được nợ
         if (!skipDebtLimitCheck) {
-          if (
-            effectiveDebtLimit !== null &&
-            effectiveDebtLimit > 0 &&
-            debtAfter > effectiveDebtLimit
-          ) {
-            if (input.debtLimitOverridden) {
-              // Override bằng PIN: ghi audit riêng (áp dụng cho POS hoặc offline sync khi có PIN)
-              // SF-3: lưu PIN actor (user đã nhập PIN để override)
+          if (effectiveDebtLimit !== null && debtAfter > effectiveDebtLimit) {
+            if (debtLimitApprover) {
+              // Vượt hạn mức có người duyệt giữ pos.overrideDebtLimit: ghi cả người bán lẫn người duyệt
               await logAction({
                 db: txDb,
                 storeId: actor.storeId,
@@ -1031,8 +1116,10 @@ export async function createOrder({
                   debtBefore,
                   debtAfter,
                   debtLimit: effectiveDebtLimit,
-                  overrideBy: actor.userId,
-                  overrideByRole: actor.role,
+                  overrideBy: debtLimitApprover.userId,
+                  overrideByRole: debtLimitApprover.role,
+                  sellerId: actor.userId,
+                  sellerRole: actor.role,
                   pinVerified: true,
                   source,
                 },
@@ -1044,7 +1131,9 @@ export async function createOrder({
               const maxAdditional = Math.max(0, effectiveDebtLimit - debtBefore)
               throw new ApiError(
                 'BUSINESS_RULE_VIOLATION',
-                `Vượt hạn mức công nợ. Nợ hiện tại: ${formatVnd(debtBefore)}. Hạn mức: ${formatVnd(effectiveDebtLimit)}. Nợ thêm tối đa: ${formatVnd(maxAdditional)}`,
+                effectiveDebtLimit === 0
+                  ? 'Khách hàng chưa được cấp hạn mức nợ nên không thể ghi nợ. Chủ cửa hàng hoặc quản lý cần đặt hạn mức, hoặc duyệt bằng mã PIN'
+                  : `Vượt hạn mức công nợ. Nợ hiện tại: ${formatVnd(debtBefore)}. Hạn mức: ${formatVnd(effectiveDebtLimit)}. Nợ thêm tối đa: ${formatVnd(maxAdditional)}`,
                 {
                   currentDebt: debtBefore,
                   debtLimit: effectiveDebtLimit,
@@ -1054,6 +1143,9 @@ export async function createOrder({
             } else if (source === 'offline_sync') {
               // Đơn ngoại tuyến vượt hạn mức nợ KHÔNG có PIN: KHÔNG từ chối, đánh dấu đơn là vượt hạn mức
               isDebtLimitExceeded = true
+              policyViolations.push(
+                debtLimitViolation({ effectiveDebtLimit, debtBefore, debtAfter }),
+              )
 
               await tx
                 .update(orders)
@@ -1181,6 +1273,62 @@ export async function createOrder({
         customerCurrentDebt = oldDebt
       }
 
+      let reviewStatus: OrderReviewStatus = 'none'
+      if (policyViolations.length > 0) {
+        // Chỉ đơn ngoại tuyến tới được đây với vi phạm: POS trực tuyến đã bị từ chối ở trên
+        reviewStatus = 'pending_review'
+        await tx
+          .update(orders)
+          .set({ reviewStatus, policyViolations })
+          .where(eq(orders.id, createdId))
+
+        const offlineAt =
+          offlineCreatedAt ??
+          ('createdAt' in input && typeof (input as { createdAt?: string }).createdAt === 'string'
+            ? (input as { createdAt?: string }).createdAt
+            : null)
+        await logAction({
+          db: txDb,
+          storeId: actor.storeId,
+          actorId: actor.userId,
+          actorRole: actor.role,
+          action: 'order.policy_violation_offline',
+          targetType: 'order',
+          targetId: createdId,
+          changes: {
+            orderId: createdId,
+            orderNumber,
+            total: input.total,
+            debtAmount,
+            violations: policyViolations,
+            sellerId: actor.userId,
+            sellerRole: actor.role,
+            clientId,
+            offlineCreatedAt: offlineAt,
+            device: { ipAddress: meta?.ipAddress ?? null, userAgent: meta?.userAgent ?? null },
+          },
+          ipAddress: meta?.ipAddress,
+          userAgent: meta?.userAgent,
+        })
+
+        emitEvent(db, {
+          storeId: actor.storeId,
+          type: 'order.policy_violation_offline',
+          severity: 'error',
+          title: `Đơn ngoại tuyến vi phạm chính sách, cần duyệt: ${orderNumber}`,
+          body: `Đơn ${orderNumber} (${formatVnd(input.total)}) được đồng bộ từ thiết bị bán ngoại tuyến với vi phạm: ${policyViolations.map((v) => v.message).join('; ')}. Hàng đã giao nên đơn đã được ghi nhận; vào Đơn hàng, lọc "Chờ duyệt" để duyệt hoặc từ chối.`,
+          context: {
+            orderId: createdId,
+            orderNumber,
+            total: input.total,
+            violations: policyViolations.map((v) => v.code),
+            sellerId: actor.userId,
+            userId: actor.userId,
+            clientId,
+          },
+        })
+      }
+
       // Audit log
       await logAction({
         db: txDb,
@@ -1199,7 +1347,7 @@ export async function createOrder({
           discountAmount: input.discountAmount,
           total: input.total,
           paymentMethod: input.paymentMethod,
-          paymentStatus: input.paymentStatus,
+          paymentStatus: payment.paymentStatus,
           source,
           clientId,
         },
@@ -1251,7 +1399,7 @@ export async function createOrder({
         discountAmount: input.discountAmount,
         total: input.total,
         paymentMethod: input.paymentMethod,
-        paymentStatus: input.paymentStatus,
+        paymentStatus: payment.paymentStatus,
         cashAmount: input.cashAmount ?? null,
         transferAmount: input.transferAmount ?? null,
         debtAmount,
@@ -1263,6 +1411,11 @@ export async function createOrder({
         oldDebt,
         customerCurrentDebt,
         debtLimitExceeded: isDebtLimitExceeded,
+        reviewStatus,
+        policyViolations: redactViolations(
+          policyViolations.length > 0 ? policyViolations : null,
+          canViewCost,
+        ),
         ...(warnings.length > 0 ? { warnings } : {}),
       } satisfies OrderDetail
     })
@@ -1291,6 +1444,7 @@ export async function createOrder({
           note: orders.note,
           status: orders.status,
           debtLimitExceeded: orders.debtLimitExceeded,
+          reviewStatus: orders.reviewStatus,
           createdAt: orders.createdAt,
         })
         .from(orders)
@@ -1319,6 +1473,7 @@ export async function createOrder({
           createdAt: dup.createdAt.toISOString(),
           isDuplicate: true,
           debtLimitExceeded: Boolean(dup.debtLimitExceeded),
+          reviewStatus: dup.reviewStatus as OrderReviewStatus,
         }
       }
     }
@@ -1338,6 +1493,8 @@ export interface CustomerDebtInfo {
   currentDebt: number
   customerDebtLimit: number | null
   groupDebtLimit: number | null
+  debtUnlimited: boolean
+  /** null chỉ khi khách không giới hạn nợ; 0 là không được nợ (ADR-0009) */
   effectiveDebtLimit: number | null
 }
 
@@ -1358,6 +1515,7 @@ export async function getCustomerDebtInfo({
       name: customers.name,
       currentDebt: customers.currentDebt,
       customerDebtLimit: customers.debtLimit,
+      debtUnlimited: customers.debtUnlimited,
       groupId: customers.groupId,
       groupName: customerGroups.name,
       groupDebtLimit: customerGroups.debtLimit,
@@ -1378,9 +1536,11 @@ export async function getCustomerDebtInfo({
     throw new ApiError('NOT_FOUND', 'Không tìm thấy khách hàng')
   }
 
-  // Effective debt limit: customer ?? group ?? null
-  const effectiveDebtLimit =
-    row.customerDebtLimit !== null ? row.customerDebtLimit : (row.groupDebtLimit ?? null)
+  const effectiveDebtLimit = resolveEffectiveDebtLimit({
+    debtUnlimited: row.debtUnlimited,
+    customerDebtLimit: row.customerDebtLimit,
+    groupDebtLimit: row.groupDebtLimit ?? null,
+  })
 
   return {
     customerId: row.id,
@@ -1390,6 +1550,7 @@ export async function getCustomerDebtInfo({
     currentDebt: row.currentDebt,
     customerDebtLimit: row.customerDebtLimit,
     groupDebtLimit: row.groupDebtLimit ?? null,
+    debtUnlimited: row.debtUnlimited,
     effectiveDebtLimit,
   }
 }
@@ -1484,6 +1645,7 @@ export interface OrderListItem {
   debtAmount: number
   status: string
   debtLimitExceeded: boolean
+  reviewStatus: OrderReviewStatus
   note: string | null
   createdAt: string
 }
@@ -1519,6 +1681,7 @@ export async function listOrders({
     customerId,
     paymentMethod,
     paymentStatus,
+    reviewStatus,
   } = query
   const conditions: SQL[] = [eq(orders.storeId, storeId)]
 
@@ -1540,6 +1703,9 @@ export async function listOrders({
   }
   if (paymentStatus) {
     conditions.push(eq(orders.paymentStatus, paymentStatus))
+  }
+  if (reviewStatus) {
+    conditions.push(eq(orders.reviewStatus, reviewStatus))
   }
   if (fromDate) {
     conditions.push(gte(orders.createdAt, new Date(fromDate)))
@@ -1572,6 +1738,7 @@ export async function listOrders({
       transferAmount: orders.transferAmount,
       status: orders.status,
       debtLimitExceeded: orders.debtLimitExceeded,
+      reviewStatus: orders.reviewStatus,
       note: orders.note,
       createdAt: orders.createdAt,
       debtRemaining: debts.remaining,
@@ -1628,6 +1795,7 @@ export async function listOrders({
       debtAmount,
       status: r.status,
       debtLimitExceeded: Boolean(r.debtLimitExceeded),
+      reviewStatus: r.reviewStatus as OrderReviewStatus,
       note: r.note ?? null,
       createdAt: r.createdAt.toISOString(),
     }
@@ -1668,6 +1836,11 @@ export interface OrderDetailFull {
   note: string | null
   status: string
   debtLimitExceeded: boolean
+  reviewStatus: OrderReviewStatus
+  policyViolations: OrderPolicyViolation[] | null
+  reviewedByName: string | null
+  reviewedAt: string | null
+  reviewNote: string | null
   items: OrderDetailItem[]
   createdAt: string
   updatedAt: string
@@ -1677,12 +1850,15 @@ export interface GetOrderDetailDeps {
   db: Db
   storeId: string
   orderId: string
+  /** BC-13: người xem không có quyền products.viewCost thì không nhận giá vốn từng dòng */
+  canViewCost: boolean
 }
 
 export async function getOrderDetail({
   db,
   storeId,
   orderId,
+  canViewCost,
 }: GetOrderDetailDeps): Promise<OrderDetailFull> {
   const orderRows = await db
     .select({
@@ -1710,6 +1886,11 @@ export async function getOrderDetail({
       note: orders.note,
       status: orders.status,
       debtLimitExceeded: orders.debtLimitExceeded,
+      reviewStatus: orders.reviewStatus,
+      policyViolations: orders.policyViolations,
+      reviewedBy: orders.reviewedBy,
+      reviewedAt: orders.reviewedAt,
+      reviewNote: orders.reviewNote,
       createdAt: orders.createdAt,
       updatedAt: orders.updatedAt,
       debtRemaining: debts.remaining,
@@ -1778,7 +1959,7 @@ export async function getOrderDetail({
     priceSource: it.priceSource ?? null,
     priceSourceDetail: it.priceSourceDetail ?? null,
     sku: it.sku ?? null,
-    costPrice: it.costPrice != null ? Number(it.costPrice) : null,
+    ...(canViewCost ? { costPrice: it.costPrice != null ? Number(it.costPrice) : null } : {}),
   }))
 
   const totalAmount = Number(row.total)
@@ -1788,6 +1969,16 @@ export async function getOrderDetail({
   const paidAmount = totalAmount - debtAmount - Number(row.debtReduced ?? 0)
   const currentDebt = row.customerCurrentDebt != null ? Number(row.customerCurrentDebt) : null
   const oldDebt = currentDebt != null ? Math.max(0, currentDebt - debtAmount) : null
+
+  let reviewedByName: string | null = null
+  if (row.reviewedBy) {
+    const [reviewer] = await db
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, row.reviewedBy))
+      .limit(1)
+    reviewedByName = reviewer?.name ?? null
+  }
 
   return {
     id: row.id,
@@ -1817,8 +2008,33 @@ export async function getOrderDetail({
     note: row.note ?? null,
     status: row.status,
     debtLimitExceeded: Boolean(row.debtLimitExceeded),
+    reviewStatus: row.reviewStatus as OrderReviewStatus,
+    policyViolations: redactViolations(row.policyViolations ?? null, canViewCost),
+    reviewedByName,
+    reviewedAt: row.reviewedAt?.toISOString() ?? null,
+    reviewNote: row.reviewNote ?? null,
     items,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
+}
+
+/**
+ * BC-13: người không được xem giá vốn không được biết đơn nào bị giữ vì dưới giá vốn; với họ vi
+ * phạm đó chỉ hiện là sửa giá hoặc chiết khấu chưa được duyệt.
+ */
+export function redactViolations(
+  violations: OrderPolicyViolation[] | null,
+  canViewCost: boolean,
+): OrderPolicyViolation[] | null {
+  if (!violations || canViewCost) return violations
+  return violations.map((v) =>
+    v.code === 'below_cost_unapproved'
+      ? {
+          code: 'price_unapproved',
+          message: 'Sửa giá hoặc chiết khấu vượt quyền người bán mà chưa được duyệt',
+          requiredPermissions: ['pos.editPrice'],
+        }
+      : v,
+  )
 }

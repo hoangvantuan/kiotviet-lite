@@ -337,6 +337,13 @@
       "when": 1790353156321,
       "tag": "0047_debt_ledger_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790361810614,
+      "tag": "0048_open_energizer",
+      "breakpoints": true
     }
   ]
 }

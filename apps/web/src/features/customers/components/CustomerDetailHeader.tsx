@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { ChevronLeft, Mail, Pencil, Phone, Tag } from 'lucide-react'
 
 import type { CustomerDetail } from '@kiotviet-lite/shared'
+import { formatDebtLimitLabel } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -145,9 +146,7 @@ export function CustomerDetailHeader({ customer, onEdit }: CustomerDetailHeaderP
           <div>
             <p className="text-xs text-muted-foreground">Hạn mức nợ</p>
             <p className="mt-1 text-lg font-semibold text-foreground">
-              {customer.effectiveDebtLimit === null
-                ? 'Không giới hạn'
-                : `${formatVnd(customer.effectiveDebtLimit)} ₫`}
+              {formatDebtLimitLabel(customer.effectiveDebtLimit)}
             </p>
           </div>
         </div>

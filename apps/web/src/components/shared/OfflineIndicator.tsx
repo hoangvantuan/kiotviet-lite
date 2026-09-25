@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertCircle, CloudOff, RefreshCw, RotateCcw, WifiOff } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { AlertCircle, CloudOff, RefreshCw, RotateCcw, ShieldAlert, WifiOff } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -19,6 +20,8 @@ export function OfflineIndicator() {
   const pendingOrderCount = useOfflineStore((s) => s.pendingOrderCount)
   const errorMessage = useOfflineStore((s) => s.errorMessage)
   const lastSyncedAt = useOfflineStore((s) => s.lastSyncedAt)
+  const reviewPendingOrders = useOfflineStore((s) => s.reviewPendingOrders)
+  const dismissReviewPending = useOfflineStore((s) => s.dismissReviewPending)
   const [syncing, setSyncing] = useState(false)
   const [errorOrders, setErrorOrders] = useState<OfflineOrder[]>([])
   const [retryingClientId, setRetryingClientId] = useState<string | null>(null)
@@ -38,7 +41,13 @@ export function OfflineIndicator() {
     loadErrorOrders()
   }, [status, pendingOrderCount, loadErrorOrders])
 
-  if (status === 'online' && pendingOrderCount === 0 && errorOrders.length === 0) return null
+  if (
+    status === 'online' &&
+    pendingOrderCount === 0 &&
+    errorOrders.length === 0 &&
+    reviewPendingOrders.length === 0
+  )
+    return null
 
   const handleManualSync = async () => {
     const pglite = getPGliteClient()
@@ -96,6 +105,8 @@ export function OfflineIndicator() {
       <CloudOff className="h-4 w-4 text-amber-500" />
     ) : pendingOrderCount > 0 ? (
       <RefreshCw className="h-4 w-4 text-primary" />
+    ) : reviewPendingOrders.length > 0 ? (
+      <ShieldAlert className="h-4 w-4 text-orange-500" />
     ) : null
 
   if (!icon) return null
@@ -136,6 +147,42 @@ export function OfflineIndicator() {
             <div className="flex items-center justify-between text-xs text-muted-foreground bg-muted/50 p-2 rounded">
               <span>Đơn chờ đồng bộ:</span>
               <span className="font-medium text-foreground">{pendingOrderCount}</span>
+            </div>
+          )}
+
+          {reviewPendingOrders.length > 0 && (
+            <div className="space-y-1.5 rounded border border-orange-200 bg-orange-50 p-2 text-xs text-orange-900">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">
+                  Đơn chờ chủ duyệt ({reviewPendingOrders.length})
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-[11px]"
+                  onClick={dismissReviewPending}
+                >
+                  Đã hiểu
+                </Button>
+              </div>
+              <p>
+                Các đơn bán ngoại tuyến này vi phạm chính sách (giá, chiết khấu hoặc hạn mức nợ).
+                Đơn đã được ghi nhận và đang chờ chủ cửa hàng duyệt.
+              </p>
+              <ul className="max-h-32 space-y-1 overflow-y-auto">
+                {reviewPendingOrders.map((o) => (
+                  <li key={o.clientId} className="flex items-center justify-between">
+                    <Link
+                      to="/orders/$orderId"
+                      params={{ orderId: o.serverId }}
+                      className="font-mono underline underline-offset-2"
+                    >
+                      #{o.clientId.slice(0, 8).toUpperCase()}
+                    </Link>
+                    <span className="font-medium">{formatVndWithSuffix(o.total)}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

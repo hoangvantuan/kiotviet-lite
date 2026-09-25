@@ -125,9 +125,17 @@ _Tránh dùng_: giảm giá tay, đổi giá
 Dãy sáu chữ số dùng để xác nhận một thao tác nhạy cảm ngay tại quầy, khác với mật khẩu đăng nhập.
 _Tránh dùng_: mã xác nhận, mật khẩu cấp hai
 
+**Người duyệt**:
+Người có quyền cho phép một thao tác vượt quyền của người bán (sửa giá, chiết khấu, bán dưới giá vốn, ghi nợ vượt hạn mức) bằng cách nhập mã PIN của chính mình tại quầy. Có thể chính là người bán nếu người bán đủ quyền.
+_Tránh dùng_: người phê duyệt, người ký
+
 **Đơn ngoại tuyến**:
 Đơn bán lập khi máy mất mạng, lưu tại máy và gửi lên khi có mạng trở lại.
 _Tránh dùng_: đơn offline, đơn chờ đồng bộ
+
+**Đơn chờ duyệt**:
+Đơn ngoại tuyến đã được nhận (đã trừ kho, đã ghi nợ) nhưng vi phạm chính sách giá, chiết khấu hay hạn mức nợ mà không có người duyệt hợp lệ. Chủ hoặc quản lý đủ quyền duyệt hoặc từ chối; từ chối chỉ ghi nhận, không huỷ đơn. Quy tắc ở ADR-0009.
+_Tránh dùng_: đơn treo, đơn bị khoá, đơn lỗi
 
 **Trả hàng**:
 Việc khách mang hàng đã mua quay lại, kéo theo hoàn tiền và hoàn tồn kho.
@@ -164,7 +172,7 @@ Khoản nợ đã có từ trước khi cửa hàng dùng phần mềm này, kh�
 _Tránh dùng_: nợ cũ, nợ tồn, số dư ban đầu
 
 **Hạn mức nợ**:
-Số tiền tối đa một khách hàng được nợ.
+Số tiền tối đa một khách hàng được nợ. Khách không đặt hạn mức riêng thì theo hạn mức nhóm; không có cả hai, hoặc hạn mức bằng 0, nghĩa là không được nợ. "Không giới hạn nợ" là một cờ riêng chỉ chủ cửa hàng bật. Quy tắc ở ADR-0009.
 _Tránh dùng_: giới hạn nợ, hạn mức tín dụng
 
 **Tuổi nợ**:

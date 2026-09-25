@@ -32,5 +32,7 @@ export function unlockUserApi(id: string) {
 }
 
 export function verifyPinApi(input: VerifyPinInput) {
-  return apiClient.post<ApiEnvelope<{ ok: true }>>('/api/v1/users/verify-pin', input)
+  return apiClient.post<
+    ApiEnvelope<{ ok: true; approver?: { userId: string; role: string; name: string } }>
+  >('/api/v1/users/verify-pin', input)
 }

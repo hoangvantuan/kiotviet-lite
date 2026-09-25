@@ -29,7 +29,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { usePermissions } from '@/features/auth/use-permissions'
 import { asFormSetError, handleApiError } from '@/lib/api-error'
 import { showSuccess } from '@/lib/toast'
 
@@ -46,6 +48,7 @@ const KNOWN_FIELDS = [
   'taxId',
   'notes',
   'debtLimit',
+  'debtUnlimited',
   'groupId',
 ]
 
@@ -79,6 +82,7 @@ function CreateCustomerDialog({ open, onOpenChange, groups }: CustomerFormDialog
       taxId: null,
       notes: null,
       debtLimit: null,
+      debtUnlimited: false,
       groupId: null,
     },
   })
@@ -95,6 +99,7 @@ function CreateCustomerDialog({ open, onOpenChange, groups }: CustomerFormDialog
         taxId: null,
         notes: null,
         debtLimit: null,
+        debtUnlimited: false,
         groupId: null,
       })
       setDebtLimitText('')
@@ -111,6 +116,7 @@ function CreateCustomerDialog({ open, onOpenChange, groups }: CustomerFormDialog
       taxId: values.taxId?.trim() ? values.taxId.trim() : null,
       notes: values.notes?.trim() ? values.notes.trim() : null,
       debtLimit: values.debtLimit ?? null,
+      ...(values.debtUnlimited ? { debtUnlimited: true } : {}),
       groupId: values.groupId ?? null,
     }
     try {
@@ -156,6 +162,8 @@ function CreateCustomerDialog({ open, onOpenChange, groups }: CustomerFormDialog
             error={form.formState.errors.debtLimit?.message}
             groups={groups}
             groupId={form.watch('groupId') ?? null}
+            unlimited={form.watch('debtUnlimited') ?? false}
+            onUnlimitedChange={(v) => form.setValue('debtUnlimited', v, { shouldDirty: true })}
           />
           <DialogFooter>
             <Button
@@ -200,6 +208,7 @@ function EditCustomerDialog({
         taxId: customer.taxId,
         notes: customer.notes,
         debtLimit: customer.debtLimit,
+        debtUnlimited: customer.debtUnlimited,
         groupId: customer.groupId,
       })
       setDebtLimitText(customer.debtLimit === null ? '' : String(customer.debtLimit))
@@ -224,6 +233,9 @@ function EditCustomerDialog({
     if (notes !== undefined && notes !== customer.notes) payload.notes = notes
     if (values.debtLimit !== undefined && values.debtLimit !== customer.debtLimit) {
       payload.debtLimit = values.debtLimit
+    }
+    if (values.debtUnlimited !== undefined && values.debtUnlimited !== customer.debtUnlimited) {
+      payload.debtUnlimited = values.debtUnlimited
     }
     if (values.groupId !== undefined && values.groupId !== customer.groupId) {
       payload.groupId = values.groupId
@@ -275,6 +287,8 @@ function EditCustomerDialog({
             error={form.formState.errors.debtLimit?.message}
             groups={groups}
             groupId={form.watch('groupId') ?? null}
+            unlimited={form.watch('debtUnlimited') ?? false}
+            onUnlimitedChange={(v) => form.setValue('debtUnlimited', v, { shouldDirty: true })}
           />
           <DialogFooter>
             <Button
@@ -432,11 +446,24 @@ interface DebtLimitFieldProps {
   error?: string
   groups: CustomerGroupItem[]
   groupId: string | null
+  unlimited: boolean
+  onUnlimitedChange: (v: boolean) => void
 }
 
-function DebtLimitField({ id, value, onChange, error, groups, groupId }: DebtLimitFieldProps) {
+function DebtLimitField({
+  id,
+  value,
+  onChange,
+  error,
+  groups,
+  groupId,
+  unlimited,
+  onUnlimitedChange,
+}: DebtLimitFieldProps) {
   const selectedGroup = groupId ? groups.find((g) => g.id === groupId) : null
   const groupDebtLimit = selectedGroup?.debtLimit ?? null
+  // POS-12: chỉ chủ cửa hàng được cho khách nợ không giới hạn
+  const canSetUnlimited = usePermissions().has('customers.setUnlimitedDebt')
 
   return (
     <div className="space-y-2">
@@ -444,18 +471,37 @@ function DebtLimitField({ id, value, onChange, error, groups, groupId }: DebtLim
       <Input
         id={id}
         inputMode="numeric"
-        placeholder="Để trống = dùng hạn mức của nhóm"
+        placeholder={
+          selectedGroup
+            ? 'Để trống = dùng hạn mức của nhóm'
+            : 'Để trống = không cho nợ; nhập số để cấp hạn mức'
+        }
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        disabled={unlimited}
       />
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {selectedGroup && (
+      {selectedGroup && !unlimited && (
         <p className="text-xs text-muted-foreground">
           Nhóm "{selectedGroup.name}": hạn mức{' '}
-          {groupDebtLimit !== null
+          {groupDebtLimit !== null && groupDebtLimit > 0
             ? `${groupDebtLimit.toLocaleString('vi-VN')} ₫`
-            : 'không giới hạn'}
+            : 'không cho nợ'}
         </p>
+      )}
+      {canSetUnlimited ? (
+        <div className="flex items-center gap-2 pt-1">
+          <Switch id={`${id}-unlimited`} checked={unlimited} onCheckedChange={onUnlimitedChange} />
+          <Label htmlFor={`${id}-unlimited`} className="font-normal">
+            Không giới hạn nợ (bỏ qua hạn mức)
+          </Label>
+        </div>
+      ) : (
+        unlimited && (
+          <p className="text-xs text-muted-foreground">
+            Chủ cửa hàng đã đặt khách này không giới hạn nợ.
+          </p>
+        )
       )}
     </div>
   )

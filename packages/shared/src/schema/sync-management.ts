@@ -48,5 +48,7 @@ export const syncPushResultSchema = z.object({
     .optional(),
   // Sai lệch máy chủ đã tự xử lý nhưng vẫn nhận đơn (khách hoặc bảng giá không thuộc cửa hàng)
   warnings: z.array(z.object({ code: z.string(), message: z.string() })).optional(),
+  // ADR-0009: đơn đã nhận nhưng vi phạm chính sách, đang chờ chủ duyệt
+  reviewStatus: z.enum(['none', 'pending_review', 'approved', 'rejected']).optional(),
 })
 export type SyncPushResult = z.infer<typeof syncPushResultSchema>
