@@ -82,9 +82,12 @@ export async function getInventoryReportApi(
   tab: InventoryReportTab,
   page: number = 1,
   pageSize: number = 20,
+  categoryId?: string,
 ) {
+  const params = new URLSearchParams({ tab, page: String(page), pageSize: String(pageSize) })
+  if (categoryId) params.set('categoryId', categoryId)
   return apiClient.get<ApiEnvelope<InventoryReportResponse>>(
-    `/api/v1/reports/inventory?tab=${tab}&page=${page}&pageSize=${pageSize}`,
+    `/api/v1/reports/inventory?${params.toString()}`,
   )
 }
 

@@ -6,6 +6,8 @@ import {
   type CreateProductInput,
   inventoryTransactions,
   type ListProductsQuery,
+  orderItems,
+  orderReturnItems,
   type PosProductItem,
   type PosUnitConversion,
   type PosVariantItem,
@@ -15,6 +17,8 @@ import {
   type ProductStatus,
   productUnitConversions,
   productVariants,
+  purchaseOrderItems,
+  stockCheckItems,
   type UnitConversionItem,
   type UpdateProductInput,
   type UserRole,
@@ -37,6 +41,7 @@ import {
   hasVariantTransactions,
   toVariantItem,
 } from './product-variants.service.js'
+import { loadProductForUpdate } from './products-lock.helper.js'
 import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 import { createUnitConversion, toUnitConversionItem } from './unit-conversions.service.js'
 
@@ -381,6 +386,36 @@ async function aggregateVariantStock({
   const map = new Map<string, number>()
   for (const r of rows) map.set(r.productId, Number(r.total))
   return map
+}
+
+// Xoá (kể cả xoá mềm) hàng còn tồn khác 0 làm số tồn đó biến khỏi báo cáo mà không có chứng từ
+// điều chỉnh nào, nên buộc kiểm kho về 0 trước, hoặc giữ hàng và chuyển sang Ngừng bán (KHO-03)
+function stockRemovalError(what: string, stock: number): ApiError {
+  return new ApiError(
+    'BUSINESS_RULE_VIOLATION',
+    `${what} còn tồn kho ${stock}. Vui lòng kiểm kho về 0 trước khi xoá, hoặc chuyển trạng thái sang "Ngừng bán" (ngừng kinh doanh) để giữ lại lịch sử`,
+    { code: 'STOCK_NOT_ZERO', stock },
+  )
+}
+
+function isSameUnitName(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
+
+// Mọi số lượng trong sổ kho, đơn bán, phiếu nhập, phiếu trả, phiếu kiểm đều ghi theo đơn vị tính
+// gốc của sản phẩm. Đổi đơn vị gốc sau khi đã có các chứng từ này sẽ đổi nghĩa toàn bộ số cũ (KHO-06)
+async function productHasUnitUsage({ db, productId }: { db: Db; productId: string }) {
+  const usage = await Promise.all(
+    [inventoryTransactions, orderItems, purchaseOrderItems, orderReturnItems, stockCheckItems].map(
+      (table) =>
+        db
+          .select({ one: sql<number>`1` })
+          .from(table)
+          .where(eq(table.productId, productId))
+          .limit(1),
+    ),
+  )
+  return usage.some((rows) => rows.length > 0)
 }
 
 async function loadVariantsForProduct({
@@ -1156,6 +1191,23 @@ export async function updateProduct({
     if (newCost !== cur) updates.costPrice = newCost
   }
   if (input.unit !== undefined && input.unit !== target.unit) {
+    // Chỉ đổi cách viết (hoa thường, khoảng trắng) là đổi hiển thị, không đổi nghĩa số lượng
+    if (!isSameUnitName(input.unit, target.unit)) {
+      const variantStocks = target.hasVariants
+        ? await db
+            .select({ stockQuantity: productVariants.stockQuantity })
+            .from(productVariants)
+            .where(and(eq(productVariants.productId, target.id), isNull(productVariants.deletedAt)))
+        : []
+      const hasStock = target.currentStock !== 0 || variantStocks.some((v) => v.stockQuantity !== 0)
+      if (hasStock || (await productHasUnitUsage({ db, productId: target.id }))) {
+        throw new ApiError(
+          'BUSINESS_RULE_VIOLATION',
+          'Không thể đổi đơn vị tính gốc khi sản phẩm đã có tồn kho hoặc đã phát sinh chứng từ (nhập, bán, trả, kiểm kho), vì số lượng cũ đều ghi theo đơn vị hiện tại. Chỉ được sửa cách viết của tên đơn vị; nếu cần bán theo đơn vị khác, hãy thêm đơn vị quy đổi',
+          { field: 'unit' },
+        )
+      }
+    }
     // Validate đơn vị mới không trùng đơn vị quy đổi hiện có (case-insensitive)
     const newUnitLower = input.unit.trim().toLowerCase()
     const existingConversions = await db
@@ -1202,8 +1254,8 @@ export async function updateProduct({
         .select({ id: productVariants.id, stockQuantity: productVariants.stockQuantity })
         .from(productVariants)
         .where(and(eq(productVariants.productId, target.id), isNull(productVariants.deletedAt)))
-      const totalStock = existing.reduce((s, r) => s + r.stockQuantity, 0)
-      if (totalStock > 0) {
+      // Tồn âm cũng là tồn cần kiểm kho về 0, cộng dồn thì +5 và -5 triệt tiêu nhau (KHO-03)
+      if (existing.some((r) => r.stockQuantity !== 0)) {
         throw new ApiError(
           'BUSINESS_RULE_VIOLATION',
           'Vui lòng kiểm kho biến thể về 0 trước khi tắt biến thể',
@@ -1219,7 +1271,7 @@ export async function updateProduct({
       }
     } else if (variantsConfigField !== null && !target.hasVariants) {
       // TURN ON variants from non-variant product
-      if (target.currentStock > 0) {
+      if (target.currentStock !== 0) {
         throw new ApiError(
           'BUSINESS_RULE_VIOLATION',
           'Vui lòng kiểm kho về 0 trước khi bật biến thể',
@@ -1462,11 +1514,14 @@ async function applyVariantDiff({
   actor,
   meta,
 }: ApplyVariantDiffArgs): Promise<void> {
-  // Load alive existing variants
+  // Khoá sản phẩm rồi mới khoá biến thể (cùng thứ tự với luồng bán, nhập, kiểm kho) để tồn
+  // không đổi giữa lúc kiểm tra và lúc xoá biến thể
+  await loadProductForUpdate({ tx, storeId, productId })
   const existing = await tx
     .select()
     .from(productVariants)
     .where(and(eq(productVariants.productId, productId), isNull(productVariants.deletedAt)))
+    .for('update')
 
   const existingMap = new Map(existing.map((e) => [e.id, e]))
   const incomingMap = new Map<string, VariantInput>()
@@ -1489,6 +1544,10 @@ async function applyVariantDiff({
 
   const incomingIds = new Set([...incomingMap.keys()])
   const toDelete = existing.filter((e) => !incomingIds.has(e.id))
+  const stockedDeletion = toDelete.find((e) => e.stockQuantity !== 0)
+  if (stockedDeletion) {
+    throw stockRemovalError(`Biến thể ${stockedDeletion.sku}`, stockedDeletion.stockQuantity)
+  }
 
   // Pre-validate uniqueness for new SKUs/barcodes (against DB excluding all involved variant ids)
   const allInvolvedIds = existing.map((e) => e.id)
@@ -1822,6 +1881,25 @@ export async function deleteProduct({
   }
 
   return db.transaction(async (tx) => {
+    const locked = await loadProductForUpdate({
+      tx: tx as unknown as Db,
+      storeId: actor.storeId,
+      productId,
+    })
+    if (locked.hasVariants) {
+      const variants = await tx
+        .select({ sku: productVariants.sku, stockQuantity: productVariants.stockQuantity })
+        .from(productVariants)
+        .where(and(eq(productVariants.productId, productId), isNull(productVariants.deletedAt)))
+        .for('update')
+      const stocked = variants.find((v) => v.stockQuantity !== 0)
+      if (stocked) {
+        throw stockRemovalError(`Sản phẩm có biến thể ${stocked.sku}`, stocked.stockQuantity)
+      }
+    } else if (locked.currentStock !== 0) {
+      throw stockRemovalError('Sản phẩm', locked.currentStock)
+    }
+
     const [updated] = await tx
       .update(products)
       .set({ deletedAt: new Date() })

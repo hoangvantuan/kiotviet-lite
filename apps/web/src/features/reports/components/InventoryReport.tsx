@@ -20,6 +20,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  CATEGORY_FILTER_ALL,
+  CategoryFilterSelect,
+} from '@/features/categories/category-filter-select'
+import { useCategoriesQuery } from '@/features/categories/use-categories'
 
 import { useInventoryReport } from '../hooks/use-reports'
 import { downloadReportExport } from '../reports-api'
@@ -32,11 +37,19 @@ function formatVND(n: number) {
 export function InventoryReport() {
   const [tab, setTab] = useState<InventoryReportTab>('current')
   const [page, setPage] = useState<number>(1)
+  const [categoryFilter, setCategoryFilter] = useState<string>(CATEGORY_FILTER_ALL)
+  const categoryId = categoryFilter === CATEGORY_FILTER_ALL ? undefined : categoryFilter
 
-  const { data, isLoading } = useInventoryReport(tab, page, 20)
+  const categoriesQuery = useCategoriesQuery()
+  const { data, isLoading } = useInventoryReport(tab, page, 20, categoryId)
 
   const handleExport = (format: ExportFormat) => {
-    downloadReportExport('inventory', format, { tab })
+    downloadReportExport('inventory', format, { tab, categoryId })
+  }
+
+  const handleCategoryChange = (v: string) => {
+    setCategoryFilter(v)
+    setPage(1)
   }
 
   const handleTabChange = (v: string) => {
@@ -51,13 +64,21 @@ export function InventoryReport() {
         <ReportExportButton onExport={handleExport} />
       </div>
 
-      <Tabs value={tab} onValueChange={handleTabChange}>
-        <TabsList>
-          <TabsTrigger value="current">Tồn hiện tại</TabsTrigger>
-          <TabsTrigger value="reorder">Cần nhập</TabsTrigger>
-          <TabsTrigger value="slow">Hàng chậm bán</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Tabs value={tab} onValueChange={handleTabChange}>
+          <TabsList>
+            <TabsTrigger value="current">Tồn hiện tại</TabsTrigger>
+            <TabsTrigger value="reorder">Cần nhập</TabsTrigger>
+            <TabsTrigger value="slow">Hàng chậm bán</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <CategoryFilterSelect
+          value={categoryFilter}
+          onValueChange={handleCategoryChange}
+          categories={categoriesQuery.data ?? []}
+          className="w-full sm:w-56"
+        />
+      </div>
 
       {data && 'summary' in data && (
         <div className="grid grid-cols-2 gap-4">
