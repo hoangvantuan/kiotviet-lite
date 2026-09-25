@@ -54,12 +54,28 @@ function isValidItem(value: unknown): value is CartItem {
   )
 }
 
+/**
+ * Bỏ những gì không được nằm trên đĩa: PIN duyệt sửa giá (người bán nhập lại nếu cần) và giá
+ * vốn (quyết định nghiệp vụ số 3, nhân viên không được thấy giá vốn). Giá vốn để undefined
+ * cho biết "chưa nạp", nơi cần dùng tự lấy lại từ máy chủ.
+ */
+function stripSensitive(tab: TabState): TabState {
+  return {
+    ...tab,
+    priceOverridePin: null,
+    items: tab.items.map((item) => {
+      const copy = { ...item }
+      delete copy.costPrice
+      return copy
+    }),
+  }
+}
+
 function sanitizeTab(value: unknown): TabState | null {
   if (!value || typeof value !== 'object') return null
   const tab = value as Partial<TabState>
   if (!Array.isArray(tab.items) || !tab.items.every(isValidItem)) return null
-  // PIN duyệt sửa giá không bao giờ được ghi xuống đĩa, người bán nhập lại nếu cần
-  return { ...createEmptyTab(), ...tab, priceOverridePin: null }
+  return stripSensitive({ ...createEmptyTab(), ...tab } as TabState)
 }
 
 function saveCart(key: string, state: Pick<PersistedCart, 'tabs' | 'activeTab'>) {
@@ -67,7 +83,7 @@ function saveCart(key: string, state: Pick<PersistedCart, 'tabs' | 'activeTab'>)
   if (!storage) return
   const tabs: Record<number, TabState> = {}
   for (const [index, tab] of Object.entries(state.tabs)) {
-    tabs[Number(index)] = { ...tab, priceOverridePin: null }
+    tabs[Number(index)] = stripSensitive(tab)
   }
   const payload: PersistedCart = { version: CART_SCHEMA_VERSION, activeTab: state.activeTab, tabs }
   try {

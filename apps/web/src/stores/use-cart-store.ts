@@ -36,7 +36,12 @@ export interface CartItem {
   lineTotal: number
   trackInventory: boolean
   stockQuantity: number
-  costPrice: number | null
+  /**
+   * Giá vốn để cảnh báo bán dưới vốn. null: sản phẩm chưa có giá vốn. undefined: chưa nạp,
+   * vì giá vốn không được lưu xuống localStorage nên giỏ vừa khôi phục không có (quyết định
+   * nghiệp vụ số 3), nơi cần dùng phải tự nạp lại từ máy chủ.
+   */
+  costPrice?: number | null
   originalPrice: number | null
   priceOverride: boolean
   priceOverrideReason: string | null

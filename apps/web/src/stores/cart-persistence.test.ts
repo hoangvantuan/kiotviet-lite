@@ -100,6 +100,40 @@ describe('lưu giỏ POS bền (POS-14, OFF-18)', () => {
     expect(storage.getItem(`kvl:pos-cart:${USER_A.storeId}:${USER_A.id}`)).not.toContain('1234')
   })
 
+  it('không ghi giá vốn xuống localStorage, khôi phục xong giá vốn ở trạng thái chưa nạp', async () => {
+    const page1 = await bootPage(USER_A)
+    page1.useCartStore.getState().addItem(coke, 2)
+    expect(page1.useCartStore.getState().tabs[1]!.items[0]!.costPrice).toBe(7_000)
+    page1.stop()
+
+    // Quyết định nghiệp vụ số 3: nhân viên không được thấy giá vốn, kể cả đọc từ đĩa
+    const raw = storage.getItem(`kvl:pos-cart:${USER_A.storeId}:${USER_A.id}`)
+    expect(raw).not.toBeNull()
+    expect(raw).not.toContain('costPrice')
+    expect(raw).not.toContain('7000')
+
+    const page2 = await bootPage(USER_A)
+    const item = page2.useCartStore.getState().tabs[1]!.items[0]!
+    expect(item.quantity).toBe(2)
+    // undefined, không phải 0 hay null: 0 trông như giá vốn thật, null là "sản phẩm chưa có giá vốn"
+    expect(item.costPrice).toBeUndefined()
+  })
+
+  it('dữ liệu cũ lỡ có giá vốn thì bỏ khi khôi phục và không ghi lại', async () => {
+    const key = `kvl:pos-cart:${USER_A.storeId}:${USER_A.id}`
+    const page1 = await bootPage(USER_A)
+    page1.useCartStore.getState().addItem(coke, 1)
+    page1.stop()
+    const legacy = JSON.parse(storage.getItem(key)!)
+    legacy.tabs[1].items[0].costPrice = 7_000
+    storage.setItem(key, JSON.stringify(legacy))
+
+    const page2 = await bootPage(USER_A)
+    expect(page2.useCartStore.getState().tabs[1]!.items[0]!.costPrice).toBeUndefined()
+    page2.useCartStore.getState().updateQuantity(`prod-coke`, 3)
+    expect(storage.getItem(key)).not.toContain('costPrice')
+  })
+
   it('đăng xuất xóa giỏ đã lưu, đăng nhập lại không còn đơn cũ', async () => {
     const page1 = await bootPage(USER_A)
     page1.useCartStore.getState().addItem(coke, 2)
