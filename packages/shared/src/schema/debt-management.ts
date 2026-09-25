@@ -6,7 +6,7 @@ export const debtInfoSchema = z.object({
   customerName: z.string(),
   groupId: z.string().uuid().nullable(),
   groupName: z.string().nullable(),
-  // Âm khi khách còn tiền trả trước (ADR-0010)
+  // Âm khi khách còn tiền trả trước (ADR-0011)
   currentDebt: z.number().int(),
   customerDebtLimit: z.number().int().min(0).nullable(),
   groupDebtLimit: z.number().int().min(0).nullable(),
@@ -19,7 +19,8 @@ export const debtItemSchema = z.object({
   orderId: z.string().uuid().nullable(),
   customerId: z.string().uuid(),
   type: z.enum(['sale', 'opening', 'adjustment']),
-  // Nợ đầu kỳ âm (tiền khách trả trước) có amount, paid, remaining âm (ADR-0010)
+  // Nợ đầu kỳ âm (tiền khách trả trước): amount và remaining âm, paid = 0; phần đã cấn nằm ở
+  // reduced âm, không có trong response này (ADR-0011)
   amount: z.number().int(),
   paid: z.number().int(),
   remaining: z.number().int(),
@@ -58,7 +59,7 @@ export const createOpeningDebtSchema = z
   })
   .strict()
 
-// Nợ đầu kỳ khách hàng: số âm là tiền khách trả trước (ADR-0010)
+// Nợ đầu kỳ khách hàng: số âm là tiền khách trả trước (ADR-0011)
 export const createCustomerOpeningDebtSchema = z
   .object({
     amount: openingAmount()

@@ -32,7 +32,7 @@ interface OpeningDebtDialogProps {
 
 export function OpeningDebtDialog({ open, onOpenChange, target }: OpeningDebtDialogProps) {
   const [amount, setAmount] = useState<number | null>(null)
-  // Khách trả trước: ghi thành nợ đầu kỳ âm (ADR-0010). Nhà cung cấp chỉ có chiều nợ.
+  // Khách trả trước: ghi thành nợ đầu kỳ âm (ADR-0011). Nhà cung cấp chỉ có chiều nợ.
   const [prepaid, setPrepaid] = useState(false)
   const [incurredAt, setIncurredAt] = useState('')
   const [error, setError] = useState('')

@@ -30,7 +30,7 @@ WHERE c.current_debt <> coalesce(d.remaining, 0);
 
 -- I2. Khoản nợ: amount = paid + reduced + remaining, không số âm (ADR 0008). Riêng tiền khách
 -- trả trước là nợ đầu kỳ âm: paid = 0, phần đã cấn ghi reduced âm, remaining chạy từ amount về 0
--- (ADR 0010).
+-- (ADR 0011).
 INSERT INTO invariant_violations
 SELECT 'I2_debt_balance', d.store_id, 'debt ' || d.id,
        format('type=%s, amount=%s, paid=%s, reduced=%s, remaining=%s',
@@ -106,7 +106,7 @@ CROSS JOIN LATERAL (
 ) x
 WHERE s.current_debt <> x.expected;
 
--- I8. Không có công nợ âm. Công nợ khách âm chỉ là tiền trả trước (I1, I2, ADR 0010), nên với
+-- I8. Không có công nợ âm. Công nợ khách âm chỉ là tiền trả trước (I1, I2, ADR 0011), nên với
 -- khách chỉ kiểm không có trạng thái vừa còn nợ vừa còn tiền trả trước (nợ mới phải cấn hết
 -- tiền trả trước trước).
 INSERT INTO invariant_violations
@@ -121,6 +121,20 @@ HAVING bool_or(d.remaining > 0) AND bool_or(d.remaining < 0)
 UNION ALL
 SELECT 'I8_negative_debt', store_id, 'supplier ' || code, format('current_debt=%s', current_debt)
 FROM suppliers WHERE current_debt < 0;
+
+-- I9. Tiền trả trước đã cấn: với mỗi khách, tổng prepayment_applied của các khoản nợ bằng phần
+-- đã dùng của các khoản trả trước (-sum(reduced)). Trả hàng hoàn phần này về trả trước (ADR 0011).
+INSERT INTO invariant_violations
+SELECT 'I9_prepayment_applied', c.store_id, 'customer ' || c.code,
+       format('applied=%s, used=%s', x.applied, x.used)
+FROM customers c
+JOIN (
+  SELECT customer_id,
+         COALESCE(sum(prepayment_applied), 0) AS applied,
+         COALESCE(-sum(reduced) FILTER (WHERE type = 'opening' AND amount < 0), 0) AS used
+  FROM debts GROUP BY customer_id
+) x ON x.customer_id = c.id
+WHERE x.applied <> x.used;
 
 \pset footer on
 SELECT check_name, count(*) AS violations

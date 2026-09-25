@@ -73,13 +73,24 @@ export function computeReturnLineRefund(
 }
 
 /**
- * Tách tiền hoàn của phiếu trả: phần cấn vào khoản nợ còn lại của đơn trước, phần dư hoàn tiền
- * cho khách.
+ * Tách tiền hoàn của phiếu trả, theo thứ tự:
+ * 1. cấn vào khoản nợ còn lại của đơn,
+ * 2. hoàn vào tiền trả trước phần đơn đã được cấn bằng tiền trả trước (ADR-0011),
+ * 3. phần dư mới hoàn tiền mặt cho khách.
  */
 export function splitReturnRefund(
   totalAmount: number,
   outstandingOrderDebt: number,
-): { debtReductionAmount: number; refundAmount: number } {
+  orderPrepaymentApplied = 0,
+): { debtReductionAmount: number; prepaymentRefundAmount: number; refundAmount: number } {
   const debtReductionAmount = Math.min(totalAmount, Math.max(0, outstandingOrderDebt))
-  return { debtReductionAmount, refundAmount: totalAmount - debtReductionAmount }
+  const prepaymentRefundAmount = Math.min(
+    totalAmount - debtReductionAmount,
+    Math.max(0, orderPrepaymentApplied),
+  )
+  return {
+    debtReductionAmount,
+    prepaymentRefundAmount,
+    refundAmount: totalAmount - debtReductionAmount - prepaymentRefundAmount,
+  }
 }

@@ -382,6 +382,11 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
                     Giảm nợ: {formatVndWithSuffix(ret.debtReductionAmount)}
                   </p>
                 )}
+                {ret.prepaymentRefundAmount > 0 && (
+                  <p className="text-xs text-green-600">
+                    Hoàn vào trả trước: {formatVndWithSuffix(ret.prepaymentRefundAmount)}
+                  </p>
+                )}
               </div>
             ))}
           </div>

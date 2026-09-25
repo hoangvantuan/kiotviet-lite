@@ -84,6 +84,8 @@ export interface OrderReturnDetail {
   totalAmount: number
   refundAmount: number
   debtReductionAmount: number
+  /** Phần hoàn vào tiền trả trước của khách (ADR-0011) */
+  prepaymentRefundAmount: number
   note: string | null
   createdBy: string
   createdByName: string | null
@@ -97,6 +99,7 @@ export interface OrderReturnListItem {
   totalAmount: number
   refundAmount: number
   debtReductionAmount: number
+  prepaymentRefundAmount: number
   createdByName: string | null
   createdAt: string
   items: OrderReturnItemDetail[]

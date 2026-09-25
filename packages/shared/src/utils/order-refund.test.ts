@@ -73,8 +73,28 @@ describe('splitReturnRefund', () => {
   it('cấn nợ còn lại của đơn trước, dư mới hoàn tiền', () => {
     expect(splitReturnRefund(100_000, 30_000)).toEqual({
       debtReductionAmount: 30_000,
+      prepaymentRefundAmount: 0,
       refundAmount: 70_000,
     })
-    expect(splitReturnRefund(100_000, 0)).toEqual({ debtReductionAmount: 0, refundAmount: 100_000 })
+    expect(splitReturnRefund(100_000, 0)).toEqual({
+      debtReductionAmount: 0,
+      prepaymentRefundAmount: 0,
+      refundAmount: 100_000,
+    })
+  })
+
+  it('phần đơn đã cấn bằng tiền trả trước hoàn vào trả trước, không hoàn tiền mặt (ADR-0011)', () => {
+    // Trả trước 500k, mua nợ 300k được cấn hết: trả hàng 300k hoàn cả vào trả trước
+    expect(splitReturnRefund(300_000, 0, 300_000)).toEqual({
+      debtReductionAmount: 0,
+      prepaymentRefundAmount: 300_000,
+      refundAmount: 0,
+    })
+    // Đơn 500k: 100k tiền mặt, 250k cấn trả trước, còn nợ 150k. Trả hàng 450k
+    expect(splitReturnRefund(450_000, 150_000, 250_000)).toEqual({
+      debtReductionAmount: 150_000,
+      prepaymentRefundAmount: 250_000,
+      refundAmount: 50_000,
+    })
   })
 })

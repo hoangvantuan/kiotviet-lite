@@ -1,11 +1,12 @@
-# ADR-0010: Tiền khách trả trước là nợ đầu kỳ âm trong sổ công nợ
+# ADR-0011: Tiền khách trả trước là nợ đầu kỳ âm trong sổ công nợ
 
 - Trạng thái: Đã chốt
 - Ngày: 2026-09-26
 - Phạm vi: `apps/api/src/services/customer-debt-ledger.service.ts`,
   `apps/api/src/services/customers.service.ts`, `packages/shared/src/schema/debts.ts`,
   `packages/shared/src/schema/debt-management.ts`,
-  `apps/web/src/features/customers/components/OpeningDebtDialog.tsx`, `apps/api/scripts/invariants.sql`
+  `apps/web/src/features/customers/components/OpeningDebtDialog.tsx`, `apps/api/scripts/invariants.sql`,
+  `apps/api/src/services/returns.service.ts`, `packages/shared/src/utils/order-refund.ts`
 - Bổ sung cho: [ADR-0003](0003-no-dau-ky-khong-gan-don-hang.md),
   [ADR-0008](0008-so-cong-no-khach-duy-nhat.md)
 
@@ -36,7 +37,23 @@ trước, cửa hàng đang giữ tiền của khách. Mô hình nợ chỉ có 
    tiền trả trước trước khi thành nợ phải thu.
 5. **Phía nhà cung cấp giữ nguyên số dương**: chưa có bảng khoản nợ (ADR-0003), và tệp thật không
    có NCC nợ âm.
-6. Thông báo lỗi của ô số tiền và ngày phát sinh dùng `invalid_type_error` tiếng Việt, vì ô để
+6. **Trả hàng đơn đã cấn tiền trả trước hoàn phần đó về tiền trả trước, không hoàn tiền mặt.**
+   Khoản nợ bán ghi riêng `prepayment_applied`: phần của `reduced` đến từ tiền trả trước (CHECK
+   `0 <= prepayment_applied <= reduced`). Tiền trả hàng chia theo thứ tự: cấn phần nợ còn lại
+   của đơn, rồi hoàn về tiền trả trước tới `prepayment_applied`, dư mới hoàn tiền mặt
+   (`splitReturnRefund`, dùng chung API và hộp trả hàng). Phần hoàn về trả trước đi qua sổ công nợ
+   (`restoreCustomerPrepayment`): giảm `prepayment_applied` của khoản bán, trả lại `reduced` âm
+   của các khoản trả trước theo thứ tự ngược lúc cấn, giảm `current_debt`. Hàm chạy sau khóa
+   khoản nợ của đơn và trước khóa sản phẩm, giữ thứ tự khóa customers, debts, products. Phiếu trả
+   ghi số này ở `order_returns.prepayment_refund_amount`, nên
+   `total_amount = debt_reduction_amount + prepayment_refund_amount + refund_amount`. Bất biến I9:
+   với mỗi khách, tổng `prepayment_applied` bằng phần đã dùng của các khoản trả trước.
+
+   Ví dụ: khách trả trước 500.000 đ, mua ghi nợ 300.000 đ được cấn hết (còn 200.000 đ trả
+   trước). Trả lại cả đơn: hoàn 300.000 đ vào trả trước, khách lại có 500.000 đ, không có tiền
+   mặt nào đi ra.
+
+7. Thông báo lỗi của ô số tiền và ngày phát sinh dùng `invalid_type_error` tiếng Việt, vì ô để
    trống gửi `null` chứ không phải `undefined`.
 
 ### Các phương án đã loại
@@ -60,7 +77,14 @@ khoản nợ treo mãi và báo cáo tuổi nợ báo sai.
   trước; tổng nào cộng thẳng `current_debt` của mọi khách sẽ ra số ròng.
 - Khoản nợ bán được cấn hết bằng tiền trả trước có `remaining = 0`, nhưng đơn vẫn giữ trạng thái
   thanh toán lúc bán, giống phiếu thu không đổi trạng thái đơn (ADR-0008).
-- Khách còn tiền trả trước không xoá được, như khách còn nợ.
+- Khách còn tiền trả trước không xoá được, như khách còn nợ. Muốn xoá phải đưa số dư về 0 trước.
+- Chưa có luồng hoàn trả hay rút tiền trả trước bằng tiền mặt. Tiền trả trước chỉ giảm khi cấn vào
+  nợ mới, và chỉ tăng lại khi trả hàng đơn đã cấn. Khách đòi lại tiền mặt thì hiện phải điều chỉnh
+  công nợ tay; luồng riêng để lại cho đợt sau.
+- Migration thêm cột sinh `products.search_text` (STORED) và CHECK `chk_debts_sign`,
+  `chk_debts_prepayment_applied`. Cột sinh viết lại cả bảng `products`, CHECK quét cả bảng
+  `debts`, cả hai giữ khóa `ACCESS EXCLUSIVE` tới hết migration. Ở quy mô một cửa hàng (khoảng
+  11 nghìn sản phẩm) chỉ mất vài giây lúc triển khai nên chấp nhận được; chạy ngoài giờ bán.
 - Hạn mức nợ (ADR-0009) tính phần còn được nợ là `hạn mức - current_debt`, nên khách "không cho
   nợ" (hạn mức 0) mà có X đ trả trước vẫn mua ghi nợ được tới X đ, đúng bằng phần được cấn.
 - Luồng bán khóa sản phẩm trước khi gọi sổ, nên cập nhật khoản trả trước diễn ra sau khóa sản phẩm.
