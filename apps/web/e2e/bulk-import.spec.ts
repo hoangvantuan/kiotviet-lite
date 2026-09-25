@@ -127,7 +127,7 @@ test('owner previews errors and names before committing; history survives reopen
   expect(request.postData()).toContain('true')
   await expect(dialog.getByText('Đang chờ xử lý')).toBeVisible()
   await expect(dialog.getByText('Đã xử lý 0/3 dòng')).toBeVisible()
-  await dialog.getByRole('button', { name: 'Đóng' }).click()
+  await dialog.getByText('Đóng', { exact: true }).click()
   await page.getByRole('button', { name: 'Nhập Excel' }).click()
   await dialog.getByRole('button', { name: 'Lịch sử nhập' }).click()
   await expect(dialog.getByText('products.xlsx')).toBeVisible()
@@ -257,7 +257,7 @@ test('active import can be cancelled and failed history explains the failure', a
   await expect(dialog.getByText('Đang chờ xử lý')).toBeVisible()
   await dialog.getByRole('button', { name: 'Huỷ lần nhập' }).click()
   await expect(dialog.getByText('Đã huỷ', { exact: true })).toBeVisible()
-  await dialog.getByRole('button', { name: 'Đóng' }).click()
+  await dialog.getByText('Đóng', { exact: true }).click()
 
   await page.route('**/api/v1/bulk-import-jobs', (route) =>
     route.fulfill({

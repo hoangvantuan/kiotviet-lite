@@ -4,7 +4,7 @@ import { expect, type Page, test } from './fixtures/auth.fixture'
 // Requires the seeded owner and product "Cà rốt" on a migrated PostgreSQL database.
 
 async function addProductToCart(page: Page) {
-  await page.getByRole('combobox', { name: /Tìm sản phẩm/i }).fill('Cà rốt')
+  await page.getByRole('combobox', { name: /Tìm theo tên, mã hàng/i }).fill('Cà rốt')
   await page
     .getByRole('option', { name: /Cà rốt/i })
     .getByRole('button')

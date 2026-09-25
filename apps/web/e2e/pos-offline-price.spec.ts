@@ -8,7 +8,7 @@ import { expect, type Page, test } from './fixtures/auth.fixture'
  */
 
 async function addProductToCart(page: Page, productName: string) {
-  const searchInput = page.getByPlaceholder(/Tìm sản phẩm, mã SKU, barcode/i)
+  const searchInput = page.getByPlaceholder(/Tìm theo tên, mã hàng hoặc mã vạch/i)
   await expect(searchInput).toBeVisible()
   await searchInput.fill(productName)
   const option = page.locator('#pos-search-listbox button').first()

@@ -14,8 +14,8 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
     const expectedOwnerMenuPatterns = [
       /Tổng quan|Tong quan/i,
       /Bán hàng|Ban hang/i,
-      /Hóa đơn|Hoa don/i,
-      /Hàng hóa|Hang hoa/i,
+      /Đơn hàng|Don hang/i,
+      /Sản phẩm|San pham/i,
       /Danh mục|Danh muc/i,
       /Khách hàng|Khach hang/i,
       /Phiếu thu|Phieu thu/i,
@@ -50,8 +50,8 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
     const expectedManagerMenuPatterns = [
       /Tổng quan|Tong quan/i,
       /Bán hàng|Ban hang/i,
-      /Hóa đơn|Hoa don/i,
-      /Hàng hóa|Hang hoa/i,
+      /Đơn hàng|Don hang/i,
+      /Sản phẩm|San pham/i,
       /Danh mục|Danh muc/i,
       /Khách hàng|Khach hang/i,
       /Phiếu thu|Phieu thu/i,
@@ -87,7 +87,7 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
     const allowedStaffMenuPatterns = [
       /Tổng quan|Tong quan/i,
       /Bán hàng|Ban hang/i,
-      /Hóa đơn|Hoa don/i,
+      /Đơn hàng|Don hang/i,
       /Cài đặt|Cai dat/i,
     ]
     for (const pattern of allowedStaffMenuPatterns) {
@@ -96,7 +96,7 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
 
     // Staff không được thấy các menu quản lý hàng hóa, đối tác và báo cáo
     const hiddenStaffMenuPatterns = [
-      /Hàng hóa|Hang hoa/i,
+      /Sản phẩm|San pham/i,
       /Danh mục|Danh muc/i,
       /Khách hàng|Khach hang/i,
       /Phiếu thu|Phieu thu/i,

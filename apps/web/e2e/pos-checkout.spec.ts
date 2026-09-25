@@ -5,7 +5,7 @@ import { expect, type Page, test } from './fixtures/auth.fixture'
  */
 async function addProductToCart(page: Page, productNameRegex: RegExp) {
   const productName = productNameRegex.source.split('|')[0]
-  await page.getByRole('combobox', { name: /Tìm sản phẩm/i }).fill(productName)
+  await page.getByRole('combobox', { name: /Tìm theo tên, mã hàng/i }).fill(productName)
   await page.getByRole('option', { name: productNameRegex }).getByRole('button').click()
   await page.getByRole('button', { name: 'Thêm vào giỏ' }).click()
 }
