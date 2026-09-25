@@ -55,11 +55,10 @@ jobs:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
     needs: ci
-    # Cho phép thất bại mềm trong lần đầu (mới chỉ có test khói), sẽ siết lại khi bộ E2E hoàn thiện và ổn định
-    continue-on-error: true
     services:
       postgres:
-        image: postgres:16-alpine
+        # Cùng bản với production (docker-compose.prod.yml)
+        image: postgres:17-alpine
         env:
           POSTGRES_USER: kiotviet
           POSTGRES_PASSWORD: kiotviet_password
@@ -101,6 +100,7 @@ jobs:
         run: pnpm db:migrate
 
       - name: Seed Database
+        id: seed
         run: pnpm --filter @kiotviet-lite/api run db:seed
 
       - name: Prepare Bulk Import Storage
@@ -122,13 +122,40 @@ jobs:
             sleep 1
           done
 
-      - name: Run Playwright E2E Tests
+      # Đích dev: vite dev, không có service worker
+      - name: Run Playwright E2E Tests (vite dev)
         run: pnpm --filter @kiotviet-lite/web run test:e2e
+
+      # Dữ liệu sau E2E phải thỏa bất biến công nợ, tồn kho, phân bổ phiếu thu, công nợ NCC.
+      # Chạy cả khi E2E lỗi để biết lỗi giao diện có kèm lệch dữ liệu hay không.
+      - name: Check Data Invariants (after vite dev E2E)
+        if: ${{ !cancelled() && steps.seed.outcome == 'success' }}
+        run: |
+          command -v psql > /dev/null || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f apps/api/scripts/invariants.sql
+
+      # Các bài ghi dữ liệu thật (bán nợ, trả hàng...), nên đích prod cần DB seed lại từ đầu
+      - name: Reseed Database for Production Build E2E
+        id: reseed
+        if: ${{ !cancelled() && steps.seed.outcome == 'success' }}
+        run: FORCE_SEED=1 pnpm --filter @kiotviet-lite/api run db:seed
+
+      # Đích prod: bản build production có service worker, e2e/prod-server.mjs mô phỏng
+      # deploy/nginx.conf (/api/ proxy sang API, SPA fallback). Playwright tự build và khởi động.
+      - name: Run Playwright E2E Tests (production build with service worker)
+        if: ${{ !cancelled() && steps.reseed.outcome == 'success' }}
+        run: pnpm --filter @kiotviet-lite/web run test:e2e:prod
+
+      - name: Check Data Invariants (after production build E2E)
+        if: ${{ !cancelled() && steps.reseed.outcome == 'success' }}
+        run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f apps/api/scripts/invariants.sql
 
       - name: Upload Playwright Artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-report
-          path: apps/web/playwright-report/
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
           retention-days: 7

@@ -9,6 +9,7 @@ export default tseslint.config(
   {
     ignores: [
       '**/dist/**',
+      '**/dist-e2e/**',
       '**/node_modules/**',
       'apps/web/postcss.config.js',
       '.claude/**',
@@ -49,6 +50,12 @@ export default tseslint.config(
     files: ['apps/web/public/**/*.js'],
     languageOptions: {
       globals: globals.serviceworker,
+    },
+  },
+  {
+    files: ['apps/web/e2e/**/*.mjs'],
+    languageOptions: {
+      globals: globals.node,
     },
   },
   {
