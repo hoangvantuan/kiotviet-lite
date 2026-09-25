@@ -107,6 +107,8 @@ describe('H5 — Đơn partial_return không biến mất khỏi báo cáo', () 
       quantity: 10,
       discountAmount: 0,
       lineTotal: 1000000,
+      // Giá vốn chụp lúc bán (BC-01); báo cáo lợi nhuận đọc cột này
+      unitCost: 50000,
     })
   })
 
@@ -370,6 +372,8 @@ describe('H6 — Hoàn tiền tính đúng chiết khấu', () => {
         quantity: 2,
         discountAmount: 0,
         lineTotal: 1000000, // = 500000 * 2
+        // Chiết khấu đơn phân bổ lúc bán (ADR-0010): một dòng nhận trọn 300.000
+        orderDiscountAllocated: 300000,
       },
     ])
 
@@ -478,6 +482,8 @@ describe('H6 — Hoàn tiền tính đúng chiết khấu', () => {
         quantity: 2,
         discountAmount: 50000,
         lineTotal: 350000,
+        // Chiết khấu đơn 130.000 phân bổ theo thành tiền dòng: 350/650 và 300/650
+        orderDiscountAllocated: 70000,
       })
       .returning()
 
@@ -490,6 +496,7 @@ describe('H6 — Hoàn tiền tính đúng chiết khấu', () => {
       quantity: 1,
       discountAmount: 0,
       lineTotal: 300000,
+      orderDiscountAllocated: 60000,
     })
 
     // Trả 1 SP A:
@@ -652,6 +659,8 @@ describe('H6 — Hoàn tiền tính đúng chiết khấu', () => {
         quantity: 1,
         discountAmount: 0,
         lineTotal: 100000,
+        // Chiết khấu đơn 50.000 theo thành tiền dòng, phần dư 1 đ vào dòng lớn nhất
+        orderDiscountAllocated: 16666,
       })
       .returning()
 
@@ -666,6 +675,7 @@ describe('H6 — Hoàn tiền tính đúng chiết khấu', () => {
         quantity: 1,
         discountAmount: 0,
         lineTotal: 200000,
+        orderDiscountAllocated: 33334,
       })
       .returning()
 
@@ -743,6 +753,7 @@ describe('H6 — Hoàn tiền tính đúng chiết khấu', () => {
         quantity: 3,
         discountAmount: 0,
         lineTotal: 150000,
+        orderDiscountAllocated: 50000,
       })
       .returning()
 

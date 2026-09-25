@@ -144,6 +144,8 @@ async function setup(): Promise<Env> {
       unitPrice: 200_000,
       quantity: 3,
       lineTotal: 600_000,
+      // Giá vốn chụp lúc bán (BC-01), bằng giá vốn sản phẩm lúc tạo dữ liệu
+      unitCost: 120_000,
     },
     {
       orderId: order2!.id,
@@ -152,6 +154,7 @@ async function setup(): Promise<Env> {
       unitPrice: 100_000,
       quantity: 4,
       lineTotal: 400_000,
+      unitCost: 60_000,
     },
   ])
 

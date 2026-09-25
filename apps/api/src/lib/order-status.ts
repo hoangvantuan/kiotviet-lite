@@ -59,13 +59,25 @@ export function orderItemNetQuantityExpr(): SQL<number> {
 }
 
 /**
- * Biểu thức SQL tính doanh thu ròng của một dòng hàng (order_item):
- * orderItems.lineTotal - tổng giá trị đã hoàn lại của dòng đó.
+ * Biểu thức SQL tính doanh thu ròng của một dòng hàng (order_item), BC-10:
+ * thành tiền dòng - chiết khấu đơn đã phân bổ lúc bán - tổng giá trị đã hoàn của dòng.
+ * Giá trị hoàn của dòng đã là giá trị sau chiết khấu đơn (TIEN-101), nên cộng mọi dòng của một
+ * đơn ra đúng `orderNetRevenueExpr()`: doanh thu theo sản phẩm, danh mục, thương hiệu khớp tổng
+ * theo thời gian, khách, nhân viên.
  */
 export function orderItemNetRevenueExpr(): SQL<number> {
-  return sql<number>`(${orderItems.lineTotal} - coalesce((
+  return sql<number>`(${orderItems.lineTotal} - ${orderItems.orderDiscountAllocated} - coalesce((
     SELECT sum(${orderReturnItems.lineTotal})
     FROM ${orderReturnItems}
     WHERE ${orderReturnItems.orderItemId} = ${orderItems.id}
   ), 0))`
+}
+
+/**
+ * Biểu thức SQL giá vốn hàng bán ròng của một dòng (BC-01): giá vốn một đơn vị gốc chụp lúc bán
+ * × hệ số quy đổi × số lượng thực bán. Không đọc giá vốn hiện tại, nên phiếu nhập sau ngày bán
+ * không viết lại lợi nhuận quá khứ. Dòng lúc bán chưa có giá vốn tính 0.
+ */
+export function orderItemCogsExpr(): SQL<number> {
+  return sql<number>`(coalesce(${orderItems.unitCost}, 0) * ${orderItems.conversionFactor} * ${orderItemNetQuantityExpr()})`
 }

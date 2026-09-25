@@ -262,7 +262,7 @@ export function buildOrderReceipt(
 
   // Debt
   if (options.showOldDebt && order.oldDebt != null && order.oldDebt > 0) {
-    buf.pushLine(twoColumns('Nợ cũ:', formatVnd(order.oldDebt), w))
+    buf.pushLine(twoColumns('Nợ trước đơn:', formatVnd(order.oldDebt), w))
   }
   if ((options.showNewDebt ?? true) && order.debtAmount > 0) {
     buf.pushLine(twoColumns('Còn nợ:', formatVnd(order.debtAmount), w))

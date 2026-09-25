@@ -27,6 +27,7 @@ import { formatVndWithSuffix } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
 
 import type { ReturnableItem } from './orders-api'
+import { previewReturn } from './return-preview'
 import { useCreateReturnMutation, useReturnableItemsQuery } from './use-orders'
 
 interface ReturnDialogProps {
@@ -34,6 +35,8 @@ interface ReturnDialogProps {
   onOpenChange: (v: boolean) => void
   orderId: string
   orderNumber: string
+  /** Nợ còn lại của đơn; tiền hoàn cấn vào đây trước (ADR-0010) */
+  outstandingDebt: number
 }
 
 const REASON_OPTIONS = Object.entries(RETURN_REASON_LABELS).map(([value, label]) => ({
@@ -47,7 +50,13 @@ interface ReturnLine {
   reason: string
 }
 
-export function ReturnDialog({ open, onOpenChange, orderId, orderNumber }: ReturnDialogProps) {
+export function ReturnDialog({
+  open,
+  onOpenChange,
+  orderId,
+  orderNumber,
+  outstandingDebt,
+}: ReturnDialogProps) {
   const itemsQuery = useReturnableItemsQuery(open ? orderId : undefined)
   const mutation = useCreateReturnMutation()
   const [lines, setLines] = useState<Map<string, ReturnLine>>(new Map())
@@ -74,11 +83,11 @@ export function ReturnDialog({ open, onOpenChange, orderId, orderNumber }: Retur
     })
   }
 
-  const totalRefund = items.reduce((sum, item) => {
-    const line = lines.get(item.orderItemId)
-    if (!line || line.quantity <= 0) return sum
-    return sum + item.unitPrice * line.quantity
-  }, 0)
+  const preview = previewReturn(
+    items,
+    new Map(Array.from(lines.values(), (l) => [l.orderItemId, l.quantity])),
+    outstandingDebt,
+  )
 
   const hasSelection = Array.from(lines.values()).some((l) => l.quantity > 0)
 
@@ -258,8 +267,18 @@ export function ReturnDialog({ open, onOpenChange, orderId, orderNumber }: Retur
 
         <div className="space-y-2">
           <div className="flex justify-between font-medium">
-            <span>Tổng tiền hoàn</span>
-            <span>{formatVndWithSuffix(totalRefund)}</span>
+            <span>Tổng giá trị trả</span>
+            <span>{formatVndWithSuffix(preview.totalAmount)}</span>
+          </div>
+          {preview.debtReductionAmount > 0 && (
+            <div className="flex justify-between text-sm text-green-700">
+              <span>Cấn nợ</span>
+              <span>{formatVndWithSuffix(preview.debtReductionAmount)}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-sm">
+            <span>Hoàn tiền</span>
+            <span>{formatVndWithSuffix(preview.refundAmount)}</span>
           </div>
           <Textarea
             placeholder="Ghi chú (tùy chọn)"

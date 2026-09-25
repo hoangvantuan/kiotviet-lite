@@ -138,8 +138,20 @@ _Tránh dùng_: đơn offline, đơn chờ đồng bộ
 _Tránh dùng_: đơn treo, đơn bị khoá, đơn lỗi
 
 **Trả hàng**:
-Việc khách mang hàng đã mua quay lại, kéo theo hoàn tiền và hoàn tồn kho.
+Việc khách mang hàng đã mua quay lại, kéo theo hoàn tiền và hoàn tồn kho. Tiền hoàn tính theo giá trị ròng của dòng lúc bán (đã trừ chiết khấu đơn phân bổ cho dòng), trả nhiều lần cộng lại bằng trả một lần; tiền hoàn cấn vào nợ còn lại của đơn trước, phần dư mới trả tiền cho khách. Quy tắc ở ADR-0010.
 _Tránh dùng_: đổi trả, hoàn hàng
+
+**Ảnh chụp lúc bán**:
+Các số liệu của đơn hàng được ghi lại ngay khi bán và không đổi về sau: hệ số quy đổi, giá vốn, phần chiết khấu đơn phân bổ cho từng dòng, số khách đã trả và nợ trước đơn. Trả hàng, báo cáo lãi lỗ và hóa đơn in lại đọc các số này, không đọc giá vốn hay công nợ hiện tại. Quy tắc ở ADR-0010.
+_Tránh dùng_: snapshot, dữ liệu gốc
+
+**Chiết khấu đơn phân bổ**:
+Phần chiết khấu cấp đơn chia cho một dòng theo tỷ lệ thành tiền dòng, làm tròn xuống, phần dư vào dòng lớn nhất; tổng các dòng khớp đúng chiết khấu đơn. Doanh thu ròng của dòng là thành tiền dòng trừ phần này.
+_Tránh dùng_: chiết khấu chia đều, giảm giá phân bổ
+
+**Nợ trước đơn**:
+Công nợ của khách ngay trước khi lập đơn, in trên hóa đơn. Chụp lúc bán nên in lại vẫn ra đúng số cũ; đơn lập trước khi có ảnh chụp thì không in dòng này.
+_Tránh dùng_: nợ cũ (dễ hiểu nhầm là nợ hiện tại), nợ đầu
 
 ### Công nợ
 

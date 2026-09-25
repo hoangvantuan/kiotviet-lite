@@ -81,6 +81,24 @@ docker compose -f docker-compose.prod.yml exec -T postgres \
 Không có dòng nào nghĩa là dữ liệu cũ đã khớp sẵn. Nên đối chiếu danh sách với chủ cửa hàng,
 nhất là các khoản nợ có ghi chú "Điều chỉnh điền ngược".
 
+### Kiểm tra sau migration order_snapshot_r2 (chứng từ bán R2)
+
+Migration `*_order_snapshot_r2` điền ngược ảnh chụp lúc bán cho đơn cũ
+([ADR-0010](adr/0010-anh-chup-chung-tu-ban.md)): hệ số quy đổi, giá vốn ước tính (cờ
+`unit_cost_estimated`), chiết khấu đơn phân bổ và số khách đã trả lúc bán. Lợi nhuận của đơn cũ vì
+thế có thể lệch nhẹ so với trước.
+
+Mã cũ hoàn tiền dư khi một dòng của đơn có chiết khấu đơn được trả qua nhiều phiếu (TIEN-101).
+Migration không sửa các phiếu này. Liệt kê để đối chiếu với chủ cửa hàng (chỉ đọc):
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  < apps/api/scripts/tien-101-over-refund-report.sql
+```
+
+Cột `chenh_lech` dương là số đã hoàn dư so với công thức mới.
+
 ## 3. Cloudflare Tunnel
 
 cloudflared chạy trên host, trỏ vào nginx:

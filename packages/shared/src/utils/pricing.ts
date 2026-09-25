@@ -132,39 +132,6 @@ export function calculateOrderTotals(input: OrderTotalsInput): CalculatedOrderTo
   }
 }
 
-/**
- * Phân bổ chiết khấu đơn hoặc số tiền hoàn về từng dòng theo tỷ lệ thành tiền dòng.
- * Áp dụng tiền lệ làm tròn dồn phần dư vào dòng cuối cùng (Remainder Allocation)
- * để đảm bảo tổng số tiền phân bổ khớp 100% với orderDiscountAmount, không lệch dù 1 đồng.
- */
-export function allocateOrderDiscount(
-  items: Array<{ lineTotal: number }>,
-  subtotal: number,
-  orderDiscountAmount: number,
-): number[] {
-  if (!items || items.length === 0 || subtotal <= 0 || orderDiscountAmount <= 0) {
-    return (items || []).map(() => 0)
-  }
-
-  let allocatedSum = 0
-  const results: number[] = []
-
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i]
-    if (!item) continue
-    if (i === items.length - 1) {
-      // Dòng cuối cùng nhận toàn bộ phần dư còn lại
-      results.push(Math.max(0, orderDiscountAmount - allocatedSum))
-    } else {
-      const portion = Math.floor((item.lineTotal / subtotal) * orderDiscountAmount)
-      allocatedSum += portion
-      results.push(portion)
-    }
-  }
-
-  return results
-}
-
 export interface UnitConversionPriceInput {
   basePrice: number
   conversionFactor: number

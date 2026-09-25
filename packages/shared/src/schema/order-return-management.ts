@@ -57,6 +57,12 @@ export interface ReturnableItem {
   purchasedQuantity: number
   returnedQuantity: number
   remainingQuantity: number
+  /** Thành tiền dòng sau chiết khấu dòng, trước chiết khấu đơn */
+  lineTotal: number
+  /** Phần chiết khấu đơn đã phân bổ cho dòng lúc bán; xem trước tiền hoàn bằng computeReturnLineRefund */
+  orderDiscountAllocated: number
+  /** Số đơn vị gốc trong một đơn vị bán; trả 1 đơn vị bán hoàn chừng này vào kho */
+  conversionFactor: number
 }
 
 export interface OrderReturnItemDetail {

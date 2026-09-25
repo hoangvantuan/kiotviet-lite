@@ -3,10 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ImagePlus, X } from 'lucide-react'
 
-import {
-  type UpdatePrintSettingsInput,
-  updatePrintSettingsSchema,
-} from '@kiotviet-lite/shared'
+import { type UpdatePrintSettingsInput, updatePrintSettingsSchema } from '@kiotviet-lite/shared'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,10 +20,7 @@ import { Switch } from '@/components/ui/switch'
 import { formatVnd } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
 
-import {
-  usePrintSettingsQuery,
-  useUpdatePrintSettingsMutation,
-} from './use-print-settings'
+import { usePrintSettingsQuery, useUpdatePrintSettingsMutation } from './use-print-settings'
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024
 const ALLOWED_TYPES = ['image/jpeg', 'image/png']
@@ -48,7 +42,7 @@ const TOGGLE_FIELDS: ToggleField[] = [
   { name: 'showCustomerPhone', label: 'SĐT khách hàng' },
   { name: 'showDiscount', label: 'Chiết khấu' },
   { name: 'showSku', label: 'Mã SKU' },
-  { name: 'showOldDebt', label: 'Nợ cũ' },
+  { name: 'showOldDebt', label: 'Nợ trước đơn' },
   { name: 'showNewDebt', label: 'Nợ mới' },
   { name: 'showCostPrice', label: 'Giá vốn' },
   { name: 'showNotes', label: 'Ghi chú cuối hóa đơn' },
@@ -207,11 +201,7 @@ export function PrintSettingsForm() {
         {/* Slogan */}
         <div className="space-y-2">
           <Label htmlFor="slogan">Slogan</Label>
-          <Input
-            id="slogan"
-            placeholder="VD: Chất lượng là uy tín"
-            {...form.register('slogan')}
-          />
+          <Input id="slogan" placeholder="VD: Chất lượng là uy tín" {...form.register('slogan')} />
           {form.formState.errors.slogan && (
             <p className="text-sm text-destructive">{form.formState.errors.slogan.message}</p>
           )}
@@ -275,9 +265,7 @@ export function PrintSettingsForm() {
             {...form.register('footerText')}
           />
           {form.formState.errors.footerText && (
-            <p className="text-sm text-destructive">
-              {form.formState.errors.footerText.message}
-            </p>
+            <p className="text-sm text-destructive">{form.formState.errors.footerText.message}</p>
           )}
         </div>
 
@@ -298,16 +286,10 @@ export function PrintSettingsForm() {
 function InvoicePreview({ settings }: { settings: UpdatePrintSettingsInput }) {
   const paperSize = settings.defaultPaperSize ?? '58mm'
   const isThermal = paperSize === '58mm' || paperSize === '80mm'
-  const maxW = isThermal
-    ? paperSize === '58mm'
-      ? 'max-w-[220px]'
-      : 'max-w-[300px]'
-    : 'max-w-md'
+  const maxW = isThermal ? (paperSize === '58mm' ? 'max-w-[220px]' : 'max-w-[300px]') : 'max-w-md'
 
   return (
-    <div
-      className={`${maxW} rounded-md border bg-white p-4 text-xs text-black shadow-sm`}
-    >
+    <div className={`${maxW} rounded-md border bg-white p-4 text-xs text-black shadow-sm`}>
       {/* Header */}
       <div className="text-center space-y-0.5">
         {settings.logoUrl && (
@@ -318,9 +300,7 @@ function InvoicePreview({ settings }: { settings: UpdatePrintSettingsInput }) {
           />
         )}
         <p className="font-bold text-sm">Cửa hàng ABC</p>
-        {settings.slogan && (
-          <p className="text-[10px] text-gray-500">{settings.slogan}</p>
-        )}
+        {settings.slogan && <p className="text-[10px] text-gray-500">{settings.slogan}</p>}
         <p className="text-[10px] text-gray-500">123 Nguyễn Huệ, Q.1, TP.HCM</p>
         <p className="text-[10px] text-gray-500">SĐT: 0901 234 567</p>
       </div>
@@ -342,9 +322,7 @@ function InvoicePreview({ settings }: { settings: UpdatePrintSettingsInput }) {
         {SAMPLE_ITEMS.map((item) => (
           <div key={item.name}>
             <p className="truncate">
-              {settings.showSku && (
-                <span className="text-gray-400 mr-1">SKU001</span>
-              )}
+              {settings.showSku && <span className="text-gray-400 mr-1">SKU001</span>}
               {item.name}
             </p>
             <div className="flex justify-between pl-2">
@@ -378,7 +356,7 @@ function InvoicePreview({ settings }: { settings: UpdatePrintSettingsInput }) {
         <>
           <DashedLine />
           <div className="space-y-0.5">
-            {settings.showOldDebt && <PreviewRow label="Nợ cũ" value={formatVnd(500000)} />}
+            {settings.showOldDebt && <PreviewRow label="Nợ trước đơn" value={formatVnd(500000)} />}
             {settings.showNewDebt && <PreviewRow label="Nợ mới" value={formatVnd(0)} />}
           </div>
         </>
@@ -394,9 +372,7 @@ function InvoicePreview({ settings }: { settings: UpdatePrintSettingsInput }) {
       <DashedLine />
 
       {settings.showNotes && (
-        <p className="text-center text-[10px] text-gray-400 italic">
-          Ghi chú: Giao trước 5h chiều
-        </p>
+        <p className="text-center text-[10px] text-gray-400 italic">Ghi chú: Giao trước 5h chiều</p>
       )}
 
       <p className="text-center mt-1">{settings.footerText || 'Cảm ơn quý khách!'}</p>
@@ -408,15 +384,7 @@ function DashedLine() {
   return <div className="my-1 border-t border-dashed border-gray-300" />
 }
 
-function PreviewRow({
-  label,
-  value,
-  bold,
-}: {
-  label: string
-  value: string
-  bold?: boolean
-}) {
+function PreviewRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
     <div className={`flex justify-between ${bold ? 'font-bold' : ''}`}>
       <span>{label}</span>
