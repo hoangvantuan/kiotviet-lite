@@ -36,8 +36,12 @@ for (const [net, prefix] of [
   ['::ffff:0:0', 96],
   ['::', 96],
   ['64:ff9b::', 96],
+  ['64:ff9b:1::', 48],
   ['100::', 64],
+  // Teredo và 6to4 đóng gói IPv4 tuỳ ý (2002:7f00:1:: là 127.0.0.1)
+  ['2001::', 32],
   ['2001:db8::', 32],
+  ['2002::', 16],
   ['fc00::', 7],
   ['fe80::', 10],
   ['fec0::', 10],
@@ -65,6 +69,7 @@ export type WebhookUrlRejectReason =
   | 'INVALID_URL'
   | 'NOT_HTTPS'
   | 'HAS_CREDENTIALS'
+  | 'PORT_NOT_ALLOWED'
   | 'PRIVATE_HOST'
   | 'DNS_FAILED'
 
@@ -80,6 +85,8 @@ export function checkWebhookUrl(raw: string): WebhookUrlCheck {
   }
   if (url.protocol !== 'https:') return { ok: false, reason: 'NOT_HTTPS' }
   if (url.username || url.password) return { ok: false, reason: 'HAS_CREDENTIALS' }
+  // Chỉ cổng 443 (URL chuẩn hoá `:443` thành rỗng): cổng tuỳ ý biến "Gửi thử" thành công cụ dò cổng
+  if (url.port !== '') return { ok: false, reason: 'PORT_NOT_ALLOWED' }
   const host = url.hostname.startsWith('[') ? url.hostname.slice(1, -1) : url.hostname
   if (!host || isBlockedHostname(host)) return { ok: false, reason: 'PRIVATE_HOST' }
   if (isIP(host) && isBlockedAddress(host)) return { ok: false, reason: 'PRIVATE_HOST' }

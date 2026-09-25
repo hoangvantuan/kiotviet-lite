@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { users } from '@kiotviet-lite/shared'
 
 import { closeDbPool, db } from './db/index.js'
+import { parseAllowedOrigins } from './lib/allowed-origins.js'
 import { setupGracefulShutdown } from './lib/graceful-shutdown.js'
 import { parseJson } from './lib/http.js'
 import { initLogger, logger } from './lib/logger.js'
@@ -56,11 +57,10 @@ if (process.env.NODE_ENV === 'production') await verifyImportStorageRoot(importS
 
 const app = new Hono()
 
-const ALLOWED_ORIGINS = (
-  process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173,http://localhost:5174'
+const { origins: ALLOWED_ORIGINS, warning: allowedOriginsWarning } = parseAllowedOrigins(
+  process.env.ALLOWED_ORIGINS,
+  process.env.NODE_ENV,
 )
-  .split(',')
-  .map((o) => o.trim())
 
 app.use(
   '/api/*',
@@ -194,6 +194,9 @@ if (process.env.NODE_ENV !== 'test') {
       logger.error({ err }, 'logger initialization failed; using stdout fallback')
     })
     .then(() => {
+      if (allowedOriginsWarning) {
+        logger.warn({ allowedOrigins: ALLOWED_ORIGINS }, allowedOriginsWarning)
+      }
       const server = serve({ fetch: app.fetch, port }, (info) => {
         logger.info({ port: info.port }, 'api server listening')
       })

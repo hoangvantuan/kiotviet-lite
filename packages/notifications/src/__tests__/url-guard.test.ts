@@ -27,6 +27,11 @@ describe('GL-15: chặn SSRF khi cấu hình webhook', () => {
     'fd00::1',
     '::ffff:127.0.0.1',
     '::ffff:169.254.169.254',
+    // 6to4 và Teredo nhúng IPv4 tuỳ ý, NAT64 cục bộ
+    '2002:7f00:1::',
+    '2002:a9fe:a9fe::1',
+    '2001:0:4136:e378:8000:63bf:3fff:fdd2',
+    '64:ff9b:1::a9fe:a9fe',
   ])('địa chỉ nội bộ %s bị chặn', (ip) => {
     expect(isBlockedAddress(ip)).toBe(true)
   })
@@ -51,12 +56,16 @@ describe('GL-15: chặn SSRF khi cấu hình webhook', () => {
     ['https://0x7f.0.0.1/x', 'PRIVATE_HOST'],
     ['https://[::ffff:7f00:1]/x', 'PRIVATE_HOST'],
     ['https://169.254.169.254/latest/meta-data/', 'PRIVATE_HOST'],
+    // Chỉ cổng 443: "Gửi thử" không được thành công cụ dò cổng
+    ['https://hooks.example.com:8443/x', 'PORT_NOT_ALLOWED'],
+    ['https://93.184.215.14:22/x', 'PORT_NOT_ALLOWED'],
   ])('%s bị từ chối (%s)', (url, reason) => {
     expect(checkWebhookUrl(url)).toEqual({ ok: false, reason })
   })
 
   it('https tới tên miền công khai hợp lệ về cú pháp', () => {
     expect(checkWebhookUrl('https://hooks.example.com/kvl?x=1')).toMatchObject({ ok: true })
+    expect(checkWebhookUrl('https://hooks.example.com:443/kvl')).toMatchObject({ ok: true })
   })
 
   it('tên miền phân giải ra địa chỉ nội bộ bị chặn (kể cả khi chỉ một bản ghi là nội bộ)', async () => {

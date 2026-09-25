@@ -136,6 +136,7 @@ describe('GL-15: quản lý kênh thông báo của cửa hàng', () => {
     ['https://localhost/hook', 'nội bộ'],
     ['https://10.0.0.5/hook', 'nội bộ'],
     ['https://[::1]/hook', 'nội bộ'],
+    ['https://93.184.215.14:8443/hook', '443'],
   ])('webhook %s bị từ chối (SSRF), không lưu kênh', async (url, hint) => {
     const res = await call('POST', '/channels', { ...webhookBody, config: { url } })
     expect([400, 422]).toContain(res.status)

@@ -6,9 +6,10 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
 /**
  * nginx chuyển `Host: $host`, vốn bỏ cổng (web chạy ở :8080 thì API nhận `Host: localhost`),
- * nên khi Host không kèm cổng thì so theo tên máy của Origin.
+ * nên khi Host không kèm cổng thì so theo tên máy của Origin, kèm scheme (`X-Forwarded-Proto`
+ * do nginx đặt, không có thì scheme của chính request) để http://tên-máy không mạo danh https.
  */
-function isSameHost(origin: string, host: string | undefined): boolean {
+function isSameHost(origin: string, host: string | undefined, scheme: string): boolean {
   if (!host) return false
   let url: URL
   try {
@@ -17,7 +18,8 @@ function isSameHost(origin: string, host: string | undefined): boolean {
     return false
   }
   const hostHasPort = /:\d+$/.test(host) && !host.endsWith(']')
-  return hostHasPort ? url.host === host : url.hostname === host
+  if (hostHasPort) return url.host === host
+  return url.hostname === host && url.protocol === `${scheme}:`
 }
 
 /**
@@ -43,7 +45,10 @@ export function csrfProtection({
     const fetchSite = c.req.header('sec-fetch-site')
 
     if (origin !== undefined) {
-      if (allowed.has(origin) || isSameHost(origin, c.req.header('host'))) return next()
+      const scheme =
+        c.req.header('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase() ||
+        new URL(c.req.url).protocol.replace(':', '')
+      if (allowed.has(origin) || isSameHost(origin, c.req.header('host'), scheme)) return next()
     } else if (fetchSite !== 'cross-site' && fetchSite !== 'same-site') {
       return next()
     }

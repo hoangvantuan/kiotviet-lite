@@ -249,6 +249,17 @@ describe('WebhookTransport', () => {
     )
     expect(result).toMatchObject({ ok: false, retriable: false })
   })
+
+  it.each([
+    'https://fcm.googleapis.com/hook',
+    'https://fdn.example.com/hook',
+    'https://fe80x.example.com/h',
+  ])('GL-15: tên miền công khai bắt đầu bằng fc/fd/fe80 (%s) không bị chặn nhầm', async (url) => {
+    mockFetch.mockResolvedValueOnce(new Response('OK', { status: 200 }))
+    const result = await transport.send(makeEvent(), { url })
+    expect(result).toEqual({ ok: true, attempts: 1 })
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('verifyWebhookSignature', () => {

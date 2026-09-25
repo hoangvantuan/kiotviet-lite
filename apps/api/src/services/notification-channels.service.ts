@@ -44,6 +44,7 @@ const WEBHOOK_REJECT_MESSAGES: Record<WebhookUrlRejectReason, string> = {
   INVALID_URL: 'URL webhook không hợp lệ',
   NOT_HTTPS: 'Webhook phải dùng https://',
   HAS_CREDENTIALS: 'URL webhook không được chứa tên đăng nhập hoặc mật khẩu',
+  PORT_NOT_ALLOWED: 'URL webhook chỉ được dùng cổng https mặc định (443)',
   PRIVATE_HOST:
     'URL webhook trỏ tới địa chỉ nội bộ, loopback hoặc metadata máy chủ, không được phép',
   DNS_FAILED: 'Không phân giải được tên miền của webhook, kiểm tra lại URL',

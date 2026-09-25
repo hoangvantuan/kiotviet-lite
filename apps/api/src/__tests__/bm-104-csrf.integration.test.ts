@@ -70,9 +70,31 @@ describe('BM-104: chặn request đổi trạng thái từ nguồn lạ', () => 
     const res = await post('/api/v1/client-diagnostics', {
       Origin: 'https://shop.example.vn',
       Host: 'shop.example.vn',
+      'X-Forwarded-Proto': 'https',
       'Sec-Fetch-Site': 'same-origin',
     })
     expect(res.status).toBe(401)
+  })
+
+  it('Host không kèm cổng: scheme của Origin phải khớp X-Forwarded-Proto (hoặc scheme request)', async () => {
+    const downgrade = await post('/api/v1/client-diagnostics', {
+      Origin: 'http://shop.example.vn',
+      Host: 'shop.example.vn',
+      'X-Forwarded-Proto': 'https',
+    })
+    expect(downgrade.status).toBe(403)
+    const upgrade = await post('/api/v1/client-diagnostics', {
+      Origin: 'https://shop.example.vn',
+      Host: 'shop.example.vn',
+      'X-Forwarded-Proto': 'http',
+    })
+    expect(upgrade.status).toBe(403)
+    // Không có X-Forwarded-Proto thì so với scheme của chính request (app.request dùng http)
+    const noProxy = await post('/api/v1/client-diagnostics', {
+      Origin: 'https://shop.example.vn',
+      Host: 'shop.example.vn',
+    })
+    expect(noProxy.status).toBe(403)
   })
 
   it('nginx bỏ cổng khỏi Host (web ở :8080) vẫn nhận ra cùng host; khác tên máy thì chặn', async () => {
