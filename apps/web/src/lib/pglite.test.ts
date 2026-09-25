@@ -1,10 +1,11 @@
 import { PGlite } from '@electric-sql/pglite'
+import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm'
 import { eq } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/pglite'
 import { migrate } from 'drizzle-orm/pglite/migrator'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach,describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { stores, users } from '@kiotviet-lite/shared/schema'
 
@@ -21,15 +22,12 @@ describe('PGlite', () => {
   })
 
   it('tạo schema, insert và query thành công', async () => {
-    pglite = new PGlite()
+    pglite = new PGlite({ extensions: { pg_trgm } })
     const db = drizzle(pglite, { casing: 'snake_case' })
 
     await migrate(db, { migrationsFolder })
 
-    const storeResults = await db
-      .insert(stores)
-      .values({ name: 'Cửa hàng test' })
-      .returning()
+    const storeResults = await db.insert(stores).values({ name: 'Cửa hàng test' }).returning()
 
     const store = storeResults[0]!
     expect(store).toBeDefined()
@@ -53,10 +51,7 @@ describe('PGlite', () => {
     expect(user.role).toBe('owner')
     expect(user.storeId).toBe(store.id)
 
-    const queriedUsers = await db
-      .select()
-      .from(users)
-      .where(eq(users.storeId, store.id))
+    const queriedUsers = await db.select().from(users).where(eq(users.storeId, store.id))
 
     expect(queriedUsers).toHaveLength(1)
     expect(queriedUsers[0]!.phone).toBe('0901234567')

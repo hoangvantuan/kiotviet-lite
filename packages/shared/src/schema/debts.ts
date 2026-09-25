@@ -39,6 +39,9 @@ export const debts = pgTable(
     // Phần nợ được giảm mà không thu tiền: cấn trừ trả hàng, điều chỉnh giảm nợ
     reduced: bigint({ mode: 'number' }).notNull().default(0),
     remaining: bigint({ mode: 'number' }).notNull(),
+    // Phần của `reduced` là tiền trả trước đã cấn vào khoản này (ADR-0011). Trả hàng hoàn phần
+    // này về tiền trả trước thay vì hoàn tiền mặt, rồi trừ lại ở đây.
+    prepaymentApplied: bigint({ mode: 'number' }).notNull().default(0),
     // Ghi chú nguồn của khoản nợ không gắn đơn (lý do điều chỉnh tăng, điền ngược)
     note: varchar({ length: 500 }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -61,9 +64,15 @@ export const debts = pgTable(
       'chk_debts_balance',
       sql`${table.amount} = ${table.paid} + ${table.reduced} + ${table.remaining}`,
     ),
+    // Khoản thường không âm. Riêng nợ đầu kỳ âm là tiền khách trả trước (ADR-0011): phần đã
+    // cấn vào nợ mới ghi thành `reduced` âm, `remaining` chạy từ `amount` về 0.
     check(
-      'chk_debts_non_negative',
-      sql`${table.paid} >= 0 AND ${table.reduced} >= 0 AND ${table.remaining} >= 0`,
+      'chk_debts_sign',
+      sql`(${table.paid} >= 0 AND ${table.reduced} >= 0 AND ${table.remaining} >= 0) OR (${table.type} = 'opening' AND ${table.amount} < 0 AND ${table.paid} = 0 AND ${table.reduced} <= 0 AND ${table.remaining} <= 0)`,
+    ),
+    check(
+      'chk_debts_prepayment_applied',
+      sql`${table.prepaymentApplied} >= 0 AND ${table.prepaymentApplied} <= GREATEST(${table.reduced}, 0)`,
     ),
   ],
 )

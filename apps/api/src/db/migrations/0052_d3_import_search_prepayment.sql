@@ -1,0 +1,8 @@
+ALTER TABLE "debts" DROP CONSTRAINT "chk_debts_non_negative";--> statement-breakpoint
+ALTER TABLE "bulk_import_jobs" ADD COLUMN "approve_conversions" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "debts" ADD COLUMN "prepayment_applied" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "order_returns" ADD COLUMN "prepayment_refund_amount" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "products" ADD COLUMN "search_text" text GENERATED ALWAYS AS (lower(translate("name" || ' ' || "sku", 'àÀáÁảẢãÃạẠăĂằẰắẮẳẲẵẴặẶâÂầẦấẤẩẨẫẪậẬèÈéÉẻẺẽẼẹẸêÊềỀếẾểỂễỄệỆìÌíÍỉỈĩĨịỊòÒóÓỏỎõÕọỌôÔồỒốỐổỔỗỖộỘơƠờỜớỚởỞỡỠợỢùÙúÚủỦũŨụỤưƯừỪứỨửỬữỮựỰỳỲýÝỷỶỹỸỵỴđĐ̛̣̀́̃̉̂̆', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaeeeeeeeeeeeeeeeeeeeeeeiiiiiiiiiioooooooooooooooooooooooooooooooooouuuuuuuuuuuuuuuuuuuuuuyyyyyyyyyydd'))) STORED NOT NULL;--> statement-breakpoint
+CREATE INDEX "idx_products_search_text_trgm" ON "products" USING gin ("search_text" gin_trgm_ops) WITH (fastupdate=off);--> statement-breakpoint
+ALTER TABLE "debts" ADD CONSTRAINT "chk_debts_sign" CHECK (("debts"."paid" >= 0 AND "debts"."reduced" >= 0 AND "debts"."remaining" >= 0) OR ("debts"."type" = 'opening' AND "debts"."amount" < 0 AND "debts"."paid" = 0 AND "debts"."reduced" <= 0 AND "debts"."remaining" <= 0));--> statement-breakpoint
+ALTER TABLE "debts" ADD CONSTRAINT "chk_debts_prepayment_applied" CHECK ("debts"."prepayment_applied" >= 0 AND "debts"."prepayment_applied" <= GREATEST("debts"."reduced", 0));

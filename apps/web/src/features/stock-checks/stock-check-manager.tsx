@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { ClipboardCheck, Plus, SearchX } from 'lucide-react'
+import { ClipboardCheck, FileSpreadsheet, Plus, SearchX } from 'lucide-react'
 
 import type { StockCheckListItem, StockCheckStatus } from '@kiotviet-lite/shared'
 
@@ -26,6 +26,7 @@ import {
 import { useDebounced } from '@/hooks/use-debounced'
 import { formatDateTime } from '@/lib/date'
 
+import { StockCheckImportDialog } from './stock-check-import-dialog'
 import { StockCheckStatusBadge } from './stock-check-status-badge'
 import { useStockChecksQuery } from './use-stock-checks'
 
@@ -37,6 +38,7 @@ function toLocalIsoString(localDateTime: string): string {
 
 export function StockCheckManager() {
   const navigate = useNavigate()
+  const [importOpen, setImportOpen] = useState(false)
   const [searchInput, setSearchInput] = useState('')
   const debouncedSearch = useDebounced(searchInput, 300)
   const [status, setStatus] = useState<StockCheckStatus | 'all'>('all')
@@ -79,12 +81,18 @@ export function StockCheckManager() {
             Tạo phiếu kiểm để đối chiếu tồn kho thực tế.
           </p>
         </div>
-        <Button asChild>
-          <Link to="/inventory/stock-checks/new">
-            <Plus className="size-4 mr-1" /> Tạo phiếu kiểm kê
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet className="size-4 mr-1" /> Nhập tồn đầu kỳ
+          </Button>
+          <Button asChild>
+            <Link to="/inventory/stock-checks/new">
+              <Plus className="size-4 mr-1" /> Tạo phiếu kiểm kê
+            </Link>
+          </Button>
+        </div>
       </header>
+      <StockCheckImportDialog open={importOpen} onOpenChange={setImportOpen} />
 
       {counts && (
         <div className="flex flex-wrap gap-2 text-sm">

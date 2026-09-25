@@ -46,10 +46,30 @@ export async function expectDebtLedgerConsistent(db: Db, storeId: string) {
     sql`
       SELECT id, amount, paid, reduced, remaining FROM debts
       WHERE store_id = ${storeId}
-        AND (amount <> paid + reduced + remaining OR remaining < 0 OR paid < 0 OR reduced < 0)
+        AND (amount <> paid + reduced + remaining
+          OR (type = 'opening' AND amount < 0
+            AND (paid <> 0 OR reduced > 0 OR remaining > 0 OR remaining < amount))
+          OR (NOT (type = 'opening' AND amount < 0)
+            AND (remaining < 0 OR paid < 0 OR reduced < 0)))
     `,
   )
   expect(badRows).toEqual([])
+
+  // Phần trả trước đã cấn vào nợ khớp phần đã dùng của các khoản trả trước (ADR-0011)
+  const prepaymentGaps = await rows<Record<string, unknown>>(
+    db,
+    sql`
+      SELECT customer_id,
+             COALESCE(SUM(prepayment_applied), 0)::bigint AS applied,
+             COALESCE(-SUM(reduced) FILTER (WHERE type = 'opening' AND amount < 0), 0)::bigint AS used
+      FROM debts
+      WHERE store_id = ${storeId}
+      GROUP BY customer_id
+      HAVING COALESCE(SUM(prepayment_applied), 0)
+        <> COALESCE(-SUM(reduced) FILTER (WHERE type = 'opening' AND amount < 0), 0)
+    `,
+  )
+  expect(prepaymentGaps).toEqual([])
 }
 
 /**

@@ -16,7 +16,12 @@ import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import { countPendingReview, reviewOrder } from '../services/order-review.service.js'
 import { getOrderDetail, listOrders } from '../services/orders.service.js'
-import { createReturn, getOrderReturns, getReturnableItems } from '../services/returns.service.js'
+import {
+  createReturn,
+  getOrderPrepaymentApplied,
+  getOrderReturns,
+  getReturnableItems,
+} from '../services/returns.service.js'
 
 const uuidParam = z.string().uuid('ID không hợp lệ')
 
@@ -63,7 +68,12 @@ export function createOrdersRoutes({ db }: OrdersRoutesDeps) {
     const auth = c.get('auth')
     const id = uuidParam.parse(c.req.param('id'))
     const data = await getReturnableItems({ db, storeId: auth.storeId, orderId: id })
-    return c.json({ data })
+    const prepaymentApplied = await getOrderPrepaymentApplied({
+      db,
+      storeId: auth.storeId,
+      orderId: id,
+    })
+    return c.json({ data, meta: { prepaymentApplied } })
   })
 
   // GET /:id/returns - Return history for an order

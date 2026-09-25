@@ -27,6 +27,7 @@ describe('previewReturn (TIEN-108)', () => {
     expect(previewReturn([item({})], new Map([['a', 1]]), 0)).toEqual({
       totalAmount: 36_000,
       debtReductionAmount: 0,
+      prepaymentRefundAmount: 0,
       refundAmount: 36_000,
     })
   })
@@ -44,7 +45,17 @@ describe('previewReturn (TIEN-108)', () => {
     expect(previewReturn([item({})], new Map([['a', 3]]), 50_000)).toEqual({
       totalAmount: 108_000,
       debtReductionAmount: 50_000,
+      prepaymentRefundAmount: 0,
       refundAmount: 58_000,
+    })
+  })
+
+  it('đơn đã cấn tiền trả trước: phần đó hoàn vào trả trước, không hoàn tiền mặt (GL-09)', () => {
+    expect(previewReturn([item({})], new Map([['a', 3]]), 20_000, 60_000)).toEqual({
+      totalAmount: 108_000,
+      debtReductionAmount: 20_000,
+      prepaymentRefundAmount: 60_000,
+      refundAmount: 28_000,
     })
   })
 })

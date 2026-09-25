@@ -64,10 +64,12 @@ export function ReturnDialog({
   const [showResult, setShowResult] = useState<{
     refundAmount: number
     debtReductionAmount: number
+    prepaymentRefundAmount: number
     returnNumber: string
   } | null>(null)
 
-  const items: ReturnableItem[] = itemsQuery.data ?? []
+  const items: ReturnableItem[] = itemsQuery.data?.items ?? []
+  const prepaymentApplied = itemsQuery.data?.prepaymentApplied ?? 0
 
   function updateLine(orderItemId: string, field: 'quantity' | 'reason', value: number | string) {
     setLines((prev) => {
@@ -87,6 +89,7 @@ export function ReturnDialog({
     items,
     new Map(Array.from(lines.values(), (l) => [l.orderItemId, l.quantity])),
     outstandingDebt,
+    prepaymentApplied,
   )
 
   const hasSelection = Array.from(lines.values()).some((l) => l.quantity > 0)
@@ -107,6 +110,7 @@ export function ReturnDialog({
       setShowResult({
         refundAmount: data.refundAmount,
         debtReductionAmount: data.debtReductionAmount,
+        prepaymentRefundAmount: data.prepaymentRefundAmount ?? 0,
         returnNumber: data.returnNumber,
       })
       showSuccess(`Trả hàng thành công: ${data.returnNumber}`)
@@ -146,6 +150,14 @@ export function ReturnDialog({
               <div className="rounded-md border border-green-200 bg-green-50 p-3">
                 <p className="text-sm font-medium text-green-800">
                   Đã giảm nợ {formatVndWithSuffix(showResult.debtReductionAmount)}
+                </p>
+              </div>
+            )}
+            {showResult.prepaymentRefundAmount > 0 && (
+              <div className="rounded-md border border-green-200 bg-green-50 p-3">
+                <p className="text-sm font-medium text-green-800">
+                  Đã hoàn {formatVndWithSuffix(showResult.prepaymentRefundAmount)} vào tiền trả
+                  trước của khách
                 </p>
               </div>
             )}
@@ -274,6 +286,12 @@ export function ReturnDialog({
             <div className="flex justify-between text-sm text-green-700">
               <span>Cấn nợ</span>
               <span>{formatVndWithSuffix(preview.debtReductionAmount)}</span>
+            </div>
+          )}
+          {preview.prepaymentRefundAmount > 0 && (
+            <div className="flex justify-between text-sm text-green-700">
+              <span>Hoàn vào tiền trả trước</span>
+              <span>{formatVndWithSuffix(preview.prepaymentRefundAmount)}</span>
             </div>
           )}
           <div className="flex justify-between text-sm">

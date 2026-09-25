@@ -18,7 +18,11 @@ import {
   requeueInterruptedBulkImportJob,
   updateBulkImportProgress,
 } from './bulk-import-jobs.service.js'
-import { type BulkImportKind, previewBulkImport } from './bulk-import-preview.service.js'
+import {
+  type BulkImportKind,
+  previewBulkImport,
+  requiresConversionApproval,
+} from './bulk-import-preview.service.js'
 import { createCategory } from './categories.service.js'
 import { createCustomer, updateCustomer } from './customers.service.js'
 import { createProduct, updateProduct } from './products.service.js'
@@ -65,6 +69,7 @@ export function runBulkImportJob(args: RunArgs): Promise<void> {
 
 async function executeBulkImportJob({ db, storageRoot, storeId, id }: RunArgs) {
   let claimed: BulkImportJob
+  let progress: ReturnType<typeof batchProgressWriter> | undefined
   try {
     claimed = await claimBulkImportJob({ db, storeId, id })
   } catch (error) {
@@ -101,6 +106,10 @@ async function executeBulkImportJob({ db, storageRoot, storeId, id }: RunArgs) {
     if (!job.approveNewNames && (preflight.newCategories.length || preflight.newBrands.length)) {
       throw new ApiError('VALIDATION_ERROR', 'Danh mục hoặc thương hiệu mới chưa được chấp thuận')
     }
+    if (!job.approveConversions && requiresConversionApproval(preflight))
+      throw new ApiError('VALIDATION_ERROR', 'Các thay đổi tự động chưa được chấp thuận')
+    const writer = batchProgressWriter({ db, storeId, id })
+    progress = writer
     await db.transaction(async (tx) => {
       const transactionalDb = tx as unknown as Db
       const plan = await previewBulkImport({
@@ -122,6 +131,8 @@ async function executeBulkImportJob({ db, storageRoot, storeId, id }: RunArgs) {
       if (!job.approveNewNames && (plan.newCategories.length || plan.newBrands.length)) {
         throw new ApiError('VALIDATION_ERROR', 'Danh mục hoặc thương hiệu mới chưa được chấp thuận')
       }
+      if (!job.approveConversions && requiresConversionApproval(plan))
+        throw new ApiError('VALIDATION_ERROR', 'Các thay đổi tự động chưa được chấp thuận')
       const categoryIds = new Map<string, string>()
       const brandIds = new Map<string, string>()
       if (kind === 'products') {
@@ -228,18 +239,18 @@ async function executeBulkImportJob({ db, storageRoot, storeId, id }: RunArgs) {
             { cause: error },
           )
         }
-        if ((index + 1) % BATCH_SIZE === 0 || index + 1 === plan.totalRows) {
-          await updateBulkImportProgress({
-            db: tx,
-            storeId,
-            id,
-            processedRows: index + 1,
-            succeededRows: index + 1,
-            failedRows: 0,
-          })
-          publishBulkImportProgress(storeId, id, index + 1)
-        }
+        if ((index + 1) % BATCH_SIZE === 0) writer.report(index + 1)
       }
+      // Success counts become visible only with the committed data.
+      await updateBulkImportProgress({
+        db: tx,
+        storeId,
+        id,
+        processedRows: plan.totalRows,
+        succeededRows: plan.totalRows,
+        failedRows: 0,
+      })
+      publishBulkImportProgress(storeId, id, plan.totalRows)
       await finishBulkImportJob({ db: tx, storeId, id, status: 'completed' })
     })
     logger.info(
@@ -292,7 +303,40 @@ async function executeBulkImportJob({ db, storageRoot, storeId, id }: RunArgs) {
       throw finishError
     }
   } finally {
+    await progress?.settled()
     clearBulkImportProgress(id)
+  }
+}
+
+/**
+ * Record processed rows per batch on the pool, outside the import transaction, so other
+ * sessions see progress while the job runs. Writes are not awaited (a single-connection
+ * driver would otherwise wait on the open transaction), at most one is in flight, and a
+ * write that loses the race is dropped: the status and non-decreasing CAS reject it.
+ */
+function batchProgressWriter({ db, storeId, id }: { db: Db; storeId: string; id: string }) {
+  let inFlight: Promise<void> | null = null
+  return {
+    report(processedRows: number) {
+      publishBulkImportProgress(storeId, id, processedRows)
+      if (inFlight) return
+      inFlight = updateBulkImportProgress({
+        db,
+        storeId,
+        id,
+        processedRows,
+        succeededRows: 0,
+        failedRows: 0,
+      })
+        .then(
+          () => {},
+          () => {},
+        )
+        .finally(() => {
+          inFlight = null
+        })
+    },
+    settled: () => inFlight ?? Promise.resolve(),
   }
 }
 

@@ -1,4 +1,13 @@
-import { bigint, index, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core'
+import {
+  bigint,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
 import { orders } from './orders.js'
@@ -21,6 +30,9 @@ export const orderReturns = pgTable(
     totalAmount: bigint({ mode: 'number' }).notNull(),
     refundAmount: bigint({ mode: 'number' }).notNull().default(0),
     debtReductionAmount: bigint({ mode: 'number' }).notNull().default(0),
+    // Phần hoàn vào tiền trả trước của khách: đơn đã được cấn bằng tiền trả trước (ADR-0011).
+    // totalAmount = debtReductionAmount + prepaymentRefundAmount + refundAmount (tiền mặt).
+    prepaymentRefundAmount: bigint({ mode: 'number' }).notNull().default(0),
     note: text(),
     createdBy: uuid()
       .notNull()

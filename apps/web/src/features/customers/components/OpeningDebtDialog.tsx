@@ -1,6 +1,10 @@
 import { type SyntheticEvent, useState } from 'react'
 
-import { createOpeningDebtSchema, formatVndWithSuffix } from '@kiotviet-lite/shared'
+import {
+  createCustomerOpeningDebtSchema,
+  createOpeningDebtSchema,
+  formatVndWithSuffix,
+} from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
 import { Button } from '@/components/ui/button'
@@ -28,6 +32,8 @@ interface OpeningDebtDialogProps {
 
 export function OpeningDebtDialog({ open, onOpenChange, target }: OpeningDebtDialogProps) {
   const [amount, setAmount] = useState<number | null>(null)
+  // Khách trả trước: ghi thành nợ đầu kỳ âm (ADR-0011). Nhà cung cấp chỉ có chiều nợ.
+  const [prepaid, setPrepaid] = useState(false)
   const [incurredAt, setIncurredAt] = useState('')
   const [error, setError] = useState('')
   const customerMutation = useCreateOpeningDebtMutation(target.id)
@@ -37,6 +43,7 @@ export function OpeningDebtDialog({ open, onOpenChange, target }: OpeningDebtDia
   const handleOpenChange = (next: boolean) => {
     if (next) {
       setAmount(null)
+      setPrepaid(false)
       setIncurredAt('')
       setError('')
     }
@@ -45,7 +52,17 @@ export function OpeningDebtDialog({ open, onOpenChange, target }: OpeningDebtDia
 
   const submit = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const parsed = createOpeningDebtSchema.safeParse({ amount, incurredAt })
+    const isPrepaid = target.kind === 'customer' && prepaid
+    const schema =
+      target.kind === 'customer' ? createCustomerOpeningDebtSchema : createOpeningDebtSchema
+    if (isPrepaid && amount === 0) {
+      setError('Số tiền phải lớn hơn 0')
+      return
+    }
+    const parsed = schema.safeParse({
+      amount: isPrepaid && amount !== null ? -amount : amount,
+      incurredAt,
+    })
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Thông tin không hợp lệ')
       return
@@ -56,7 +73,11 @@ export function OpeningDebtDialog({ open, onOpenChange, target }: OpeningDebtDia
     }
     try {
       await mutation.mutateAsync(parsed.data)
-      showSuccess(`Đã nạp nợ đầu kỳ ${formatVndWithSuffix(parsed.data.amount)} cho ${target.name}`)
+      showSuccess(
+        isPrepaid
+          ? `Đã ghi ${formatVndWithSuffix(-parsed.data.amount)} tiền trả trước cho ${target.name}`
+          : `Đã nạp nợ đầu kỳ ${formatVndWithSuffix(parsed.data.amount)} cho ${target.name}`,
+      )
       onOpenChange(false)
     } catch (cause) {
       setError(cause instanceof ApiClientError ? cause.message : 'Không nạp được nợ đầu kỳ')
@@ -74,8 +95,41 @@ export function OpeningDebtDialog({ open, onOpenChange, target }: OpeningDebtDia
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
+          {target.kind === 'customer' && (
+            <fieldset className="grid gap-2">
+              <legend className="mb-1 text-sm font-medium">Số dư đầu kỳ</legend>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="opening-direction"
+                  checked={!prepaid}
+                  onChange={() => {
+                    setPrepaid(false)
+                    setError('')
+                  }}
+                />
+                Khách nợ cửa hàng
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="opening-direction"
+                  checked={prepaid}
+                  onChange={() => {
+                    setPrepaid(true)
+                    setError('')
+                  }}
+                />
+                Khách trả trước (cửa hàng đang giữ tiền của khách)
+              </label>
+            </fieldset>
+          )}
           <div className="grid gap-2">
-            <Label htmlFor="opening-amount">Số tiền nợ đầu kỳ</Label>
+            <Label htmlFor="opening-amount">
+              {target.kind === 'customer' && prepaid
+                ? 'Số tiền khách trả trước'
+                : 'Số tiền nợ đầu kỳ'}
+            </Label>
             <CurrencyInput
               id="opening-amount"
               value={amount}

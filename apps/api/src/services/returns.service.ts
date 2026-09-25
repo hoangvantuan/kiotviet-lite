@@ -26,7 +26,11 @@ import { logger } from '../lib/logger.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
-import { lockCustomerForDebt, settleCustomerDebts } from './customer-debt-ledger.service.js'
+import {
+  lockCustomerForDebt,
+  restoreCustomerPrepayment,
+  settleCustomerDebts,
+} from './customer-debt-ledger.service.js'
 import {
   aggregateVariantStock,
   loadProductForUpdate,
@@ -143,6 +147,27 @@ export async function getReturnableItems({
     orderDiscountAllocated: Number(it.orderDiscountAllocated),
     conversionFactor: Number(it.conversionFactor),
   }))
+}
+
+/**
+ * Tiền trả trước đã cấn vào khoản nợ của đơn và chưa hoàn lại (ADR-0011), để hộp trả hàng xem
+ * trước đúng phần hoàn vào trả trước.
+ */
+export async function getOrderPrepaymentApplied({
+  db,
+  storeId,
+  orderId,
+}: {
+  db: Db
+  storeId: string
+  orderId: string
+}): Promise<number> {
+  const [row] = await db
+    .select({ prepaymentApplied: debts.prepaymentApplied })
+    .from(debts)
+    .where(and(eq(debts.orderId, orderId), eq(debts.storeId, storeId)))
+    .limit(1)
+  return row ? Number(row.prepaymentApplied) : 0
 }
 
 // ---------------------------------------------------------------------------
@@ -320,6 +345,7 @@ export async function createReturn({
         id: debts.id,
         remaining: debts.remaining,
         paid: debts.paid,
+        prepaymentApplied: debts.prepaymentApplied,
         customerId: debts.customerId,
       })
       .from(debts)
@@ -329,18 +355,31 @@ export async function createReturn({
 
     const debt = debtRows[0]
 
+    // 5. Tách phần cấn nợ còn lại của đơn, phần hoàn vào tiền trả trước và phần hoàn tiền mặt
+    // (cùng hàm hộp trả hàng ở web dùng)
+    const { debtReductionAmount, prepaymentRefundAmount, refundAmount } = splitReturnRefund(
+      totalAmount,
+      debt ? Number(debt.remaining) : 0,
+      debt ? Number(debt.prepaymentApplied) : 0,
+    )
+
+    // Đơn đã được cấn bằng tiền trả trước: phần đó quay về tiền trả trước (ADR-0011). Gọi trước
+    // khi khóa sản phẩm vì hàm khóa các khoản trả trước của khách.
+    if (debt && prepaymentRefundAmount > 0) {
+      await restoreCustomerPrepayment(txDb, {
+        storeId: actor.storeId,
+        customerId: debt.customerId,
+        debtId: debt.id,
+        amount: prepaymentRefundAmount,
+      })
+    }
+
     // Khóa sản phẩm theo id sau khoản nợ, trước khi chèn dòng trả (khóa ngoại tới products)
     await lockProductsInIdOrder({
       tx: txDb,
       storeId: actor.storeId,
       productIds: validatedItems.map((item) => item.productId),
     })
-
-    // 5. Tách phần cấn nợ còn lại của đơn và phần hoàn tiền (cùng hàm hộp trả hàng ở web dùng)
-    const { debtReductionAmount, refundAmount } = splitReturnRefund(
-      totalAmount,
-      debt ? Number(debt.remaining) : 0,
-    )
 
     // 6. Insert order_returns
     while (attempts < MAX_ATTEMPTS && createdReturnId === null) {
@@ -354,6 +393,7 @@ export async function createReturn({
             totalAmount,
             refundAmount,
             debtReductionAmount,
+            prepaymentRefundAmount,
             note: input.note ?? null,
             createdBy: actor.userId,
           })
@@ -521,6 +561,7 @@ export async function createReturn({
         totalAmount,
         refundAmount,
         debtReductionAmount,
+        prepaymentRefundAmount,
         itemCount: validatedItems.length,
         newStatus,
       },
@@ -537,6 +578,7 @@ export async function createReturn({
         totalAmount,
         refundAmount,
         debtReductionAmount,
+        prepaymentRefundAmount,
         newStatus,
       },
       'order.returned',
@@ -549,6 +591,7 @@ export async function createReturn({
       totalAmount,
       refundAmount,
       debtReductionAmount,
+      prepaymentRefundAmount,
       note: input.note ?? null,
       createdBy: actor.userId,
       createdByName: null,
@@ -592,6 +635,7 @@ export async function getOrderReturns({
       totalAmount: orderReturns.totalAmount,
       refundAmount: orderReturns.refundAmount,
       debtReductionAmount: orderReturns.debtReductionAmount,
+      prepaymentRefundAmount: orderReturns.prepaymentRefundAmount,
       createdByName: users.name,
       createdAt: orderReturns.createdAt,
     })
@@ -634,6 +678,7 @@ export async function getOrderReturns({
     totalAmount: Number(ret.totalAmount),
     refundAmount: Number(ret.refundAmount),
     debtReductionAmount: Number(ret.debtReductionAmount),
+    prepaymentRefundAmount: Number(ret.prepaymentRefundAmount),
     createdByName: ret.createdByName ?? null,
     createdAt: ret.createdAt.toISOString(),
     items: (itemsByReturnId.get(ret.id) ?? []).map((it) => ({

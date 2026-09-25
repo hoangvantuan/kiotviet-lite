@@ -1,4 +1,5 @@
 import { PGlite } from '@electric-sql/pglite'
+import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm'
 import { drizzle } from 'drizzle-orm/pglite'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -53,7 +54,7 @@ describe('healthcheck phản ánh DB thật', () => {
   })
 
   it('DB tới được nhưng chưa migrate: readiness 503 migrations pending', async () => {
-    const pglite = new PGlite()
+    const pglite = new PGlite({ extensions: { pg_trgm } })
     try {
       const app = createHealthRoutes({
         db: drizzle(pglite, { casing: 'snake_case' }) as unknown as Db,

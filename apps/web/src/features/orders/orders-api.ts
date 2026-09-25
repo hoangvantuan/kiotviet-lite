@@ -200,6 +200,7 @@ export interface OrderReturnListItem {
   totalAmount: number
   refundAmount: number
   debtReductionAmount: number
+  prepaymentRefundAmount: number
   createdByName: string | null
   createdAt: string
   items: OrderReturnItemDetail[]
@@ -217,7 +218,10 @@ export interface OrderReturnDetail extends OrderReturnListItem {
 }
 
 export function getReturnableItemsApi(orderId: string) {
-  return apiClient.get<Envelope<ReturnableItem[]>>(`/api/v1/orders/${orderId}/returnable-items`)
+  // meta.prepaymentApplied: tiền trả trước đã cấn vào đơn, trả hàng hoàn về trả trước (ADR-0011)
+  return apiClient.get<Envelope<ReturnableItem[]> & { meta?: { prepaymentApplied: number } }>(
+    `/api/v1/orders/${orderId}/returnable-items`,
+  )
 }
 
 export function getOrderReturnsApi(orderId: string) {

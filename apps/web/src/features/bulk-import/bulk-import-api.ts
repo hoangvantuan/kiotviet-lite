@@ -6,6 +6,13 @@ import { useAuthStore } from '@/stores/use-auth-store'
 export type ImportKind = 'products' | 'customers' | 'suppliers'
 export type ImportMode = 'create-only' | 'upsert'
 export type ImportError = { row: number; column: string; message: string }
+export type ImportConversion = {
+  code: string
+  message: string
+  count: number
+  rows: number[]
+  requiresConfirmation: boolean
+}
 
 export interface ImportPreview {
   kind: ImportKind
@@ -19,6 +26,8 @@ export interface ImportPreview {
   newCategories: string[]
   newBrands: string[]
   warnings: string[]
+  sourceFormat: 'template' | 'kiotviet'
+  conversions: ImportConversion[]
   sample: Record<string, unknown>[]
   digest: string
 }
@@ -56,6 +65,16 @@ const previewSchema = z.object({
   newCategories: z.array(z.string()),
   newBrands: z.array(z.string()),
   warnings: z.array(z.string()),
+  sourceFormat: z.enum(['template', 'kiotviet']),
+  conversions: z.array(
+    z.object({
+      code: z.string(),
+      message: z.string(),
+      count: z.number(),
+      rows: z.array(z.number()),
+      requiresConfirmation: z.boolean(),
+    }),
+  ),
   sample: z.array(z.record(z.unknown())),
   digest: z.string(),
 })
@@ -86,7 +105,8 @@ const responseErrorSchema = z.object({
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000'
 
-async function request(path: string, options: RequestInit): Promise<Response> {
+/** Gửi tệp (multipart) kèm token; lỗi trả về thành ApiClientError như apiClient. */
+export async function request(path: string, options: RequestInit): Promise<Response> {
   const headers = new Headers(options.headers)
   const token = useAuthStore.getState().accessToken
   if (token) headers.set('Authorization', `Bearer ${token}`)
@@ -146,10 +166,12 @@ export async function confirmImport(
   mode: ImportMode,
   digest: string,
   approveNewNames: boolean,
+  approveConversions: boolean,
 ) {
   const form = formData(file, mode)
   form.append('digest', digest)
   form.append('approveNewNames', String(approveNewNames))
+  form.append('approveConversions', String(approveConversions))
   const response = await request(`/api/v1/bulk-import/${kind}/confirm`, {
     method: 'POST',
     body: form,

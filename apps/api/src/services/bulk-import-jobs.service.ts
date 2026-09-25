@@ -141,6 +141,7 @@ export async function createBulkImportJob(args: {
   file: Uint8Array
   digest: string
   approveNewNames: boolean
+  approveConversions?: boolean
 }): Promise<BulkImportJob> {
   const { db, storageRoot, actor, type, mode, totalRows, file } = args
   if (!/^[0-9a-f]{64}$/.test(args.digest))
@@ -197,6 +198,7 @@ export async function createBulkImportJob(args: {
         originalFilename,
         confirmedDigest: args.digest,
         approveNewNames: args.approveNewNames,
+        approveConversions: args.approveConversions ?? false,
         fileSizeBytes: file.byteLength,
         totalRows,
         expiresAt: new Date(now.getTime() + retentionMs),
