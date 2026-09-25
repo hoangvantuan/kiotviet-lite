@@ -236,7 +236,12 @@ describe('TIEN-01: trả hàng đơn ghi nợ không bị tính là đã thu ti�
     const [debt] = await env.db.select().from(debts).where(eq(debts.orderId, order.id))
     expect(debt).toMatchObject({ paid: 0, reduced: 450_000, remaining: 0 })
 
-    const detail = await getOrderDetail({ db: env.db, storeId: env.storeId, orderId: order.id })
+    const detail = await getOrderDetail({
+      db: env.db,
+      storeId: env.storeId,
+      orderId: order.id,
+      canViewCost: true,
+    })
     expect(detail.paidAmount).toBe(0)
     expect(detail.debtAmount).toBe(0)
     expect(detail.paymentStatus).not.toBe('paid')
@@ -264,7 +269,12 @@ describe('TIEN-01: trả hàng đơn ghi nợ không bị tính là đã thu ti�
 
     const [debt] = await env.db.select().from(debts).where(eq(debts.orderId, order.id))
     expect(debt).toMatchObject({ paid: 200_000, reduced: 250_000, remaining: 0 })
-    const detail = await getOrderDetail({ db: env.db, storeId: env.storeId, orderId: order.id })
+    const detail = await getOrderDetail({
+      db: env.db,
+      storeId: env.storeId,
+      orderId: order.id,
+      canViewCost: true,
+    })
     expect(detail.paidAmount).toBe(200_000)
     expect(detail.paymentStatus).toBe('paid')
   })
@@ -386,7 +396,8 @@ describe('TIEN-103: một thứ tự khóa chung cho bán, trả, thu, điều c
 
   it('bán ghi nợ khóa khách trước sản phẩm', async () => {
     const product = await createProduct(env)
-    const customer = await createCustomer(env)
+    // ADR-0009: khách phải có hạn mức mới ghi nợ được
+    const customer = await createCustomer(env, { debtLimit: 1_000_000 })
     const { db, queries } = loggingDb()
     await createOrder({
       db,
