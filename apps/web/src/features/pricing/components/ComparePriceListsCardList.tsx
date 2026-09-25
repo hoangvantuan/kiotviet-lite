@@ -2,7 +2,6 @@ import type { CompareRow } from '@kiotviet-lite/shared'
 import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
-import { formatVnd } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 
 interface Props {

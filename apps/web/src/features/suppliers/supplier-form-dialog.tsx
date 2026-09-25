@@ -24,7 +24,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { asFormSetError, handleApiError } from '@/lib/api-error'
-import { formatVnd } from '@/lib/currency'
 import { showSuccess } from '@/lib/toast'
 
 import { useCreateSupplierMutation, useUpdateSupplierMutation } from './use-suppliers'

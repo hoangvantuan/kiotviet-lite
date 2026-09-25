@@ -15,7 +15,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useStoreQuery } from '@/features/settings/use-store-settings'
-import { formatVnd } from '@/lib/currency'
 import { formatDate } from '@/lib/date'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/use-auth-store'
@@ -113,7 +112,9 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
           <div>
             <p className="text-xs text-muted-foreground">Tổng công nợ hiện tại</p>
             <div className="mt-1 flex items-center gap-3">
-              <p className="text-2xl font-semibold text-foreground">{formatVndWithSuffix(currentDebt)}</p>
+              <p className="text-2xl font-semibold text-foreground">
+                {formatVndWithSuffix(currentDebt)}
+              </p>
               {isOwner && (
                 <Button variant="outline" size="sm" onClick={() => setAdjustDialogOpen(true)}>
                   <PenLine className="mr-1 size-4" />
@@ -204,7 +205,9 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDate(debt.date)}
                     </TableCell>
-                    <TableCell className="text-right">{formatVndWithSuffix(debt.originalAmount)}</TableCell>
+                    <TableCell className="text-right">
+                      {formatVndWithSuffix(debt.originalAmount)}
+                    </TableCell>
                     <TableCell className="text-right text-green-700">
                       {formatVndWithSuffix(debt.paidAmount)}
                     </TableCell>

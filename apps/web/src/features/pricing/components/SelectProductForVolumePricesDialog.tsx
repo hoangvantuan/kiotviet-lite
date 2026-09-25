@@ -15,7 +15,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { useProductsQuery } from '@/features/products/use-products'
 import { useDebounced } from '@/hooks/use-debounced'
-import { formatVnd } from '@/lib/currency'
 
 interface Props {
   open: boolean

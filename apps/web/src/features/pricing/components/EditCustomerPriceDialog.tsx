@@ -17,7 +17,6 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { handleApiError } from '@/lib/api-error'
-import { formatVnd } from '@/lib/currency'
 import { showSuccess } from '@/lib/toast'
 
 import { useUpdateCustomerPriceMutation } from '../use-customer-prices'
@@ -90,12 +89,16 @@ export function EditCustomerPriceDialog({ open, onOpenChange, customerPrice }: P
           <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
             <div>
               Giá lẻ chuẩn:{' '}
-              <span className="font-medium">{formatVndWithSuffix(customerPrice.productSellingPrice)}</span>
+              <span className="font-medium">
+                {formatVndWithSuffix(customerPrice.productSellingPrice)}
+              </span>
             </div>
             {customerPrice.productCostPrice !== null && (
               <div>
                 Giá vốn:{' '}
-                <span className="font-medium">{formatVndWithSuffix(customerPrice.productCostPrice)}</span>
+                <span className="font-medium">
+                  {formatVndWithSuffix(customerPrice.productCostPrice)}
+                </span>
               </div>
             )}
           </div>

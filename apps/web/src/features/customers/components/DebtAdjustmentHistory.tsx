@@ -13,7 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatVnd } from '@/lib/currency'
 import { formatDateTime as formatDate } from '@/lib/date'
 import { cn } from '@/lib/utils'
 
@@ -70,7 +69,9 @@ export function DebtAdjustmentHistory({ customerId }: DebtAdjustmentHistoryProps
                   <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                     {formatDate(item.createdAt)}
                   </TableCell>
-                  <TableCell className="text-right">{formatVndWithSuffix(item.oldAmount)}</TableCell>
+                  <TableCell className="text-right">
+                    {formatVndWithSuffix(item.oldAmount)}
+                  </TableCell>
                   <TableCell className="text-right font-medium">
                     {formatVndWithSuffix(item.newAmount)}
                   </TableCell>

@@ -20,7 +20,6 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { handleApiError } from '@/lib/api-error'
-import { formatVnd } from '@/lib/currency'
 import { showSuccess } from '@/lib/toast'
 
 import { useUpdatePriceListItemMutation } from '../use-price-lists'

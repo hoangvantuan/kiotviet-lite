@@ -6,7 +6,6 @@ import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 import { EmptyState } from '@/components/shared/empty-state'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatVnd } from '@/lib/currency'
 import { showError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
@@ -96,7 +95,9 @@ export function DebtSummaryReport({ query }: DebtSummaryReportProps) {
             <ArrowDownLeft className="size-4 text-blue-500" />
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-2xl font-bold text-blue-700">{formatVndWithSuffix(receivable.totalDebt)}</p>
+            <p className="text-2xl font-bold text-blue-700">
+              {formatVndWithSuffix(receivable.totalDebt)}
+            </p>
             <StatRow label="Số KH còn nợ" value={String(receivable.customerCount)} />
             <StatRow
               label="Tổng đã thu (trong kỳ)"
@@ -113,7 +114,9 @@ export function DebtSummaryReport({ query }: DebtSummaryReportProps) {
             <ArrowUpRight className="size-4 text-orange-500" />
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-2xl font-bold text-orange-700">{formatVndWithSuffix(payable.totalDebt)}</p>
+            <p className="text-2xl font-bold text-orange-700">
+              {formatVndWithSuffix(payable.totalDebt)}
+            </p>
             <StatRow label="Số NCC còn nợ" value={String(payable.supplierCount)} />
             <StatRow
               label="Tổng đã trả (trong kỳ)"

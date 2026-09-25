@@ -12,7 +12,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatVnd } from '@/lib/currency'
 
 import { useCustomerStats } from '../hooks/use-customer-detail'
 

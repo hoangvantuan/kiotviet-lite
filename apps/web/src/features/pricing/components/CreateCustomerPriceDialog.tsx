@@ -20,7 +20,6 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useProductQuery } from '@/features/products/use-products'
 import { handleApiError } from '@/lib/api-error'
-import { formatVnd } from '@/lib/currency'
 import { showSuccess } from '@/lib/toast'
 
 import { useCreateCustomerPriceMutation } from '../use-customer-prices'
@@ -215,7 +214,8 @@ function PriceWarning({ price, sellingPrice, costPrice }: PriceWarningProps) {
   if (costPrice !== null && price < costPrice) {
     return (
       <div className="rounded-md border border-destructive/50 bg-destructive/5 p-2 text-xs text-destructive">
-        ⚠ Giá thấp hơn giá vốn ({formatVndWithSuffix(costPrice)}). Bạn có chắc muốn đặt giá dưới vốn?
+        ⚠ Giá thấp hơn giá vốn ({formatVndWithSuffix(costPrice)}). Bạn có chắc muốn đặt giá dưới
+        vốn?
       </div>
     )
   }

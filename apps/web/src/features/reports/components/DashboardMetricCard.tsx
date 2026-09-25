@@ -2,7 +2,6 @@ import { TrendingDown, TrendingUp } from 'lucide-react'
 
 import type { DashboardMetric } from '@kiotviet-lite/shared'
 
-
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 

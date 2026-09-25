@@ -17,7 +17,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useStoreQuery } from '@/features/settings/use-store-settings'
-import { formatVnd } from '@/lib/currency'
 import { showError } from '@/lib/toast'
 
 import { useDebtAgingReport } from '../hooks/use-reports'

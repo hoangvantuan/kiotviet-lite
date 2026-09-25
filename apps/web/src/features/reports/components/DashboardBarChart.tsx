@@ -5,7 +5,6 @@ import type { RevenueChartItem } from '@kiotviet-lite/shared'
 import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatVnd } from '@/lib/currency'
 
 function formatAxisValue(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(0)}M`

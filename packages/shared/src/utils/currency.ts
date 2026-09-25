@@ -30,6 +30,7 @@ export function formatVndWithSuffix(
   value: number | null | undefined,
   suffix: string = '\xA0đ',
 ): string {
+  const formatted = formatVnd(value)
   if (!formatted) return ''
   return `${formatted}${suffix}`
 }

@@ -10,7 +10,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatVnd } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -79,7 +78,9 @@ export function ComparePriceListsTable({ rows }: Props) {
                   <div className="text-xs text-muted-foreground">{row.productSku}</div>
                 </TableCell>
                 <TableCell className="text-right tabular-nums text-muted-foreground">
-                  {row.productCostPrice === null ? '—' : `${formatVndWithSuffix(row.productCostPrice)}`}
+                  {row.productCostPrice === null
+                    ? '—'
+                    : `${formatVndWithSuffix(row.productCostPrice)}`}
                 </TableCell>
                 <TableCell
                   className={cn(

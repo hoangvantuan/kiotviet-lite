@@ -23,7 +23,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatVnd } from '@/lib/currency'
 import { formatDate } from '@/lib/date'
 
 import { useCustomerOrders } from '../hooks/use-customer-detail'

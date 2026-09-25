@@ -22,7 +22,9 @@ export function meApi() {
   return apiClient.get<ApiEnvelope<AuthUser>>('/api/v1/me')
 }
 
-export async function refreshApi(): Promise<{ accessToken: string; expiresIn: number } | { error: string } | null> {
+export async function refreshApi(): Promise<
+  { accessToken: string; expiresIn: number } | { error: string } | null
+> {
   try {
     const response = await apiClient.post<ApiEnvelope<{ accessToken: string; expiresIn: number }>>(
       '/api/v1/auth/refresh',
@@ -30,6 +32,7 @@ export async function refreshApi(): Promise<{ accessToken: string; expiresIn: nu
       { auth: false, skipRefresh: true },
     )
     return response.data
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     if (err.message === 'Không thể kết nối đến máy chủ') {
       return { error: 'network' }

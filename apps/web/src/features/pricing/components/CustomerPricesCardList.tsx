@@ -4,7 +4,6 @@ import type { CustomerPriceListItem } from '@kiotviet-lite/shared'
 import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Button } from '@/components/ui/button'
-import { formatVnd } from '@/lib/currency'
 
 interface Props {
   items: CustomerPriceListItem[]

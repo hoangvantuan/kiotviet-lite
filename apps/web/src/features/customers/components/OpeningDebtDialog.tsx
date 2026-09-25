@@ -17,7 +17,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useCreateSupplierOpeningDebtMutation } from '@/features/suppliers/use-suppliers'
 import { ApiClientError } from '@/lib/api-client'
-import { formatVnd } from '@/lib/currency'
 import { showSuccess } from '@/lib/toast'
 
 import { useCreateOpeningDebtMutation } from '../hooks/use-customer-detail'

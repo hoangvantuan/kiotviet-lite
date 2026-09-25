@@ -1,6 +1,5 @@
 import type { DashboardPeriod } from '@kiotviet-lite/shared'
 
-
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 const PERIOD_LABELS: Record<DashboardPeriod, string> = {

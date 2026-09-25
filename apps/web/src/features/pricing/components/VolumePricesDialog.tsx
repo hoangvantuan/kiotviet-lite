@@ -18,7 +18,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { handleApiError } from '@/lib/api-error'
-import { formatVnd } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
 
 import {
@@ -149,7 +148,9 @@ export function VolumePricesDialog({
             <div className="font-medium">{displayName}</div>
             <div className="text-xs text-muted-foreground">
               SKU {displaySku} • Giá lẻ chuẩn: {formatVndWithSuffix(displaySellingPrice)}
-              {displayCostPrice !== null ? ` • Giá vốn: ${formatVndWithSuffix(displayCostPrice)}` : ''}
+              {displayCostPrice !== null
+                ? ` • Giá vốn: ${formatVndWithSuffix(displayCostPrice)}`
+                : ''}
             </div>
           </div>
         )}

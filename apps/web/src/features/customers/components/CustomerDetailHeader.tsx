@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useStoreQuery } from '@/features/settings/use-store-settings'
-import { formatVnd } from '@/lib/currency'
 
 interface CustomerDetailHeaderProps {
   customer: CustomerDetail

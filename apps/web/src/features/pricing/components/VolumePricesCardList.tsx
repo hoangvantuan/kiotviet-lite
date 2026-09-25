@@ -5,7 +5,6 @@ import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { formatVnd } from '@/lib/currency'
 
 interface Props {
   items: VolumePricesListItem[]

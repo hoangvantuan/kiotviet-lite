@@ -13,7 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatVnd } from '@/lib/currency'
 
 interface Props {
   items: CategoryDiscountListItem[]
@@ -36,7 +35,9 @@ const STATUS_VARIANT: Record<EffectiveStatus, 'default' | 'destructive' | 'secon
 }
 
 function formatDiscount(p: CategoryDiscountListItem): string {
-  return p.discountType === 'percent' ? `${p.discountValue}%` : `${formatVndWithSuffix(p.discountValue)}`
+  return p.discountType === 'percent'
+    ? `${p.discountValue}%`
+    : `${formatVndWithSuffix(p.discountValue)}`
 }
 
 function formatEffective(p: CategoryDiscountListItem): string {
