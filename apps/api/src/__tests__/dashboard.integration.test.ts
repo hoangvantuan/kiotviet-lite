@@ -41,7 +41,7 @@ async function setup(): Promise<Env> {
   app.onError(errorHandler)
   app.route('/api/v1/reports', reportsApp)
 
-  // Create products with costPrice and minStock
+  // Create products with costPrice and minStock (BC-11: cảnh báo tồn chỉ tính sản phẩm theo dõi tồn)
   const [product1] = await base.db
     .insert(products)
     .values({
@@ -52,6 +52,7 @@ async function setup(): Promise<Env> {
       costPrice: 120_000,
       currentStock: 50,
       minStock: 10,
+      trackInventory: true,
     })
     .returning()
 
@@ -65,6 +66,7 @@ async function setup(): Promise<Env> {
       costPrice: 60_000,
       currentStock: 2,
       minStock: 10,
+      trackInventory: true,
     })
     .returning()
 
@@ -78,6 +80,7 @@ async function setup(): Promise<Env> {
       costPrice: 180_000,
       currentStock: 0,
       minStock: 5,
+      trackInventory: true,
     })
     .returning()
 

@@ -33,6 +33,7 @@ import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
+import { parseDateRangeBoundary } from '../lib/timezone.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import { addCustomerDebt, lockCustomerForDebt } from './customer-debt-ledger.service.js'
 import { nextDocumentCode } from './document-codes.service.js'
@@ -1684,14 +1685,11 @@ export async function listOrders({
   if (reviewStatus) {
     conditions.push(eq(orders.reviewStatus, reviewStatus))
   }
-  if (fromDate) {
-    conditions.push(gte(orders.createdAt, new Date(fromDate)))
-  }
-  if (toDate) {
-    const endOfDay = new Date(toDate)
-    endOfDay.setHours(23, 59, 59, 999)
-    conditions.push(lte(orders.createdAt, endOfDay))
-  }
+  // R7: fromDate, toDate (YYYY-MM-DD) cắt theo lịch cửa hàng, không theo giờ tiến trình (UTC)
+  const from = parseDateRangeBoundary(fromDate, 'start')
+  const to = parseDateRangeBoundary(toDate, 'end')
+  if (from) conditions.push(gte(orders.createdAt, from))
+  if (to) conditions.push(lte(orders.createdAt, to))
 
   const whereClause = and(...conditions)
   const offset = (page - 1) * pageSize
