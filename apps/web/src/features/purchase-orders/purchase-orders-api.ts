@@ -39,6 +39,8 @@ export function getPurchaseOrderApi(id: string) {
   return apiClient.get<Envelope<PurchaseOrderDetail>>(`/api/v1/purchase-orders/${id}`)
 }
 
-export function createPurchaseOrderApi(input: CreatePurchaseOrderInput) {
-  return apiClient.post<Envelope<PurchaseOrderDetail>>('/api/v1/purchase-orders', input)
+export function createPurchaseOrderApi(input: CreatePurchaseOrderInput, idempotencyKey?: string) {
+  return apiClient.post<Envelope<PurchaseOrderDetail>>('/api/v1/purchase-orders', input, {
+    idempotencyKey,
+  })
 }

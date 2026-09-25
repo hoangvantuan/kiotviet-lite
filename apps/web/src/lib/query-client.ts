@@ -22,5 +22,10 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       staleTime: 30_000,
     },
+    // R4 (UX-03): mutation không tự tạm dừng khi trình duyệt báo mất mạng rồi âm thầm gửi lại
+    // sau đó; request thất bại ngay để người dùng thấy và tự quyết định lưu lại
+    mutations: {
+      networkMode: 'always',
+    },
   },
 })

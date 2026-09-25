@@ -228,8 +228,14 @@ export function getOrderReturnsApi(orderId: string) {
   return apiClient.get<Envelope<OrderReturnListItem[]>>(`/api/v1/orders/${orderId}/returns`)
 }
 
-export function createReturnApi(orderId: string, input: CreateOrderReturnInput) {
-  return apiClient.post<Envelope<OrderReturnDetail>>(`/api/v1/orders/${orderId}/returns`, input)
+export function createReturnApi(
+  orderId: string,
+  input: CreateOrderReturnInput,
+  idempotencyKey?: string,
+) {
+  return apiClient.post<Envelope<OrderReturnDetail>>(`/api/v1/orders/${orderId}/returns`, input, {
+    idempotencyKey,
+  })
 }
 
 export type { OrderDetailItem, OrderDetailResponse, OrderListItem }

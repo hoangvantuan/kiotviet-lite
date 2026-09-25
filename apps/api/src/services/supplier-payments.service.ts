@@ -17,6 +17,7 @@ import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
+import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
 export interface SupplierPaymentsActor {
   userId: string
@@ -182,17 +183,21 @@ export async function getSupplierPayment({
 
 export interface CreateSupplierPaymentDeps {
   db: Db
+  // Transaction của request có Idempotency-Key: chứng từ và phản hồi lưu cùng một lần commit
+  transaction?: ServiceTransaction
   actor: SupplierPaymentsActor
   input: CreateSupplierPaymentInput
   meta?: RequestMeta
 }
 
 export async function createSupplierPayment({
-  db,
+  db: rootDb,
+  transaction,
   actor,
   input,
   meta,
 }: CreateSupplierPaymentDeps): Promise<SupplierPaymentDetail> {
+  const db = serviceDb(rootDb, transaction)
   // Layer 3: defense in depth — service tự re-check role (middleware + route đã chặn trước)
   if (actor.role !== 'owner') {
     throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được tạo phiếu chi')

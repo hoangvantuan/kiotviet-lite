@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, like, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 
 import {
   computeReturnLineRefund,
@@ -23,67 +23,25 @@ import {
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
-import { isUniqueViolation } from '../lib/pg-errors.js'
-import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import {
   lockCustomerForDebt,
   restoreCustomerPrepayment,
   settleCustomerDebts,
 } from './customer-debt-ledger.service.js'
+import { nextDocumentCode } from './document-codes.service.js'
 import {
   aggregateVariantStock,
   loadProductForUpdate,
   loadVariantForUpdate,
   lockProductsInIdOrder,
 } from './products-lock.helper.js'
+import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
 export interface ReturnsActor {
   userId: string
   storeId: string
   role: UserRole
-}
-
-const MAX_DAILY_RETURN_SEQUENCE = 9999
-
-const DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Asia/Ho_Chi_Minh',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-})
-
-function formatDateForCode(date: Date): string {
-  return DATE_FORMATTER.format(date).replace(/-/g, '')
-}
-
-async function generateReturnNumber({ tx, storeId }: { tx: Db; storeId: string }): Promise<string> {
-  const dateStr = formatDateForCode(new Date())
-  const prefix = `TH-${dateStr.slice(2)}-`
-  const escapedPrefix = escapeLikePattern(prefix)
-
-  const rows = await tx
-    .select({ code: sql<string>`MAX(${orderReturns.returnNumber})` })
-    .from(orderReturns)
-    .where(
-      and(eq(orderReturns.storeId, storeId), like(orderReturns.returnNumber, `${escapedPrefix}%`)),
-    )
-
-  const maxCode = rows[0]?.code ?? null
-  const nextSeq = maxCode ? parseInt(maxCode.slice(-4), 10) + 1 : 1
-  if (nextSeq > MAX_DAILY_RETURN_SEQUENCE) {
-    throw new ApiError('BUSINESS_RULE_VIOLATION', 'Đã vượt quá 9999 phiếu trả trong ngày')
-  }
-  return `${prefix}${String(nextSeq).padStart(4, '0')}`
-}
-
-function incrementReturnSequence(code: string): string {
-  const seqStr = code.slice(-4)
-  const next = parseInt(seqStr, 10) + 1
-  if (next > MAX_DAILY_RETURN_SEQUENCE) {
-    throw new ApiError('BUSINESS_RULE_VIOLATION', 'Đã vượt quá 9999 phiếu trả trong ngày')
-  }
-  return `${code.slice(0, -4)}${String(next).padStart(4, '0')}`
 }
 
 // ---------------------------------------------------------------------------
@@ -178,6 +136,8 @@ export async function getOrderPrepaymentApplied({
 
 export interface CreateReturnDeps {
   db: Db
+  // Transaction của request có Idempotency-Key: chứng từ và phản hồi lưu cùng một lần commit
+  transaction?: ServiceTransaction
   actor: ReturnsActor
   orderId: string
   input: CreateOrderReturnInput
@@ -185,12 +145,14 @@ export interface CreateReturnDeps {
 }
 
 export async function createReturn({
-  db,
+  db: rootDb,
+  transaction,
   actor,
   orderId,
   input,
   meta,
 }: CreateReturnDeps): Promise<OrderReturnDetail> {
+  const db = serviceDb(rootDb, transaction)
   const result = await db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
 
@@ -328,12 +290,6 @@ export async function createReturn({
       totalAmount = refundCap
     }
 
-    // 4. Generate return number with retry
-    let returnNumber = await generateReturnNumber({ tx: txDb, storeId: actor.storeId })
-    let createdReturnId: string | null = null
-    let attempts = 0
-    const MAX_ATTEMPTS = 3
-
     // TIEN-103: thứ tự khóa chung orders, customers, debts, products (customer-debt-ledger.service.ts)
     if (order.customerId) {
       await lockCustomerForDebt(txDb, { storeId: actor.storeId, customerId: order.customerId })
@@ -381,43 +337,31 @@ export async function createReturn({
       productIds: validatedItems.map((item) => item.productId),
     })
 
-    // 6. Insert order_returns
-    while (attempts < MAX_ATTEMPTS && createdReturnId === null) {
-      try {
-        const [row] = await tx
-          .insert(orderReturns)
-          .values({
-            storeId: actor.storeId,
-            orderId,
-            returnNumber,
-            totalAmount,
-            refundAmount,
-            debtReductionAmount,
-            prepaymentRefundAmount,
-            note: input.note ?? null,
-            createdBy: actor.userId,
-          })
-          .returning({ id: orderReturns.id })
-        if (!row) {
-          throw new ApiError('INTERNAL_ERROR', 'Không tạo được phiếu trả hàng')
-        }
-        createdReturnId = row.id
-      } catch (err) {
-        if (isUniqueViolation(err, 'uniq_order_returns_store_number')) {
-          attempts++
-          if (attempts >= MAX_ATTEMPTS) {
-            throw new ApiError('INTERNAL_ERROR', 'Không thể sinh mã phiếu trả, vui lòng thử lại')
-          }
-          returnNumber = incrementReturnSequence(returnNumber)
-          continue
-        }
-        throw err
-      }
-    }
-
-    if (!createdReturnId) {
+    // 6. Insert order_returns. OFF-08: mã phiếu cấp từ bộ đếm theo cửa hàng, sau khi đã khóa
+    // khách và khoản nợ (thứ tự khóa TIEN-103), không còn thử lại trong transaction đã hỏng.
+    const returnNumber = await nextDocumentCode({
+      db: txDb,
+      storeId: actor.storeId,
+      kind: 'return',
+    })
+    const [createdReturn] = await tx
+      .insert(orderReturns)
+      .values({
+        storeId: actor.storeId,
+        orderId,
+        returnNumber,
+        totalAmount,
+        refundAmount,
+        debtReductionAmount,
+        prepaymentRefundAmount,
+        note: input.note ?? null,
+        createdBy: actor.userId,
+      })
+      .returning({ id: orderReturns.id })
+    if (!createdReturn) {
       throw new ApiError('INTERNAL_ERROR', 'Không tạo được phiếu trả hàng')
     }
+    const createdReturnId = createdReturn.id
 
     // 7. Insert return items
     const returnItemDetails: OrderReturnItemDetail[] = []

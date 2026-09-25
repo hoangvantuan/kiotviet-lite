@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, like, lte, or, type SQL, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, ilike, lte, or, type SQL, sql } from 'drizzle-orm'
 
 import {
   type CreatePurchaseOrderInput,
@@ -20,28 +20,17 @@ import {
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
-import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
+import { nextDocumentCode } from './document-codes.service.js'
 import { allocateProportionally, receiveStock } from './inventory-cost.helper.js'
 import { loadProductForUpdate, loadVariantForUpdate } from './products-lock.helper.js'
+import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
 export interface PurchaseOrdersActor {
   userId: string
   storeId: string
   role: UserRole
-}
-
-const DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Asia/Ho_Chi_Minh',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-})
-
-function formatPurchaseDateForCode(date: Date): string {
-  // en-CA gives YYYY-MM-DD; strip dashes for YYYYMMDD
-  return DATE_FORMATTER.format(date).replace(/-/g, '')
 }
 
 export function applyDiscount(baseAmount: number, type: DiscountType, value: number): number {
@@ -62,62 +51,23 @@ export function determinePaymentStatus(totalAmount: number, paidAmount: number):
 // Giới hạn số lượng một dòng sau khi quy ra đơn vị tính, cùng mức với schema dòng nhập
 const MAX_BASE_QUANTITY = 1_000_000
 
-const MAX_DAILY_PO_SEQUENCE = 9999
-
-async function generatePurchaseOrderCode({
-  tx,
-  storeId,
-  purchaseDate,
-}: {
-  tx: Db
-  storeId: string
-  purchaseDate: Date
-}): Promise<string> {
-  const dateStr = formatPurchaseDateForCode(purchaseDate)
-  const prefix = `PN-${dateStr}-`
-  const escapedPrefix = escapeLikePattern(prefix)
-
-  const rows = await tx
-    .select({ code: sql<string>`MAX(${purchaseOrders.code})` })
-    .from(purchaseOrders)
-    .where(and(eq(purchaseOrders.storeId, storeId), like(purchaseOrders.code, `${escapedPrefix}%`)))
-
-  const maxCode = rows[0]?.code ?? null
-  const nextSeq = maxCode ? parseInt(maxCode.slice(-4), 10) + 1 : 1
-  if (nextSeq > MAX_DAILY_PO_SEQUENCE) {
-    throw new ApiError(
-      'BUSINESS_RULE_VIOLATION',
-      'Đã vượt quá 9999 phiếu nhập trong ngày, vui lòng liên hệ hỗ trợ',
-    )
-  }
-  return `${prefix}${String(nextSeq).padStart(4, '0')}`
-}
-
-function incrementCodeSequence(code: string): string {
-  const seqStr = code.slice(-4)
-  const next = parseInt(seqStr, 10) + 1
-  if (next > MAX_DAILY_PO_SEQUENCE) {
-    throw new ApiError(
-      'BUSINESS_RULE_VIOLATION',
-      'Đã vượt quá 9999 phiếu nhập trong ngày, vui lòng liên hệ hỗ trợ',
-    )
-  }
-  return `${code.slice(0, -4)}${String(next).padStart(4, '0')}`
-}
-
 export interface CreatePurchaseOrderDeps {
   db: Db
+  // Transaction của request có Idempotency-Key: chứng từ và phản hồi lưu cùng một lần commit
+  transaction?: ServiceTransaction
   actor: PurchaseOrdersActor
   input: CreatePurchaseOrderInput
   meta?: RequestMeta
 }
 
 export async function createPurchaseOrder({
-  db,
+  db: rootDb,
+  transaction,
   actor,
   input,
   meta,
 }: CreatePurchaseOrderDeps): Promise<PurchaseOrderDetail> {
+  const db = serviceDb(rootDb, transaction)
   // Pre-validate at the service boundary (defense, Zod đã chặn ở route)
   if (input.items.length === 0) {
     throw new ApiError('VALIDATION_ERROR', 'Phiếu nhập phải có ít nhất 1 sản phẩm')
@@ -319,57 +269,32 @@ export async function createPurchaseOrder({
       })
     }
 
-    // Generate code with retry on unique violation
-    let code = await generatePurchaseOrderCode({ tx: txDb, storeId: actor.storeId, purchaseDate })
-    let createdId: string | null = null
-    let attempts = 0
-    const MAX_ATTEMPTS = 3
-    while (attempts < MAX_ATTEMPTS && createdId === null) {
-      try {
-        const [row] = await tx
-          .insert(purchaseOrders)
-          .values({
-            storeId: actor.storeId,
-            supplierId: input.supplierId,
-            code,
-            subtotal,
-            discountTotal,
-            discountTotalType: input.discountTotalType,
-            discountTotalValue: input.discountTotalValue,
-            totalAmount,
-            paidAmount: input.paidAmount,
-            paymentStatus,
-            note: input.note ?? null,
-            purchaseDate,
-            createdBy: actor.userId,
-          })
-          .returning({ id: purchaseOrders.id })
-        if (!row) {
-          throw new ApiError('INTERNAL_ERROR', 'Không tạo được phiếu nhập')
-        }
-        createdId = row.id
-      } catch (err) {
-        if (isUniqueViolation(err, 'uniq_purchase_orders_store_code')) {
-          attempts++
-          if (attempts >= MAX_ATTEMPTS) {
-            throw new ApiError('INTERNAL_ERROR', 'Không thể sinh mã phiếu nhập, vui lòng thử lại')
-          }
-          const nextCode = incrementCodeSequence(code)
-          logger.warn(
-            {
-              storeId: actor.storeId,
-              code,
-              nextCode,
-              attempt: attempts,
-            },
-            'purchase_order.code_collision_retry',
-          )
-          code = nextCode
-          continue
-        }
-        throw err
-      }
-    }
+    // OFF-08: mã phiếu cấp từ bộ đếm theo cửa hàng, theo ngày nhập của phiếu
+    const code = await nextDocumentCode({
+      db: txDb,
+      storeId: actor.storeId,
+      kind: 'purchase_order',
+      date: purchaseDate,
+    })
+    const [createdRow] = await tx
+      .insert(purchaseOrders)
+      .values({
+        storeId: actor.storeId,
+        supplierId: input.supplierId,
+        code,
+        subtotal,
+        discountTotal,
+        discountTotalType: input.discountTotalType,
+        discountTotalValue: input.discountTotalValue,
+        totalAmount,
+        paidAmount: input.paidAmount,
+        paymentStatus,
+        note: input.note ?? null,
+        purchaseDate,
+        createdBy: actor.userId,
+      })
+      .returning({ id: purchaseOrders.id })
+    const createdId = createdRow?.id ?? null
     if (!createdId) {
       throw new ApiError('INTERNAL_ERROR', 'Không tạo được phiếu nhập')
     }

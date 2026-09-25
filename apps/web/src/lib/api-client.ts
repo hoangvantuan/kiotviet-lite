@@ -186,6 +186,48 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown
   auth?: boolean
   skipRefresh?: boolean
+  /** R4: gửi kèm header Idempotency-Key, gửi lại cùng khóa không tạo chứng từ thứ hai */
+  idempotencyKey?: string
+  /** R4: chỉ chỗ kiểm tra khi không rõ máy chủ đã lưu chưa, ví dụ "Xem danh sách phiếu thu" */
+  unknownOutcomeHint?: string
+}
+
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+// 502, 504: nginx mất kết nối hoặc hết giờ chờ API; 524: Cloudflare hết giờ chờ nginx
+const GATEWAY_STATUSES = new Set([502, 504, 524])
+
+/**
+ * R4 (UX-03): request ghi đã gửi đi nhưng không nhận được phản hồi thì máy chủ có thể đã lưu.
+ * Không báo "không kết nối được" như thể chưa có gì xảy ra, mà nói rõ là chưa biết kết quả.
+ */
+function unknownOutcomeMessage({ idempotencyKey, unknownOutcomeHint }: RequestOptions): string {
+  const base = 'Chưa rõ đã lưu hay chưa vì mất kết nối tới máy chủ.'
+  if (idempotencyKey) {
+    return `${base} Giữ nguyên nội dung và bấm lưu lại: nếu lần trước đã lưu, hệ thống trả lại đúng chứng từ đó, không tạo bản trùng.`
+  }
+  return `${base} ${unknownOutcomeHint ?? 'Vui lòng kiểm tra lại danh sách trước khi thao tác lại.'}`
+}
+
+function isUnsafeRequest(options: RequestOptions): boolean {
+  return !SAFE_METHODS.has((options.method ?? 'GET').toUpperCase())
+}
+
+/** Cổng trung gian hết thời gian chờ hay mất kết nối tới API: request ghi có thể đã chạy xong. */
+function gatewayUnknownOutcome(
+  res: Response,
+  options: RequestOptions,
+  requestId?: string,
+): ApiClientError | null {
+  if (!isUnsafeRequest(options) || !GATEWAY_STATUSES.has(res.status)) return null
+  return new ApiClientError(
+    res.status,
+    {
+      code: 'NETWORK_ERROR',
+      message: unknownOutcomeMessage(options),
+      details: { outcomeUnknown: true },
+    },
+    requestId,
+  )
 }
 
 let refreshPromise: Promise<boolean> | null = null
@@ -234,10 +276,19 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { body, auth = true, skipRefresh = false, headers, ...rest } = options
+  const {
+    body,
+    auth = true,
+    skipRefresh = false,
+    headers,
+    idempotencyKey,
+    unknownOutcomeHint,
+    ...rest
+  } = options
   const requestId = crypto.randomUUID()
   const finalHeaders = new Headers(headers)
   finalHeaders.set('X-Request-Id', requestId)
+  if (idempotencyKey) finalHeaders.set('Idempotency-Key', idempotencyKey)
   if (body !== undefined) {
     finalHeaders.set('Content-Type', 'application/json')
   }
@@ -261,7 +312,13 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     queueBrowserDiagnostic({ kind: 'request_network_error', requestId, code: 'NETWORK_ERROR' })
     throw new ApiClientError(
       0,
-      { code: 'NETWORK_ERROR', message: 'Không thể kết nối đến máy chủ' },
+      isUnsafeRequest(options)
+        ? {
+            code: 'NETWORK_ERROR',
+            message: unknownOutcomeMessage({ idempotencyKey, unknownOutcomeHint }),
+            details: { outcomeUnknown: true },
+          }
+        : { code: 'NETWORK_ERROR', message: 'Không thể kết nối đến máy chủ' },
       requestId,
     )
   }
@@ -292,7 +349,13 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     })
     throw new ApiClientError(
       res.status,
-      { code: 'NETWORK_ERROR', message: 'Không thể đọc phản hồi từ máy chủ' },
+      isUnsafeRequest(options) && res.ok
+        ? {
+            code: 'NETWORK_ERROR',
+            message: unknownOutcomeMessage(options),
+            details: { outcomeUnknown: true },
+          }
+        : { code: 'NETWORK_ERROR', message: 'Không thể đọc phản hồi từ máy chủ' },
       receivedRequestId,
     )
   }
@@ -301,6 +364,8 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     try {
       json = JSON.parse(text)
     } catch {
+      const unknown = gatewayUnknownOutcome(res, options, receivedRequestId)
+      if (unknown) throw unknown
       if (res.ok) {
         queueBrowserDiagnostic({
           kind: 'response_parse_error',
@@ -318,6 +383,10 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   }
 
   if (!res.ok) {
+    if (!(json as { error?: ApiErrorBody } | null)?.error) {
+      const unknown = gatewayUnknownOutcome(res, options, receivedRequestId)
+      if (unknown) throw unknown
+    }
     const errBody = (json as { error?: ApiErrorBody } | null)?.error ?? {
       code: 'INTERNAL_ERROR',
       message: 'Đã xảy ra lỗi không xác định',

@@ -1,6 +1,8 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type { CreateReceiptInput, ListReceiptsQuery } from '@kiotviet-lite/shared'
+
+import { useDocumentMutation } from '@/hooks/use-document-mutation'
 
 import {
   createReceiptApi,
@@ -38,8 +40,10 @@ export function useCustomerOpenDebtsQuery(customerId: string | undefined) {
 
 export function useCreateReceiptMutation() {
   const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: CreateReceiptInput) => createReceiptApi(input),
+  return useDocumentMutation({
+    intent: 'receipt.create',
+    mutationFn: (input: CreateReceiptInput, idempotencyKey) =>
+      createReceiptApi(input, idempotencyKey),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: RECEIPTS_KEY })
       qc.invalidateQueries({ queryKey: ['customers'] })

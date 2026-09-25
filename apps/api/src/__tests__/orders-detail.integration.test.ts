@@ -110,7 +110,6 @@ describe('Orders detail and print data fields', () => {
         debtLimitOverridden: false,
         cashAmount: 160_000,
         transferAmount: 0,
-        change: 0,
         note: null,
         items: [
           {

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, isNull, like, lte, type SQL, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, ilike, isNull, lte, type SQL, sql } from 'drizzle-orm'
 
 import {
   allocateOrderDiscount,
@@ -35,6 +35,7 @@ import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import { addCustomerDebt, lockCustomerForDebt } from './customer-debt-ledger.service.js'
+import { nextDocumentCode } from './document-codes.service.js'
 import { emitEvent } from './notification-emitter.js'
 import {
   assertDiscountAmounts,
@@ -52,6 +53,7 @@ import {
   loadVariantForUpdate,
   lockProductsInIdOrder,
 } from './products-lock.helper.js'
+import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 import { assertStoreOwned } from './store-scope.js'
 
 // ---------------------------------------------------------------------------
@@ -143,61 +145,13 @@ export interface StockInfo {
 }
 
 // ---------------------------------------------------------------------------
-// Order number generation (pattern from purchase-orders.service.ts)
-// ---------------------------------------------------------------------------
-
-const MAX_DAILY_ORDER_SEQUENCE = 9999
-
-const DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Asia/Ho_Chi_Minh',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-})
-
-function formatDateForCode(date: Date): string {
-  return DATE_FORMATTER.format(date).replace(/-/g, '')
-}
-
-async function generateOrderNumber({ tx, storeId }: { tx: Db; storeId: string }): Promise<string> {
-  const dateStr = formatDateForCode(new Date())
-  const prefix = `HD-${dateStr.slice(2)}-`
-  const escapedPrefix = escapeLikePattern(prefix)
-
-  const rows = await tx
-    .select({ code: sql<string>`MAX(${orders.orderNumber})` })
-    .from(orders)
-    .where(and(eq(orders.storeId, storeId), like(orders.orderNumber, `${escapedPrefix}%`)))
-
-  const maxCode = rows[0]?.code ?? null
-  const nextSeq = maxCode ? parseInt(maxCode.slice(-4), 10) + 1 : 1
-  if (nextSeq > MAX_DAILY_ORDER_SEQUENCE) {
-    throw new ApiError(
-      'BUSINESS_RULE_VIOLATION',
-      'Đã vượt quá 9999 đơn hàng trong ngày, vui lòng liên hệ hỗ trợ',
-    )
-  }
-  return `${prefix}${String(nextSeq).padStart(4, '0')}`
-}
-
-function incrementOrderSequence(code: string): string {
-  const seqStr = code.slice(-4)
-  const next = parseInt(seqStr, 10) + 1
-  if (next > MAX_DAILY_ORDER_SEQUENCE) {
-    throw new ApiError(
-      'BUSINESS_RULE_VIOLATION',
-      'Đã vượt quá 9999 đơn hàng trong ngày, vui lòng liên hệ hỗ trợ',
-    )
-  }
-  return `${code.slice(0, -4)}${String(next).padStart(4, '0')}`
-}
-
-// ---------------------------------------------------------------------------
 // createOrder
 // ---------------------------------------------------------------------------
 
 export interface CreateOrderDeps {
   db: Db
+  // Transaction của request có Idempotency-Key: chứng từ và phản hồi lưu cùng một lần commit
+  transaction?: ServiceTransaction
   actor: OrdersActor
   input: CreateOrderInput
   meta?: RequestMeta
@@ -208,7 +162,8 @@ export interface CreateOrderDeps {
 }
 
 export async function createOrder({
-  db,
+  db: rootDb,
+  transaction,
   actor,
   input: requestedInput,
   meta,
@@ -217,6 +172,7 @@ export async function createOrder({
   offlineCreatedAt,
   skipDebtLimitCheck = false,
 }: CreateOrderDeps): Promise<OrderDetail> {
+  const db = serviceDb(rootDb, transaction)
   let input = requestedInput
   if (input.items.length === 0) {
     throw new ApiError('VALIDATION_ERROR', 'Đơn hàng phải có ít nhất 1 sản phẩm')
@@ -426,69 +382,42 @@ export async function createOrder({
         await lockCustomerForDebt(txDb, { storeId: actor.storeId, customerId: input.customerId })
       }
 
-      // Generate order number with retry on unique violation
-      let orderNumber = await generateOrderNumber({ tx: txDb, storeId: actor.storeId })
-      let createdId: string | null = null
-      let attempts = 0
-      const MAX_ATTEMPTS = 3
-
-      while (attempts < MAX_ATTEMPTS && createdId === null) {
-        try {
-          const [row] = await tx
-            .insert(orders)
-            .values({
-              storeId: actor.storeId,
-              orderNumber,
-              customerId: input.customerId ?? null,
-              userId: actor.userId,
-              priceListId: effectivePriceListId,
-              priceListName: snapshotPriceListName,
-              subtotal: input.subtotal,
-              discountType: input.discountType ?? null,
-              discountValue: input.discountValue,
-              discountAmount: input.discountAmount,
-              total: input.total,
-              paymentMethod: input.paymentMethod,
-              paymentStatus: payment.paymentStatus,
-              cashAmount: input.cashAmount ?? null,
-              transferAmount: input.transferAmount ?? null,
-              change,
-              clientId,
-              note: input.note ?? null,
-              status: 'completed',
-              // BC-08: số khách đã trả lúc bán, để in lại hóa đơn không đổi theo phát sinh sau
-              paidAmountAtSale: input.total - debtAmount,
-            })
-            .returning({ id: orders.id })
-          if (!row) {
-            throw new ApiError('INTERNAL_ERROR', 'Không tạo được đơn hàng')
-          }
-          createdId = row.id
-        } catch (err) {
-          if (isUniqueViolation(err, 'uniq_orders_store_number')) {
-            attempts++
-            if (attempts >= MAX_ATTEMPTS) {
-              throw new ApiError('INTERNAL_ERROR', 'Không thể sinh mã đơn hàng, vui lòng thử lại')
-            }
-            const nextCode = incrementOrderSequence(orderNumber)
-            logger.warn(
-              {
-                storeId: actor.storeId,
-                orderNumber,
-                nextCode,
-                attempt: attempts,
-              },
-              'order.code_collision_retry',
-            )
-            orderNumber = nextCode
-            continue
-          }
-          throw err
-        }
-      }
-      if (!createdId) {
+      // OFF-08: mã đơn cấp từ bộ đếm theo cửa hàng, không đụng mã khi bán song song
+      const orderNumber = await nextDocumentCode({
+        db: txDb,
+        storeId: actor.storeId,
+        kind: 'order',
+      })
+      const [row] = await tx
+        .insert(orders)
+        .values({
+          storeId: actor.storeId,
+          orderNumber,
+          customerId: input.customerId ?? null,
+          userId: actor.userId,
+          priceListId: effectivePriceListId,
+          priceListName: snapshotPriceListName,
+          subtotal: input.subtotal,
+          discountType: input.discountType ?? null,
+          discountValue: input.discountValue,
+          discountAmount: input.discountAmount,
+          total: input.total,
+          paymentMethod: input.paymentMethod,
+          paymentStatus: payment.paymentStatus,
+          cashAmount: input.cashAmount ?? null,
+          transferAmount: input.transferAmount ?? null,
+          change,
+          clientId,
+          note: input.note ?? null,
+          status: 'completed',
+          // BC-08: số khách đã trả lúc bán, để in lại hóa đơn không đổi theo phát sinh sau
+          paidAmountAtSale: input.total - debtAmount,
+        })
+        .returning({ id: orders.id })
+      if (!row) {
         throw new ApiError('INTERNAL_ERROR', 'Không tạo được đơn hàng')
       }
+      const createdId = row.id
 
       // Process items: insert order_items + deduct stock
       const processedItems: OrderDetailItem[] = []
@@ -745,7 +674,7 @@ export async function createOrder({
           })
 
           if (!effectivePriceOverridePinUsed && source === 'offline_sync') {
-            emitEvent(db, {
+            emitEvent(rootDb, {
               storeId: actor.storeId,
               type: 'audit.price_override',
               severity: 'warn',
@@ -765,7 +694,7 @@ export async function createOrder({
 
         // audit.price_override: cảnh báo chủ cửa hàng khi sửa giá hay chiết khấu xuống dưới giá vốn
         if (lineBelowCost && lineUnitCost !== null) {
-          emitEvent(db, {
+          emitEvent(rootDb, {
             storeId: actor.storeId,
             type: 'audit.price_override',
             severity: 'warn',
@@ -887,7 +816,7 @@ export async function createOrder({
               negativeStockAlertsEnabled = setting.negativeStockAlertsEnabled
             }
             if (negativeStockAlertsEnabled) {
-              emitEvent(db, {
+              emitEvent(rootDb, {
                 storeId: actor.storeId,
                 type: 'stock.negative',
                 severity: 'error',
@@ -946,7 +875,7 @@ export async function createOrder({
           userAgent: meta?.userAgent,
         })
 
-        emitEvent(db, {
+        emitEvent(rootDb, {
           storeId: actor.storeId,
           type: 'order.price_mismatch_adjusted',
           severity: 'warn',
@@ -1028,7 +957,7 @@ export async function createOrder({
         })
         // Dòng sửa giá đã có cảnh báo riêng ở trên, chỉ cảnh báo thêm khi đơn chỉ có chiết khấu
         if (!priceApproval.hasOverride)
-          emitEvent(db, {
+          emitEvent(rootDb, {
             storeId: actor.storeId,
             type: 'audit.price_override',
             severity: 'warn',
@@ -1225,7 +1154,7 @@ export async function createOrder({
                 userAgent: meta?.userAgent,
               })
 
-              emitEvent(db, {
+              emitEvent(rootDb, {
                 storeId: actor.storeId,
                 type: 'order.debt_limit_exceeded',
                 severity: 'warn',
@@ -1357,7 +1286,7 @@ export async function createOrder({
           userAgent: meta?.userAgent,
         })
 
-        emitEvent(db, {
+        emitEvent(rootDb, {
           storeId: actor.storeId,
           type: 'order.policy_violation_offline',
           severity: 'error',
@@ -1418,7 +1347,7 @@ export async function createOrder({
 
       // order.high_value: notify when total exceeds threshold
       if (input.total > env.highValueOrderThreshold) {
-        emitEvent(db, {
+        emitEvent(rootDb, {
           storeId: actor.storeId,
           type: 'order.high_value',
           severity: 'info',

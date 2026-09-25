@@ -38,6 +38,11 @@ export function getSupplierPaymentApi(id: string) {
   return apiClient.get<Envelope<SupplierPaymentDetail>>(`/api/v1/supplier-payments/${id}`)
 }
 
-export function createSupplierPaymentApi(input: CreateSupplierPaymentInput) {
-  return apiClient.post<Envelope<SupplierPaymentDetail>>('/api/v1/supplier-payments', input)
+export function createSupplierPaymentApi(
+  input: CreateSupplierPaymentInput,
+  idempotencyKey?: string,
+) {
+  return apiClient.post<Envelope<SupplierPaymentDetail>>('/api/v1/supplier-payments', input, {
+    idempotencyKey,
+  })
 }

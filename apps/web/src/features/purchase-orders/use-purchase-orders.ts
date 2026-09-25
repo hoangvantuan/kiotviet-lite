@@ -1,6 +1,8 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type { CreatePurchaseOrderInput, ListPurchaseOrdersQuery } from '@kiotviet-lite/shared'
+
+import { useDocumentMutation } from '@/hooks/use-document-mutation'
 
 import {
   createPurchaseOrderApi,
@@ -28,8 +30,10 @@ export function usePurchaseOrderQuery(id: string | undefined) {
 
 export function useCreatePurchaseOrderMutation() {
   const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: CreatePurchaseOrderInput) => createPurchaseOrderApi(input),
+  return useDocumentMutation({
+    intent: 'purchase-order.create',
+    mutationFn: (input: CreatePurchaseOrderInput, idempotencyKey) =>
+      createPurchaseOrderApi(input, idempotencyKey),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: PURCHASE_ORDERS_KEY })
       qc.invalidateQueries({ queryKey: ['suppliers'] })

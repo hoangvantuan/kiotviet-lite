@@ -1,8 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import type { CreateOrderInput, DebtInfo, PriceSource } from '@kiotviet-lite/shared'
 
+import { useDocumentMutation } from '@/hooks/use-document-mutation'
 import { apiClient } from '@/lib/api-client'
 import { saveOfflineOrder } from '@/lib/offline-orders'
 import { getPGliteRaw, initializeOfflineDB } from '@/lib/pglite'
@@ -54,6 +55,12 @@ interface CheckoutPayload {
   }[]
 }
 
+export interface CheckoutVariables {
+  /** Tab giỏ hàng đang thanh toán: mỗi tab là một ý định bán, giữ khóa riêng */
+  tab: number
+  order: CheckoutPayload
+}
+
 interface CheckoutResponse {
   data: OrderDetail
 }
@@ -68,9 +75,13 @@ interface CustomerDebtResponse {
 
 export function useCheckoutMutation() {
   const qc = useQueryClient()
-  return useMutation({
-    networkMode: 'always',
-    mutationFn: async (payload: CheckoutPayload) => {
+  return useDocumentMutation({
+    intent: 'pos.order',
+    instance: ({ tab }: CheckoutVariables) => String(tab),
+    // R4 (OFF-07): khóa của lần bán cũng là clientId của đơn, dùng chung cho request trực tuyến
+    // và hàng chờ ngoại tuyến. Mất phản hồi rồi lưu lại (trực tuyến hay ngoại tuyến) vẫn ra một đơn.
+    mutationFn: async ({ order }: CheckoutVariables, clientId) => {
+      const payload = { ...order, clientId }
       const isOffline =
         useOfflineStore.getState().status === 'offline' ||
         (typeof navigator !== 'undefined' && !navigator.onLine)
@@ -82,7 +93,7 @@ export function useCheckoutMutation() {
         const storeId = useAuthStore.getState().user?.storeId
         if (!storeId) throw new Error('Chưa đăng nhập')
 
-        const clientId = await saveOfflineOrder(pglite, storeId, payload as CreateOrderInput)
+        await saveOfflineOrder(pglite, storeId, payload as CreateOrderInput, clientId)
         toast.success('Đơn hàng đã lưu (ngoại tuyến, chờ đồng bộ)')
 
         const debtAmount = payload.debtAmount ?? 0
@@ -144,9 +155,11 @@ export function useCheckoutMutation() {
         return { data: offlineOrder }
       }
 
-      return apiClient.post<CheckoutResponse>('/api/v1/pos/orders', payload)
+      return apiClient.post<CheckoutResponse>('/api/v1/pos/orders', payload, {
+        idempotencyKey: clientId,
+      })
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: (_data, { order: variables }) => {
       qc.invalidateQueries({ queryKey: ['pos-products'] })
       qc.invalidateQueries({ queryKey: ['low-stock-count'] })
       qc.invalidateQueries({ queryKey: ['low-stock-list'] })

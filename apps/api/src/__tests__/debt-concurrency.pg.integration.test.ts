@@ -236,17 +236,13 @@ describe.skipIf(!adminUrl)('TIEN-103: thứ tự khóa công nợ trên Postgres
       ],
     } as CreateOrderInput
 
-    // Đơn bán chạy nối tiếp nhau (hai đơn bán song song trùng mã đơn, lỗi riêng ngoài phạm vi
-    // công nợ), phiếu trả chạy nối tiếp ở luồng thứ hai; hai luồng đan xen nhau từng bước.
+    // OFF-08 (R4): mã đơn cấp từ bộ đếm nên đơn bán chạy song song được, đan xen với phiếu trả
     const ROUNDS = 20
     const actor = { userId: s.owner.id, storeId: s.store.id, role: 'owner' as const }
-    const sales = (async () => {
-      for (let i = 0; i < ROUNDS; i++) await createOrder({ db, actor, input: saleInput })
-    })()
-    const returnsStream = (async () => {
-      for (let i = 0; i < ROUNDS; i++) await returnOne(s)
-    })()
-    const pairs = [sales, returnsStream]
+    const pairs = Array.from({ length: ROUNDS }, () => [
+      createOrder({ db, actor, input: saleInput }),
+      returnOne(s),
+    ]).flat()
 
     expect(rejectedReasons(await Promise.allSettled(pairs))).toEqual([])
 

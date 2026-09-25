@@ -96,6 +96,8 @@ export const createOrderItemSchema = z
     priceSource: priceSourceSchema.nullable().optional(),
     priceSourceDetail: z.string().trim().max(255).nullable().optional(),
   })
+  // R6: trường lạ bị từ chối thay vì bị cắt lặng lẽ
+  .strict()
   .refine((item) => item.lineTotal === item.unitPrice * item.quantity - item.discountAmount, {
     message: 'lineTotal không khớp với unitPrice * quantity - discountAmount',
   })
@@ -142,7 +144,12 @@ export const createOrderSchema = z
       .array(createOrderItemSchema)
       .min(1, 'Đơn hàng phải có ít nhất 1 sản phẩm')
       .max(200, 'Tối đa 200 dòng sản phẩm trong một đơn'),
+    // POS-02: mã đơn do máy bán sinh cho mỗi lần thanh toán, dùng chung cho request trực tuyến và
+    // hàng đợi ngoại tuyến. Đơn trực tuyến lưu lại để /sync/push nhận ra cùng một đơn.
+    clientId: z.string().uuid('Mã đơn phía máy bán không hợp lệ').optional(),
   })
+  // R6: schema ghi quan trọng từ chối trường lạ, không để zod cắt mất (như clientId trước đây)
+  .strict()
   .refine((order) => order.total === order.subtotal - order.discountAmount, {
     message: 'total không khớp với subtotal - discountAmount',
   })

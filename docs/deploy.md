@@ -119,6 +119,20 @@ API đặt `TRUSTED_PROXY_HOPS=1` trong compose nên chỉ tin đúng một đ�
 không qua nginx thì bỏ biến này (mặc định 0), API dùng địa chỉ socket và bỏ qua mọi header IP.
 Đăng nhập còn bị giới hạn 10 lần sai / 15 phút / số điện thoại, bất kể IP.
 
+Thời gian chờ giữa nginx và API (`deploy/nginx.conf`, khối `location /api/`):
+
+| Thiết lập               | Giá trị | Lý do                                                                             |
+| ----------------------- | ------- | --------------------------------------------------------------------------------- |
+| `proxy_connect_timeout` | 5s      | api cùng mạng Docker, không kết nối được trong 5s là api không chạy               |
+| `proxy_send_timeout`    | 60s     | gửi body lên API (file import tối đa 20 MB theo `client_max_body_size`)           |
+| `proxy_read_timeout`    | 90s     | chờ API trả lời; dưới ngưỡng 100s của Cloudflare (lỗi 524) để nginx báo 504 trước |
+
+Hết thời gian chờ không có nghĩa request bị hủy: API vẫn có thể lưu xong chứng từ. Vì vậy mọi
+thao tác tạo đơn, phiếu thu, phiếu chi, phiếu nhập, phiếu trả gửi kèm `Idempotency-Key` (R4). Web
+coi mất kết nối, 502, 504, 524 với request ghi là "chưa rõ đã lưu hay chưa": giữ nguyên form, người
+dùng bấm lưu lại với cùng khóa, API trả lại đúng chứng từ đã lưu (header `Idempotent-Replayed: true`)
+thay vì tạo bản thứ hai. Tăng `proxy_read_timeout` thì giữ dưới 100s nếu đi qua Cloudflare.
+
 ## 4. Log và điều tra sự cố
 
 | Loại                                                   | Vị trí                                                     | Giữ log                                                                                                                                                                                                |

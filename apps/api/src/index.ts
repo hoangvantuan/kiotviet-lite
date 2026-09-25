@@ -67,8 +67,8 @@ app.use(
   cors({
     origin: (origin) => (origin && ALLOWED_ORIGINS.includes(origin) ? origin : null),
     credentials: true,
-    allowHeaders: ['Authorization', 'Content-Type', 'X-Request-Id'],
-    exposeHeaders: ['X-Request-Id'],
+    allowHeaders: ['Authorization', 'Content-Type', 'X-Request-Id', 'Idempotency-Key'],
+    exposeHeaders: ['X-Request-Id', 'Idempotent-Replayed'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   }),
 )

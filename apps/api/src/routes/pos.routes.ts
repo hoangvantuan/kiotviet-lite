@@ -18,6 +18,7 @@ import { ApiError } from '../lib/errors.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
+import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import { isApprovalPermission } from '../services/order-policy.js'
@@ -106,22 +107,26 @@ export function createPosRoutes({ db }: PosRoutesDeps) {
   })
 
   // Story 3.3 - Create order (POST before parameterized routes)
-  app.post('/orders', async (c) => {
-    const auth = c.get('auth')
-    const parsed = await parseJson(c, createOrderSchema)
-    const meta = getRequestMeta(c)
-    const data = await createOrder({
-      db,
-      actor: {
-        userId: auth.userId,
-        storeId: auth.storeId,
-        role: auth.role,
-      },
-      input: parsed,
-      meta,
-    })
-    return c.json({ data }, 201)
-  })
+  app.post(
+    '/orders',
+    idempotent(db, async (c, transaction) => {
+      const auth = c.get('auth')
+      const parsed = await parseJson(c, createOrderSchema)
+      const meta = getRequestMeta(c)
+      const data = await createOrder({
+        db,
+        transaction,
+        actor: {
+          userId: auth.userId,
+          storeId: auth.storeId,
+          role: auth.role,
+        },
+        input: parsed,
+        meta,
+      })
+      return c.json({ data }, 201)
+    }),
+  )
 
   // Story 5.1 - Customer debt info (literal route, an toàn vì /:id dùng prefix khác)
   app.get('/customer-debt/:customerId', async (c) => {

@@ -11,6 +11,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { PinDialog } from '@/features/auth/pin-dialog'
+import { useGuardedOpenChange } from '@/hooks/use-document-mutation'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { ApiClientError } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
@@ -103,6 +104,8 @@ export function PosScreen() {
   const searchRef = useRef<HTMLInputElement>(null)
   const { data: products, isLoading } = usePosProducts(selectedCategory)
   const checkoutMutation = useCheckoutMutation()
+  // R4: không cho đóng hộp thoại thanh toán khi đơn đang gửi đi
+  const handlePaymentOpenChange = useGuardedOpenChange(setPaymentDialogOpen, checkoutMutation)
   const addToCart = useAddToCart()
 
   function handleSelectProduct(product: PosProductItem) {
@@ -159,46 +162,49 @@ export function PosScreen() {
 
     checkoutMutation.mutate(
       {
-        customerId: tab.customerId ?? null,
-        priceListId: tab.priceListId ?? null,
-        priceListName: tab.priceListName ?? null,
-        subtotal,
-        discountType: tab.orderDiscountType,
-        discountValue: tab.orderDiscountValue,
-        discountAmount: tab.orderDiscountAmount,
-        total,
-        paymentMethod: payload.paymentMethod,
-        paymentStatus,
-        cashAmount: payload.cashAmount,
-        transferAmount: payload.transferAmount,
-        debtAmount: debtAmount > 0 ? debtAmount : undefined,
-        debtLimitOverridden: payload.debtLimitOverridden ?? false,
-        debtLimitOverridePin: payload.debtLimitOverridePin,
-        debtLimitApproverId: payload.debtLimitApproverId,
-        priceOverridePin: tab.priceOverridePin ?? undefined,
-        priceApproverId: tab.priceApproverId ?? undefined,
-        note: null,
-        items: tab.items.map((item) => ({
-          productId: item.productId,
-          variantId: item.variantId,
-          productName: item.productName,
-          variantName: item.variantName,
-          unit: item.unitName,
-          unitPrice: item.unitPrice,
-          quantity: item.quantity,
-          discountType: item.discountType,
-          discountValue: item.discountValue,
-          discountAmount: item.discountAmount,
-          lineTotal: item.lineTotal,
-          note: item.notes,
-          unitConversionId: item.unitConversionId,
-          originalPrice: item.originalPrice,
-          priceOverride: item.priceOverride,
-          priceOverrideReason: item.priceOverrideReason,
-          priceOverridePinUsed: item.priceOverridePinUsed,
-          priceSource: item.priceSource,
-          priceSourceDetail: item.priceSourceDetail,
-        })),
+        tab: cart.activeTab,
+        order: {
+          customerId: tab.customerId ?? null,
+          priceListId: tab.priceListId ?? null,
+          priceListName: tab.priceListName ?? null,
+          subtotal,
+          discountType: tab.orderDiscountType,
+          discountValue: tab.orderDiscountValue,
+          discountAmount: tab.orderDiscountAmount,
+          total,
+          paymentMethod: payload.paymentMethod,
+          paymentStatus,
+          cashAmount: payload.cashAmount,
+          transferAmount: payload.transferAmount,
+          debtAmount: debtAmount > 0 ? debtAmount : undefined,
+          debtLimitOverridden: payload.debtLimitOverridden ?? false,
+          debtLimitOverridePin: payload.debtLimitOverridePin,
+          debtLimitApproverId: payload.debtLimitApproverId,
+          priceOverridePin: tab.priceOverridePin ?? undefined,
+          priceApproverId: tab.priceApproverId ?? undefined,
+          note: null,
+          items: tab.items.map((item) => ({
+            productId: item.productId,
+            variantId: item.variantId,
+            productName: item.productName,
+            variantName: item.variantName,
+            unit: item.unitName,
+            unitPrice: item.unitPrice,
+            quantity: item.quantity,
+            discountType: item.discountType,
+            discountValue: item.discountValue,
+            discountAmount: item.discountAmount,
+            lineTotal: item.lineTotal,
+            note: item.notes,
+            unitConversionId: item.unitConversionId,
+            originalPrice: item.originalPrice,
+            priceOverride: item.priceOverride,
+            priceOverrideReason: item.priceOverrideReason,
+            priceOverridePinUsed: item.priceOverridePinUsed,
+            priceSource: item.priceSource,
+            priceSourceDetail: item.priceSourceDetail,
+          })),
+        },
       },
       {
         onSuccess: (response) => {
@@ -420,7 +426,7 @@ export function PosScreen() {
       {/* Story 3.3: Payment dialog */}
       <PaymentDialog
         open={paymentDialogOpen}
-        onOpenChange={setPaymentDialogOpen}
+        onOpenChange={handlePaymentOpenChange}
         grandTotal={cartGrandTotal}
         customerId={cartCustomerId}
         customerName={cartCustomerName}
