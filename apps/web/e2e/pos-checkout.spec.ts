@@ -113,7 +113,7 @@ test.describe('Kiểm thử E2E: POS Bán hàng (Tiền mặt, Chuyển khoản,
     const customerSelectBtn = page.getByRole('button', { name: /Kh[aá]ch l[eẻ]/i })
     await customerSelectBtn.click()
 
-    const searchCustomerInput = page.getByPlaceholder(/T[iì]m (theo )?t[eê]n/i)
+    const searchCustomerInput = page.getByPlaceholder(/m[aã] ho[aặ]c s[oố] đi[eệ]n tho[aạ]i/i)
     await searchCustomerInput.fill('Bùi Thanh Hà')
     const customerOption = page.getByText(/Bùi Thanh Hà|Bui Thanh Ha/i).first()
     await expect(customerOption).toBeVisible({ timeout: 5000 })
@@ -169,7 +169,7 @@ test.describe('Kiểm thử E2E: POS Bán hàng (Tiền mặt, Chuyển khoản,
     // Chọn khách hàng Bùi Thanh Hà (hạn mức 5.000.000đ)
     const customerSelectBtn = page.getByRole('button', { name: /Kh[aá]ch l[eẻ]/i })
     await customerSelectBtn.click()
-    const searchCustomerInput = page.getByPlaceholder(/T[iì]m (theo )?t[eê]n/i)
+    const searchCustomerInput = page.getByPlaceholder(/m[aã] ho[aặ]c s[oố] đi[eệ]n tho[aạ]i/i)
     await searchCustomerInput.fill('Bùi Thanh Hà')
     await page
       .getByText(/Bùi Thanh Hà|Bui Thanh Ha/i)
