@@ -25,6 +25,8 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 Thứ tự tự động: postgres healthy → migrate chạy xong → api start → web start.
 
+Build web cho production phải đặt `VITE_API_URL=` (chuỗi rỗng, tức cùng origin; `apps/web/Dockerfile` đã đặt sẵn) vì CSP của nginx chỉ cho `connect-src 'self'`. Không đặt biến thì code rơi về `http://localhost:3000`, đặt URL khác origin thì request API bị CSP chặn.
+
 Kiểm tra nhanh:
 
 ```bash

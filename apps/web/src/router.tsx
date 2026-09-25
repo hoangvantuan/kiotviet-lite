@@ -53,6 +53,7 @@ import { StockChecksPage } from '@/pages/stock-checks-page'
 import { SupplierPaymentsPage } from '@/pages/supplier-payments-page'
 import { SuppliersPage } from '@/pages/suppliers-page'
 import { VolumePricesPage } from '@/pages/volume-prices-page'
+import { UpdatePrompt } from '@/pwa/UpdatePrompt'
 import { useAuthStore } from '@/stores/use-auth-store'
 
 const rootRoute = createRootRoute({
@@ -472,6 +473,7 @@ function RootComponent() {
     <ErrorBoundary>
       <Outlet />
       <ResponsiveToaster />
+      <UpdatePrompt />
     </ErrorBoundary>
   )
 }

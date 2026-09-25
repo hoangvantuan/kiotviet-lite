@@ -266,6 +266,9 @@ importers:
       vite-plugin-pwa:
         specifier: ^1.2.0
         version: 1.2.0(vite@8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))(workbox-build@7.4.1)(workbox-window@7.4.1)
+      workbox-window:
+        specifier: ^7.4.1
+        version: 7.4.1
 
   packages/notifications:
     dependencies:
