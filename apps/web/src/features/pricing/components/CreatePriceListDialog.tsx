@@ -13,6 +13,7 @@ import {
   type ImportPriceListInput,
   importPriceListSchema,
   type ImportPriceListSummary,
+  MAX_PAGE_SIZE,
   type PriceListListItem,
   type RoundingRule,
 } from '@kiotviet-lite/shared'
@@ -209,7 +210,7 @@ interface DirectFormProps {
 
 function DirectForm({ onBack, onClose }: DirectFormProps) {
   const mutation = useCreatePriceListMutation()
-  const productsQuery = useProductsQuery({ status: 'active', pageSize: 100, page: 1 })
+  const productsQuery = useProductsQuery({ status: 'active', pageSize: MAX_PAGE_SIZE, page: 1 })
   const products = productsQuery.data?.data ?? []
 
   const form = useForm<DirectFormShape>({
@@ -370,7 +371,7 @@ function FormulaForm({ onBack, onClose }: FormulaFormProps) {
   const formulaValue = form.watch('formulaValue') ?? 0
   const roundingRule = form.watch('roundingRule')
 
-  const baseItemsQuery = usePriceListItemsQuery(baseListId || undefined, { page: 1, pageSize: 200 })
+  const baseItemsQuery = usePriceListItemsQuery(baseListId || undefined, { page: 1, pageSize: 5 })
 
   const previewItems = useMemo(
     () => (baseItemsQuery.data?.data ?? []).slice(0, 5),
@@ -614,7 +615,7 @@ function ChainForm({ onBack, onClose }: ChainFormProps) {
   const formulaValue = form.watch('formulaValue') ?? 0
   const roundingRule = form.watch('roundingRule')
 
-  const baseItemsQuery = usePriceListItemsQuery(baseListId || undefined, { page: 1, pageSize: 200 })
+  const baseItemsQuery = usePriceListItemsQuery(baseListId || undefined, { page: 1, pageSize: 5 })
 
   const previewItems = useMemo(
     () => (baseItemsQuery.data?.data ?? []).slice(0, 5),
@@ -952,7 +953,7 @@ function ImportForm({ onBack, onClose }: ImportFormProps) {
   const mutation = useImportPriceListMutation()
   const directQuery = usePriceListsQuery({
     method: 'direct',
-    pageSize: 100,
+    pageSize: MAX_PAGE_SIZE,
     status: 'all',
     page: 1,
   })

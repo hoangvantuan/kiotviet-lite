@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { NAME_REGEX } from '../constants/regex.js'
+import { paginationSchema } from './pagination.js'
 
 export const brandNameSchema = z
   .string({ required_error: 'Vui lòng nhập tên thương hiệu' })
@@ -11,9 +12,7 @@ export const brandNameSchema = z
 
 export const createBrandSchema = z.object({ name: brandNameSchema })
 export const updateBrandSchema = z.object({ name: brandNameSchema })
-export const listBrandsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+export const listBrandsQuerySchema = paginationSchema.extend({
   search: z.string().trim().optional(),
   status: z.enum(['active', 'trashed']).default('active'),
 })

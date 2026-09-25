@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { paginationSchema } from './pagination.js'
 import { priceSchema } from './price-list-management.js'
 
 export const volumeMinQtySchema = z
@@ -55,9 +56,7 @@ export const replaceVolumePricesSchema = z
     }
   })
 
-export const listVolumePricesQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+export const listVolumePricesQuerySchema = paginationSchema.extend({
   search: z.string().trim().optional(),
 })
 

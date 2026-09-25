@@ -6,6 +6,7 @@ import { z } from 'zod'
 import type { CreateCategoryDiscountInput } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
+import { CustomerCombobox } from '@/components/shared/customer-combobox'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -27,7 +28,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { useCategoriesQuery } from '@/features/categories/use-categories'
-import { useCustomerGroupsQuery, useCustomersQuery } from '@/features/customers/use-customers'
+import { useCustomerGroupsQuery } from '@/features/customers/use-customers'
 import { handleApiError } from '@/lib/api-error'
 import { showSuccess } from '@/lib/toast'
 
@@ -104,10 +105,8 @@ interface Props {
 export function CreateCategoryDiscountDialog({ open, onOpenChange }: Props) {
   const mutation = useCreateCategoryDiscountMutation()
   const categoriesQuery = useCategoriesQuery({ enabled: open })
-  const customersQuery = useCustomersQuery({ pageSize: 200, page: 1 })
   const groupsQuery = useCustomerGroupsQuery({ enabled: open })
   const categories = categoriesQuery.data ?? []
-  const customers = customersQuery.data?.data ?? []
   const groups = groupsQuery.data ?? []
 
   const form = useForm<FormShape>({
@@ -213,28 +212,10 @@ export function CreateCategoryDiscountDialog({ open, onOpenChange }: Props) {
               <Label>
                 Khách hàng <span className="text-destructive">*</span>
               </Label>
-              <Select
+              <CustomerCombobox
                 value={form.watch('customerId')}
-                onValueChange={(v) => form.setValue('customerId', v, { shouldValidate: true })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn khách hàng" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.length === 0 ? (
-                    <div className="px-2 py-2 text-xs text-muted-foreground">
-                      Chưa có khách hàng.
-                    </div>
-                  ) : (
-                    customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                        {c.phone && ` • ${c.phone}`}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+                onChange={(v) => form.setValue('customerId', v ?? '', { shouldValidate: true })}
+              />
               {form.formState.errors.customerId && (
                 <p className="text-sm text-destructive">
                   {form.formState.errors.customerId.message}

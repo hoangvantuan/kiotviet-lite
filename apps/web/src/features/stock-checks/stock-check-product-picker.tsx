@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 
-import type { ProductListItem } from '@kiotviet-lite/shared'
+import { MAX_PAGE_SIZE, type ProductListItem } from '@kiotviet-lite/shared'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -33,7 +33,7 @@ export interface StockCheckProductPickerProps {
   onConfirm: (selections: StockCheckPickerSelection[]) => void
 }
 
-const MAX_BULK_SIZE = 1000
+const MAX_BULK_SIZE = MAX_PAGE_SIZE
 
 export function StockCheckProductPicker({
   open,
@@ -42,7 +42,7 @@ export function StockCheckProductPicker({
   onConfirm,
 }: StockCheckProductPickerProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'category' | 'search'>('all')
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [selectedItems, setSelectedItems] = useState<Map<string, ProductListItem>>(new Map())
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | 'none' | null>(null)
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounced(search, 300)
@@ -75,17 +75,17 @@ export function StockCheckProductPicker({
   const categoryItems = filterTrackable(categoryQuery.data?.data)
   const searchItems = filterTrackable(searchQuery.data?.data)
 
-  const toggle = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+  const toggle = (p: ProductListItem) => {
+    setSelectedItems((prev) => {
+      const next = new Map(prev)
+      if (next.has(p.id)) next.delete(p.id)
+      else next.set(p.id, p)
       return next
     })
   }
 
   const reset = () => {
-    setSelectedIds(new Set())
+    setSelectedItems(new Map())
     setSearch('')
     setSelectedCategoryId(null)
     setActiveTab('all')
@@ -97,15 +97,9 @@ export function StockCheckProductPicker({
   }
 
   const submit = () => {
-    if (selectedIds.size === 0) return
-    const pool = new Map<string, ProductListItem>()
-    for (const p of [...allItems, ...categoryItems, ...searchItems]) {
-      pool.set(p.id, p)
-    }
+    if (selectedItems.size === 0) return
     const selections: StockCheckPickerSelection[] = []
-    for (const id of selectedIds) {
-      const p = pool.get(id)
-      if (!p) continue
+    for (const p of selectedItems.values()) {
       selections.push({
         productId: p.id,
         productName: p.name,
@@ -134,7 +128,7 @@ export function StockCheckProductPicker({
     return (
       <div className="divide-y">
         {items.map((p) => {
-          const checked = selectedIds.has(p.id)
+          const checked = selectedItems.has(p.id)
           return (
             <label
               key={p.id}
@@ -144,7 +138,7 @@ export function StockCheckProductPicker({
                 type="checkbox"
                 className="size-4"
                 checked={checked}
-                onChange={() => toggle(p.id)}
+                onChange={() => toggle(p)}
               />
               <span className="flex-1 truncate">
                 <span className="font-medium">{p.name}</span>{' '}
@@ -251,12 +245,12 @@ export function StockCheckProductPicker({
 
         <DialogFooter className="flex-col-reverse gap-2 sm:flex-row">
           <span className="text-sm text-muted-foreground mr-auto">
-            Đã chọn {selectedIds.size} sản phẩm
+            Đã chọn {selectedItems.size} sản phẩm
           </span>
           <Button variant="outline" onClick={() => handleClose(false)}>
             Huỷ
           </Button>
-          <Button onClick={submit} disabled={selectedIds.size === 0}>
+          <Button onClick={submit} disabled={selectedItems.size === 0}>
             Thêm vào phiếu
           </Button>
         </DialogFooter>

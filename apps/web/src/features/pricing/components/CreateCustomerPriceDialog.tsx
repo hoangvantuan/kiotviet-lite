@@ -1,9 +1,11 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 
 import type { CreateCustomerPriceInput } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
+import { CustomerCombobox } from '@/components/shared/customer-combobox'
+import { ProductCombobox } from '@/components/shared/product-combobox'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -14,16 +16,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { useCustomersQuery } from '@/features/customers/use-customers'
-import { useProductsQuery } from '@/features/products/use-products'
+import { useProductQuery } from '@/features/products/use-products'
 import { handleApiError } from '@/lib/api-error'
 import { formatVnd } from '@/lib/currency'
 import { showSuccess } from '@/lib/toast'
@@ -51,10 +45,6 @@ export function CreateCustomerPriceDialog({
   defaultProductId,
 }: Props) {
   const mutation = useCreateCustomerPriceMutation()
-  const customersQuery = useCustomersQuery({ pageSize: 200, page: 1 })
-  const productsQuery = useProductsQuery({ status: 'active', pageSize: 200, page: 1 })
-  const customers = customersQuery.data?.data ?? []
-  const products = productsQuery.data?.data ?? []
 
   const form = useForm<FormShape>({
     mode: 'onTouched',
@@ -81,10 +71,8 @@ export function CreateCustomerPriceDialog({
   const productId = form.watch('productId')
   const price = form.watch('price')
 
-  const selectedProduct = useMemo(
-    () => products.find((p) => p.id === productId) ?? null,
-    [products, productId],
-  )
+  const { data: productDetail } = useProductQuery(productId || undefined)
+  const selectedProduct = productDetail
 
   const submit = form.handleSubmit(async (values) => {
     if (!values.customerId) {
@@ -128,27 +116,11 @@ export function CreateCustomerPriceDialog({
             <Label>
               Khách hàng <span className="text-destructive">*</span>
             </Label>
-            <Select
+            <CustomerCombobox
               value={customerId}
-              onValueChange={(v) => form.setValue('customerId', v, { shouldValidate: true })}
+              onChange={(v) => form.setValue('customerId', v ?? '', { shouldValidate: true })}
               disabled={Boolean(defaultCustomerId)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Chọn khách hàng" />
-              </SelectTrigger>
-              <SelectContent>
-                {customers.length === 0 ? (
-                  <div className="px-2 py-2 text-xs text-muted-foreground">Chưa có khách hàng.</div>
-                ) : (
-                  customers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                      {c.phone && ` • ${c.phone}`}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            />
             {form.formState.errors.customerId && (
               <p className="text-sm text-destructive">{form.formState.errors.customerId.message}</p>
             )}
@@ -158,26 +130,12 @@ export function CreateCustomerPriceDialog({
             <Label>
               Sản phẩm <span className="text-destructive">*</span>
             </Label>
-            <Select
+            <ProductCombobox
               value={productId}
-              onValueChange={(v) => form.setValue('productId', v, { shouldValidate: true })}
+              onChange={(v) => form.setValue('productId', v ?? '', { shouldValidate: true })}
+              status="active"
               disabled={Boolean(defaultProductId)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Chọn sản phẩm" />
-              </SelectTrigger>
-              <SelectContent>
-                {products.length === 0 ? (
-                  <div className="px-2 py-2 text-xs text-muted-foreground">Chưa có sản phẩm.</div>
-                ) : (
-                  products.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name} • SKU {p.sku}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            />
             {form.formState.errors.productId && (
               <p className="text-sm text-destructive">{form.formState.errors.productId.message}</p>
             )}

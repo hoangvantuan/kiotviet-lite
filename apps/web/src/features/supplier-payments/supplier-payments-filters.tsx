@@ -1,12 +1,5 @@
+import { SupplierCombobox } from '@/components/shared/supplier-combobox'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { useSuppliersQuery } from '@/features/suppliers/use-suppliers'
 
 interface SupplierPaymentsFiltersProps {
   searchInput: string
@@ -29,9 +22,6 @@ export function SupplierPaymentsFilters({
   toDate,
   onToDateChange,
 }: SupplierPaymentsFiltersProps) {
-  const suppliersQuery = useSuppliersQuery({ pageSize: 200, hasDebt: 'all' })
-  const suppliers = suppliersQuery.data?.data ?? []
-
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
       <Input
@@ -39,22 +29,12 @@ export function SupplierPaymentsFilters({
         value={searchInput}
         onChange={(e) => onSearchInputChange(e.target.value)}
       />
-      <Select
-        value={supplierId ?? 'all'}
-        onValueChange={(v) => onSupplierIdChange(v === 'all' ? undefined : v)}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder="Tất cả NCC" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Tất cả NCC</SelectItem>
-          {suppliers.map((s) => (
-            <SelectItem key={s.id} value={s.id}>
-              {s.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <SupplierCombobox
+        value={supplierId}
+        onChange={onSupplierIdChange}
+        hasDebt="all"
+        placeholder="Tất cả NCC"
+      />
       <Input
         type="date"
         value={fromDate}

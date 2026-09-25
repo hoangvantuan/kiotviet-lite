@@ -1,12 +1,5 @@
+import { CustomerCombobox } from '@/components/shared/customer-combobox'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { useCustomersQuery } from '@/features/customers/use-customers'
 
 interface ReceiptsFiltersProps {
   searchInput: string
@@ -29,9 +22,6 @@ export function ReceiptsFilters({
   toDate,
   onToDateChange,
 }: ReceiptsFiltersProps) {
-  const customersQuery = useCustomersQuery({ pageSize: 200, hasDebt: 'all' })
-  const customers = customersQuery.data?.data ?? []
-
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
       <Input
@@ -39,22 +29,12 @@ export function ReceiptsFilters({
         value={searchInput}
         onChange={(e) => onSearchInputChange(e.target.value)}
       />
-      <Select
-        value={customerId ?? 'all'}
-        onValueChange={(v) => onCustomerIdChange(v === 'all' ? undefined : v)}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder="Tất cả KH" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Tất cả KH</SelectItem>
-          {customers.map((c) => (
-            <SelectItem key={c.id} value={c.id}>
-              {c.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <CustomerCombobox
+        value={customerId}
+        onChange={onCustomerIdChange}
+        hasDebt="all"
+        placeholder="Tất cả KH"
+      />
       <Input
         type="date"
         value={fromDate}

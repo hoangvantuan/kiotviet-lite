@@ -1,10 +1,11 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 
 import { type CreateSupplierPaymentInput, createSupplierPaymentSchema } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
+import { SupplierCombobox } from '@/components/shared/supplier-combobox'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -15,15 +16,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { useSuppliersQuery } from '@/features/suppliers/use-suppliers'
+import { useSupplierQuery, useSuppliersQuery } from '@/features/suppliers/use-suppliers'
 import { asFormSetError, handleApiError } from '@/lib/api-error'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { showSuccess } from '@/lib/toast'
@@ -52,14 +46,6 @@ export function CreateSupplierPaymentDialog({
   onCreated,
 }: CreateSupplierPaymentDialogProps) {
   const mutation = useCreateSupplierPaymentMutation()
-  const suppliersQuery = useSuppliersQuery({ pageSize: 200, hasDebt: 'yes' })
-
-  useEffect(() => {
-    if (open) {
-      suppliersQuery.refetch()
-    }
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
-  const suppliers = useMemo(() => suppliersQuery.data?.data ?? [], [suppliersQuery.data])
 
   const form = useForm<CreateSupplierPaymentInput>({
     resolver: zodResolver(createSupplierPaymentSchema),
@@ -74,10 +60,10 @@ export function CreateSupplierPaymentDialog({
   }, [open, form])
 
   const supplierId = useWatch({ control: form.control, name: 'supplierId' })
-  const selectedSupplier = useMemo(
-    () => suppliers.find((s) => s.id === supplierId),
-    [suppliers, supplierId],
-  )
+  const checkDebtQuery = useSuppliersQuery({ pageSize: 1, hasDebt: 'yes' })
+  const noSuppliersWithDebt = !checkDebtQuery.isLoading && checkDebtQuery.data?.data.length === 0
+  const { data: supplierDetail } = useSupplierQuery(supplierId || undefined)
+  const selectedSupplier = supplierDetail
   const currentDebt = selectedSupplier?.currentDebt ?? 0
 
   const noteValue = useWatch({ control: form.control, name: 'note' }) ?? ''
@@ -115,7 +101,6 @@ export function CreateSupplierPaymentDialog({
   const isPending = mutation.isPending
   const errors = form.formState.errors
   const disabled = !form.formState.isValid || isPending
-  const noSuppliersWithDebt = !suppliersQuery.isLoading && suppliers.length === 0
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -131,28 +116,17 @@ export function CreateSupplierPaymentDialog({
             <Label htmlFor="payment-supplier">
               Nhà cung cấp <span className="text-destructive">*</span>
             </Label>
-            <Select
-              value={supplierId || undefined}
-              onValueChange={(v) => form.setValue('supplierId', v, { shouldValidate: true })}
+            <SupplierCombobox
               disabled={noSuppliersWithDebt}
-            >
-              <SelectTrigger id="payment-supplier">
-                <SelectValue placeholder="Chọn nhà cung cấp" />
-              </SelectTrigger>
-              <SelectContent>
-                {suppliers.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    <span className="truncate">
-                      {s.name}
-                      {s.phone ? ` - ${s.phone}` : ''} - Nợ: {formatVndWithSuffix(s.currentDebt)}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              value={supplierId || undefined}
+              onChange={(v) => form.setValue('supplierId', v ?? '', { shouldValidate: true })}
+              hasDebt="yes"
+              showDebt={true}
+            />
             {noSuppliersWithDebt && (
               <p className="text-xs text-muted-foreground">Hiện không có NCC nào còn nợ phải trả</p>
             )}
+
             {errors.supplierId?.message && (
               <p className="text-xs text-destructive">{errors.supplierId.message}</p>
             )}

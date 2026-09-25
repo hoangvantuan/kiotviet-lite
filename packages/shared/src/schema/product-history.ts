@@ -1,8 +1,8 @@
 import { z } from 'zod'
 
-export const productHistoryQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+import { paginationSchema } from './pagination.js'
+
+export const productHistoryQuerySchema = paginationSchema.extend({
   variantId: z.string().uuid().optional(),
 })
 

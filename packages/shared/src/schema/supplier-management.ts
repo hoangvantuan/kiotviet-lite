@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { NAME_REGEX, PHONE_REGEX, TAX_ID_REGEX } from '../constants/regex.js'
+import { paginationSchema } from './pagination.js'
 
 export const supplierNameSchema = z
   .string({ required_error: 'Vui lòng nhập tên nhà cung cấp' })
@@ -56,17 +57,12 @@ export const updateSupplierSchema = z
     message: 'Cần ít nhất một trường để cập nhật',
   })
 
-export const listSuppliersQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+export const listSuppliersQuerySchema = paginationSchema.extend({
   search: z.string().trim().optional(),
   hasDebt: supplierHasDebtSchema.default('all'),
 })
 
-export const listTrashedSuppliersQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(50),
-})
+export const listTrashedSuppliersQuerySchema = paginationSchema.extend({})
 
 export const supplierListItemSchema = z.object({
   id: z.string().uuid(),
