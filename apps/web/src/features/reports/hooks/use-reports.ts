@@ -61,10 +61,11 @@ export function useInventoryReport(
   tab: InventoryReportTab,
   page: number = 1,
   pageSize: number = 20,
+  categoryId?: string,
 ) {
   return useQuery({
-    queryKey: ['reports', 'inventory', tab, page, pageSize],
-    queryFn: async () => (await getInventoryReportApi(tab, page, pageSize)).data,
+    queryKey: ['reports', 'inventory', tab, page, pageSize, categoryId ?? null],
+    queryFn: async () => (await getInventoryReportApi(tab, page, pageSize, categoryId)).data,
   })
 }
 

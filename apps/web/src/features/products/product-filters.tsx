@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/sheet'
 import { useMediaQuery } from '@/hooks/use-media-query'
 
-import { buildCategoryTree } from '../categories/utils'
+import { CategoryFilterSelect } from '../categories/category-filter-select'
 
 export type StatusFilter = 'all' | 'active' | 'inactive'
 export type StockFilterValue = 'all' | 'in_stock' | 'out_of_stock' | 'below_min'
@@ -44,39 +44,6 @@ export interface ProductFiltersProps {
 
 const ALL = 'all'
 const NONE = 'none'
-
-function CategorySelect({
-  value,
-  onValueChange,
-  categories,
-}: {
-  value: string
-  onValueChange: (v: string) => void
-  categories: CategoryItem[]
-}) {
-  const tree = buildCategoryTree(categories)
-  return (
-    <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger className="md:w-56">
-        <SelectValue placeholder="Tất cả danh mục" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={ALL}>Tất cả danh mục</SelectItem>
-        <SelectItem value={NONE}>Chưa phân loại</SelectItem>
-        {tree.map((parent) => (
-          <div key={parent.id}>
-            <SelectItem value={parent.id}>{parent.name}</SelectItem>
-            {parent.children.map((child) => (
-              <SelectItem key={child.id} value={child.id}>
-                {`    ${child.name}`}
-              </SelectItem>
-            ))}
-          </div>
-        ))}
-      </SelectContent>
-    </Select>
-  )
-}
 
 function BrandSelect({
   value,
@@ -166,7 +133,7 @@ export function ProductFilters({ value, onChange, categories, brands }: ProductF
 
   const filters = (
     <>
-      <CategorySelect
+      <CategoryFilterSelect
         value={value.categoryId}
         onValueChange={(v) => onChange({ categoryId: v })}
         categories={categories}

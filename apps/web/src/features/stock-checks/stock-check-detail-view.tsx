@@ -26,7 +26,7 @@ import { showError, showSuccess } from '@/lib/toast'
 
 import { getProductApi } from '../products/products-api'
 import { StockCheckStatusBadge } from './stock-check-status-badge'
-import { formatDiff } from './stock-check-utils'
+import { formatConfirmStockCheckError, formatDiff } from './stock-check-utils'
 import {
   useConfirmStockCheckMutation,
   useDeleteStockCheckMutation,
@@ -98,23 +98,7 @@ export function StockCheckDetailView({ stockCheckId }: StockCheckDetailViewProps
       const r = await confirmMutation.mutateAsync(stockCheckId)
       showSuccess(`Đã xác nhận phiếu kiểm ${r.data.code}. Tồn kho đã cập nhật.`)
     } catch (err) {
-      if (err instanceof ApiClientError) {
-        if (err.code === 'BUSINESS_RULE_VIOLATION') {
-          const details = err.details as
-            | { code?: string; items?: { productName: string; wouldBe: number }[] }
-            | undefined
-          if (details?.code === 'NEGATIVE_STOCK' && Array.isArray(details.items)) {
-            const list = details.items
-              .map((d) => `• ${d.productName} (sẽ còn ${d.wouldBe})`)
-              .join('\n')
-            showError(`Tồn sẽ âm sau khi xác nhận:\n${list}`)
-            return
-          }
-        }
-        showError(err.message)
-      } else {
-        showError('Không xác nhận được phiếu kiểm')
-      }
+      showError(formatConfirmStockCheckError(err))
     }
   }
 

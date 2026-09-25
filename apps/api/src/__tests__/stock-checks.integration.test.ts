@@ -401,7 +401,9 @@ describe('POST /stock-checks/:id/confirm (confirmStockCheck)', () => {
     expect(row?.costPrice).toBe(7000)
   })
 
-  it('AC13: Confirm khi diff sẽ làm tồn âm → 422 NEGATIVE_STOCK với danh sách', async () => {
+  // Trước KHO-02, tồn giảm sau lúc đếm làm chênh lệch cũ đẩy tồn xuống âm (NEGATIVE_STOCK).
+  // Nay mọi thay đổi tồn sau lúc đếm đều bị chặn trước, yêu cầu đếm lại.
+  it('AC13: Confirm khi tồn giảm sau lúc đếm → 422 STOCK_CHANGED_SINCE_COUNT với danh sách', async () => {
     const product = await createProductFixture(env)
     await setProductStock(env, product.id, 5)
 
@@ -423,8 +425,12 @@ describe('POST /stock-checks/:id/confirm (confirmStockCheck)', () => {
     )
     expect(conf.status).toBe(422)
     const details = conf.body.error.details as { code?: string; items?: unknown[] } | undefined
-    expect(details?.code).toBe('NEGATIVE_STOCK')
-    expect(Array.isArray(details?.items)).toBe(true)
+    expect(details?.code).toBe('STOCK_CHANGED_SINCE_COUNT')
+    expect(details?.items).toEqual([
+      expect.objectContaining({ productId: product.id, systemQty: 5, currentStock: 1 }),
+    ])
+    const [row] = await env.base.db.select().from(products).where(eq(products.id, product.id))
+    expect(row?.currentStock).toBe(1)
   })
 
   it('AC14: Confirm phiếu đã confirmed → 409', async () => {
@@ -936,7 +942,7 @@ describe('Stock check — additional review-driven cases', () => {
     expect(statuses).toEqual([200, 409])
   })
 
-  it('AC22h: 2 phiếu cùng SP confirm song song → cả 2 thành công, tồn cuối = base + diff1 + diff2', async () => {
+  it('AC22h: 2 phiếu cùng SP confirm song song → 1 phiếu thành công, phiếu kia bị chặn vì tồn đã đổi sau lúc đếm (KHO-02)', async () => {
     const product = await createProductFixture(env)
     await setProductStock(env, product.id, 100)
     const c1 = await jsonRequest<{ data: SCDetailResp }>(
@@ -969,11 +975,12 @@ describe('Stock check — additional review-driven cases', () => {
         env.base.owner.authHeader,
       ),
     ])
-    expect(r1.status).toBe(200)
-    expect(r2.status).toBe(200)
+    // Cộng dồn cả hai chênh lệch (115) không khớp số đếm nào, nên phiếu xác nhận sau phải đếm lại
+    expect([r1.status, r2.status].sort()).toEqual([200, 422])
+    const loser = (r1.status === 422 ? r1 : r2) as unknown as { body: ApiError }
+    expect(loser.body.error.details).toMatchObject({ code: 'STOCK_CHANGED_SINCE_COUNT' })
     const [row] = await env.base.db.select().from(products).where(eq(products.id, product.id))
-    // base 100 + diff1 (105-100=+5) + diff2 (110-100=+10) = 115
-    expect(row?.currentStock).toBe(115)
+    expect(row?.currentStock).toBe(r1.status === 200 ? 105 : 110)
   })
 
   it('AC22i: multi-tenant — store khác KHÔNG thấy phiếu kiểm của store hiện tại', async () => {
