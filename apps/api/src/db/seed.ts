@@ -13,6 +13,10 @@
  * - 5 nhà cung cấp
  * - 2 bảng giá (1 direct + 1 formula) + price list items
  * - 3 phiếu nhập kho + items + inventory transactions
+ *
+ * Tồn kho chỉ sinh từ chứng từ (ADR 0006): mỗi mặt hàng có một dòng sổ tồn đầu kỳ
+ * (type 'initial_stock') cộng các dòng nhập của phiếu nhập, nên current_stock luôn
+ * bằng tổng sổ giao dịch kho. Seed không tạo đơn bán nên tổng mua của khách bằng 0.
  */
 
 import bcrypt from 'bcryptjs'
@@ -163,6 +167,20 @@ export async function seed(db: Db) {
   // ─── 4. Products (~55 sản phẩm) ───
   console.log('📦 Tạo sản phẩm...')
 
+  // Mặt hàng giữ tồn (sản phẩm không biến thể hoặc từng biến thể), khoá theo SKU.
+  // Dùng để ghi sổ tồn đầu kỳ và dòng phiếu nhập khớp đúng tồn cuối.
+  type StockItem = {
+    productId: string
+    variantId: string | null
+    name: string
+    variantLabel: string | null
+    sku: string
+    cost: number
+    stock: number
+  }
+  const stockItems = new Map<string, StockItem>()
+  const productNames = new Map<string, string>()
+
   // Helper: insert 1 sản phẩm, trả về id
   async function addProduct(p: {
     name: string
@@ -189,9 +207,22 @@ export async function seed(db: Db) {
       status: 'active',
       hasVariants: p.hasVariants ?? false,
       trackInventory: true,
-      currentStock: p.stock,
+      // Giống app: tồn cấp sản phẩm cha bằng tổng tồn biến thể, cập nhật sau khi tạo biến thể
+      currentStock: p.hasVariants ? 0 : p.stock,
       minStock: 5,
     })
+    productNames.set(id, p.name)
+    if (!p.hasVariants) {
+      stockItems.set(p.sku, {
+        productId: id,
+        variantId: null,
+        name: p.name,
+        variantLabel: null,
+        sku: p.sku,
+        cost: p.cost,
+        stock: p.stock,
+      })
+    }
     return id
   }
 
@@ -451,7 +482,7 @@ export async function seed(db: Db) {
   const unitProductIds: string[] = []
   for (const p of unitProducts) unitProductIds.push(await addProduct(p))
 
-  // ── Nước ngọt (8 SP, có biến thể) ──
+  // ── Nước ngọt (8 SP, 7 có biến thể; Trà xanh bán đơn giản) ──
   const variantProducts = [
     {
       name: 'Coca-Cola',
@@ -524,13 +555,14 @@ export async function seed(db: Db) {
       cost: 6500,
       unit: 'Chai',
       stock: 120,
+      hasVariants: false,
     },
   ]
   const variantProductIds: string[] = []
   for (const p of variantProducts)
-    variantProductIds.push(await addProduct({ ...p, hasVariants: true }))
+    variantProductIds.push(await addProduct({ hasVariants: true, ...p }))
 
-  // ── Bia & Nước tăng lực (5 SP, có biến thể) ──
+  // ── Bia & Nước tăng lực (5 SP, 3 có biến thể; Saigon Special và Red Bull bán đơn giản) ──
   const beerProducts = [
     {
       name: 'Bia Tiger',
@@ -558,6 +590,7 @@ export async function seed(db: Db) {
       cost: 10000,
       unit: 'Lon',
       stock: 110,
+      hasVariants: false,
     },
     {
       name: 'Red Bull',
@@ -567,6 +600,7 @@ export async function seed(db: Db) {
       cost: 7000,
       unit: 'Lon',
       stock: 90,
+      hasVariants: false,
     },
     {
       name: 'Bia 333',
@@ -579,7 +613,7 @@ export async function seed(db: Db) {
     },
   ]
   for (const p of beerProducts)
-    variantProductIds.push(await addProduct({ ...p, hasVariants: true }))
+    variantProductIds.push(await addProduct({ hasVariants: true, ...p }))
 
   // ── Gia dụng & Vệ sinh (6 SP, có quy đổi ĐV) ──
   const homeProducts = [
@@ -776,11 +810,11 @@ export async function seed(db: Db) {
       price: 22000,
       sku: 'PP001-1500',
     },
-    // Sting
+    // Sting: hai biến thể cùng thuộc tính "Vị", hộp chọn biến thể ở POS mới khớp được
     {
       productId: variantProductIds[2],
-      a1: 'Dung tích',
-      v1: '330ml',
+      a1: 'Vị',
+      v1: 'Nguyên bản',
       price: 10000,
       sku: 'ST001-330',
     },
@@ -880,10 +914,10 @@ export async function seed(db: Db) {
     },
   ]
 
-  const variantIds: string[] = []
+  const VARIANT_STOCK = 50
   for (const v of variantData) {
     const id = uuidv7()
-    variantIds.push(id)
+    const costPrice = Math.round(v.price * 0.7)
     await db.insert(productVariants).values({
       id,
       storeId,
@@ -892,11 +926,27 @@ export async function seed(db: Db) {
       attribute1Name: v.a1,
       attribute1Value: v.v1,
       sellingPrice: v.price,
-      costPrice: Math.round(v.price * 0.7),
-      stockQuantity: 50,
+      costPrice,
+      stockQuantity: VARIANT_STOCK,
       status: 'active',
     })
+    stockItems.set(v.sku, {
+      productId: v.productId!,
+      variantId: id,
+      name: productNames.get(v.productId!)!,
+      variantLabel: v.v1,
+      sku: v.sku,
+      cost: costPrice,
+      stock: VARIANT_STOCK,
+    })
   }
+
+  // Tồn cấp sản phẩm cha = tổng tồn biến thể (giống orders.service sau mỗi lần bán)
+  await db.execute(sql`UPDATE products p
+    SET current_stock = COALESCE(
+      (SELECT SUM(v.stock_quantity) FROM product_variants v
+        WHERE v.product_id = p.id AND v.deleted_at IS NULL), 0)
+    WHERE p.store_id = ${storeId} AND p.has_variants`)
 
   // ─── 6. Product Unit Conversions ───
   console.log('📐 Tạo quy đổi đơn vị...')
@@ -962,36 +1012,28 @@ export async function seed(db: Db) {
       name: 'Phạm Thị Dung',
       phone: '0911000001',
       group: groupIds.vip,
-      total: 15_000_000,
-      count: 25,
     },
     {
       name: 'Hoàng Văn Em',
       phone: '0911000002',
       group: groupIds.vip,
-      total: 22_000_000,
-      count: 40,
     },
     {
       name: 'Vũ Thị Phương',
       phone: '0911000003',
       group: groupIds.si,
-      total: 50_000_000,
-      count: 100,
     },
     {
       name: 'Đặng Minh Quân',
       phone: '0911000004',
       group: groupIds.si,
-      total: 35_000_000,
-      count: 60,
     },
-    { name: 'Bùi Thanh Hà', phone: '0911000005', group: groupIds.le, total: 3_000_000, count: 10 },
-    { name: 'Ngô Văn Sơn', phone: '0911000006', group: groupIds.le, total: 1_500_000, count: 5 },
-    { name: 'Lý Thị Thu', phone: '0911000007', group: groupIds.le, total: 800_000, count: 3 },
-    { name: 'Trịnh Đức Anh', phone: '0911000008', total: 500_000, count: 2 },
-    { name: 'Mai Hương Giang', phone: '0911000009', total: 200_000, count: 1 },
-    { name: 'Phan Văn Khánh', phone: '0911000010', total: 0, count: 0 },
+    { name: 'Bùi Thanh Hà', phone: '0911000005', group: groupIds.le },
+    { name: 'Ngô Văn Sơn', phone: '0911000006', group: groupIds.le },
+    { name: 'Lý Thị Thu', phone: '0911000007', group: groupIds.le },
+    { name: 'Trịnh Đức Anh', phone: '0911000008' },
+    { name: 'Mai Hương Giang', phone: '0911000009' },
+    { name: 'Phan Văn Khánh', phone: '0911000010' },
   ]
 
   for (const [index, c] of customerData.entries()) {
@@ -1001,8 +1043,9 @@ export async function seed(db: Db) {
       name: c.name,
       phone: c.phone,
       groupId: (c as Record<string, unknown>).group as string | undefined,
-      totalPurchased: c.total,
-      purchaseCount: c.count,
+      // Seed không có đơn bán nên chưa có tổng mua (tránh số liệu không truy ra chứng từ)
+      totalPurchased: 0,
+      purchaseCount: 0,
       email: `${c.phone}@test.vn`,
       address: 'TP.HCM',
     })
@@ -1080,109 +1123,150 @@ export async function seed(db: Db) {
     })
   }
 
-  // ─── 11. Purchase Orders + Items ───
-  console.log('📥 Tạo phiếu nhập kho...')
+  // ─── 11. Tồn đầu kỳ + Purchase Orders ───
+  // Phiếu nhập ghi theo SKU, giá nhập bằng giá vốn nên bình quân gia quyền không đổi.
+  // Tồn đầu kỳ = tồn cuối - tổng nhập, để tồn cuối (E2E đang dựa vào) giữ nguyên.
   const poData = [
     {
       code: 'PN-0001',
       suppIdx: 0,
       items: [
-        { pIdx: 0, qty: 30, unitPrice: 18000 },
-        { pIdx: 1, qty: 20, unitPrice: 20000 },
+        { sku: 'RC001', qty: 30 },
+        { sku: 'KT001', qty: 20 },
       ],
     },
     {
       code: 'PN-0002',
       suppIdx: 1,
       items: [
-        { pIdx: 3, qty: 15, unitPrice: 95000 },
-        { pIdx: 4, qty: 10, unitPrice: 220000 },
+        { sku: 'TH001', qty: 15 },
+        { sku: 'TB001', qty: 10 },
       ],
     },
     {
       code: 'PN-0003',
       suppIdx: 2,
       items: [
-        { pIdx: 5, qty: 100, unitPrice: 7000 },
-        { pIdx: 6, qty: 100, unitPrice: 7000 },
-        { pIdx: 7, qty: 50, unitPrice: 7000 },
+        { sku: 'CC001-330', qty: 30 },
+        { sku: 'PP001-330', qty: 30 },
+        { sku: 'ST001-330', qty: 20 },
       ],
     },
   ]
 
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const openingAt = new Date(Date.now() - 2 * DAY_MS)
+  const purchaseAt = new Date(Date.now() - DAY_MS)
+
+  const purchasedQty = new Map<string, number>()
+  for (const po of poData) {
+    for (const item of po.items) {
+      if (!stockItems.has(item.sku)) throw new Error(`Seed: phiếu nhập dùng SKU lạ ${item.sku}`)
+      purchasedQty.set(item.sku, (purchasedQty.get(item.sku) ?? 0) + item.qty)
+    }
+  }
+
+  console.log('📊 Ghi sổ tồn đầu kỳ...')
+  // Tồn đang chạy theo SKU, dùng cho stockAfter của từng dòng sổ
+  const runningStock = new Map<string, number>()
+  let openingCount = 0
+  for (const item of stockItems.values()) {
+    const opening = item.stock - (purchasedQty.get(item.sku) ?? 0)
+    if (opening < 0) throw new Error(`Seed: tổng nhập vượt tồn cuối của ${item.sku}`)
+    runningStock.set(item.sku, opening)
+    if (opening === 0) continue
+    await db.insert(inventoryTransactions).values({
+      storeId,
+      productId: item.productId,
+      variantId: item.variantId,
+      type: 'initial_stock',
+      quantity: opening,
+      unitCost: item.cost,
+      costAfter: item.cost,
+      stockAfter: opening,
+      note: 'Tồn đầu kỳ (dữ liệu mẫu)',
+      createdBy: ownerId,
+      createdAt: openingAt,
+    })
+    openingCount++
+  }
+
+  console.log('📥 Tạo phiếu nhập kho...')
+  let purchaseTxCount = 0
+  const supplierTotals = new Map<string, { count: number; total: number }>()
   for (const po of poData) {
     const poId = uuidv7()
-    let subtotal = 0
-    const itemRows: Array<{
-      purchaseOrderId: string
-      productId: string
-      productNameSnapshot: string
-      productSkuSnapshot: string
-      quantity: number
-      unitPrice: number
-      lineTotal: number
-    }> = []
-
-    for (const item of po.items) {
-      const pid = allProductIds[item.pIdx]!
-      const lineTotal = item.qty * item.unitPrice
-      subtotal += lineTotal
-      itemRows.push({
-        purchaseOrderId: poId,
-        productId: pid,
-        productNameSnapshot: `Sản phẩm ${item.pIdx + 1}`,
-        productSkuSnapshot: `SKU-${item.pIdx + 1}`,
-        quantity: item.qty,
-        unitPrice: item.unitPrice,
-        lineTotal,
-      })
-    }
+    const supplierId = supplierIds[po.suppIdx]!
+    const lines = po.items.map((it) => {
+      const item = stockItems.get(it.sku)!
+      const stockAfter = runningStock.get(it.sku)! + it.qty
+      runningStock.set(it.sku, stockAfter)
+      return { item, qty: it.qty, lineTotal: it.qty * item.cost, stockAfter }
+    })
+    const subtotal = lines.reduce((sum, l) => sum + l.lineTotal, 0)
 
     await db.insert(purchaseOrders).values({
       id: poId,
       storeId,
-      supplierId: supplierIds[po.suppIdx]!,
+      supplierId,
       code: po.code,
       subtotal,
       totalAmount: subtotal,
       paidAmount: subtotal,
       paymentStatus: 'paid',
+      purchaseDate: purchaseAt,
       createdBy: ownerId,
+      createdAt: purchaseAt,
     })
 
-    for (const row of itemRows) {
-      await db.insert(purchaseOrderItems).values(row)
+    for (const l of lines) {
+      await db.insert(purchaseOrderItems).values({
+        purchaseOrderId: poId,
+        productId: l.item.productId,
+        variantId: l.item.variantId,
+        productNameSnapshot: l.item.name,
+        productSkuSnapshot: l.item.sku,
+        variantLabelSnapshot: l.item.variantLabel,
+        quantity: l.qty,
+        unitPrice: l.item.cost,
+        lineTotal: l.lineTotal,
+        costAfter: l.item.cost,
+        stockAfter: l.stockAfter,
+        createdAt: purchaseAt,
+      })
+      await db.insert(inventoryTransactions).values({
+        storeId,
+        productId: l.item.productId,
+        variantId: l.item.variantId,
+        type: 'purchase',
+        quantity: l.qty,
+        unitCost: l.item.cost,
+        costAfter: l.item.cost,
+        stockAfter: l.stockAfter,
+        note: po.code,
+        createdBy: ownerId,
+        createdAt: purchaseAt,
+      })
+      purchaseTxCount++
     }
+
+    const prev = supplierTotals.get(supplierId) ?? { count: 0, total: 0 }
+    supplierTotals.set(supplierId, { count: prev.count + 1, total: prev.total + subtotal })
   }
 
-  // ─── 12. Inventory Transactions ───
-  console.log('📊 Tạo lịch sử kho...')
-  for (let i = 0; i < 5; i++) {
-    const pid = simpleProductIds[i]!
-    await db.insert(inventoryTransactions).values({
-      storeId,
-      productId: pid,
-      type: 'purchase',
-      quantity: (i + 1) * 10,
-      unitCost: simpleProducts[i]!.cost,
-      stockAfter: simpleProducts[i]!.stock,
-      note: `Nhập kho ban đầu - ${simpleProducts[i]!.name}`,
-      createdBy: ownerId,
-    })
+  // Phiếu nhập đã trả đủ nên công nợ NCC giữ 0, chỉ cộng số lần và tổng nhập như app
+  for (const [supplierId, t] of supplierTotals) {
+    await db
+      .update(suppliers)
+      .set({ purchaseCount: t.count, totalPurchased: t.total })
+      .where(eq(suppliers.id, supplierId))
   }
 
-  // Thêm vài giao dịch bán
-  for (let i = 0; i < 3; i++) {
-    const pid = simpleProductIds[i]!
-    await db.insert(inventoryTransactions).values({
-      storeId,
-      productId: pid,
-      type: 'sale',
-      quantity: -5,
-      stockAfter: simpleProducts[i]!.stock - 5,
-      note: `Bán hàng - ${simpleProducts[i]!.name}`,
-      createdBy: staffId,
-    })
+  // Tự kiểm: tồn cuối sau khi ghi sổ phải đúng tồn đã khai báo
+  for (const item of stockItems.values()) {
+    if (runningStock.get(item.sku) !== item.stock) {
+      throw new Error(`Seed: sổ kho lệch tồn của ${item.sku}`)
+    }
   }
 
   console.log('\n✅ Seed hoàn tất!')
@@ -1198,7 +1282,9 @@ export async function seed(db: Db) {
   console.log(`  NCC:          5`)
   console.log(`  Bảng giá:     2 (direct + formula)`)
   console.log(`  Phiếu nhập:   3`)
-  console.log(`  Giao dịch kho: 8`)
+  console.log(
+    `  Giao dịch kho: ${openingCount + purchaseTxCount} (${openingCount} tồn đầu kỳ + ${purchaseTxCount} nhập)`,
+  )
   console.log('─────────────────────────────')
   console.log(`\n🔑 Tài khoản đăng nhập:`)
   console.log(`  Owner:   0901000001 / matkhau123 (PIN: 111111)`)
