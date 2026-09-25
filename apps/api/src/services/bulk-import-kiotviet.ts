@@ -202,8 +202,15 @@ export function readKiotVietRows({
     const values: unknown[] = expected.map(() => undefined)
     const source: BulkImportSourceRow = { row, values }
     // KiotViet exports each extra unit as its own row pointing at the base unit's code.
-    const baseSku = kind === 'products' ? text(cell('Mã ĐVT Cơ bản')) : undefined
-    if (typeof baseSku === 'string' && baseSku && baseSku !== text(cell('Mã hàng'))) {
+    // So và tra theo mã đã làm sạch, như mã hàng ĐVT cơ bản được lưu ở dưới
+    const rawBaseSku = kind === 'products' ? text(cell('Mã ĐVT Cơ bản')) : undefined
+    const baseSku = typeof rawBaseSku === 'string' ? cleanKiotVietSku(rawBaseSku) : rawBaseSku
+    const ownSku = text(cell('Mã hàng'))
+    if (
+      typeof baseSku === 'string' &&
+      baseSku &&
+      baseSku !== (typeof ownSku === 'string' ? cleanKiotVietSku(ownSku) : ownSku)
+    ) {
       values[0] = text(cell('Mã hàng'))
       values[1] = text(cell('Tên hàng'))
       let price = cell('Giá bán')

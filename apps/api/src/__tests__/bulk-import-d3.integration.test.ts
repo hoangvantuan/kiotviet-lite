@@ -326,6 +326,42 @@ describe('bulk import d3 go-live (PGlite)', () => {
       expect(requiresConversionApproval(plan)).toBe(true)
     })
 
+    it('finds the base unit row by its cleaned code when the KiotViet code has invalid characters', async () => {
+      const file = workbook(
+        KV_PRODUCT_HEADERS,
+        kvRows(KV_PRODUCT_HEADERS, [
+          {
+            'Loại hàng': 'Hàng hóa',
+            'Mã hàng': 'KV`010',
+            'Tên hàng': 'Nước mắm',
+            'Giá bán': 30_000,
+            ĐVT: 'Chai',
+            'Mã ĐVT Cơ bản': 'KV`010',
+            'Quy đổi': 1,
+            'Đang kinh doanh': 1,
+          },
+          {
+            'Loại hàng': 'Hàng hóa',
+            'Mã hàng': 'KV`010-T',
+            'Tên hàng': 'Nước mắm (thùng)',
+            'Giá bán': 330_000,
+            ĐVT: 'Thùng',
+            'Mã ĐVT Cơ bản': 'KV`010',
+            'Quy đổi': 12,
+            'Đang kinh doanh': 1,
+          },
+        ]),
+        'DanhSachSanPham',
+      )
+      const plan = await preview('products', file)
+      expect(plan.errors).toEqual([])
+      expect(plan.totalRows).toBe(1)
+      expect(codes(plan)).toMatchObject({
+        'sku_cleaned:Mã hàng có ký tự không hợp lệ, đã bỏ các ký tự đó': 1,
+        'unit_conversion_merged:Dòng ĐVT quy đổi được gộp vào hàng ĐVT cơ bản; mã hàng và mã vạch riêng của ĐVT quy đổi không được giữ': 1,
+      })
+    })
+
     it('refuses to run without conversion approval, then imports exactly what preview showed', async () => {
       const refused = await importAll('products', productFile(), { names: true })
       expect(refused.job.status).toBe('failed')
