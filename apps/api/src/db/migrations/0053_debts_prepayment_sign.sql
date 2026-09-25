@@ -1,2 +1,0 @@
-ALTER TABLE "debts" DROP CONSTRAINT "chk_debts_non_negative";--> statement-breakpoint
-ALTER TABLE "debts" ADD CONSTRAINT "chk_debts_sign" CHECK (("debts"."paid" >= 0 AND "debts"."reduced" >= 0 AND "debts"."remaining" >= 0) OR ("debts"."type" = 'opening' AND "debts"."amount" < 0 AND "debts"."paid" = 0 AND "debts"."reduced" <= 0 AND "debts"."remaining" <= 0));

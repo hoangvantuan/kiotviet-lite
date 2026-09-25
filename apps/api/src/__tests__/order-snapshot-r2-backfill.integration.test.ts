@@ -1,4 +1,5 @@
 import { PGlite } from '@electric-sql/pglite'
+import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm'
 import { drizzle as pgliteDrizzle } from 'drizzle-orm/pglite'
 import { migrate } from 'drizzle-orm/pglite/migrator'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -59,7 +60,7 @@ afterEach(async () => {
 
 describe('migration điền ngược ảnh chụp chứng từ bán (R2)', () => {
   it('suy hệ số quy đổi, giá vốn ước tính, phân bổ chiết khấu và tiền trả lúc bán cho đơn cũ', async () => {
-    pglite = new PGlite()
+    pglite = new PGlite({ extensions: { pg_trgm } })
     const db = pgliteDrizzle(pglite, { schema, casing: 'snake_case' })
     tmpDir = migrationsBeforeSnapshot()
     await migrate(db, { migrationsFolder: tmpDir })
@@ -170,7 +171,7 @@ describe('migration điền ngược ảnh chụp chứng từ bán (R2)', () =>
   })
 
   it('script TIEN-101 liệt kê dòng đơn có chiết khấu đơn bị hoàn dư qua nhiều phiếu trả', async () => {
-    pglite = new PGlite()
+    pglite = new PGlite({ extensions: { pg_trgm } })
     const db = pgliteDrizzle(pglite, { schema, casing: 'snake_case' })
     await migrate(db, { migrationsFolder })
 

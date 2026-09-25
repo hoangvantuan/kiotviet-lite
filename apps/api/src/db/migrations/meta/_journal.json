@@ -362,22 +362,15 @@
     {
       "idx": 51,
       "version": "7",
-      "when": 1790366990851,
+      "when": 1790368747585,
       "tag": "0051_enable_pg_trgm",
       "breakpoints": true
     },
     {
       "idx": 52,
       "version": "7",
-      "when": 1790366994883,
-      "tag": "0052_products_search_text",
-      "breakpoints": true
-    },
-    {
-      "idx": 53,
-      "version": "7",
-      "when": 1790367021015,
-      "tag": "0053_debts_prepayment_sign",
+      "when": 1790368748685,
+      "tag": "0052_d3_import_search_prepayment",
       "breakpoints": true
     }
   ]
