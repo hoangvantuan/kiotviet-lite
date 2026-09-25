@@ -9,6 +9,22 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    # Postgres thật cho các test cần nhiều kết nối đồng thời (PGlite chỉ có một kết nối),
+    # ví dụ test deadlock phiếu thu và trả hàng (TIEN-103)
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: kiotviet
+          POSTGRES_PASSWORD: kiotviet_password
+          POSTGRES_DB: kiotviet_lite_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +45,8 @@ jobs:
 
       - name: Test
         run: pnpm test
+        env:
+          TEST_PG_URL: postgres://kiotviet:kiotviet_password@localhost:5432/kiotviet_lite_ci
 
       - name: Build
         run: pnpm -r build

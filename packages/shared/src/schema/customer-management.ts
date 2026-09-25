@@ -168,11 +168,15 @@ export const customerOrderItemSchema = z.object({
 export const customerDebtItemSchema = z.object({
   id: z.string().uuid(),
   orderCode: z.string().nullable(),
-  type: z.enum(['sale', 'opening']),
+  type: z.enum(['sale', 'opening', 'adjustment']),
   date: z.string(),
   originalAmount: z.number(),
+  // Tiền thực thu qua phiếu thu
   paidAmount: z.number(),
+  // Giảm nợ không thu tiền: cấn trừ trả hàng, điều chỉnh giảm (TIEN-01)
+  reducedAmount: z.number(),
   remainingAmount: z.number(),
+  note: z.string().nullable(),
 })
 
 export const customerDebtsResponseSchema = z.object({

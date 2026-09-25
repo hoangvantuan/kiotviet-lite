@@ -869,7 +869,9 @@ describe('H7 — Điều chỉnh nợ đồng bộ debts.remaining', () => {
       headers: { ...base.owner.authHeader, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         customerId,
-        newAmount: 0,
+        direction: 'decrease',
+        amount: 500000,
+        expectedCurrentDebt: 500000,
         reason: 'Xoá nợ xấu',
       }),
     })
@@ -890,7 +892,9 @@ describe('H7 — Điều chỉnh nợ đồng bộ debts.remaining', () => {
       headers: { ...base.owner.authHeader, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         customerId,
-        newAmount: 200000,
+        direction: 'decrease',
+        amount: 300000,
+        expectedCurrentDebt: 500000,
         reason: 'Khách trả tiền mặt ngoài hệ thống',
       }),
     })
@@ -947,7 +951,9 @@ describe('H7 — Điều chỉnh nợ đồng bộ debts.remaining', () => {
       headers: { ...base.owner.authHeader, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         customerId,
-        newAmount: 200000,
+        direction: 'decrease',
+        amount: 600000,
+        expectedCurrentDebt: 800000,
         reason: 'Khách thanh toán 600k tiền mặt',
       }),
     })
@@ -970,7 +976,9 @@ describe('H7 — Điều chỉnh nợ đồng bộ debts.remaining', () => {
       headers: { ...base.owner.authHeader, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         customerId,
-        newAmount: -100000,
+        direction: 'decrease',
+        amount: -100000,
+        expectedCurrentDebt: 500000,
         reason: 'Nợ âm không hợp lệ',
       }),
     })
@@ -984,7 +992,9 @@ describe('H7 — Điều chỉnh nợ đồng bộ debts.remaining', () => {
       headers: { ...base.owner.authHeader, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         customerId,
-        newAmount: 0,
+        direction: 'decrease',
+        amount: 500000,
+        expectedCurrentDebt: 500000,
         reason: 'Xoá toàn bộ',
       }),
     })

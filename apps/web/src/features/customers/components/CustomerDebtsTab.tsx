@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { AlertTriangle, CheckCircle2, Clock, PenLine, Wallet } from 'lucide-react'
 
+import type { CustomerDebtItem } from '@kiotviet-lite/shared'
+
 import { EmptyState } from '@/components/shared/empty-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -60,6 +62,12 @@ function getDebtStatusBadge(dateIso: string, remaining: number, overdueDays: num
     label: `Quá hạn ${daysSince} ngày`,
     className: 'border-red-200 bg-red-50 text-red-700',
   }
+}
+
+/** Tên khoản nợ: đơn bán ghi mã đơn, nợ đầu kỳ và khoản điều chỉnh tăng ghi rõ loại. */
+function debtSourceLabel(debt: CustomerDebtItem): string {
+  if (debt.orderCode) return debt.orderCode
+  return debt.type === 'adjustment' ? 'Điều chỉnh tăng nợ' : 'Nợ đầu kỳ'
 }
 
 function DebtProgressBar({
@@ -189,6 +197,7 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
                   <TableHead>Ngày phát sinh</TableHead>
                   <TableHead className="text-right">Nợ ban đầu</TableHead>
                   <TableHead className="text-right">Đã trả</TableHead>
+                  <TableHead className="text-right">Giảm trừ</TableHead>
                   <TableHead className="text-right">Còn lại</TableHead>
                   <TableHead>Tình trạng</TableHead>
                 </TableRow>
@@ -196,13 +205,19 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
               <TableBody>
                 {items.map((debt) => (
                   <TableRow key={debt.id}>
-                    <TableCell className="text-sm">{debt.orderCode ?? 'Nợ đầu kỳ'}</TableCell>
+                    <TableCell className="text-sm">
+                      <p>{debtSourceLabel(debt)}</p>
+                      {debt.note && <p className="text-xs text-muted-foreground">{debt.note}</p>}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDate(debt.date)}
                     </TableCell>
                     <TableCell className="text-right">{formatVnd(debt.originalAmount)} ₫</TableCell>
                     <TableCell className="text-right text-green-700">
                       {formatVnd(debt.paidAmount)} ₫
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {formatVnd(debt.reducedAmount)} ₫
                     </TableCell>
                     <TableCell className="text-right font-medium text-red-700">
                       {formatVnd(debt.remainingAmount)} ₫

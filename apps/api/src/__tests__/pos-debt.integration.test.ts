@@ -4,6 +4,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { auditLogs, customerGroups, customers, debts, products } from '@kiotviet-lite/shared'
 
 import { createPosRoutes } from '../routes/pos.routes.js'
+import { seedOpeningDebtsForFixtureCustomers } from './helpers/debt-ledger.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 beforeAll(() => {
@@ -85,6 +86,7 @@ async function setup(): Promise<Env> {
       },
     ])
     .returning({ id: customers.id, name: customers.name })
+  await seedOpeningDebtsForFixtureCustomers(base.db, base.storeId)
 
   const findCust = (name: string) => {
     const c = insertedCustomers.find((x) => x.name === name)

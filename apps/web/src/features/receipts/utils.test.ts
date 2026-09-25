@@ -9,6 +9,7 @@ function makeDebt(id: string, orderCode: string, remaining: number): OpenDebtIte
     id,
     orderId: id,
     orderCode,
+    type: 'sale',
     amount: remaining,
     paid: 0,
     remaining,

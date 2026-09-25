@@ -1,12 +1,12 @@
-import { and, asc, desc, eq, gt, isNull, sql } from 'drizzle-orm'
+import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 
 import {
+  applyDebtAdjustment,
   type CreateDebtAdjustmentInput,
   customers,
   type DebtAdjustmentDetail,
   type DebtAdjustmentListItem,
   debtAdjustments,
-  debts,
   formatCurrencyVnd as formatVnd,
   type ListDebtAdjustmentsQuery,
   type UserRole,
@@ -17,6 +17,7 @@ import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { logAction, type RequestMeta } from './audit.service.js'
+import { addCustomerDebt, settleCustomerDebtsFifo } from './customer-debt-ledger.service.js'
 
 export interface DebtAdjustmentsActor {
   userId: string
@@ -161,28 +162,30 @@ export async function createDebtAdjustment({
       throw new ApiError('NOT_FOUND', 'Không tìm thấy khách hàng')
     }
 
-    // 2. Lấy oldAmount snapshot
+    // 2. TIEN-102: số nợ máy khách thấy phải khớp số hiện tại, lệch thì để người dùng tải lại
     const oldAmount = Number(customer.currentDebt)
-
-    // 3. Validate newAmount !== oldAmount và không âm
-    if (input.newAmount < 0) {
-      throw new ApiError('VALIDATION_ERROR', 'Số nợ mới không được âm')
-    }
-    if (input.newAmount === oldAmount) {
+    if (input.expectedCurrentDebt !== oldAmount) {
       throw new ApiError(
-        'BUSINESS_RULE_VIOLATION',
-        `Số nợ mới phải khác số nợ hiện tại (${formatVnd(oldAmount)})`,
+        'CONFLICT',
+        `Công nợ của khách đã thay đổi (hiện là ${formatVnd(oldAmount)}), vui lòng tải lại rồi điều chỉnh`,
       )
     }
+    if (input.direction === 'decrease' && input.amount > oldAmount) {
+      throw new ApiError(
+        'BUSINESS_RULE_VIOLATION',
+        `Số tiền giảm (${formatVnd(input.amount)}) vượt quá số nợ hiện tại (${formatVnd(oldAmount)})`,
+      )
+    }
+    const newAmount = applyDebtAdjustment(oldAmount, input.direction, input.amount)
 
-    // 4. Insert adjustment
+    // 3. Insert adjustment
     const [adjustmentRow] = await tx
       .insert(debtAdjustments)
       .values({
         storeId: actor.storeId,
         customerId: input.customerId,
         oldAmount,
-        newAmount: input.newAmount,
+        newAmount,
         reason: input.reason,
         adjustedBy: actor.userId,
       })
@@ -192,66 +195,19 @@ export async function createDebtAdjustment({
       throw new ApiError('INTERNAL_ERROR', 'Không tạo được điều chỉnh nợ')
     }
 
-    // 5. Update customer.currentDebt = newAmount
-    await tx
-      .update(customers)
-      .set({ currentDebt: input.newAmount })
-      .where(eq(customers.id, input.customerId))
-
-    // H7: đồng bộ debts.remaining khi điều chỉnh nợ
-    // Khi giảm nợ (newAmount < oldAmount): settle các khoản nợ cũ nhất (FIFO)
-    // Khi tăng nợ (newAmount > oldAmount): không cần sửa debts vì nợ mới chưa phát sinh
-    if (input.newAmount < oldAmount) {
-      const reduction = oldAmount - input.newAmount
-
-      if (input.newAmount === 0) {
-        // Xoá toàn bộ nợ: set remaining=0, paid=amount cho tất cả khoản nợ còn lại
-        await tx
-          .update(debts)
-          .set({
-            remaining: 0,
-            paid: debts.amount,
-          })
-          .where(
-            and(
-              eq(debts.storeId, actor.storeId),
-              eq(debts.customerId, input.customerId),
-              gt(debts.remaining, 0),
-            ),
-          )
-      } else {
-        // Giảm nợ một phần: phân bổ theo FIFO (nợ cũ nhất tất toán trước)
-        const openDebts = await tx
-          .select({
-            id: debts.id,
-            remaining: debts.remaining,
-          })
-          .from(debts)
-          .where(
-            and(
-              eq(debts.storeId, actor.storeId),
-              eq(debts.customerId, input.customerId),
-              gt(debts.remaining, 0),
-            ),
-          )
-          .orderBy(asc(debts.createdAt))
-          .for('update')
-
-        let leftToSettle = reduction
-        for (const d of openDebts) {
-          if (leftToSettle <= 0) break
-          const rem = Number(d.remaining)
-          const settleAmount = Math.min(leftToSettle, rem)
-          await tx
-            .update(debts)
-            .set({
-              remaining: sql`GREATEST(0, ${debts.remaining} - ${settleAmount})`,
-              paid: sql`${debts.paid} + ${settleAmount}`,
-            })
-            .where(eq(debts.id, d.id))
-          leftToSettle -= settleAmount
-        }
-      }
+    // 4. Ghi bút toán qua sổ công nợ (TIEN-03): tăng nợ là một khoản nợ mới có tuổi nợ và
+    // thu được bằng phiếu thu; giảm nợ trừ vào khoản nợ cũ nhất trước (FIFO), ghi là giảm trừ.
+    const target = { storeId: actor.storeId, customerId: input.customerId }
+    if (input.direction === 'increase') {
+      await addCustomerDebt(txDb, {
+        ...target,
+        type: 'adjustment',
+        amount: input.amount,
+        note: input.reason,
+        createdAt: adjustmentRow.createdAt,
+      })
+    } else {
+      await settleCustomerDebtsFifo(txDb, { ...target, kind: 'reduction', amount: input.amount })
     }
 
     // 6. Audit log trong cùng transaction
@@ -267,7 +223,9 @@ export async function createDebtAdjustment({
         customerId: input.customerId,
         customerName: customer.name,
         oldAmount,
-        newAmount: input.newAmount,
+        newAmount,
+        direction: input.direction,
+        amount: input.amount,
         reason: input.reason,
       },
       ipAddress: meta?.ipAddress,
@@ -281,7 +239,7 @@ export async function createDebtAdjustment({
         actorId: actor.userId,
         customerId: input.customerId,
         oldAmount,
-        newAmount: input.newAmount,
+        newAmount,
         adjustmentId: adjustmentRow.id,
       },
       'debt_adjustment.created',
@@ -299,7 +257,7 @@ export async function createDebtAdjustment({
       customerId: customer.id,
       customerName: customer.name,
       oldAmount,
-      newAmount: input.newAmount,
+      newAmount,
       reason: input.reason,
       adjustedBy: actor.userId,
       adjustedByName: actorRows[0]?.name ?? null,

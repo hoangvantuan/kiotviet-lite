@@ -1,8 +1,10 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 
 import {
+  applyDebtAdjustment,
   type CreateOpeningDebtInput,
   type CreateSupplierDebtAdjustmentInput,
+  type DebtAdjustmentDirection,
   formatCurrencyVnd,
   type ListSupplierDebtAdjustmentsQuery,
   type SupplierDebtAdjustmentDetail,
@@ -114,7 +116,11 @@ export async function createSupplierDebtAdjustment({
     db,
     actor,
     supplierId: input.supplierId,
-    newAmount: input.newAmount,
+    change: {
+      direction: input.direction,
+      amount: input.amount,
+      expectedCurrentDebt: input.expectedCurrentDebt,
+    },
     reason: input.reason,
     type: 'adjustment',
     meta,
@@ -142,7 +148,7 @@ export async function createSupplierOpeningDebt({
     db,
     actor,
     supplierId,
-    newAmount: input.amount,
+    change: { direction: 'increase', amount: input.amount, expectedCurrentDebt: 0 },
     reason: `Nợ đầu kỳ (phát sinh ngày ${input.incurredAt})`,
     type: 'opening',
     incurredAt,
@@ -155,7 +161,7 @@ async function saveAdjustment({
   db,
   actor,
   supplierId,
-  newAmount,
+  change,
   reason,
   type,
   incurredAt = null,
@@ -165,7 +171,8 @@ async function saveAdjustment({
   db: Db
   actor: SupplierDebtActor
   supplierId: string
-  newAmount: number
+  // TIEN-102: bút toán tăng/giảm kèm số nợ máy khách thấy, không ghi đè số tuyệt đối
+  change: { direction: DebtAdjustmentDirection; amount: number; expectedCurrentDebt: number }
   reason: string
   type: 'adjustment' | 'opening'
   incurredAt?: Date | null
@@ -175,8 +182,8 @@ async function saveAdjustment({
   if (actor.role !== 'owner') {
     throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được điều chỉnh công nợ nhà cung cấp')
   }
-  if (newAmount < 0) {
-    throw new ApiError('VALIDATION_ERROR', 'Số nợ mới không được âm')
+  if (!Number.isInteger(change.amount) || change.amount <= 0) {
+    throw new ApiError('VALIDATION_ERROR', 'Số tiền điều chỉnh phải lớn hơn 0')
   }
   return db.transaction(async (tx) => {
     const [supplier] = await tx
@@ -196,12 +203,19 @@ async function saveAdjustment({
     if (type === 'opening' && oldAmount !== 0) {
       throw new ApiError('BUSINESS_RULE_VIOLATION', 'Nhà cung cấp đã có công nợ')
     }
-    if (oldAmount === newAmount) {
+    if (change.expectedCurrentDebt !== oldAmount) {
       throw new ApiError(
-        'BUSINESS_RULE_VIOLATION',
-        `Số nợ mới phải khác số nợ hiện tại (${formatCurrencyVnd(oldAmount)})`,
+        'CONFLICT',
+        `Công nợ nhà cung cấp đã thay đổi (hiện là ${formatCurrencyVnd(oldAmount)}), vui lòng tải lại rồi điều chỉnh`,
       )
     }
+    if (change.direction === 'decrease' && change.amount > oldAmount) {
+      throw new ApiError(
+        'BUSINESS_RULE_VIOLATION',
+        `Số tiền giảm (${formatCurrencyVnd(change.amount)}) vượt quá số nợ hiện tại (${formatCurrencyVnd(oldAmount)})`,
+      )
+    }
+    const newAmount = applyDebtAdjustment(oldAmount, change.direction, change.amount)
     const [created] = await tx
       .insert(supplierDebtAdjustments)
       .values({

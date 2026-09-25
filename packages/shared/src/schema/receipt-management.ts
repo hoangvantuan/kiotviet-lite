@@ -64,6 +64,7 @@ export const openDebtItemSchema = z.object({
   id: z.string().uuid(),
   orderId: z.string().uuid().nullable(),
   orderCode: z.string().nullable(),
+  type: z.enum(['sale', 'opening', 'adjustment']),
   amount: z.number().int(),
   paid: z.number().int(),
   remaining: z.number().int(),

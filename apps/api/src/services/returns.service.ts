@@ -2,7 +2,6 @@ import { and, asc, eq, inArray, like, sql } from 'drizzle-orm'
 
 import {
   type CreateOrderReturnInput,
-  customers,
   debts,
   inventoryTransactions,
   orderItems,
@@ -25,6 +24,7 @@ import { logger } from '../lib/logger.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
+import { lockCustomerForDebt, settleCustomerDebts } from './customer-debt-ledger.service.js'
 import {
   aggregateVariantStock,
   loadProductForUpdate,
@@ -356,6 +356,11 @@ export async function createReturn({
     let refundAmount = 0
     let debtReductionAmount = 0
 
+    // TIEN-103: khóa khách trước khoản nợ (orders, customers, debts), cùng thứ tự với phiếu thu
+    if (order.customerId) {
+      await lockCustomerForDebt(txDb, { storeId: actor.storeId, customerId: order.customerId })
+    }
+
     // Check if order has outstanding debt
     const debtRows = await tx
       .select({
@@ -501,24 +506,20 @@ export async function createReturn({
       }
     }
 
-    // 9. Debt reduction
+    // 9. Debt reduction: cấn trừ là giảm trừ, không phải tiền thu (TIEN-01)
     if (debt && debtReductionAmount > 0) {
-      await tx
-        .update(debts)
-        .set({
-          remaining: sql`GREATEST(0, ${debts.remaining} - ${debtReductionAmount})`,
-          paid: sql`${debts.paid} + ${debtReductionAmount}`,
-        })
-        .where(eq(debts.id, debt.id))
+      await settleCustomerDebts(txDb, {
+        storeId: actor.storeId,
+        customerId: debt.customerId,
+        kind: 'reduction',
+        allocations: [{ debtId: debt.id, amount: debtReductionAmount }],
+      })
 
-      await tx
-        .update(customers)
-        .set({ currentDebt: sql`GREATEST(0, ${customers.currentDebt} - ${debtReductionAmount})` })
-        .where(eq(customers.id, debt.customerId))
-
-      // Check if debt is fully paid after reduction
+      // Hết nợ nhờ cấn trừ chỉ là "đã thanh toán" khi khách thực có trả tiền cho đơn này
+      // (trả trước lúc bán hoặc phiếu thu); không thu đồng nào thì giữ nguyên trạng thái.
       const newRemaining = Number(debt.remaining) - debtReductionAmount
-      if (newRemaining <= 0) {
+      const hasCashPaid = Number(debt.paid) > 0 || order.paymentStatus === 'partial'
+      if (newRemaining <= 0 && hasCashPaid) {
         await tx.update(orders).set({ paymentStatus: 'paid' }).where(eq(orders.id, orderId))
       }
     }
