@@ -11,7 +11,7 @@
  * - 5 quy đổi đơn vị
  * - 3 nhóm khách hàng + 10 khách hàng
  * - 5 nhà cung cấp
- * - 2 bảng giá (1 direct + 1 formula) + price list items
+ * - 2 bảng giá hợp lệ tạo qua service: Giá sỉ (direct) + Giá VIP giảm 5% so với giá sỉ (formula), gắn cho nhóm KH
  * - 3 phiếu nhập kho + items + inventory transactions
  *
  * Tồn kho chỉ sinh từ chứng từ (ADR 0006): mỗi mặt hàng có một dòng sổ tồn đầu kỳ
@@ -26,9 +26,10 @@ import { pathToFileURL } from 'node:url'
 import postgres from 'postgres'
 import { uuidv7 } from 'uuidv7'
 
-import { DEV_SEED_ACCOUNTS, DEV_SEED_PASSWORD } from '@kiotviet-lite/shared'
+import { createPriceListSchema, DEV_SEED_ACCOUNTS, DEV_SEED_PASSWORD } from '@kiotviet-lite/shared'
 import * as schema from '@kiotviet-lite/shared/schema'
 
+import { createPriceList } from '../services/price-lists.service.js'
 import type { Db } from './index.js'
 import { assertSeedSafe } from './seed-guard.js'
 
@@ -44,8 +45,6 @@ const {
   customerGroups,
   customers,
   suppliers,
-  priceLists,
-  priceListItems,
   purchaseOrders,
   purchaseOrderItems,
   inventoryTransactions,
@@ -180,6 +179,7 @@ export async function seed(db: Db) {
   }
   const stockItems = new Map<string, StockItem>()
   const productNames = new Map<string, string>()
+  const productPricing = new Map<string, { price: number; cost: number }>()
 
   // Helper: insert 1 sản phẩm, trả về id
   async function addProduct(p: {
@@ -212,6 +212,7 @@ export async function seed(db: Db) {
       minStock: 5,
     })
     productNames.set(id, p.name)
+    productPricing.set(id, { price: p.price, cost: p.cost })
     if (!p.hasVariants) {
       stockItems.set(p.sku, {
         productId: id,
@@ -1084,44 +1085,54 @@ export async function seed(db: Db) {
     .where(eq(stores.id, storeId))
 
   // ─── 10. Price Lists ───
+  // Tạo qua đúng service của app sau khi parse bằng schema dùng chung, nên bảng giá seed
+  // luôn hợp lệ (quy tắc làm tròn, đơn vị công thức) và bảng công thức có sẵn dòng giá.
   console.log('💰 Tạo bảng giá...')
-  const directPLId = uuidv7()
-  const formulaPLId = uuidv7()
+  const priceListActor = { userId: ownerId, storeId, role: 'owner' as const }
 
-  await db.insert(priceLists).values([
-    {
-      id: directPLId,
-      storeId,
-      name: 'Giá sỉ',
-      description: 'Bảng giá dành cho khách sỉ',
+  // Giá sỉ: 85% giá bán lẻ của từng mặt hàng, không dưới giá vốn. 10 mặt hàng đầu.
+  const wholesaleItems = allProductIds.slice(0, 10).map((productId) => {
+    const pricing = productPricing.get(productId)!
+    const price = Math.round(pricing.price * 0.85)
+    if (price < pricing.cost) throw new Error(`Seed: giá sỉ dưới giá vốn (${productId})`)
+    return { productId, price }
+  })
+  const wholesaleList = await createPriceList({
+    db,
+    actor: priceListActor,
+    input: createPriceListSchema.parse({
       method: 'direct',
+      name: 'Giá sỉ',
+      description: 'Bảng giá dành cho khách sỉ, bằng 85% giá bán lẻ',
       roundingRule: 'none',
-      isActive: true,
-    },
-    {
-      id: formulaPLId,
-      storeId,
-      name: 'Giá VIP giảm 10%',
-      description: 'Giảm 10% so với giá sỉ',
-      method: 'formula',
-      basePriceListId: directPLId,
-      formulaType: 'percent_decrease',
-      formulaValue: 10,
-      roundingRule: 'round_thousand',
-      isActive: true,
-    },
-  ])
+      items: wholesaleItems,
+    }),
+  })
 
-  // Gán giá sỉ cho 10 sản phẩm đầu
-  console.log('📋 Gán giá vào bảng giá...')
-  const top10 = allProductIds.slice(0, 10)
-  for (const pid of top10) {
-    await db.insert(priceListItems).values({
-      priceListId: directPLId,
-      productId: pid,
-      price: Math.round((simpleProducts[0]?.price ?? 10000) * 0.85),
-    })
-  }
+  // formulaValue tính theo phần vạn (500 = 5%), giống ô nhập % trên màn bảng giá
+  const vipList = await createPriceList({
+    db,
+    actor: priceListActor,
+    input: createPriceListSchema.parse({
+      method: 'formula',
+      // Tên bảng giá không được chứa ký tự %, mức giảm ghi ở mô tả
+      name: 'Giá VIP',
+      description: 'Giảm 5% so với giá sỉ, làm tròn tới trăm đồng',
+      baseListId: wholesaleList.id,
+      formulaType: 'percent_decrease',
+      formulaValue: 500,
+      roundingRule: 'nearest_hundred',
+    }),
+  })
+
+  await db
+    .update(customerGroups)
+    .set({ defaultPriceListId: wholesaleList.id })
+    .where(eq(customerGroups.id, groupIds.si))
+  await db
+    .update(customerGroups)
+    .set({ defaultPriceListId: vipList.id })
+    .where(eq(customerGroups.id, groupIds.vip))
 
   // ─── 11. Tồn đầu kỳ + Purchase Orders ───
   // Phiếu nhập ghi theo SKU, giá nhập bằng giá vốn nên bình quân gia quyền không đổi.
@@ -1280,7 +1291,7 @@ export async function seed(db: Db) {
   console.log(`  Nhóm KH:     3`)
   console.log(`  Khách hàng:   10`)
   console.log(`  NCC:          5`)
-  console.log(`  Bảng giá:     2 (direct + formula)`)
+  console.log(`  Bảng giá:     2 (Giá sỉ ${wholesaleItems.length} mặt hàng + VIP công thức)`)
   console.log(`  Phiếu nhập:   3`)
   console.log(
     `  Giao dịch kho: ${openingCount + purchaseTxCount} (${openingCount} tồn đầu kỳ + ${purchaseTxCount} nhập)`,

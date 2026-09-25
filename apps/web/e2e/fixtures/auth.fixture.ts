@@ -25,6 +25,9 @@ export async function loginViaUI(page: Page, phone: string, pass: string) {
 export async function loginAsRole(page: Page, role: 'owner' | 'manager' | 'staff') {
   const user = SEED_USERS[role]
   await loginViaUI(page, user.phone, user.password)
+  // Màn đăng nhập bản dev liệt kê sẵn tên tài khoản seed, nên chỉ thấy tên là chưa đủ:
+  // phải chờ rời trang /login thì mới chắc đã đăng nhập xong.
+  await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 15000 })
   await expect(
     page.getByText(new RegExp(`Xin chào, ${user.name}|${user.name}`, 'i')).first(),
   ).toBeVisible({ timeout: 15000 })
