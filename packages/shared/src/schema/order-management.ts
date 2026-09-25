@@ -11,6 +11,38 @@ export const orderPaymentStatusSchema = z.enum(['paid', 'partial', 'unpaid'])
 
 export const orderStatusSchema = z.enum(['completed', 'cancelled', 'partial_return', 'full_return'])
 
+// ADR-0009: trạng thái duyệt của đơn ngoại tuyến vi phạm chính sách
+export const orderReviewStatusSchema = z.enum(['none', 'pending_review', 'approved', 'rejected'])
+
+export const orderPolicyViolationCodeSchema = z.enum([
+  // Sửa giá hay chiết khấu vượt quyền người bán mà không có duyệt hợp lệ (thiếu PIN, PIN sai,
+  // người duyệt thiếu quyền)
+  'price_unapproved',
+  // Như trên nhưng thành tiền dưới giá vốn: chỉ người có pos.editPriceBelowCost duyệt được
+  'below_cost_unapproved',
+  // Ghi nợ vượt hạn mức hiệu lực mà không có duyệt hợp lệ
+  'debt_limit_exceeded',
+  // Ghi nợ cho khách không được nợ (hạn mức 0 hoặc chưa đặt, như khách tạo nhanh)
+  'no_credit',
+])
+
+export interface OrderPolicyViolation {
+  code: z.infer<typeof orderPolicyViolationCodeSchema>
+  message: string
+  /** Quyền người duyệt đơn phải giữ để duyệt vi phạm này */
+  requiredPermissions: Array<'pos.editPrice' | 'pos.editPriceBelowCost' | 'pos.overrideDebtLimit'>
+}
+
+export const reviewOrderSchema = z
+  .object({
+    decision: z.enum(['approved', 'rejected']),
+    note: z.string().trim().max(500, 'Ghi chú tối đa 500 ký tự').nullable().default(null),
+  })
+  .refine((d) => d.decision !== 'rejected' || (d.note ?? '').length > 0, {
+    message: 'Từ chối cần ghi lý do để xử lý tiếp (trả hàng, điều chỉnh công nợ)',
+    path: ['note'],
+  })
+
 export const createOrderItemSchema = z
   .object({
     productId: z.string().uuid('Sản phẩm không hợp lệ'),
@@ -98,7 +130,11 @@ export const createOrderSchema = z
       .optional(),
     debtLimitOverridden: z.boolean().default(false),
     debtLimitOverridePin: z.string().trim().min(1).max(32).optional(),
+    // POS-04: người duyệt vượt hạn mức (giữ quyền pos.overrideDebtLimit), mặc định là người bán
+    debtLimitApproverId: z.string().uuid('Người duyệt không hợp lệ').optional(),
     priceOverridePin: z.string().trim().min(1).max(32).optional(),
+    // POS-01: người duyệt sửa giá, chiết khấu, bán dưới giá vốn; mặc định là người bán
+    priceApproverId: z.string().uuid('Người duyệt không hợp lệ').optional(),
     note: z.string().trim().max(1000, 'Ghi chú đơn tối đa 1000 ký tự').nullable().default(null),
     priceListId: z.string().uuid('Bảng giá không hợp lệ').nullable().optional(),
     priceListName: z.string().trim().max(100).nullable().optional(),
@@ -227,6 +263,9 @@ export type OrderDiscountType = z.infer<typeof orderDiscountTypeSchema>
 export type OrderPaymentMethod = z.infer<typeof orderPaymentMethodSchema>
 export type OrderPaymentStatus = z.infer<typeof orderPaymentStatusSchema>
 export type OrderStatus = z.infer<typeof orderStatusSchema>
+export type OrderReviewStatus = z.infer<typeof orderReviewStatusSchema>
+export type OrderPolicyViolationCode = z.infer<typeof orderPolicyViolationCodeSchema>
+export type ReviewOrderInput = z.infer<typeof reviewOrderSchema>
 export type CreateOrderItemInput = z.infer<typeof createOrderItemSchema>
 export type CreateOrderInput = z.infer<typeof createOrderSchema>
 
@@ -246,6 +285,7 @@ export const listOrdersQuerySchema = paginationSchema.extend({
   customerId: z.string().uuid().optional(),
   paymentMethod: z.enum(['cash', 'transfer', 'qr', 'combined', 'debt']).optional(),
   paymentStatus: z.enum(['paid', 'partial', 'unpaid']).optional(),
+  reviewStatus: orderReviewStatusSchema.optional(),
 })
 
 export type ListOrdersQuery = z.infer<typeof listOrdersQuerySchema>

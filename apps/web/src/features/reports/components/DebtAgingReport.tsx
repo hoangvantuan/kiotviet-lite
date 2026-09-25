@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { AlertTriangle, Download, FileSpreadsheet } from 'lucide-react'
 
+import { formatDebtLimitLabel } from '@kiotviet-lite/shared'
+
 import { EmptyState } from '@/components/shared/empty-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -115,7 +117,7 @@ export function DebtAgingReport({ query }: DebtAgingReportProps) {
                     {row.customerPhone ?? ''}
                   </TableCell>
                   <TableCell className="text-right text-sm">
-                    {row.debtLimit !== null ? `${formatVnd(row.debtLimit)} ₫` : 'Không giới hạn'}
+                    {formatDebtLimitLabel(row.debtLimit)}
                   </TableCell>
                   <TableCell className="text-right font-medium text-red-700">
                     {formatVnd(row.totalDebt)} ₫

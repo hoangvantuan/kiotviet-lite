@@ -57,6 +57,8 @@ async function setup(): Promise<Env> {
         name: 'KH Không Giới Hạn',
         phone: '0922222222',
         debtLimit: null,
+        // ADR-0009: "không giới hạn" là cờ tường minh, NULL không còn nghĩa là không giới hạn
+        debtUnlimited: true,
         currentDebt: 0,
       },
       {
@@ -244,7 +246,7 @@ describe('GET /customer-debt/:customerId', () => {
     expect(r.body.data.effectiveDebtLimit).toBe(500_000)
   })
 
-  it('KH không giới hạn (cả customer và group đều null) → effectiveDebtLimit null', async () => {
+  it('KH có cờ không giới hạn nợ → effectiveDebtLimit null', async () => {
     const r = await jsonReq<DebtInfoResp>(
       env,
       'GET',
@@ -418,8 +420,8 @@ describe('POST /orders với debt', () => {
     expect(r.body.data.debtAmount).toBe(100_000)
   })
 
-  it('debtLimit = 0 → coi là không giới hạn (không chặn)', async () => {
-    const r = await jsonReq<OrderResp>(
+  it('TIEN-106: debtLimit = 0 → không cho nợ (chặn 422)', async () => {
+    const r = await jsonReq<ErrResp>(
       env,
       'POST',
       '/orders',
@@ -429,7 +431,8 @@ describe('POST /orders với debt', () => {
       }),
       env.base.owner.authHeader,
     )
-    expect(r.status).toBe(201)
+    expect(r.status).toBe(422)
+    expect(r.body.error.code).toBe('BUSINESS_RULE_VIOLATION')
   })
 
   it('Ghi nợ qua group debtLimit → check theo group khi customer.debtLimit null', async () => {

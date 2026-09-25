@@ -35,7 +35,11 @@ const PAGE_SIZE = 20
 
 type DatePreset = 'today' | '7days' | '30days' | 'all' | 'custom'
 
-import { OrderStatusBadge as StatusBadge, PaymentStatusBadge } from './order-status-badges'
+import {
+  OrderStatusBadge as StatusBadge,
+  PaymentStatusBadge,
+  ReviewStatusBadge,
+} from './order-status-badges'
 
 function toLocalDateString(date: Date): string {
   const y = date.getFullYear()
@@ -169,6 +173,7 @@ export function OrderList() {
   const status = searchParams.status ?? undefined
   const paymentMethod = searchParams.paymentMethod ?? undefined
   const paymentStatus = searchParams.paymentStatus ?? undefined
+  const reviewStatus = searchParams.reviewStatus ?? undefined
   const customerId = searchParams.customerId ?? undefined
   const customerName = searchParams.customerName ?? undefined
   const customFromDate = searchParams.fromDate
@@ -207,6 +212,7 @@ export function OrderList() {
     customerId,
     paymentMethod,
     paymentStatus,
+    reviewStatus,
   })
 
   const items = ordersQuery.data?.data ?? []
@@ -220,6 +226,7 @@ export function OrderList() {
     status !== undefined ||
     paymentMethod !== undefined ||
     paymentStatus !== undefined ||
+    reviewStatus !== undefined ||
     customerId !== undefined
 
   return (
@@ -271,7 +278,7 @@ export function OrderList() {
       )}
 
       {/* Filters */}
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Input
           placeholder="Tìm theo mã hóa đơn"
           value={searchInput}
@@ -329,6 +336,22 @@ export function OrderList() {
             <SelectItem value="paid">Đã thanh toán</SelectItem>
             <SelectItem value="partial">Một phần</SelectItem>
             <SelectItem value="unpaid">Chưa thanh toán</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={reviewStatus ?? 'all'}
+          onValueChange={(v) =>
+            updateSearch({ reviewStatus: v === 'all' ? undefined : v, page: 1 })
+          }
+        >
+          <SelectTrigger aria-label="Trạng thái duyệt">
+            <SelectValue placeholder="Trạng thái duyệt" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tất cả trạng thái duyệt</SelectItem>
+            <SelectItem value="pending_review">Chờ chủ duyệt</SelectItem>
+            <SelectItem value="approved">Đã duyệt</SelectItem>
+            <SelectItem value="rejected">Bị từ chối</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -423,6 +446,7 @@ function OrderTable({
                         Vượt hạn mức
                       </Badge>
                     )}
+                    <ReviewStatusBadge status={it.reviewStatus} />
                   </div>
                 </TableCell>
                 <TableCell>{formatDateTime(it.createdAt)}</TableCell>
@@ -468,6 +492,7 @@ function OrderTable({
                     Vượt hạn mức
                   </Badge>
                 )}
+                <ReviewStatusBadge status={it.reviewStatus} />
               </div>
               <StatusBadge status={it.status} />
             </div>

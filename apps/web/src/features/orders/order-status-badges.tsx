@@ -66,3 +66,25 @@ export function PaymentStatusBadge({ status }: { status: string }) {
     </Badge>
   )
 }
+
+const REVIEW_STATUS_LABELS: Record<string, string> = {
+  pending_review: 'Chờ chủ duyệt',
+  approved: 'Đã duyệt',
+  rejected: 'Bị từ chối',
+}
+
+/** ADR-0009: trạng thái duyệt của đơn ngoại tuyến vi phạm chính sách; đơn thường không có nhãn */
+export function ReviewStatusBadge({ status }: { status: string | undefined }) {
+  if (!status || status === 'none') return null
+  const className =
+    status === 'pending_review'
+      ? 'bg-orange-100 text-orange-700 border-orange-200'
+      : status === 'rejected'
+        ? 'bg-red-100 text-red-700 border-red-200'
+        : 'bg-gray-100 text-gray-600 border-gray-200'
+  return (
+    <Badge className={className} variant="outline">
+      {REVIEW_STATUS_LABELS[status] ?? status}
+    </Badge>
+  )
+}

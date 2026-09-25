@@ -9,7 +9,7 @@ import { logger } from '../lib/logger.js'
 
 /**
  * Seed default notification rules for a new store.
- * Creates 1 console channel + 7 rules (one per event type, all enabled).
+ * Creates 1 console channel + one rule per event type (all enabled).
  */
 export async function seedDefaultRules(db: Db, storeId: string): Promise<void> {
   try {

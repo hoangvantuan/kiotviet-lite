@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { AlertTriangle, CheckCircle2, Clock, PenLine, Wallet } from 'lucide-react'
 
-import { debtSourceLabel } from '@kiotviet-lite/shared'
+import { debtSourceLabel, formatDebtLimitLabel } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Badge } from '@/components/ui/badge'
@@ -130,9 +130,7 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Hạn mức nợ hiệu lực</p>
             <p className="mt-1 text-base font-medium text-foreground">
-              {effectiveDebtLimit === null
-                ? 'Không giới hạn'
-                : `${formatVnd(effectiveDebtLimit)} ₫`}
+              {formatDebtLimitLabel(effectiveDebtLimit)}
             </p>
           </div>
         </div>

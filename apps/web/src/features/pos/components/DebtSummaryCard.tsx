@@ -1,3 +1,5 @@
+import { formatDebtLimitLabel } from '@kiotviet-lite/shared'
+
 import { useStoreQuery } from '@/features/settings/use-store-settings'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { cn } from '@/lib/utils'
@@ -27,7 +29,7 @@ export function DebtSummaryCard({
   const warningPercent = propWarningPercent ?? storeQuery.data?.debtWarningPercent ?? 80
 
   const debtAfter = currentDebt + debtAmount
-  // null hoặc 0 đều là không giới hạn
+  // ADR-0009: null là không giới hạn (chủ cửa hàng bật), 0 là không cho nợ
   const hasLimit = effectiveDebtLimit !== null && effectiveDebtLimit > 0
   const usage = hasLimit ? (debtAfter / (effectiveDebtLimit as number)) * 100 : 0
   const usageRounded = Math.round(usage)
@@ -50,7 +52,7 @@ export function DebtSummaryCard({
       <div className="flex justify-between text-sm">
         <span className="text-muted-foreground">Hạn mức</span>
         <span className="font-mono text-foreground">
-          {hasLimit ? formatVndWithSuffix(effectiveDebtLimit as number) : 'Không giới hạn'}
+          {formatDebtLimitLabel(effectiveDebtLimit)}
         </span>
       </div>
 

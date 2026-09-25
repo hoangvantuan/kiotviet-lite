@@ -41,6 +41,7 @@ export const notificationTypeValues = [
   'order.high_value',
   'order.debt_limit_exceeded',
   'order.price_mismatch_adjusted',
+  'order.policy_violation_offline',
   'stock.negative',
   'sync.failed_repeatedly',
   'audit.price_override',

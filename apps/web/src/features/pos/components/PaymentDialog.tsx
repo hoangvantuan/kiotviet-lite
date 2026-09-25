@@ -22,6 +22,7 @@ import {
 import { PinDialog } from '@/features/auth/pin-dialog'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { cn } from '@/lib/utils'
+import { useOfflineStore } from '@/stores/use-offline-store'
 
 import { useCustomerDebtQuery } from '../hooks/use-checkout'
 import { getDenominations } from '../utils'
@@ -43,6 +44,7 @@ interface PaymentDialogProps {
     debtAmount?: number
     debtLimitOverridden?: boolean
     debtLimitOverridePin?: string
+    debtLimitApproverId?: string
   }) => void
   isLoading?: boolean
 }
@@ -80,7 +82,11 @@ export function PaymentDialog({
   const [debtCashPrepaid, setDebtCashPrepaid] = useState<number | null>(null)
   const [debtLimitOverridden, setDebtLimitOverridden] = useState(false)
   const [overridePin, setOverridePin] = useState<string | null>(null)
+  const [overrideApproverId, setOverrideApproverId] = useState<string | null>(null)
   const [pinDialogOpen, setPinDialogOpen] = useState(false)
+  const offlineStatus = useOfflineStore((s) => s.status)
+  const isOffline =
+    offlineStatus === 'offline' || (typeof navigator !== 'undefined' && !navigator.onLine)
   const cashInputRef = useRef<HTMLInputElement>(null)
 
   // Available methods: thêm Ghi nợ chỉ khi có customer
@@ -102,6 +108,7 @@ export function PaymentDialog({
       setDebtCashPrepaid(null)
       setDebtLimitOverridden(false)
       setOverridePin(null)
+      setOverrideApproverId(null)
       setPinDialogOpen(false)
       const timer = setTimeout(() => cashInputRef.current?.focus(), 100)
       return () => clearTimeout(timer)
@@ -110,6 +117,7 @@ export function PaymentDialog({
     setPinDialogOpen(false)
     setDebtLimitOverridden(false)
     setOverridePin(null)
+    setOverrideApproverId(null)
   }, [open, defaultMethod, customerId])
 
   // Reset override khi đổi method khác debt
@@ -117,6 +125,7 @@ export function PaymentDialog({
     if (method !== 'debt') {
       setDebtLimitOverridden(false)
       setOverridePin(null)
+      setOverrideApproverId(null)
     }
   }, [method])
 
@@ -151,7 +160,9 @@ export function PaymentDialog({
   // Hạn mức check
   const currentDebt = debtInfo?.currentDebt ?? 0
   const effectiveDebtLimit = debtInfo?.effectiveDebtLimit ?? null
-  const hasDebtLimit = effectiveDebtLimit !== null && effectiveDebtLimit > 0
+  // ADR-0009: null chỉ còn nghĩa "không giới hạn" (cờ do chủ cửa hàng bật); 0 là không cho nợ
+  const hasDebtLimit = debtInfo !== null && effectiveDebtLimit !== null
+  const noCredit = hasDebtLimit && effectiveDebtLimit === 0
   const exceedsLimit = hasDebtLimit && currentDebt + debtAmount > (effectiveDebtLimit as number)
   const maxAdditional = hasDebtLimit ? Math.max(0, (effectiveDebtLimit as number) - currentDebt) : 0
 
@@ -170,8 +181,9 @@ export function PaymentDialog({
         if (debtInfoQuery.isLoading) return false
         // Nếu có debtAmount = 0 (cash trả trước >= grandTotal), không cần check limit
         if (debtAmount === 0) return true
-        // Nếu vượt limit và chưa override → chặn
-        if (exceedsLimit && !debtLimitOverridden) return false
+        // Nếu vượt limit và chưa override → chặn. Ngoại tuyến không xác thực PIN được: đơn vẫn
+        // ghi và máy chủ gắn cờ vượt hạn mức khi đồng bộ (ADR-0001)
+        if (exceedsLimit && !debtLimitOverridden && !isOffline) return false
         return true
     }
   }
@@ -208,6 +220,9 @@ export function PaymentDialog({
             debtAmount,
             debtLimitOverridden,
             debtLimitOverridePin: debtLimitOverridden ? (overridePin ?? undefined) : undefined,
+            debtLimitApproverId: debtLimitOverridden
+              ? (overrideApproverId ?? undefined)
+              : undefined,
           })
         }
         break
@@ -218,9 +233,10 @@ export function PaymentDialog({
     setPinDialogOpen(true)
   }
 
-  function handlePinVerified(pin?: string) {
+  function handlePinVerified(pin?: string, approverId?: string) {
     setDebtLimitOverridden(true)
     setOverridePin(pin ?? null)
+    setOverrideApproverId(approverId ?? null)
     setPinDialogOpen(false)
   }
 
@@ -451,10 +467,24 @@ export function PaymentDialog({
                         <div className="flex items-start gap-2">
                           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                           <div className="space-y-1 text-sm text-destructive">
-                            <p className="font-semibold">Vượt hạn mức công nợ</p>
-                            <p>Nợ hiện tại: {formatVndWithSuffix(currentDebt)}</p>
-                            <p>Hạn mức: {formatVndWithSuffix(effectiveDebtLimit as number)}</p>
-                            <p>Nợ thêm tối đa: {formatVndWithSuffix(maxAdditional)}</p>
+                            {noCredit ? (
+                              <p className="font-semibold">
+                                Khách chưa được cấp hạn mức nợ, cần người có quyền duyệt
+                              </p>
+                            ) : (
+                              <>
+                                <p className="font-semibold">Vượt hạn mức công nợ</p>
+                                <p>Nợ hiện tại: {formatVndWithSuffix(currentDebt)}</p>
+                                <p>Hạn mức: {formatVndWithSuffix(effectiveDebtLimit as number)}</p>
+                                <p>Nợ thêm tối đa: {formatVndWithSuffix(maxAdditional)}</p>
+                              </>
+                            )}
+                            {isOffline && (
+                              <p>
+                                Đang ngoại tuyến: đơn vẫn được ghi nợ và sẽ bị gắn cờ vượt hạn mức
+                                khi đồng bộ.
+                              </p>
+                            )}
                           </div>
                         </div>
                         <Button
@@ -508,8 +538,9 @@ export function PaymentDialog({
         open={pinDialogOpen}
         onOpenChange={setPinDialogOpen}
         onVerified={handlePinVerified}
-        title="Xác thực PIN chủ cửa hàng"
-        description="Nhập mã PIN 6 chữ số để vượt hạn mức công nợ."
+        title="Duyệt vượt hạn mức công nợ"
+        description="Chủ cửa hàng hoặc quản lý nhập mã PIN của mình để cho phép ghi nợ vượt hạn mức."
+        approvalPermissions={['pos.overrideDebtLimit']}
       />
     </Dialog>
   )

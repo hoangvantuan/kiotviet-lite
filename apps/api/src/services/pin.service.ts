@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
 import { users } from '@kiotviet-lite/shared'
 
@@ -25,6 +25,11 @@ export interface VerifyPinDeps {
   storeId: string
   pin: string
   meta?: RequestMeta
+  /**
+   * false: PIN sai không cộng vào số lần sai và không khoá. Dùng cho PIN duyệt nằm sẵn trong đơn
+   * ngoại tuyến: mỗi lần đồng bộ lại cùng một đơn không được làm khoá PIN người duyệt (ADR-0009).
+   */
+  recordFailure?: boolean
 }
 
 export interface VerifyPinResult {
@@ -44,9 +49,15 @@ export async function verifyPin({
   storeId,
   pin,
   meta,
+  recordFailure = true,
 }: VerifyPinDeps): Promise<VerifyPinResult> {
   const outcome: PinOutcome = await db.transaction(async (tx) => {
-    const rows = await tx.select().from(users).where(eq(users.id, userId)).for('update')
+    // PIN của người dùng cửa hàng khác không bao giờ được kiểm (người duyệt do máy khách chỉ định)
+    const rows = await tx
+      .select()
+      .from(users)
+      .where(and(eq(users.id, userId), eq(users.storeId, storeId)))
+      .for('update')
     const user = rows[0]
 
     if (!user || !user.pinHash) {
@@ -72,6 +83,14 @@ export async function verifyPin({
       user.pinLockedUntil && user.pinLockedUntil <= now ? 0 : (user.failedPinAttempts ?? 0)
 
     const ok = await verifyPassword(pin, user.pinHash)
+
+    if (!ok && !recordFailure) {
+      return {
+        error: 'UNAUTHORIZED',
+        message: 'Mã PIN không đúng',
+        details: { remaining: MAX_PIN_ATTEMPTS - baseAttempts },
+      }
+    }
 
     if (!ok) {
       const next = baseAttempts + 1

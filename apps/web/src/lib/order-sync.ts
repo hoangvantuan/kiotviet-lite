@@ -1,6 +1,6 @@
 import type { PGlite } from '@electric-sql/pglite'
 
-import { useOfflineStore } from '@/stores/use-offline-store'
+import { type ReviewPendingOrder, useOfflineStore } from '@/stores/use-offline-store'
 
 import { apiFetch, reportBrowserFailure } from './api-client'
 import {
@@ -12,6 +12,7 @@ import {
   resetSingleErrorOrder,
 } from './offline-orders'
 import { runIncrementalSync } from './sync-engine'
+import { showWarning } from './toast'
 
 interface SyncPushResponse {
   data: {
@@ -20,6 +21,7 @@ interface SyncPushResponse {
       serverId?: string
       status: 'synced' | 'error' | 'duplicate'
       error?: { code: string; message: string }
+      reviewStatus?: 'none' | 'pending_review' | 'approved' | 'rejected'
     }>
     syncedAt: string
   }
@@ -49,14 +51,31 @@ export async function pushPendingOrders(
       body: { orders: ordersPayload },
     })
 
+    const reviewPending: ReviewPendingOrder[] = []
     for (const result of json.data.results) {
       if (result.status === 'synced' || result.status === 'duplicate') {
         await markOrderSynced(pglite, result.clientId, result.serverId ?? '')
         synced++
+        if (result.reviewStatus === 'pending_review' && result.serverId) {
+          const order = pending.find((o) => o.clientId === result.clientId)
+          reviewPending.push({
+            clientId: result.clientId,
+            serverId: result.serverId,
+            total: order?.orderData.total ?? 0,
+          })
+        }
       } else {
         await markOrderError(pglite, result.clientId, result.error?.message ?? 'Unknown error')
         errors++
       }
+    }
+
+    if (reviewPending.length > 0) {
+      // ADR-0009: đơn đã được nhận nhưng vi phạm chính sách, người bán phải biết đơn đang chờ duyệt
+      store.addReviewPending(reviewPending)
+      showWarning(
+        `${reviewPending.length} đơn ngoại tuyến vi phạm chính sách (giá, chiết khấu hoặc hạn mức nợ) đã được ghi nhận và đang chờ chủ duyệt`,
+      )
     }
 
     store.setLastSynced(json.data.syncedAt)

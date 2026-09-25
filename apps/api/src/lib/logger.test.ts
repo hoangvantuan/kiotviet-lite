@@ -76,6 +76,27 @@ describe('logger module', () => {
     expect(parsed.data.pin).toBe('[Redacted]')
   })
 
+  it('redact: PIN người duyệt trong đơn hàng và đơn đồng bộ bị thay thế', () => {
+    const { logger, lines } = createTestLogger()
+    logger.info(
+      {
+        body: { priceOverridePin: '111111', debtLimitOverridePin: '222222' },
+        offline: { orderData: { priceOverridePin: '111111', debtLimitOverridePin: '222222' } },
+        ctx: { input: { priceOverridePin: '111111', debtLimitOverridePin: '222222' } },
+      },
+      'create order',
+    )
+    logger.flush()
+
+    const line = lines[0]!
+    expect(line).not.toContain('111111')
+    expect(line).not.toContain('222222')
+    const parsed = JSON.parse(line)
+    expect(parsed.body.priceOverridePin).toBe('[Redacted]')
+    expect(parsed.offline.orderData.debtLimitOverridePin).toBe('[Redacted]')
+    expect(parsed.ctx.input.priceOverridePin).toBe('[Redacted]')
+  })
+
   it('redact: authorization header bị thay thế', () => {
     const { logger, lines } = createTestLogger()
     logger.info({ req: { headers: { authorization: 'Bearer token123' } } }, 'request')

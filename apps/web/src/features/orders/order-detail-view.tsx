@@ -32,7 +32,12 @@ interface OrderDetailViewProps {
   orderId: string
 }
 
-import { OrderStatusBadge as StatusBadge, PaymentStatusBadge } from './order-status-badges'
+import { OrderReviewPanel } from './order-review-panel'
+import {
+  OrderStatusBadge as StatusBadge,
+  PaymentStatusBadge,
+  ReviewStatusBadge,
+} from './order-status-badges'
 
 export function OrderDetailView({ orderId }: OrderDetailViewProps) {
   const navigate = useNavigate()
@@ -106,6 +111,7 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
                 Vượt hạn mức nợ (Offline)
               </Badge>
             )}
+            <ReviewStatusBadge status={order.reviewStatus} />
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             Tạo lúc {formatDateTime(order.createdAt)}
@@ -129,6 +135,15 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
           (offline) và đã ghi nhận nợ vượt hạn mức công nợ của khách hàng.
         </div>
       )}
+
+      <OrderReviewPanel
+        orderId={order.id}
+        reviewStatus={order.reviewStatus}
+        violations={order.policyViolations}
+        reviewedByName={order.reviewedByName}
+        reviewedAt={order.reviewedAt}
+        reviewNote={order.reviewNote}
+      />
 
       {/* Customer info + Payment method */}
       <section className="grid gap-3 sm:grid-cols-2">

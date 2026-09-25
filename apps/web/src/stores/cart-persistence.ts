@@ -63,6 +63,7 @@ function stripSensitive(tab: TabState): TabState {
   return {
     ...tab,
     priceOverridePin: null,
+    priceApproverId: null,
     items: tab.items.map((item) => {
       const copy = { ...item }
       delete copy.costPrice

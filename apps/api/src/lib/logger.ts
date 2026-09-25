@@ -80,6 +80,13 @@ export const REDACT_PATHS = [
   '*.passwordHash',
   '*.pin',
   '*.pinHash',
+  // PIN duyệt nằm trong payload đơn (POS và đơn ngoại tuyến trong /sync/push)
+  '*.priceOverridePin',
+  '*.debtLimitOverridePin',
+  '*.orderData.priceOverridePin',
+  '*.orderData.debtLimitOverridePin',
+  '*.input.priceOverridePin',
+  '*.input.debtLimitOverridePin',
   '*.botToken',
   '*.secret',
   '*.hmacSecret',

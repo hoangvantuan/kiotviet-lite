@@ -11,7 +11,8 @@ export interface PosVariantItem {
   sku: string
   barcode: string | null
   price: number
-  costPrice: number | null
+  /** Chỉ có khi người gọi có quyền products.viewCost (BC-13). */
+  costPrice?: number | null
   stockQuantity: number
   attributes: Record<string, string>
 }
@@ -23,7 +24,8 @@ export interface PosProductItem {
   barcode: string | null
   unit: string
   basePrice: number
-  costPrice: number | null
+  /** Chỉ có khi người gọi có quyền products.viewCost (BC-13). */
+  costPrice?: number | null
   imageUrl: string | null
   trackInventory: boolean
   stockQuantity: number

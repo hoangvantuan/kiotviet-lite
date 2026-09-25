@@ -286,7 +286,7 @@ beforeAll(async () => {
   })
 
   const customerA = await createCustomer(base)
-  const customerB = await createCustomer(base, { storeId: storeB.id })
+  const customerB = await createCustomer(base, { storeId: storeB.id, debtLimit: 100_000_000 })
 
   const [categoryA] = await base.db
     .insert(categories)

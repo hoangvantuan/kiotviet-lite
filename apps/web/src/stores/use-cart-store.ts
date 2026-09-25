@@ -99,6 +99,8 @@ export interface TabState {
   priceListId: string | null
   priceListName: string | null
   priceOverridePin: string | null
+  // POS-01: người đã nhập PIN duyệt sửa giá hay chiết khấu (null: chính người bán)
+  priceApproverId: string | null
 }
 
 interface CartState {
@@ -141,7 +143,7 @@ interface CartState {
     targetTabIndex?: number,
     isFallback?: boolean,
   ) => void
-  setPriceOverridePin: (pin: string | null) => void
+  setPriceOverridePin: (pin: string | null, approverId?: string | null) => void
   clearCart: () => void
   setMode: (mode: 'quick' | 'normal') => void
 }
@@ -200,6 +202,7 @@ export function createEmptyTab(): TabState {
     priceListId: null,
     priceListName: null,
     priceOverridePin: null,
+    priceApproverId: null,
   }
 }
 
@@ -211,13 +214,33 @@ export function createInitialTabs(): Record<number, TabState> {
   return tabs
 }
 
+/**
+ * Dấu vân tay phần giỏ mà người duyệt đã xem khi nhập PIN: dòng hàng, số lượng, giá, chiết khấu.
+ * Đổi bất kỳ phần nào thì PIN đã nhập không còn áp cho giỏ mới.
+ */
+function approvalSignature(tab: TabState): string {
+  return JSON.stringify([
+    tab.items.map((i) => [i.id, i.quantity, i.unitPrice, i.discountAmount, i.lineTotal]),
+    tab.orderDiscountAmount,
+  ])
+}
+
 function updateTab(
   state: CartState,
   tabIndex: number,
   updater: (tab: TabState) => TabState,
 ): Pick<CartState, 'tabs'> {
   const current = state.tabs[tabIndex] ?? createEmptyTab()
-  const next = updater(current)
+  let next = updater(current)
+  // Người duyệt duyệt đúng giỏ lúc nhập PIN. Giỏ hay chiết khấu đổi sau đó thì bỏ PIN, bắt duyệt
+  // lại, để nhân viên không mang PIN của quản lý đi áp cho một chiết khấu lớn hơn.
+  if (
+    next.priceOverridePin &&
+    next.priceOverridePin === current.priceOverridePin &&
+    approvalSignature(next) !== approvalSignature(current)
+  ) {
+    next = { ...next, priceOverridePin: null, priceApproverId: null }
+  }
   return { tabs: { ...state.tabs, [tabIndex]: next } }
 }
 
@@ -470,8 +493,14 @@ export const useCartStore = create<CartState>((set, get) => ({
     })
   },
 
-  setPriceOverridePin: (pin) => {
-    set((state) => updateActiveTab(state, (tab) => ({ ...tab, priceOverridePin: pin })))
+  setPriceOverridePin: (pin, approverId = null) => {
+    set((state) =>
+      updateActiveTab(state, (tab) => ({
+        ...tab,
+        priceOverridePin: pin,
+        priceApproverId: pin ? approverId : null,
+      })),
+    )
   },
 
   clearCart: () => {

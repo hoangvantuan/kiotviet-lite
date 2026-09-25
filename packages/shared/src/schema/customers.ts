@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
   bigint,
+  boolean,
   index,
   integer,
   pgTable,
@@ -31,7 +32,10 @@ export const customers = pgTable(
     address: text(),
     taxId: varchar({ length: 32 }),
     notes: text(),
+    // Hạn mức nợ riêng. NULL: theo hạn mức nhóm; không có nhóm hoặc nhóm không đặt thì KHÔNG được nợ.
+    // 0 cũng là không được nợ. "Không giới hạn" chỉ bật bằng cờ debtUnlimited (ADR-0009).
     debtLimit: bigint({ mode: 'number' }),
+    debtUnlimited: boolean().notNull().default(false),
     groupId: uuid().references(() => customerGroups.id, { onDelete: 'set null' }),
     totalPurchased: bigint({ mode: 'number' }).notNull().default(0),
     purchaseCount: integer().notNull().default(0),

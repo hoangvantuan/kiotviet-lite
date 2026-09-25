@@ -63,7 +63,8 @@ import {
 const NO_PRICE_LIST = '__NONE__'
 
 function formatDebtLimit(value: number | null): string {
-  if (value === null) return 'Không giới hạn'
+  // ADR-0009: nhóm không đặt hạn mức thì khách trong nhóm không được nợ
+  if (value === null || value === 0) return 'Không cho nợ'
   return formatVndWithSuffix(value, ' ₫')
 }
 
@@ -292,7 +293,7 @@ function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps) {
             <Input
               id="group-debt-limit"
               inputMode="numeric"
-              placeholder="Để trống = không giới hạn"
+              placeholder="Để trống = không cho nợ"
               value={debtLimitText}
               onChange={(e) => handleDebtLimitChange(e.target.value)}
             />
@@ -442,7 +443,7 @@ function EditGroupDialog({ open, onOpenChange, group }: EditGroupDialogProps) {
             <Input
               id="edit-group-debt-limit"
               inputMode="numeric"
-              placeholder="Để trống = không giới hạn"
+              placeholder="Để trống = không cho nợ"
               value={debtLimitText}
               onChange={(e) => handleDebtLimitChange(e.target.value)}
             />

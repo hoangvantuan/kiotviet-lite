@@ -1,4 +1,9 @@
-import type { PriceSource } from '@kiotviet-lite/shared'
+import type {
+  OrderPolicyViolation,
+  OrderReviewStatus,
+  PriceSource,
+  ReviewOrderInput,
+} from '@kiotviet-lite/shared'
 
 import { apiClient } from '@/lib/api-client'
 
@@ -22,6 +27,7 @@ interface OrderListItem {
   debtAmount: number
   status: string
   debtLimitExceeded?: boolean
+  reviewStatus?: OrderReviewStatus
   note: string | null
   createdAt: string
 }
@@ -54,6 +60,11 @@ interface OrderDetailResponse {
   note: string | null
   status: string
   debtLimitExceeded?: boolean
+  reviewStatus?: OrderReviewStatus
+  policyViolations?: OrderPolicyViolation[] | null
+  reviewedByName?: string | null
+  reviewedAt?: string | null
+  reviewNote?: string | null
   createdAt: string
   updatedAt: string
   items: OrderDetailItem[]
@@ -99,6 +110,7 @@ export interface ListOrdersQuery {
   customerId?: string
   paymentMethod?: string
   paymentStatus?: string
+  reviewStatus?: string
 }
 
 function buildQuery(q: ListOrdersQuery): string {
@@ -112,6 +124,7 @@ function buildQuery(q: ListOrdersQuery): string {
   if (q.customerId) params.set('customerId', q.customerId)
   if (q.paymentMethod) params.set('paymentMethod', q.paymentMethod)
   if (q.paymentStatus) params.set('paymentStatus', q.paymentStatus)
+  if (q.reviewStatus) params.set('reviewStatus', q.reviewStatus)
   const s = params.toString()
   return s ? `?${s}` : ''
 }
@@ -122,6 +135,25 @@ export function listOrdersApi(query: ListOrdersQuery) {
 
 export function getOrderApi(id: string) {
   return apiClient.get<Envelope<OrderDetailResponse>>(`/api/v1/orders/${id}`)
+}
+
+// --- ADR-0009: duyệt đơn ngoại tuyến vi phạm chính sách ---
+
+export interface ReviewOrderResult {
+  id: string
+  orderNumber: string
+  reviewStatus: OrderReviewStatus
+  reviewedAt: string
+  reviewNote: string | null
+  nextSteps: string[]
+}
+
+export function reviewOrderApi(id: string, input: ReviewOrderInput) {
+  return apiClient.post<Envelope<ReviewOrderResult>>(`/api/v1/orders/${id}/review`, input)
+}
+
+export function getPendingReviewCountApi() {
+  return apiClient.get<Envelope<{ count: number }>>('/api/v1/orders/pending-review/count')
 }
 
 // --- Returns API ---

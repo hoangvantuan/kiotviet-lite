@@ -57,6 +57,7 @@ function buildQuery(q: Partial<ListCustomersQuery>): string {
   if (q.search) params.set('search', q.search)
   if (q.groupId) params.set('groupId', q.groupId)
   if (q.hasDebt && q.hasDebt !== 'all') params.set('hasDebt', q.hasDebt)
+  if (q.debtUnlimited === 'yes') params.set('debtUnlimited', 'yes')
   const s = params.toString()
   return s ? `?${s}` : ''
 }

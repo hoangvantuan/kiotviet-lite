@@ -49,6 +49,7 @@ export function addToCartAction({
       variantName: variant?.name ?? null,
       sku: variant?.sku ?? product.sku,
       unitPrice: displayPrice,
+      // BC-13: người không có quyền products.viewCost không nhận giá vốn (undefined)
       costPrice: variant?.costPrice ?? product.costPrice,
       imageUrl: product.imageUrl,
       notes: notes?.trim() || null,

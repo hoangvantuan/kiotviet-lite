@@ -26,12 +26,14 @@ import {
   customers,
   type CustomerStats,
   debts,
+  hasPermission,
   type ListCustomerOrdersQuery,
   type ListCustomersQuery,
   type OpeningDebt,
   orderItems,
   orders,
   type QuickCreateCustomerInput,
+  resolveEffectiveDebtLimit,
   type UpdateCustomerInput,
   type UserRole,
 } from '@kiotviet-lite/shared'
@@ -64,6 +66,7 @@ interface CustomerJoinRow {
   taxId: string | null
   notes: string | null
   debtLimit: number | null
+  debtUnlimited: boolean
   groupId: string | null
   totalPurchased: number
   purchaseCount: number
@@ -89,7 +92,12 @@ function toCustomerListItem(row: CustomerJoinRow): CustomerListItem {
     taxId: row.taxId,
     notes: row.notes,
     debtLimit,
-    effectiveDebtLimit: debtLimit ?? groupDebtLimit ?? null,
+    debtUnlimited: row.debtUnlimited,
+    effectiveDebtLimit: resolveEffectiveDebtLimit({
+      debtUnlimited: row.debtUnlimited,
+      customerDebtLimit: debtLimit,
+      groupDebtLimit,
+    }),
     groupId: row.groupId,
     groupName: row.groupName,
     totalPurchased: Number(row.totalPurchased),
@@ -114,6 +122,13 @@ function toCustomerDetail(row: CustomerJoinRow): CustomerDetail {
             defaultPriceListId: row.groupDefaultPriceListId,
             debtLimit: row.groupDebtLimit === null ? null : Number(row.groupDebtLimit),
           },
+  }
+}
+
+/** Cờ "không giới hạn nợ" chỉ chủ cửa hàng được đặt (ADR-0009). */
+function assertCanSetUnlimitedDebt(actor: CustomersActor): void {
+  if (!hasPermission(actor.role, 'customers.setUnlimitedDebt')) {
+    throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng được đặt khách không giới hạn nợ')
   }
 }
 
@@ -194,6 +209,7 @@ const customerSelectColumns = {
   taxId: customers.taxId,
   notes: customers.notes,
   debtLimit: customers.debtLimit,
+  debtUnlimited: customers.debtUnlimited,
   groupId: customers.groupId,
   totalPurchased: customers.totalPurchased,
   purchaseCount: customers.purchaseCount,
@@ -225,7 +241,7 @@ export async function listCustomers({
   storeId,
   query,
 }: ListCustomersDeps): Promise<CustomerListResult> {
-  const { page, pageSize, search, groupId, hasDebt } = query
+  const { page, pageSize, search, groupId, hasDebt, debtUnlimited } = query
 
   const conditions: SQL[] = [eq(customers.storeId, storeId), isNull(customers.deletedAt)]
 
@@ -247,6 +263,9 @@ export async function listCustomers({
     conditions.push(eq(customers.groupId, groupId))
   }
 
+  if (debtUnlimited === 'yes') {
+    conditions.push(eq(customers.debtUnlimited, true))
+  }
   if (hasDebt === 'yes') {
     conditions.push(sql`${customers.currentDebt} > 0`)
   } else if (hasDebt === 'no') {
@@ -362,6 +381,7 @@ export async function createCustomer({
   transaction,
 }: CreateCustomerDeps): Promise<CustomerDetail> {
   const db = serviceDb(rootDb, transaction)
+  if (input.debtUnlimited) assertCanSetUnlimitedDebt(actor)
   if (input.phone) {
     await ensurePhoneUnique({ db, storeId: actor.storeId, phone: input.phone })
   }
@@ -411,6 +431,7 @@ export async function createCustomer({
           taxId: input.taxId ?? null,
           notes: input.notes ?? null,
           debtLimit: input.debtLimit ?? null,
+          debtUnlimited: input.debtUnlimited ?? false,
           groupId: input.groupId ?? null,
         })
         .returning({ id: customers.id })
@@ -444,6 +465,7 @@ export async function createCustomer({
         phone: input.phone,
         groupId: input.groupId ?? null,
         debtLimit: input.debtLimit ?? null,
+        debtUnlimited: input.debtUnlimited ?? false,
       },
       ipAddress: meta?.ipAddress,
       userAgent: meta?.userAgent,
@@ -476,7 +498,9 @@ export async function quickCreateCustomer({
       address: null,
       taxId: null,
       notes: null,
+      // POS-12: khách tạo nhanh tại quầy không được nợ cho tới khi chủ hoặc quản lý đặt hạn mức
       debtLimit: null,
+      debtUnlimited: false,
       groupId: null,
     },
     meta,
@@ -517,6 +541,9 @@ export async function updateCustomer({
     })
   }
 
+  if (input.debtUnlimited !== undefined && input.debtUnlimited !== target.debtUnlimited) {
+    assertCanSetUnlimitedDebt(actor)
+  }
   if (input.code !== undefined && input.code.toLowerCase() !== target.code.toLowerCase()) {
     await ensureCodeUnique(db, actor.storeId, input.code, targetId)
   }
@@ -537,6 +564,7 @@ export async function updateCustomer({
     'taxId',
     'notes',
     'debtLimit',
+    'debtUnlimited',
     'groupId',
   ]
   for (const field of fields) {

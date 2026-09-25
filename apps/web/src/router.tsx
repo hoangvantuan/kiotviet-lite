@@ -384,6 +384,7 @@ const ordersSearchSchema = z.object({
   status: z.string().optional().catch(undefined),
   paymentMethod: z.string().optional().catch(undefined),
   paymentStatus: z.string().optional().catch(undefined),
+  reviewStatus: z.string().optional().catch(undefined),
   customerId: z.string().optional().catch(undefined),
   customerName: z.string().optional().catch(undefined),
 })

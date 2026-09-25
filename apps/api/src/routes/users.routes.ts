@@ -6,12 +6,14 @@ import { createUserSchema, updateUserSchema, verifyPinSchema } from '@kiotviet-l
 const uuidParam = z.string().uuid('ID không hợp lệ')
 
 import type { Db } from '../db/index.js'
+import { ApiError } from '../lib/errors.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { createUserRateLimit } from '../middleware/rate-limit.middleware.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
+import { verifyApproval } from '../services/order-policy.js'
 import { verifyPin } from '../services/pin.service.js'
 import {
   createUser,
@@ -34,12 +36,31 @@ export function createUsersRoutes({ db }: UsersRoutesDeps) {
   app.post('/verify-pin', async (c) => {
     const auth = c.get('auth')
     const input = await parseJson(c, verifyPinSchema)
+    const meta = getRequestMeta(c)
+    if (input.userId || input.permissions?.length) {
+      const permissions = input.permissions ?? []
+      if (input.userId && input.userId !== auth.userId && permissions.length === 0) {
+        // Schema đã chặn; giữ lại để route không bao giờ kiểm PIN người khác mà không nêu quyền
+        throw new ApiError('VALIDATION_ERROR', 'Kiểm PIN người duyệt cần nêu quyền cần duyệt')
+      }
+      // Kiểm PIN người duyệt: cùng cửa hàng, có đủ quyền được yêu cầu, qua bộ chặn dò PIN
+      const approver = await verifyApproval({
+        db,
+        storeId: auth.storeId,
+        approverUserId: input.userId ?? auth.userId,
+        pin: input.pin,
+        permissions,
+        requester: { userId: auth.userId, ipAddress: meta.ipAddress },
+        meta,
+      })
+      return c.json({ data: { ok: true as const, approver } })
+    }
     const result = await verifyPin({
       db,
       userId: auth.userId,
       storeId: auth.storeId,
       pin: input.pin,
-      meta: getRequestMeta(c),
+      meta,
     })
     return c.json({ data: result })
   })
