@@ -8,6 +8,7 @@ const ROLES: UserRole[] = ['owner', 'manager', 'staff']
 const MATRIX: Record<Permission, Record<UserRole, boolean>> = {
   'users.manage': { owner: true, manager: false, staff: false },
   'store.manage': { owner: true, manager: false, staff: false },
+  'notifications.manage': { owner: true, manager: false, staff: false },
   'audit.viewAll': { owner: true, manager: false, staff: false },
   'audit.viewTeam': { owner: false, manager: true, staff: false },
   'audit.viewOwn': { owner: true, manager: true, staff: true },
@@ -41,6 +42,7 @@ describe('PERMISSIONS map', () => {
         'customers.setUnlimitedDebt',
         'customers.view',
         'inventory.manage',
+        'notifications.manage',
         'orders.return',
         'orders.reviewPolicy',
         'orders.view',

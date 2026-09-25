@@ -2,26 +2,8 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 
 import type { NotificationEvent } from '@kiotviet-lite/shared'
 
+import { checkWebhookTarget } from '../url-guard.js'
 import type { SendResult, Transport } from './base.js'
-
-function isPrivateHost(hostname: string): boolean {
-  if (hostname === 'localhost' || hostname === '::1' || hostname === '[::1]') return true
-
-  // IPv6 private ranges
-  const bare = hostname.startsWith('[') ? hostname.slice(1, -1) : hostname
-  if (bare === '::1' || bare.startsWith('fe80:') || bare.startsWith('fc') || bare.startsWith('fd'))
-    return true
-
-  const parts = hostname.split('.')
-  if (parts.length !== 4 || parts.some((p) => !/^\d+$/.test(p))) return false
-  const a = Number(parts[0])
-  const b = Number(parts[1])
-  if (a === 127 || a === 10 || a === 0) return true
-  if (a === 172 && b >= 16 && b <= 31) return true
-  if (a === 192 && b === 168) return true
-  if (a === 169 && b === 254) return true
-  return false
-}
 
 /** Header chuẩn của webhook KVL; bên nhận kiểm bằng `verifyWebhookSignature`. */
 export function webhookHeaders(body: string, hmacSecret?: string): Record<string, string> {
@@ -62,7 +44,8 @@ export class WebhookTransport implements Transport {
       return { ok: false, error: 'Webhook URL must use HTTPS', attempts: 1, retriable: false }
     }
 
-    if (isPrivateHost(parsed.hostname)) {
+    // Kiểm theo địa chỉ đã phân giải chứ không theo tiền tố tên miền (fcm.googleapis.com là công khai)
+    if (!(await checkWebhookTarget(url)).ok) {
       return {
         ok: false,
         error: 'Webhook URL must not target private network',
@@ -80,6 +63,8 @@ export class WebhookTransport implements Transport {
         headers,
         body,
         signal: AbortSignal.timeout(10_000),
+        // Không theo chuyển hướng: URL công khai có thể 302 về địa chỉ nội bộ (SSRF, GL-15)
+        redirect: 'manual',
       })
 
       if (response.ok) {

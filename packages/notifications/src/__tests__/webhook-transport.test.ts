@@ -8,6 +8,10 @@ import { verifyWebhookSignature, WebhookTransport } from '../transports/webhook.
 
 const mockFetch = vi.fn()
 
+// Test không tra DNS thật: tên miền mặc định phân giải ra địa chỉ công khai
+const { mockLookup } = vi.hoisted(() => ({ mockLookup: vi.fn() }))
+vi.mock('node:dns/promises', () => ({ lookup: mockLookup }))
+
 function makeEvent(overrides: Partial<NotificationEvent> = {}): NotificationEvent {
   return {
     id: uuidv7(),
@@ -27,6 +31,8 @@ describe('WebhookTransport', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', mockFetch)
     mockFetch.mockReset()
+    mockLookup.mockReset()
+    mockLookup.mockResolvedValue([{ address: '93.184.215.14', family: 4 }])
   })
 
   afterEach(() => {
@@ -220,6 +226,39 @@ describe('WebhookTransport', () => {
         retriable: false,
       })
     }
+  })
+
+  it('GL-15: tên miền phân giải ra địa chỉ nội bộ bị chặn trước khi gửi', async () => {
+    mockLookup.mockResolvedValueOnce([{ address: '169.254.169.254', family: 4 }])
+    const result = await transport.send(makeEvent(), { url: 'https://rebind.example.com/hook' })
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'Webhook URL must not target private network',
+    })
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
+
+  it('GL-15: không theo chuyển hướng, 302 coi là gửi lỗi không thử lại', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(null, { status: 302, headers: { Location: 'http://169.254.169.254/' } }),
+    )
+    const result = await transport.send(makeEvent(), { url: 'https://example.com/hook' })
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://example.com/hook',
+      expect.objectContaining({ redirect: 'manual' }),
+    )
+    expect(result).toMatchObject({ ok: false, retriable: false })
+  })
+
+  it.each([
+    'https://fcm.googleapis.com/hook',
+    'https://fdn.example.com/hook',
+    'https://fe80x.example.com/h',
+  ])('GL-15: tên miền công khai bắt đầu bằng fc/fd/fe80 (%s) không bị chặn nhầm', async (url) => {
+    mockFetch.mockResolvedValueOnce(new Response('OK', { status: 200 }))
+    const result = await transport.send(makeEvent(), { url })
+    expect(result).toEqual({ ok: true, attempts: 1 })
+    expect(mockFetch).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -3,6 +3,8 @@ import type { UserRole } from '../schema/auth.js'
 export const PERMISSIONS = {
   'users.manage': ['owner'],
   'store.manage': ['owner'],
+  // Kênh thông báo giữ bot token, URL webhook của cửa hàng nên chỉ chủ cửa hàng cấu hình (GL-15)
+  'notifications.manage': ['owner'],
   'audit.viewAll': ['owner'],
   'audit.viewTeam': ['manager'],
   'audit.viewOwn': ['owner', 'manager', 'staff'],

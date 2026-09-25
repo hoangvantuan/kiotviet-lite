@@ -1,7 +1,7 @@
 import {
   notificationChannels,
   notificationRules,
-  notificationTypeValues,
+  notificationSubscribableTypeValues,
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
@@ -28,7 +28,7 @@ export async function seedDefaultRules(db: Db, storeId: string): Promise<void> {
       return
     }
 
-    const ruleValues = notificationTypeValues.map((eventType) => ({
+    const ruleValues = notificationSubscribableTypeValues.map((eventType) => ({
       storeId,
       eventType,
       minSeverity: 'info' as const,

@@ -33,6 +33,7 @@ function assertStrongSecret(name: string, value: string): void {
 
 export function validateSecrets(source: NodeJS.ProcessEnv = process.env): void {
   const accessSecret = source.JWT_ACCESS_SECRET
+  const notificationKey = source.NOTIFICATION_CONFIG_KEY
   const refreshSecret = source.JWT_REFRESH_SECRET
 
   if (!accessSecret || accessSecret.length < 32) {
@@ -49,10 +50,20 @@ export function validateSecrets(source: NodeJS.ProcessEnv = process.env): void {
     if (accessSecret === refreshSecret) {
       throw new Error('JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be different')
     }
-    const notificationKey = source.NOTIFICATION_CONFIG_KEY
-    if (notificationKey) {
-      assertStrongSecret('NOTIFICATION_CONFIG_KEY', notificationKey)
+    // GL-15: kênh thông báo lưu token/secret đã mã hoá bằng khoá này, thiếu thì không cấu hình được kênh
+    if (!notificationKey) {
+      throw new Error(
+        'NOTIFICATION_CONFIG_KEY is required in production (64 hex characters, generate with `openssl rand -hex 32`)',
+      )
     }
+    assertStrongSecret('NOTIFICATION_CONFIG_KEY', notificationKey)
+  }
+
+  // Khoá sai định dạng chỉ lộ ra lúc lưu kênh đầu tiên, nên chặn ngay khi khởi động ở mọi môi trường
+  if (notificationKey && !/^[0-9a-fA-F]{64}$/.test(notificationKey)) {
+    throw new Error(
+      'NOTIFICATION_CONFIG_KEY must be 64 hex characters (32 bytes), generate with `openssl rand -hex 32`',
+    )
   }
 
   const ttl = source.ACCESS_TOKEN_TTL_SECONDS
