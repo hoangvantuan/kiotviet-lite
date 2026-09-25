@@ -22,6 +22,7 @@ import { pathToFileURL } from 'node:url'
 import postgres from 'postgres'
 import { uuidv7 } from 'uuidv7'
 
+import { DEV_SEED_ACCOUNTS, DEV_SEED_PASSWORD } from '@kiotviet-lite/shared'
 import * as schema from '@kiotviet-lite/shared/schema'
 
 import type { Db } from './index.js'
@@ -90,7 +91,7 @@ export async function seed(db: Db) {
 
   // ─── 2. Users ───
   console.log('👤 Tạo nhân viên...')
-  const pwdHash = await hash('matkhau123')
+  const pwdHash = await hash(DEV_SEED_PASSWORD)
   const pinOwner = await hash('111111')
   const pinManager = await hash('222222')
   const pinStaff = await hash('333333')
@@ -103,8 +104,8 @@ export async function seed(db: Db) {
     {
       id: ownerId,
       storeId,
-      name: 'Nguyễn Văn An',
-      phone: '0901000001',
+      name: DEV_SEED_ACCOUNTS[0].name,
+      phone: DEV_SEED_ACCOUNTS[0].phone,
       passwordHash: pwdHash,
       pinHash: pinOwner,
       role: 'owner',
@@ -112,8 +113,8 @@ export async function seed(db: Db) {
     {
       id: managerId,
       storeId,
-      name: 'Trần Thị Bình',
-      phone: '0901000002',
+      name: DEV_SEED_ACCOUNTS[1].name,
+      phone: DEV_SEED_ACCOUNTS[1].phone,
       passwordHash: pwdHash,
       pinHash: pinManager,
       role: 'manager',
@@ -121,8 +122,8 @@ export async function seed(db: Db) {
     {
       id: staffId,
       storeId,
-      name: 'Lê Minh Cường',
-      phone: '0901000003',
+      name: DEV_SEED_ACCOUNTS[2].name,
+      phone: DEV_SEED_ACCOUNTS[2].phone,
       passwordHash: pwdHash,
       pinHash: pinStaff,
       role: 'staff',
