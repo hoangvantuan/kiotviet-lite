@@ -173,7 +173,11 @@ function checkZipSize(bytes: Uint8Array): void {
   }
 }
 
-function workbookData(bytes: Uint8Array, kind: BulkImportKind) {
+/**
+ * Mở sheet đầu của tệp XLSX tải lên với các giới hạn an toàn (dung lượng, zip, số dòng) và đọc
+ * hàng tiêu đề. Dùng chung cho nhập liệu hàng loạt và nhập phiếu kiểm từ tệp.
+ */
+export function openImportWorkbook(bytes: Uint8Array) {
   if (!bytes.length || bytes.length > BULK_IMPORT_MAX_BYTES) {
     throw new ApiError(
       'VALIDATION_ERROR',
@@ -199,10 +203,18 @@ function workbookData(bytes: Uint8Array, kind: BulkImportKind) {
     const cell = sheet![XLSX.utils.encode_cell({ r: 0, c: col })] as XLSX.CellObject | undefined
     header.push(cell?.v === undefined ? '' : String(cell.v))
   }
+  if (range && range.e.r > BULK_IMPORT_MAX_ROWS) {
+    throw new ApiError('VALIDATION_ERROR', `Tệp vượt quá ${BULK_IMPORT_MAX_ROWS} dòng dữ liệu`)
+  }
+  return { sheetName: workbook.SheetNames[0], sheet, range, header }
+}
+
+function workbookData(bytes: Uint8Array, kind: BulkImportKind) {
+  const { sheetName, sheet, range, header } = openImportWorkbook(bytes)
   const expected = BULK_EXPORT_HEADERS[kind]
   // KiotViet exports keep their own sheet name and column names; map them instead of rejecting.
   const kiotViet = isKiotVietExport(kind, header)
-  if (!kiotViet && workbook.SheetNames[0] !== BULK_EXPORT_FORMAT.dataSheet) {
+  if (!kiotViet && sheetName !== BULK_EXPORT_FORMAT.dataSheet) {
     throw new ApiError(
       'VALIDATION_ERROR',
       'Sheet đầu tiên phải là Dữ liệu (tệp mẫu) hoặc tệp xuất nguyên bản từ KiotViet',
@@ -210,9 +222,6 @@ function workbookData(bytes: Uint8Array, kind: BulkImportKind) {
   }
   if (!sheet || !range)
     throw new ApiError('VALIDATION_ERROR', 'Sheet dữ liệu không có hàng tiêu đề')
-  if (range.e.r > BULK_IMPORT_MAX_ROWS) {
-    throw new ApiError('VALIDATION_ERROR', `Tệp vượt quá ${BULK_IMPORT_MAX_ROWS} dòng dữ liệu`)
-  }
   const report = new ConversionReport()
   if (kiotViet) {
     const rows = readKiotVietRows({
@@ -240,7 +249,7 @@ function workbookData(bytes: Uint8Array, kind: BulkImportKind) {
   return { rows, expected, report, sourceFormat: 'template' as const }
 }
 
-function readCell(sheet: XLSX.WorkSheet, row: number, column: number): unknown {
+export function readCell(sheet: XLSX.WorkSheet, row: number, column: number): unknown {
   const cell = sheet[XLSX.utils.encode_cell({ r: row, c: column })] as XLSX.CellObject | undefined
   if (!cell) return undefined
   // Never evaluate imported formulas or trust cached results as input.

@@ -34,17 +34,8 @@ const uploadRateLimit = rateLimiter({
 })
 const MAX_MULTIPART_BYTES = BULK_IMPORT_MAX_BYTES + 16 * 1024
 
-export async function readBulkImportUpload(
-  request: Request,
-  confirm = false,
-): Promise<{
-  bytes: Uint8Array
-  filename: string
-  mode: BulkImportMode
-  digest?: string
-  approveNewNames?: boolean
-  approveConversions?: boolean
-}> {
+/** Đọc multipart có giới hạn dung lượng trước khi giải mã (không tin Content-Length). */
+export async function readMultipartForm(request: Request): Promise<FormData> {
   if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('multipart/form-data;')) {
     throw new ApiError('VALIDATION_ERROR', 'Cần gửi một tệp XLSX bằng multipart/form-data')
   }
@@ -76,9 +67,8 @@ export async function readBulkImportUpload(
     body.set(chunk, offset)
     offset += chunk.byteLength
   }
-  let form: FormData
   try {
-    form = await new Request(request.url, {
+    return await new Request(request.url, {
       method: 'POST',
       headers: request.headers,
       body,
@@ -86,6 +76,20 @@ export async function readBulkImportUpload(
   } catch {
     throw new ApiError('VALIDATION_ERROR', 'Nội dung multipart không hợp lệ')
   }
+}
+
+export async function readBulkImportUpload(
+  request: Request,
+  confirm = false,
+): Promise<{
+  bytes: Uint8Array
+  filename: string
+  mode: BulkImportMode
+  digest?: string
+  approveNewNames?: boolean
+  approveConversions?: boolean
+}> {
+  const form = await readMultipartForm(request)
   const allowed = confirm
     ? ['file', 'mode', 'digest', 'approveNewNames', 'approveConversions']
     : ['file', 'mode']

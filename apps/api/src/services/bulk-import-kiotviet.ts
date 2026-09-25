@@ -134,6 +134,15 @@ const droppable: Record<BulkExportKind, Record<string, ZodTypeAny>> = {
   },
 }
 
+/**
+ * Mã hàng KiotViet có ký tự mà mã của mình không nhận: bỏ các ký tự đó nếu phần còn lại hợp lệ,
+ * không thì giữ nguyên để lỗi hiện ra. Nhập tồn đầu kỳ dùng lại để khớp đúng mã đã nhập.
+ */
+export function cleanKiotVietSku(value: string): string {
+  const cleaned = value.replace(/[^\p{L}\p{M}0-9\p{Zs}_\-./+*,@=]/gu, '').trim()
+  return cleaned !== value && productSkuSchema.safeParse(cleaned).success ? cleaned : value
+}
+
 export function isKiotVietExport(kind: BulkExportKind, header: string[]): boolean {
   return signatures[kind].every((name) => header.includes(name))
 }
@@ -268,8 +277,8 @@ export function readKiotVietRows({
         } else value = 'Có'
       } else value = text(value)
       if (target === 'Mã hàng' && typeof value === 'string') {
-        const cleaned = value.replace(/[^\p{L}\p{M}0-9\p{Zs}_\-./+*,@=]/gu, '').trim()
-        if (cleaned !== value && productSkuSchema.safeParse(cleaned).success) {
+        const cleaned = cleanKiotVietSku(value)
+        if (cleaned !== value) {
           report.add('sku_cleaned', 'Mã hàng có ký tự không hợp lệ, đã bỏ các ký tự đó', row)
           value = cleaned
         }

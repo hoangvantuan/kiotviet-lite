@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 import type {
   CreateStockCheckInput,
   ListStockChecksQuery,
@@ -7,6 +9,7 @@ import type {
   UpdateStockCheckInput,
 } from '@kiotviet-lite/shared'
 
+import { request as uploadRequest } from '@/features/bulk-import/bulk-import-api'
 import { apiClient } from '@/lib/api-client'
 
 interface Envelope<T> {
@@ -60,4 +63,66 @@ export function confirmStockCheckApi(id: string) {
 
 export function deleteStockCheckApi(id: string) {
   return apiClient.delete<Envelope<{ ok: true }>>(`/api/v1/stock-checks/${id}`)
+}
+
+// GL-02: nhập tồn đầu kỳ từ tệp thành các phiếu kiểm nháp
+const stockImportPreviewSchema = z.object({
+  filename: z.string(),
+  totalRows: z.number(),
+  items: z.number(),
+  checks: z.number(),
+  totalDiffPositive: z.number(),
+  totalDiffNegative: z.number(),
+  errors: z.array(z.object({ row: z.number(), column: z.string(), message: z.string() })),
+  conversions: z.array(
+    z.object({
+      code: z.string(),
+      message: z.string(),
+      count: z.number(),
+      rows: z.array(z.number()),
+      requiresConfirmation: z.boolean(),
+    }),
+  ),
+  requiresApproval: z.boolean(),
+  sample: z.array(
+    z.object({
+      row: z.number(),
+      sku: z.string(),
+      name: z.string(),
+      variantLabel: z.string().nullable(),
+      systemQty: z.number(),
+      actualQty: z.number(),
+    }),
+  ),
+  digest: z.string(),
+})
+
+export type StockImportPreview = z.infer<typeof stockImportPreviewSchema>
+
+export async function previewStockImportApi(file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  const response = await uploadRequest('/api/v1/stock-checks/import/preview', {
+    method: 'POST',
+    body: form,
+  })
+  return z.object({ data: stockImportPreviewSchema }).parse(await response.json()).data
+}
+
+export async function confirmStockImportApi(
+  file: File,
+  digest: string,
+  approveConversions: boolean,
+) {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('digest', digest)
+  form.append('approveConversions', String(approveConversions))
+  const response = await uploadRequest('/api/v1/stock-checks/import/confirm', {
+    method: 'POST',
+    body: form,
+  })
+  return z
+    .object({ data: z.object({ ids: z.array(z.string()), items: z.number() }) })
+    .parse(await response.json()).data
 }

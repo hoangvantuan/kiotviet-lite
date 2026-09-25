@@ -105,7 +105,8 @@ const responseErrorSchema = z.object({
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000'
 
-async function request(path: string, options: RequestInit): Promise<Response> {
+/** Gửi tệp (multipart) kèm token; lỗi trả về thành ApiClientError như apiClient. */
+export async function request(path: string, options: RequestInit): Promise<Response> {
   const headers = new Headers(options.headers)
   const token = useAuthStore.getState().accessToken
   if (token) headers.set('Authorization', `Bearer ${token}`)

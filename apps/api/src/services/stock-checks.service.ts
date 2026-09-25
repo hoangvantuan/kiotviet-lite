@@ -114,7 +114,7 @@ export function recomputeStockCheckTotals(items: { diff: number }[]): StockCheck
   }
 }
 
-interface ResolvedItem {
+export interface ResolvedItem {
   productId: string
   variantId: string | null
   productNameSnapshot: string
@@ -220,6 +220,123 @@ async function resolveItems({
   return resolved
 }
 
+/**
+ * Chèn một phiếu kiểm nháp từ các dòng đã đối chiếu tồn, trong transaction của người gọi. Dùng cho
+ * tạo phiếu tay và nhập tồn đầu kỳ từ tệp (tự chia nhiều phiếu trong cùng transaction).
+ */
+export async function insertStockCheckDraft({
+  tx,
+  actor,
+  items,
+  note,
+  meta,
+}: {
+  tx: Db
+  actor: StockCheckActor
+  items: ResolvedItem[]
+  note?: string | null
+  meta?: RequestMeta
+}): Promise<string> {
+  const totals = recomputeStockCheckTotals(items)
+
+  const noteValue = note?.trim() ? note.trim() : null
+
+  let code = await generateStockCheckCode({ tx, storeId: actor.storeId, now: new Date() })
+  let createdId: string | null = null
+  let attempts = 0
+  const MAX_ATTEMPTS = 3
+  while (attempts < MAX_ATTEMPTS && createdId === null) {
+    try {
+      const [row] = await tx
+        .insert(stockChecks)
+        .values({
+          storeId: actor.storeId,
+          code,
+          status: 'draft',
+          note: noteValue,
+          totalItems: totals.totalItems,
+          totalDiffPositive: totals.totalDiffPositive,
+          totalDiffNegative: totals.totalDiffNegative,
+          createdBy: actor.userId,
+        })
+        .returning({ id: stockChecks.id })
+      if (!row) {
+        throw new ApiError('INTERNAL_ERROR', 'Không tạo được phiếu kiểm kho')
+      }
+      createdId = row.id
+    } catch (err) {
+      if (isUniqueViolation(err, 'uniq_stock_checks_store_code')) {
+        attempts++
+        if (attempts >= MAX_ATTEMPTS) {
+          throw new ApiError('INTERNAL_ERROR', 'Không thể sinh mã phiếu kiểm kho, vui lòng thử lại')
+        }
+        const nextCode = incrementCodeSequence(code)
+        logger.warn(
+          { storeId: actor.storeId, code, nextCode, attempt: attempts },
+          'stock_check.code_collision_retry',
+        )
+        code = nextCode
+        continue
+      }
+      throw err
+    }
+  }
+  if (!createdId) {
+    throw new ApiError('INTERNAL_ERROR', 'Không tạo được phiếu kiểm kho')
+  }
+
+  // Chèn theo lô: phiếu nhập từ tệp có tới 1000 dòng
+  for (let offset = 0; offset < items.length; offset += 500) {
+    await tx.insert(stockCheckItems).values(
+      items.slice(offset, offset + 500).map((item) => ({
+        stockCheckId: createdId,
+        productId: item.productId,
+        variantId: item.variantId,
+        productNameSnapshot: item.productNameSnapshot,
+        productSkuSnapshot: item.productSkuSnapshot,
+        variantLabelSnapshot: item.variantLabelSnapshot,
+        systemQty: item.systemQty,
+        actualQty: item.actualQty,
+        diff: item.diff,
+        note: item.note,
+      })),
+    )
+  }
+
+  await logAction({
+    db: tx,
+    storeId: actor.storeId,
+    actorId: actor.userId,
+    actorRole: actor.role,
+    action: 'stock_check.created',
+    targetType: 'stock_check',
+    targetId: createdId,
+    changes: {
+      code,
+      itemCount: totals.totalItems,
+      totalDiffPositive: totals.totalDiffPositive,
+      totalDiffNegative: totals.totalDiffNegative,
+    },
+    ipAddress: meta?.ipAddress,
+    userAgent: meta?.userAgent,
+  })
+
+  logger.info(
+    {
+      entity: 'stock_check',
+      entityId: createdId,
+      action: 'create',
+      storeId: actor.storeId,
+      userId: actor.userId,
+      code,
+      itemCount: totals.totalItems,
+    },
+    'stock_check.created',
+  )
+
+  return createdId
+}
+
 export interface CreateStockCheckDeps {
   db: Db
   actor: StockCheckActor
@@ -239,110 +356,12 @@ export async function createStockCheck({
 
   const stockCheckId = await db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
-
     const resolved = await resolveItems({
       tx: txDb,
       storeId: actor.storeId,
       inputItems: input.items,
     })
-    const totals = recomputeStockCheckTotals(resolved)
-
-    const noteValue = input.note?.trim() ? input.note.trim() : null
-
-    let code = await generateStockCheckCode({ tx: txDb, storeId: actor.storeId, now: new Date() })
-    let createdId: string | null = null
-    let attempts = 0
-    const MAX_ATTEMPTS = 3
-    while (attempts < MAX_ATTEMPTS && createdId === null) {
-      try {
-        const [row] = await tx
-          .insert(stockChecks)
-          .values({
-            storeId: actor.storeId,
-            code,
-            status: 'draft',
-            note: noteValue,
-            totalItems: totals.totalItems,
-            totalDiffPositive: totals.totalDiffPositive,
-            totalDiffNegative: totals.totalDiffNegative,
-            createdBy: actor.userId,
-          })
-          .returning({ id: stockChecks.id })
-        if (!row) {
-          throw new ApiError('INTERNAL_ERROR', 'Không tạo được phiếu kiểm kho')
-        }
-        createdId = row.id
-      } catch (err) {
-        if (isUniqueViolation(err, 'uniq_stock_checks_store_code')) {
-          attempts++
-          if (attempts >= MAX_ATTEMPTS) {
-            throw new ApiError(
-              'INTERNAL_ERROR',
-              'Không thể sinh mã phiếu kiểm kho, vui lòng thử lại',
-            )
-          }
-          const nextCode = incrementCodeSequence(code)
-          logger.warn(
-            { storeId: actor.storeId, code, nextCode, attempt: attempts },
-            'stock_check.code_collision_retry',
-          )
-          code = nextCode
-          continue
-        }
-        throw err
-      }
-    }
-    if (!createdId) {
-      throw new ApiError('INTERNAL_ERROR', 'Không tạo được phiếu kiểm kho')
-    }
-
-    for (const item of resolved) {
-      await tx.insert(stockCheckItems).values({
-        stockCheckId: createdId,
-        productId: item.productId,
-        variantId: item.variantId,
-        productNameSnapshot: item.productNameSnapshot,
-        productSkuSnapshot: item.productSkuSnapshot,
-        variantLabelSnapshot: item.variantLabelSnapshot,
-        systemQty: item.systemQty,
-        actualQty: item.actualQty,
-        diff: item.diff,
-        note: item.note,
-      })
-    }
-
-    await logAction({
-      db: txDb,
-      storeId: actor.storeId,
-      actorId: actor.userId,
-      actorRole: actor.role,
-      action: 'stock_check.created',
-      targetType: 'stock_check',
-      targetId: createdId,
-      changes: {
-        code,
-        itemCount: totals.totalItems,
-        totalDiffPositive: totals.totalDiffPositive,
-        totalDiffNegative: totals.totalDiffNegative,
-      },
-      ipAddress: meta?.ipAddress,
-      userAgent: meta?.userAgent,
-    })
-
-    logger.info(
-      {
-        entity: 'stock_check',
-        entityId: createdId,
-        action: 'create',
-        storeId: actor.storeId,
-        userId: actor.userId,
-        code,
-        itemCount: totals.totalItems,
-      },
-      'stock_check.created',
-    )
-
-    return createdId
+    return insertStockCheckDraft({ tx: txDb, actor, items: resolved, note: input.note, meta })
   })
 
   return getStockCheckById({ db, storeId: actor.storeId, stockCheckId })
