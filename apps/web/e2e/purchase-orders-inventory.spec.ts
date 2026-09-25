@@ -41,7 +41,7 @@ test.describe('Kiểm thử E2E: Nhập hàng và Cập nhật Tồn kho (Purcha
     await nccOption.click()
 
     // 5. Thêm sản phẩm vào phiếu nhập
-    const productSearchInput = page.getByPlaceholder(/Tìm theo tên, mã hàng/i)
+    const productSearchInput = page.getByPlaceholder(/Tìm sản phẩm/i)
     await productSearchInput.fill('Cà rốt')
 
     // Click vào sản phẩm Cà rốt xuất hiện trong danh sách gợi ý bằng dispatchEvent
