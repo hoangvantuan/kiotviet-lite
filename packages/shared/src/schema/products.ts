@@ -13,6 +13,7 @@ import {
 } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
+import { PRODUCT_SEARCH_SOURCE, searchTextSql } from '../utils/search-text.js'
 import { brands } from './brands.js'
 import { categories } from './categories.js'
 import { stores } from './stores.js'
@@ -37,6 +38,10 @@ export const products = pgTable(
     weight: integer(),
     description: text(),
     imageUrl: text(),
+    // Tên và mã đã bỏ dấu tiếng Việt, chữ thường: tìm kiếm không dấu, có chỉ mục trigram.
+    searchText: text()
+      .notNull()
+      .generatedAlwaysAs(sql.raw(searchTextSql(PRODUCT_SEARCH_SOURCE))),
     status: varchar({ length: 16 }).notNull().default('active'),
     hasVariants: boolean().notNull().default(false),
     trackInventory: boolean().notNull().default(false),
@@ -59,5 +64,11 @@ export const products = pgTable(
     index('idx_products_store_status_created').on(table.storeId, table.status, table.createdAt),
     index('idx_products_store_category').on(table.storeId, table.categoryId),
     index('idx_products_store_name_lower').on(table.storeId, sql`LOWER(${table.name})`),
+    // Cần extension pg_trgm (migration tạo extension chạy trước). Tắt fastupdate: danh sách chờ
+    // của GIN làm nhập 11k dòng trong một transaction chậm gấp 6 lần, và planner bỏ qua chỉ mục
+    // tới lần VACUUM kế tiếp (GL-21).
+    index('idx_products_search_text_trgm')
+      .using('gin', table.searchText.op('gin_trgm_ops'))
+      .with({ fastupdate: 'off' }),
   ],
 )

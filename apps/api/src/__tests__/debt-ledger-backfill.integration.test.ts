@@ -1,4 +1,5 @@
 import { PGlite } from '@electric-sql/pglite'
+import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm'
 import { drizzle as pgliteDrizzle } from 'drizzle-orm/pglite'
 import { migrate } from 'drizzle-orm/pglite/migrator'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -57,7 +58,7 @@ afterEach(async () => {
 
 describe('migration điền ngược sổ công nợ (R3)', () => {
   it('đưa dữ liệu lệch kiểu cũ về bất biến mà không đổi công nợ khách đang thấy', async () => {
-    pglite = new PGlite()
+    pglite = new PGlite({ extensions: { pg_trgm } })
     const db = pgliteDrizzle(pglite, { schema, casing: 'snake_case' })
     tmpDir = migrationsBeforeBackfill()
     await migrate(db, { migrationsFolder: tmpDir })

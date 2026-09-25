@@ -1,4 +1,5 @@
 import { PGlite } from '@electric-sql/pglite'
+import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm'
 import type { NotificationDb } from '@kiotviet-lite/notifications'
 import { notify } from '@kiotviet-lite/notifications'
 import { drizzle as pgliteDrizzle } from 'drizzle-orm/pglite'
@@ -19,7 +20,7 @@ let db: NotificationDb
 let storeId: string
 
 beforeAll(async () => {
-  pglite = new PGlite()
+  pglite = new PGlite({ extensions: { pg_trgm } })
   const drizzleDb = pgliteDrizzle(pglite, { schema, casing: 'snake_case' })
   await migrate(drizzleDb, { migrationsFolder })
   db = drizzleDb as unknown as NotificationDb

@@ -1,0 +1,2 @@
+ALTER TABLE "products" ADD COLUMN "search_text" text GENERATED ALWAYS AS (lower(translate("name" || ' ' || "sku", 'àÀáÁảẢãÃạẠăĂằẰắẮẳẲẵẴặẶâÂầẦấẤẩẨẫẪậẬèÈéÉẻẺẽẼẹẸêÊềỀếẾểỂễỄệỆìÌíÍỉỈĩĨịỊòÒóÓỏỎõÕọỌôÔồỒốỐổỔỗỖộỘơƠờỜớỚởỞỡỠợỢùÙúÚủỦũŨụỤưƯừỪứỨửỬữỮựỰỳỲýÝỷỶỹỸỵỴđĐ̛̣̀́̃̉̂̆', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaeeeeeeeeeeeeeeeeeeeeeeiiiiiiiiiioooooooooooooooooooooooooooooooooouuuuuuuuuuuuuuuuuuuuuuyyyyyyyyyydd'))) STORED NOT NULL;--> statement-breakpoint
+CREATE INDEX "idx_products_search_text_trgm" ON "products" USING gin ("search_text" gin_trgm_ops) WITH (fastupdate=off);

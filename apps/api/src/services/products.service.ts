@@ -18,6 +18,7 @@ import {
   productUnitConversions,
   productVariants,
   purchaseOrderItems,
+  searchLikePattern,
   stockCheckItems,
   type UnitConversionItem,
   type UpdateProductInput,
@@ -472,11 +473,9 @@ function buildListConditions({
   conds.push(trashed ? isNotNull(products.deletedAt) : isNull(products.deletedAt))
 
   if (query.search && query.search.length > 0) {
-    const escaped = query.search.toLowerCase().replace(/[%_\\]/g, '\\$&')
-    const like = `%${escaped}%`
+    const like = searchLikePattern(query.search)
     const searchCond = or(
-      sql`LOWER(${products.name}) LIKE ${like}`,
-      sql`LOWER(${products.sku}) LIKE ${like}`,
+      sql`${products.searchText} LIKE ${like}`,
       eq(products.barcode, query.search),
     )
     if (searchCond) conds.push(searchCond)
@@ -2081,11 +2080,10 @@ export async function searchProductsForPos({
   ]
 
   if (search && search.trim().length > 0) {
-    const escaped = escapeLikePattern(search.trim().toLowerCase())
-    const like = `%${escaped}%`
+    // search_text = tên + mã đã bỏ dấu, có chỉ mục trigram (GL-16, GL-21).
+    const like = searchLikePattern(search)
     const searchCond = or(
-      sql`LOWER(${products.name}) LIKE ${like}`,
-      sql`LOWER(${products.sku}) LIKE ${like}`,
+      sql`${products.searchText} LIKE ${like}`,
       eq(products.barcode, search.trim()),
     )
     if (searchCond) conds.push(searchCond)

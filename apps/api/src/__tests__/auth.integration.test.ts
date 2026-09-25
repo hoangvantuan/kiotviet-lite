@@ -1,4 +1,5 @@
 import { PGlite } from '@electric-sql/pglite'
+import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm'
 import { drizzle as pgliteDrizzle } from 'drizzle-orm/pglite'
 import { migrate } from 'drizzle-orm/pglite/migrator'
 import { dirname, resolve } from 'node:path'
@@ -28,7 +29,7 @@ interface TestEnv {
 }
 
 async function setup(): Promise<TestEnv> {
-  const pglite = new PGlite()
+  const pglite = new PGlite({ extensions: { pg_trgm } })
   const drizzleDb = pgliteDrizzle(pglite, { schema, casing: 'snake_case' })
   await migrate(drizzleDb, { migrationsFolder })
   const app = createAuthRoutes({ db: drizzleDb as unknown as Db })
