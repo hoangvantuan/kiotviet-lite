@@ -25,6 +25,9 @@ import { createProduct, updateProduct } from './products.service.js'
 import { createSupplier, updateSupplier } from './suppliers.service.js'
 
 const BATCH_SIZE = 100
+// Nhường event loop sau mỗi chừng này dòng: driver chạy toàn microtask (PGlite) không bỏ đói
+// timer, request khác và yêu cầu tắt êm trong lúc một job lớn đang chạy.
+const YIELD_EVERY_ROWS = 25
 const QUEUE_POLL_MS = 10_000
 const normalize = (value: string) => value.trim().toLowerCase()
 type RunArgs = { db: Db; storageRoot: string; storeId: string; id: string }
@@ -44,6 +47,9 @@ class ShutdownInterruption extends Error {
 function assertNotAborted(): void {
   if (abortRequested) throw new ShutdownInterruption()
 }
+
+const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve))
+let rowHookForTest: ((index: number) => void) | undefined
 
 /** Claims once. Domain writes, audits, and the completed state commit together or all roll back. */
 export function runBulkImportJob(args: RunArgs): Promise<void> {
@@ -156,6 +162,8 @@ async function executeBulkImportJob({ db, storageRoot, storeId, id }: RunArgs) {
       }
       for (let index = 0; index < plan.rows.length; index++) {
         const row = plan.rows[index]!
+        if (index > 0 && index % YIELD_EVERY_ROWS === 0) await yieldToEventLoop()
+        rowHookForTest?.(index)
         assertNotAborted()
         if (row.action === 'error')
           throw new ApiError('VALIDATION_ERROR', `Tệp có lỗi tại dòng ${row.row}`)
@@ -362,7 +370,9 @@ export async function drainBulkImportRunner({
   if (pollTimer) clearInterval(pollTimer)
   pollTimer = undefined
   const running = [...activeRuns]
-  if (await waitFor(running, graceMs)) return { finished: true, interrupted: 0 }
+  if (!running.length) return { finished: true, interrupted: 0 }
+  // graceMs <= 0: yêu cầu dừng ngay, đồng bộ, không chờ timer.
+  if (graceMs > 0 && (await waitFor(running, graceMs))) return { finished: true, interrupted: 0 }
   const interrupted = activeRuns.size
   abortRequested = true
   logger.warn({ activeJobs: interrupted }, 'Import jobs interrupted by shutdown')
@@ -370,9 +380,15 @@ export async function drainBulkImportRunner({
   return { finished, interrupted }
 }
 
+/** Chỉ dùng trong test: gọi trước khi xử lý mỗi dòng, để ngắt job tại một dòng xác định. */
+export function setBulkImportRowHookForTest(hook: ((index: number) => void) | undefined): void {
+  rowHookForTest = hook
+}
+
 /** Chỉ dùng trong test. */
 export function resetBulkImportRunnerForTest(): void {
   abortRequested = false
+  rowHookForTest = undefined
   if (pollTimer) clearInterval(pollTimer)
   pollTimer = undefined
 }

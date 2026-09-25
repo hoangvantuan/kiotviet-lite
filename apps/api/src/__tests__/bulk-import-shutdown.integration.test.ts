@@ -19,6 +19,7 @@ import {
   drainBulkImportRunner,
   resetBulkImportRunnerForTest,
   runBulkImportJob,
+  setBulkImportRowHookForTest,
 } from '../services/bulk-import-runner.service.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
@@ -92,12 +93,21 @@ describe('tắt êm khi đang có job nhập hàng loạt (GL-11)', () => {
       storeId: env.storeId,
       id: queued.id,
     })
-    markShuttingDown()
-    const started = Date.now()
-    const result = await drainBulkImportRunner({ graceMs: 10, abortMs: 20_000 })
+    // Ngắt tại dòng 150 bằng hook, không dựa vào thời gian: graceMs 0 đặt cờ dừng đồng bộ,
+    // ngay dòng đó thấy cờ và ném lỗi, transaction rollback.
+    let drained: ReturnType<typeof drainBulkImportRunner> | undefined
+    const seenRows: number[] = []
+    setBulkImportRowHookForTest((index) => {
+      seenRows.push(index)
+      if (index === 150) {
+        markShuttingDown()
+        drained = drainBulkImportRunner({ graceMs: 0, abortMs: 20_000 })
+      }
+    })
     await running
-    expect(result).toEqual({ finished: true, interrupted: 1 })
-    expect(Date.now() - started).toBeLessThan(20_000)
+    expect(drained).toBeDefined()
+    expect(await drained).toEqual({ finished: true, interrupted: 1 })
+    expect(Math.max(...seenRows)).toBe(150)
 
     const interrupted = await job(queued.id)
     expect(interrupted).toMatchObject({ status: 'queued', processedRows: 0, startedAt: null })
