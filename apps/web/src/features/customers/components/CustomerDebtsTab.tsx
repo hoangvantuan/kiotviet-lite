@@ -38,6 +38,9 @@ function parseOverdueDays(raw: string): number[] {
 }
 
 function getDebtStatusBadge(dateIso: string, remaining: number, overdueDays: number[]) {
+  if (remaining < 0) {
+    return { label: 'Còn tiền trả trước', className: 'border-blue-200 bg-blue-50 text-blue-700' }
+  }
   if (remaining === 0) {
     return { label: 'Đã tất toán', className: 'border-gray-200 bg-gray-50 text-gray-600' }
   }
@@ -136,7 +139,18 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
           </div>
         </div>
 
-        {currentDebt === 0 ? (
+        {currentDebt < 0 ? (
+          <div className="mt-4 flex items-center gap-2">
+            <Badge className="bg-blue-100 text-blue-700 border-blue-200" variant="outline">
+              <Wallet className="size-3 mr-1" />
+              Khách trả trước
+            </Badge>
+            <span className="text-sm text-muted-foreground">
+              Khách còn {formatVndWithSuffix(-currentDebt)} tiền trả trước, tự trừ vào khoản nợ phát sinh
+              sau.
+            </span>
+          </div>
+        ) : currentDebt === 0 ? (
           <div className="mt-4 flex items-center gap-2">
             <Badge className="bg-green-100 text-green-700 border-green-200" variant="outline">
               <CheckCircle2 className="size-3 mr-1" />
@@ -199,7 +213,11 @@ export function CustomerDebtsTab({ customerId, customerName }: CustomerDebtsTabP
                 {items.map((debt) => (
                   <TableRow key={debt.id}>
                     <TableCell className="text-sm">
-                      <p>{debtSourceLabel(debt)}</p>
+                      <p>
+                        {debt.type === 'opening' && debt.originalAmount < 0
+                          ? 'Khách trả trước (đầu kỳ)'
+                          : debtSourceLabel(debt)}
+                      </p>
                       {debt.note && <p className="text-xs text-muted-foreground">{debt.note}</p>}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">

@@ -2,8 +2,8 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 
 import {
+  createCustomerOpeningDebtSchema,
   createCustomerSchema,
-  createOpeningDebtSchema,
   listCustomerOrdersQuerySchema,
   listCustomersQuerySchema,
   quickCreateCustomerSchema,
@@ -186,7 +186,7 @@ export function createCustomersRoutes({ db }: CustomersRoutesDeps) {
       throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được nạp nợ đầu kỳ')
     }
     const targetId = uuidParam.parse(c.req.param('id'))
-    const input = await parseJson(c, createOpeningDebtSchema)
+    const input = await parseJson(c, createCustomerOpeningDebtSchema)
     const data = await createOpeningDebt({
       db,
       actor: auth,

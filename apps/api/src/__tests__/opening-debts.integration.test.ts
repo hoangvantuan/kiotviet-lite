@@ -153,10 +153,10 @@ describe('nợ đầu kỳ khách hàng', () => {
     expect(rows).toHaveLength(1)
   })
 
-  it('rejects zero, negative, malformed and future dates', async () => {
+  it('rejects zero, missing, malformed and future dates', async () => {
     for (const body of [
       { ...input, amount: 0 },
-      { ...input, amount: -1 },
+      { ...input, amount: null },
       { ...input, incurredAt: '2025-02-30' },
       { ...input, incurredAt: '2999-01-01' },
     ]) {

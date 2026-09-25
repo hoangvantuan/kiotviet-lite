@@ -16,7 +16,7 @@ import {
 
 import {
   type CreateCustomerInput,
-  type CreateOpeningDebtInput,
+  type CreateCustomerOpeningDebtInput,
   type CustomerDebtsResponse,
   type CustomerDetail,
   customerGroups,
@@ -652,6 +652,13 @@ export async function deleteCustomer({
       `Khách hàng có công nợ ${formatted}đ, không thể xoá`,
     )
   }
+  if (target.currentDebt < 0) {
+    const formatted = new Intl.NumberFormat('vi-VN').format(-target.currentDebt)
+    throw new ApiError(
+      'BUSINESS_RULE_VIOLATION',
+      `Khách hàng còn ${formatted}đ tiền trả trước, không thể xoá`,
+    )
+  }
 
   return db.transaction(async (tx) => {
     const [row] = await tx
@@ -868,7 +875,7 @@ export async function createOpeningDebt({
   db: Db
   actor: CustomersActor
   targetId: string
-  input: CreateOpeningDebtInput
+  input: CreateCustomerOpeningDebtInput
   meta?: RequestMeta
 }): Promise<OpeningDebt> {
   if (actor.role !== 'owner') {

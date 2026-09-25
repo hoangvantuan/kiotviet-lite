@@ -46,7 +46,11 @@ export async function expectDebtLedgerConsistent(db: Db, storeId: string) {
     sql`
       SELECT id, amount, paid, reduced, remaining FROM debts
       WHERE store_id = ${storeId}
-        AND (amount <> paid + reduced + remaining OR remaining < 0 OR paid < 0 OR reduced < 0)
+        AND (amount <> paid + reduced + remaining
+          OR (type = 'opening' AND amount < 0
+            AND (paid <> 0 OR reduced > 0 OR remaining > 0 OR remaining < amount))
+          OR (NOT (type = 'opening' AND amount < 0)
+            AND (remaining < 0 OR paid < 0 OR reduced < 0)))
     `,
   )
   expect(badRows).toEqual([])

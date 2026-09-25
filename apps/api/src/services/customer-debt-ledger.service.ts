@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, inArray, sql } from 'drizzle-orm'
+import { and, asc, eq, gt, gte, inArray, lt, sql } from 'drizzle-orm'
 
 import { customers, debts } from '@kiotviet-lite/shared'
 
@@ -87,12 +87,52 @@ export interface AddCustomerDebtInput extends DebtLedgerTarget {
   createdAt?: Date
 }
 
-/** Bút toán phát sinh nợ: tạo một khoản nợ và cộng vào công nợ khách. */
+/**
+ * Bút toán phát sinh nợ: tạo một khoản nợ và cộng vào công nợ khách.
+ *
+ * Số âm chỉ nhận cho nợ đầu kỳ: đó là tiền khách trả trước mang sang từ hệ thống cũ (GL-09,
+ * ADR-0010), ghi thành khoản nợ có `amount` và `remaining` âm. Khoản nợ dương phát sinh sau đó
+ * được cấn trừ vào tiền trả trước theo FIFO: phần cấn ghi vào `reduced` của khoản mới và `reduced`
+ * âm tương ứng trên khoản trả trước. `paid` vẫn chỉ tăng qua phiếu thu (ADR-0008), và
+ * `current_debt = sum(remaining)` vẫn giữ.
+ */
 export async function addCustomerDebt(db: Db, input: AddCustomerDebtInput) {
-  if (!Number.isInteger(input.amount) || input.amount <= 0) {
+  const isPrepayment = input.type === 'opening' && input.amount < 0
+  if (!Number.isInteger(input.amount) || (input.amount <= 0 && !isPrepayment)) {
     throw new ApiError('VALIDATION_ERROR', 'Số tiền nợ phải lớn hơn 0')
   }
   await lockCustomerForDebt(db, input)
+
+  const openRows = await db
+    .select({ id: debts.id, remaining: debts.remaining })
+    .from(debts)
+    .where(
+      and(
+        eq(debts.storeId, input.storeId),
+        eq(debts.customerId, input.customerId),
+        isPrepayment ? gt(debts.remaining, 0) : lt(debts.remaining, 0),
+      ),
+    )
+    .orderBy(asc(debts.createdAt), asc(debts.id))
+  if (isPrepayment && openRows.length > 0) {
+    throw new ApiError(
+      'BUSINESS_RULE_VIOLATION',
+      'Khách hàng còn nợ, không ghi được tiền trả trước',
+    )
+  }
+
+  // Khoản trả trước chỉ bị sửa khi đã giữ khóa khách (mọi bút toán của sổ đều khóa khách trước),
+  // nên cập nhật nó sau khi luồng bán đã khóa sản phẩm vẫn không tạo vòng chờ.
+  const credits: DebtAllocation[] = []
+  let applied = 0
+  if (!isPrepayment) {
+    for (const row of openRows) {
+      const take = Math.min(input.amount - applied, -Number(row.remaining))
+      if (take <= 0) break
+      credits.push({ debtId: row.id, amount: take })
+      applied += take
+    }
+  }
 
   const [debt] = await db
     .insert(debts)
@@ -103,8 +143,8 @@ export async function addCustomerDebt(db: Db, input: AddCustomerDebtInput) {
       type: input.type,
       amount: input.amount,
       paid: 0,
-      reduced: 0,
-      remaining: input.amount,
+      reduced: applied,
+      remaining: input.amount - applied,
       note: input.note ?? null,
       ...(input.createdAt ? { createdAt: input.createdAt } : {}),
     })
@@ -113,13 +153,23 @@ export async function addCustomerDebt(db: Db, input: AddCustomerDebtInput) {
     throw new ApiError('INTERNAL_ERROR', 'Không tạo được khoản nợ')
   }
 
+  for (const credit of credits) {
+    await db
+      .update(debts)
+      .set({
+        reduced: sql`${debts.reduced} - ${credit.amount}`,
+        remaining: sql`${debts.remaining} + ${credit.amount}`,
+      })
+      .where(eq(debts.id, credit.debtId))
+  }
+
   await db
     .update(customers)
     .set({ currentDebt: sql`${customers.currentDebt} + ${input.amount}` })
     .where(eq(customers.id, input.customerId))
 
   await assertCustomerDebtBalanced(db, input)
-  return debt
+  return { ...debt, prepaymentApplied: applied }
 }
 
 export interface SettleCustomerDebtsInput extends DebtLedgerTarget {

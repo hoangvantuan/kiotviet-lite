@@ -28,14 +28,19 @@ LEFT JOIN (SELECT customer_id, sum(remaining) AS remaining FROM debts GROUP BY c
   ON d.customer_id = c.id
 WHERE c.current_debt <> coalesce(d.remaining, 0);
 
--- I2. Khoản nợ: amount = paid + reduced + remaining, không số âm (ADR 0008)
+-- I2. Khoản nợ: amount = paid + reduced + remaining, không số âm (ADR 0008). Riêng tiền khách
+-- trả trước là nợ đầu kỳ âm: paid = 0, phần đã cấn ghi reduced âm, remaining chạy từ amount về 0
+-- (ADR 0010).
 INSERT INTO invariant_violations
 SELECT 'I2_debt_balance', d.store_id, 'debt ' || d.id,
-       format('amount=%s, paid=%s, reduced=%s, remaining=%s',
-              d.amount, d.paid, d.reduced, d.remaining)
+       format('type=%s, amount=%s, paid=%s, reduced=%s, remaining=%s',
+              d.type, d.amount, d.paid, d.reduced, d.remaining)
 FROM debts d
 WHERE d.amount <> d.paid + d.reduced + d.remaining
-   OR d.paid < 0 OR d.reduced < 0 OR d.remaining < 0;
+   OR (d.type = 'opening' AND d.amount < 0
+       AND (d.paid <> 0 OR d.reduced > 0 OR d.remaining > 0 OR d.remaining < d.amount))
+   OR (NOT (d.type = 'opening' AND d.amount < 0)
+       AND (d.paid < 0 OR d.reduced < 0 OR d.remaining < 0));
 
 -- I3. Phiếu thu: số thu = tổng phân bổ
 INSERT INTO invariant_violations
@@ -101,10 +106,18 @@ CROSS JOIN LATERAL (
 ) x
 WHERE s.current_debt <> x.expected;
 
--- I8. Không có công nợ âm
+-- I8. Không có công nợ âm. Công nợ khách âm chỉ là tiền trả trước (I1, I2, ADR 0010), nên với
+-- khách chỉ kiểm không có trạng thái vừa còn nợ vừa còn tiền trả trước (nợ mới phải cấn hết
+-- tiền trả trước trước).
 INSERT INTO invariant_violations
-SELECT 'I8_negative_debt', store_id, 'customer ' || code, format('current_debt=%s', current_debt)
-FROM customers WHERE current_debt < 0
+SELECT 'I8_negative_debt', c.store_id, 'customer ' || c.code,
+       format('sum(remaining>0)=%s, sum(remaining<0)=%s',
+              sum(d.remaining) FILTER (WHERE d.remaining > 0),
+              sum(d.remaining) FILTER (WHERE d.remaining < 0))
+FROM customers c
+JOIN debts d ON d.customer_id = c.id
+GROUP BY c.id
+HAVING bool_or(d.remaining > 0) AND bool_or(d.remaining < 0)
 UNION ALL
 SELECT 'I8_negative_debt', store_id, 'supplier ' || code, format('current_debt=%s', current_debt)
 FROM suppliers WHERE current_debt < 0;

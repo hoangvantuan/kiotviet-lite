@@ -61,9 +61,11 @@ export const debts = pgTable(
       'chk_debts_balance',
       sql`${table.amount} = ${table.paid} + ${table.reduced} + ${table.remaining}`,
     ),
+    // Khoản thường không âm. Riêng nợ đầu kỳ âm là tiền khách trả trước (ADR-0010): phần đã
+    // cấn vào nợ mới ghi thành `reduced` âm, `remaining` chạy từ `amount` về 0.
     check(
-      'chk_debts_non_negative',
-      sql`${table.paid} >= 0 AND ${table.reduced} >= 0 AND ${table.remaining} >= 0`,
+      'chk_debts_sign',
+      sql`(${table.paid} >= 0 AND ${table.reduced} >= 0 AND ${table.remaining} >= 0) OR (${table.type} = 'opening' AND ${table.amount} < 0 AND ${table.paid} = 0 AND ${table.reduced} <= 0 AND ${table.remaining} <= 0)`,
     ),
   ],
 )

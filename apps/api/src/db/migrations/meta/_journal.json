@@ -372,6 +372,13 @@
       "when": 1790366994883,
       "tag": "0052_products_search_text",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1790367021015,
+      "tag": "0053_debts_prepayment_sign",
+      "breakpoints": true
     }
   ]
 }

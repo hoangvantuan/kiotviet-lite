@@ -12,10 +12,11 @@ const adjustmentAmountSchema = z
   .min(1, 'Số tiền điều chỉnh phải lớn hơn 0')
   .max(99_999_999_999_999, 'Số tiền vượt giới hạn')
 
+// Âm khi khách còn tiền trả trước (ADR-0010)
 export const expectedCurrentDebtSchema = z
   .number({ required_error: 'Thiếu số nợ hiện tại, vui lòng tải lại' })
   .int()
-  .min(0)
+  .min(-99_999_999_999_999)
   .max(99_999_999_999_999)
 
 export const adjustmentReasonSchema = z
