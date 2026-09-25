@@ -160,8 +160,12 @@ let apiCtx: APIRequestContext
 let api: Api
 
 test.beforeAll(async ({ baseURL }) => {
-  apiCtx = await playwrightRequest.newContext({ baseURL: API_URL })
-  api = await apiAs(apiCtx, new URL(baseURL!).origin)
+  // Gọi API theo đúng đường trang đang gọi: bản build (VITE_API_URL rỗng) đi qua proxy cùng origin,
+  // lớp chống CSRF nhận vì cùng host; bản dev gọi thẳng API, Origin là trang dev (ALLOWED_ORIGINS).
+  const origin = new URL(baseURL!).origin
+  const sameOrigin = process.env.E2E_TARGET === 'prod'
+  apiCtx = await playwrightRequest.newContext({ baseURL: sameOrigin ? origin : API_URL })
+  api = await apiAs(apiCtx, origin)
 })
 
 test.afterAll(async () => {
