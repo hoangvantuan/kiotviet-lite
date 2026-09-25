@@ -16,14 +16,18 @@ import { useMediaQuery } from '@/hooks/use-media-query'
 import { ApiClientError } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { initializeOfflineDB } from '@/lib/pglite'
-import { showError, showSuccess } from '@/lib/toast'
+import { showError, showErrorWithAction, showSuccess } from '@/lib/toast'
 import { useAuthStore } from '@/stores/use-auth-store'
 import { useCartStore } from '@/stores/use-cart-store'
 import { useOfflineStore } from '@/stores/use-offline-store'
 
 import { MAX_CART_TABS } from '../constants'
 import { useAddToCart } from '../hooks/use-add-to-cart'
-import { useCheckoutMutation } from '../hooks/use-checkout'
+import {
+  PREVIOUS_ORDER_SAVED,
+  type PreviousOrderSaved,
+  useCheckoutMutation,
+} from '../hooks/use-checkout'
 import { usePosKeyboard } from '../hooks/use-pos-keyboard'
 import { usePosProducts } from '../hooks/use-pos-products'
 import { priceApprovalFromError, requiredPriceApproval } from '../price-approval'
@@ -214,6 +218,15 @@ export function PosScreen() {
           showSuccess('Đơn hàng đã hoàn thành!')
         },
         onError: (err) => {
+          if (err instanceof ApiClientError && err.code === PREVIOUS_ORDER_SAVED) {
+            // R4: lần bán trước cùng giỏ đã được lưu, cho thu ngân mở đơn đó ra kiểm tra
+            const { orderId } = err.details as PreviousOrderSaved
+            showErrorWithAction(err.message, {
+              label: 'Mở đơn',
+              onClick: () => window.open(`/orders/${orderId}`, '_blank', 'noopener'),
+            })
+            return
+          }
           if (err instanceof ApiClientError) {
             const perms = priceApprovalFromError(err.code, err.details)
             if (perms) {

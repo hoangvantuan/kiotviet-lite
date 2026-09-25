@@ -18,6 +18,12 @@ type DocumentMutationOptions<TData, TVariables> = Omit<
   intent: string
   /** Tách khóa trong cùng một ý định, ví dụ theo tab bán hàng: `(v) => String(v.tab)` */
   instance?: (variables: TVariables) => string
+  /**
+   * Phần nội dung quyết định khóa, mặc định là toàn bộ variables. Chỉ chọn phần mà người dùng
+   * không nhập lại khác đi khi bấm lưu lần nữa cho cùng một chứng từ (ví dụ POS: hàng, khách,
+   * chiết khấu, tổng; không gồm tiền khách đưa hay PIN).
+   */
+  fingerprint?: (variables: TVariables) => unknown
   mutationFn: (variables: TVariables, idempotencyKey: string) => Promise<TData>
 }
 
@@ -45,6 +51,7 @@ function isKeyRejected(error: unknown): boolean {
 export function useDocumentMutation<TData, TVariables>({
   intent,
   instance,
+  fingerprint,
   mutationFn,
   ...options
 }: DocumentMutationOptions<TData, TVariables>) {
@@ -57,7 +64,7 @@ export function useDocumentMutation<TData, TVariables>({
     networkMode: 'always',
     mutationFn: async (variables) => {
       const scope = instance ? `${intent}:${instance(variables)}` : intent
-      const key = idempotencyKeyFor(scope, variables)
+      const key = idempotencyKeyFor(scope, fingerprint ? fingerprint(variables) : variables)
       try {
         const result = await mutationFn(variables, key)
         releaseIdempotencyKey(scope, key)

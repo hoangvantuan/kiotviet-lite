@@ -51,6 +51,7 @@ import { createUsersRoutes } from './routes/users.routes.js'
 import { createVolumePricesRoutes } from './routes/volume-prices.routes.js'
 import { importStorageRoot, verifyImportStorageRoot } from './services/bulk-import-jobs.service.js'
 import { drainBulkImportRunner } from './services/bulk-import-runner.service.js'
+import { startIdempotencyKeyCleanup } from './services/idempotency-cleanup.service.js'
 
 // Refuse to serve any endpoint when production import storage is absent or unsafe.
 if (process.env.NODE_ENV === 'production') await verifyImportStorageRoot(importStorageRoot())
@@ -202,6 +203,8 @@ if (process.env.NODE_ENV !== 'test') {
       })
       if (opsAlerter().enabled) logger.info('ops alerts enabled')
       watchReadiness({ db, alerter: opsAlerter() })
+      // R4: xóa khóa chống trùng cũ hơn 7 ngày, lúc khởi động và mỗi 6 giờ
+      startIdempotencyKeyCleanup({ db })
 
       // GL-11: tổng hạn 30 s (stop_grace_period của compose là 45 s). Job nhập được 15 s để
       // xong, quá hạn thì dừng tại ranh giới dòng, rollback và trả về hàng đợi (5 s),

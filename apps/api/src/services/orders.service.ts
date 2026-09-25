@@ -1654,11 +1654,13 @@ export async function listOrders({
     toDate,
     status,
     customerId,
+    clientId,
     paymentMethod,
     paymentStatus,
     reviewStatus,
   } = query
   const conditions: SQL[] = [eq(orders.storeId, storeId)]
+  if (clientId) conditions.push(eq(orders.clientId, clientId))
 
   const trimmedSearch = search?.trim()
   if (trimmedSearch) {

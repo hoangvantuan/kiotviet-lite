@@ -119,10 +119,15 @@ export function getCustomerDebtsApi(id: string) {
   return apiClient.get<Envelope<CustomerDebtsResponse>>(`/api/v1/customers/${id}/debts`)
 }
 
-export function createOpeningDebtApi(customerId: string, input: CreateOpeningDebtInput) {
+export function createOpeningDebtApi(
+  customerId: string,
+  input: CreateOpeningDebtInput,
+  idempotencyKey?: string,
+) {
   return apiClient.post<Envelope<OpeningDebt>>(
     `/api/v1/customers/${customerId}/opening-debt`,
     input,
+    { idempotencyKey },
   )
 }
 
@@ -145,6 +150,8 @@ export function listDebtAdjustmentsApi(
   )
 }
 
-export function createDebtAdjustmentApi(input: CreateDebtAdjustmentInput) {
-  return apiClient.post<Envelope<DebtAdjustmentDetail>>('/api/v1/debt-adjustments', input)
+export function createDebtAdjustmentApi(input: CreateDebtAdjustmentInput, idempotencyKey?: string) {
+  return apiClient.post<Envelope<DebtAdjustmentDetail>>('/api/v1/debt-adjustments', input, {
+    idempotencyKey,
+  })
 }

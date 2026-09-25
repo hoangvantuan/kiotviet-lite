@@ -33,6 +33,7 @@ import {
   loadProductForUpdate,
   loadVariantForUpdate,
 } from './products-lock.helper.js'
+import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
 export interface StockCheckActor {
   userId: string
@@ -488,17 +489,21 @@ export async function updateStockCheck({
 
 export interface ConfirmStockCheckDeps {
   db: Db
+  // Transaction của request có Idempotency-Key: chứng từ và phản hồi lưu cùng một lần commit
+  transaction?: ServiceTransaction
   actor: StockCheckActor
   stockCheckId: string
   meta?: RequestMeta
 }
 
 export async function confirmStockCheck({
-  db,
+  db: rootDb,
+  transaction,
   actor,
   stockCheckId,
   meta,
 }: ConfirmStockCheckDeps): Promise<StockCheckDetail> {
+  const db = serviceDb(rootDb, transaction)
   await db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
     const headerRows = await tx

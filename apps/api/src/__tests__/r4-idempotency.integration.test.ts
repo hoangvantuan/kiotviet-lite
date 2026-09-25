@@ -4,8 +4,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   customers,
+  debtAdjustments,
   debts,
   idempotencyKeys,
+  inventoryTransactions,
   orderReturns,
   orders,
   products,
@@ -15,10 +17,14 @@ import {
   suppliers,
 } from '@kiotviet-lite/shared'
 
+import { createCustomersRoutes } from '../routes/customers.routes.js'
+import { createDebtAdjustmentsRoutes } from '../routes/debt-adjustments.routes.js'
 import { createOrdersRoutes } from '../routes/orders.routes.js'
 import { createPosRoutes } from '../routes/pos.routes.js'
+import { createProductsRoutes } from '../routes/products.routes.js'
 import { createPurchaseOrdersRoutes } from '../routes/purchase-orders.routes.js'
 import { createReceiptsRoutes } from '../routes/receipts.routes.js'
+import { createStockChecksRoutes } from '../routes/stock-checks.routes.js'
 import { createSupplierPaymentsRoutes } from '../routes/supplier-payments.routes.js'
 import { createSyncRoutes } from '../routes/sync.routes.js'
 import { formatDateForCode } from '../services/document-codes.service.js'
@@ -206,6 +212,81 @@ describe('R4 POS-02, TIEN-04, KHO-08: gửi lại cùng Idempotency-Key ra đún
   })
 })
 
+describe('R4: các thao tác ghi nợ và tồn kho khác cũng chống gửi đôi', () => {
+  it('Điều chỉnh nợ khách: 2 lần cùng khóa, 1 phiếu, nợ tăng 1 lần', async () => {
+    const customer = await createCustomer(env, { currentDebt: 100_000 })
+    const app = createDebtAdjustmentsRoutes({ db: env.db })
+
+    const r = await sendTwice(app, '/', {
+      customerId: customer.id,
+      direction: 'increase',
+      amount: 50_000,
+      expectedCurrentDebt: 100_000,
+      reason: 'Bù chênh lệch',
+    })
+
+    expectReplay(r)
+    const rows = await env.db
+      .select()
+      .from(debtAdjustments)
+      .where(eq(debtAdjustments.customerId, customer.id))
+    expect(rows).toHaveLength(1)
+    const after = await env.db.query.customers.findFirst({ where: eq(customers.id, customer.id) })
+    expect(Number(after!.currentDebt)).toBe(150_000)
+  })
+
+  it('Nợ đầu kỳ khách: 2 lần cùng khóa, nạp 1 lần', async () => {
+    const customer = await createCustomer(env)
+    const app = createCustomersRoutes({ db: env.db })
+
+    const r = await sendTwice(app, `/${customer.id}/opening-debt`, {
+      amount: 300_000,
+      incurredAt: '2026-01-15',
+    })
+
+    expectReplay(r)
+    const after = await env.db.query.customers.findFirst({ where: eq(customers.id, customer.id) })
+    expect(Number(after!.currentDebt)).toBe(300_000)
+  })
+
+  it('Điều chỉnh tồn tay: 2 lần cùng khóa, tồn đổi 1 lần', async () => {
+    const product = await createProduct(env, { currentStock: 10 })
+    const app = createProductsRoutes({ db: env.db })
+    const key = randomUUID()
+    const body = { delta: -3, reason: 'Hỏng' }
+
+    const first = await post(app, `/${product.id}/inventory/adjust`, body, key)
+    const second = await post(app, `/${product.id}/inventory/adjust`, body, key)
+
+    expect(first.status).toBe(200)
+    expect(second.status).toBe(200)
+    expect(second.headers.get('Idempotent-Replayed')).toBe('true')
+    const txs = await env.db
+      .select()
+      .from(inventoryTransactions)
+      .where(eq(inventoryTransactions.productId, product.id))
+    expect(txs.filter((t) => t.type === 'manual_adjustment')).toHaveLength(1)
+    expect(await stockOf(product.id)).toBe(7)
+  })
+
+  it('Xác nhận kiểm kho: gửi lại cùng khóa nhận lại kết quả, không báo "đã xác nhận"', async () => {
+    const product = await createProduct(env, { currentStock: 100 })
+    const app = createStockChecksRoutes({ db: env.db })
+    const created = await post(app, '/', { items: [{ productId: product.id, actualQty: 95 }] })
+    const { data } = (await created.json()) as { data: { id: string } }
+    const key = randomUUID()
+
+    const first = await post(app, `/${data.id}/confirm`, undefined, key)
+    const second = await post(app, `/${data.id}/confirm`, undefined, key)
+
+    expect(first.status).toBe(200)
+    expect(second.status).toBe(200)
+    expect(second.headers.get('Idempotent-Replayed')).toBe('true')
+    expect(await second.json()).toEqual(await first.json())
+    expect(await stockOf(product.id)).toBe(95)
+  })
+})
+
 describe('R4: quy tắc của Idempotency-Key', () => {
   it('cùng khóa nhưng khác nội dung thì 422, không tạo thêm chứng từ', async () => {
     const supplier = await seedSupplier(1_000_000)
@@ -337,6 +418,42 @@ describe('R4 OFF-07: đơn trực tuyến và hàng chờ ngoại tuyến dùng 
     const rows = await env.db.select().from(orders).where(eq(orders.storeId, env.storeId))
     expect(rows).toHaveLength(1)
     expect(rows[0]!.clientId).toBe(clientId)
+    expect(await stockOf(product.id)).toBe(8)
+  })
+
+  it('cùng khóa nhưng trả tiền khác: 422, POS tra được đơn đã lưu theo clientId', async () => {
+    const product = await createProduct(env, { currentStock: 10 })
+    const clientId = randomUUID()
+    const pos = createPosRoutes({ db: env.db })
+
+    const first = await post(
+      pos,
+      '/orders',
+      { ...cashOrderPayload(product.id), clientId },
+      clientId,
+    )
+    expect(first.status).toBe(201)
+    const created = (await first.json()) as { data: { id: string; orderNumber: string } }
+    // Mở lại hộp thanh toán, chọn mệnh giá khác
+    const again = await post(
+      pos,
+      '/orders',
+      { ...cashOrderPayload(product.id), cashAmount: 500_000, clientId },
+      clientId,
+    )
+    expect(again.status).toBe(422)
+    expect(((await again.json()) as { error: { details: unknown } }).error.details).toEqual({
+      reason: 'idempotency_key_reused',
+    })
+
+    const lookup = await createOrdersRoutes({ db: env.db }).request(`/?clientId=${clientId}`, {
+      headers: env.owner.authHeader,
+    })
+    expect(lookup.status).toBe(200)
+    const listed = (await lookup.json()) as { data: Array<{ id: string; orderNumber: string }> }
+    expect(listed.data).toEqual([
+      expect.objectContaining({ id: created.data.id, orderNumber: created.data.orderNumber }),
+    ])
     expect(await stockOf(product.id)).toBe(8)
   })
 

@@ -6,6 +6,8 @@ import type {
   UpdateStockCheckInput,
 } from '@kiotviet-lite/shared'
 
+import { useDocumentMutation } from '@/hooks/use-document-mutation'
+
 import {
   confirmStockCheckApi,
   createStockCheckApi,
@@ -55,8 +57,9 @@ export function useUpdateStockCheckMutation(id: string | undefined) {
 
 export function useConfirmStockCheckMutation() {
   const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => confirmStockCheckApi(id),
+  return useDocumentMutation({
+    intent: 'stock-check.confirm',
+    mutationFn: (id: string, idempotencyKey) => confirmStockCheckApi(id, idempotencyKey),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: STOCK_CHECKS_KEY })
       qc.invalidateQueries({ queryKey: ['products'] })

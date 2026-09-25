@@ -23,6 +23,7 @@ import {
   loadProductForUpdate,
   loadVariantForUpdate,
 } from './products-lock.helper.js'
+import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
 export interface InventoryActor {
   userId: string
@@ -63,6 +64,8 @@ export function toInventoryTransactionItem(row: InventoryTransactionRow): Invent
 
 export interface RecordPurchaseDeps {
   db: Db
+  // Transaction của request có Idempotency-Key: chứng từ và phản hồi lưu cùng một lần commit
+  transaction?: ServiceTransaction
   actor: InventoryActor
   productId: string
   input: RecordPurchaseInput
@@ -75,12 +78,14 @@ export interface RecordPurchaseResult {
 }
 
 export async function recordPurchaseTransaction({
-  db,
+  db: rootDb,
+  transaction,
   actor,
   productId,
   input,
   meta,
 }: RecordPurchaseDeps): Promise<RecordPurchaseResult> {
+  const db = serviceDb(rootDb, transaction)
   if (input.quantity <= 0) {
     throw new ApiError('BUSINESS_RULE_VIOLATION', 'Số lượng nhập phải > 0')
   }
@@ -155,6 +160,8 @@ export async function recordPurchaseTransaction({
 
 export interface RecordManualAdjustDeps {
   db: Db
+  // Transaction của request có Idempotency-Key: chứng từ và phản hồi lưu cùng một lần commit
+  transaction?: ServiceTransaction
   actor: InventoryActor
   productId: string
   input: RecordManualAdjustInput
@@ -162,12 +169,14 @@ export interface RecordManualAdjustDeps {
 }
 
 export async function recordManualAdjustment({
-  db,
+  db: rootDb,
+  transaction,
   actor,
   productId,
   input,
   meta,
 }: RecordManualAdjustDeps): Promise<RecordPurchaseResult> {
+  const db = serviceDb(rootDb, transaction)
   if (input.delta === 0) {
     throw new ApiError('VALIDATION_ERROR', 'Delta phải khác 0')
   }

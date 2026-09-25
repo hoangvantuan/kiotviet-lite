@@ -110,16 +110,24 @@ export function listLowStockProductsApi(page = 1, pageSize = 50) {
 
 // ========== Story 2.4: Inventory transactions (helpers) ==========
 
-export function recordPurchaseApi(productId: string, input: RecordPurchaseInput) {
+export function recordPurchaseApi(
+  productId: string,
+  input: RecordPurchaseInput,
+  idempotencyKey?: string,
+) {
   return apiClient.post<
     Envelope<{ product: ProductDetail; transaction: InventoryTransactionItem }>
-  >(`/api/v1/products/${productId}/inventory/purchase`, input)
+  >(`/api/v1/products/${productId}/inventory/purchase`, input, { idempotencyKey })
 }
 
-export function recordManualAdjustmentApi(productId: string, input: RecordManualAdjustInput) {
+export function recordManualAdjustmentApi(
+  productId: string,
+  input: RecordManualAdjustInput,
+  idempotencyKey?: string,
+) {
   return apiClient.post<
     Envelope<{ product: ProductDetail; transaction: InventoryTransactionItem }>
-  >(`/api/v1/products/${productId}/inventory/adjust`, input)
+  >(`/api/v1/products/${productId}/inventory/adjust`, input, { idempotencyKey })
 }
 
 export function listInventoryTransactionsApi(productId: string, page = 1, pageSize = 20) {

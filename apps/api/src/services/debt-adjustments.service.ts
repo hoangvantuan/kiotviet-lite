@@ -18,6 +18,7 @@ import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import { addCustomerDebt, settleCustomerDebtsFifo } from './customer-debt-ledger.service.js'
+import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
 export interface DebtAdjustmentsActor {
   userId: string
@@ -125,17 +126,21 @@ export async function listDebtAdjustments({
 
 export interface CreateDebtAdjustmentDeps {
   db: Db
+  // Transaction của request có Idempotency-Key: chứng từ và phản hồi lưu cùng một lần commit
+  transaction?: ServiceTransaction
   actor: DebtAdjustmentsActor
   input: CreateDebtAdjustmentInput
   meta?: RequestMeta
 }
 
 export async function createDebtAdjustment({
-  db,
+  db: rootDb,
+  transaction,
   actor,
   input,
   meta,
 }: CreateDebtAdjustmentDeps): Promise<DebtAdjustmentDetail> {
+  const db = serviceDb(rootDb, transaction)
   // Defense in depth: re-check role tại service layer
   if (actor.role !== 'owner') {
     throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được điều chỉnh nợ')

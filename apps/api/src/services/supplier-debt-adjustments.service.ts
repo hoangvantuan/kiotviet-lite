@@ -20,6 +20,7 @@ import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { parseDateRangeBoundary } from '../lib/timezone.js'
 import { logAction, type RequestMeta } from './audit.service.js'
+import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
 export interface SupplierDebtActor {
   userId: string
@@ -102,16 +103,20 @@ export async function listSupplierDebtAdjustments({
 }
 
 export async function createSupplierDebtAdjustment({
-  db,
+  db: rootDb,
+  transaction,
   actor,
   input,
   meta,
 }: {
   db: Db
+  // Transaction của request có Idempotency-Key: chứng từ và phản hồi lưu cùng một lần commit
+  transaction?: ServiceTransaction
   actor: SupplierDebtActor
   input: CreateSupplierDebtAdjustmentInput
   meta?: RequestMeta
 }): Promise<SupplierDebtAdjustmentDetail> {
+  const db = serviceDb(rootDb, transaction)
   return saveAdjustment({
     db,
     actor,
@@ -128,18 +133,22 @@ export async function createSupplierDebtAdjustment({
 }
 
 export async function createSupplierOpeningDebt({
-  db,
+  db: rootDb,
+  transaction,
   actor,
   supplierId,
   input,
   meta,
 }: {
   db: Db
+  // Transaction của request có Idempotency-Key: chứng từ và phản hồi lưu cùng một lần commit
+  transaction?: ServiceTransaction
   actor: SupplierDebtActor
   supplierId: string
   input: CreateOpeningDebtInput
   meta?: RequestMeta
 }): Promise<SupplierDebtAdjustmentDetail> {
+  const db = serviceDb(rootDb, transaction)
   const incurredAt = parseDateRangeBoundary(input.incurredAt, 'start')!
   if (incurredAt > new Date()) {
     throw new ApiError('VALIDATION_ERROR', 'Ngày phát sinh không được ở tương lai')

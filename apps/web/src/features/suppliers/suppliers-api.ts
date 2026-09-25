@@ -61,10 +61,14 @@ export function restoreSupplierApi(id: string) {
   return apiClient.post<Envelope<SupplierDetail>>(`/api/v1/suppliers/${id}/restore`)
 }
 
-export function createSupplierDebtAdjustmentApi(input: CreateSupplierDebtAdjustmentInput) {
+export function createSupplierDebtAdjustmentApi(
+  input: CreateSupplierDebtAdjustmentInput,
+  idempotencyKey?: string,
+) {
   return apiClient.post<Envelope<SupplierDebtAdjustmentDetail>>(
     '/api/v1/supplier-debt-adjustments',
     input,
+    { idempotencyKey },
   )
 }
 
@@ -75,9 +79,14 @@ export function listSupplierDebtAdjustmentsApi(supplierId: string, page = 1) {
   )
 }
 
-export function createSupplierOpeningDebtApi(supplierId: string, input: CreateOpeningDebtInput) {
+export function createSupplierOpeningDebtApi(
+  supplierId: string,
+  input: CreateOpeningDebtInput,
+  idempotencyKey?: string,
+) {
   return apiClient.post<Envelope<SupplierDebtAdjustmentDetail>>(
     `/api/v1/supplier-debt-adjustments/${supplierId}/opening-debt`,
     input,
+    { idempotencyKey },
   )
 }

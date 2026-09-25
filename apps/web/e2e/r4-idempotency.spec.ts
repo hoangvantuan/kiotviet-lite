@@ -184,17 +184,21 @@ async function addToCart(page: Page, name: string) {
   await expect(page.locator('table tbody tr').first()).toContainText(name)
 }
 
-async function openPaymentAndPayCash(page: Page) {
+/** Mở hộp thanh toán và chọn một mệnh giá tiền mặt: `pick` chọn nút đầu hay nút cuối */
+async function openPaymentAndPayCash(page: Page, pick: 'first' | 'last' = 'first') {
   await page.getByRole('button', { name: /Thanh to[aá]n/i }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByRole('heading', { name: /Thanh to[aá]n/i })).toBeVisible()
-  const cashButton = dialog
-    .locator('button')
-    .filter({ hasText: /50\.000|100\.000|200\.000/ })
-    .first()
-  if (await cashButton.isVisible().catch(() => false)) await cashButton.click()
-  else await dialog.locator('input[placeholder="0"]').first().fill('100000')
+  const cashButtons = dialog.locator('button').filter({ hasText: /^[\d.]+\.000\s*đ$/ })
+  await expect(cashButtons.first()).toBeVisible()
+  expect(await cashButtons.count()).toBeGreaterThan(1)
+  await (pick === 'first' ? cashButtons.first() : cashButtons.last()).click()
   return dialog
+}
+
+async function closePaymentDialog(page: Page) {
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toBeHidden()
 }
 
 test('POS: mất phản hồi rồi bấm Hoàn thành lại, vẫn một đơn, kho trừ một lần', async ({ page }) => {
@@ -224,6 +228,37 @@ test('POS: mất phản hồi rồi bấm Hoàn thành lại, vẫn một đơn,
   expect((await product(api)).currentStock).toBe(stockBefore - 1)
 })
 
+test('POS: mất phản hồi, đóng rồi mở lại hộp thanh toán, chọn mệnh giá khác: vẫn một đơn, báo đơn trước đã lưu', async ({
+  page,
+}) => {
+  const ordersBefore = await total(api, '/api/v1/orders?pageSize=1')
+  const stockBefore = (await product(api)).currentStock
+
+  await page.goto('/pos')
+  await addToCart(page, 'Dưa leo')
+  let dialog = await openPaymentAndPayCash(page, 'first')
+  await loseNextResponse(page, '/api/v1/pos/orders$')
+  await dialog.getByRole('button', { name: /Hoàn thành/i }).click()
+  await expectUnknownOutcome(page)
+  expect(await total(api, '/api/v1/orders?pageSize=1')).toBe(ordersBefore + 1)
+
+  // Hộp thanh toán đặt lại tiền khách đưa mỗi lần mở: thu ngân chọn mệnh giá khác
+  await closePaymentDialog(page)
+  dialog = await openPaymentAndPayCash(page, 'last')
+  const retry = page.waitForResponse(
+    (r) => r.url().endsWith('/api/v1/pos/orders') && r.request().method() === 'POST',
+  )
+  await dialog.getByRole('button', { name: /Hoàn thành/i }).click()
+  expect((await retry).status()).toBe(422)
+  await expect(page.getByText(/Đơn trước có thể đã được lưu \(HD-/).first()).toBeVisible({
+    timeout: 10000,
+  })
+  await expect(page.getByRole('button', { name: 'Mở đơn' })).toBeVisible()
+
+  expect(await total(api, '/api/v1/orders?pageSize=1')).toBe(ordersBefore + 1)
+  expect((await product(api)).currentStock).toBe(stockBefore - 1)
+})
+
 test('POS: mất phản hồi, mất mạng, lưu vào hàng chờ, có mạng lại thì đồng bộ không tạo đơn thứ hai', async ({
   page,
 }) => {
@@ -240,9 +275,12 @@ test('POS: mất phản hồi, mất mạng, lưu vào hàng chờ, có mạng l
   await expectUnknownOutcome(page)
   expect(await total(api, '/api/v1/orders?pageSize=1')).toBe(ordersBefore + 1)
 
-  // Mất mạng hẳn: lần lưu lại đi vào hàng chờ ngoại tuyến với cùng clientId
+  // Mất mạng hẳn, mở lại hộp chọn mệnh giá khác: lần lưu lại đi vào hàng chờ ngoại tuyến với
+  // cùng clientId
   await page.context().setOffline(true)
-  await complete.click()
+  await closePaymentDialog(page)
+  const reopened = await openPaymentAndPayCash(page, 'last')
+  await reopened.getByRole('button', { name: /Hoàn thành/i }).click()
   await expect(page.getByText(/Đơn hàng đã lưu \(ngoại tuyến, chờ đồng bộ\)/).first()).toBeVisible({
     timeout: 10000,
   })

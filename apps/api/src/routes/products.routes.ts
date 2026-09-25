@@ -16,6 +16,7 @@ import type { Db } from '../db/index.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
+import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import {
@@ -220,33 +221,41 @@ export function createProductsRoutes({ db }: ProductsRoutesDeps) {
   // ========== Story 2.4: Inventory helpers ==========
   // HELPER for Story 2.4 — replaced by Story 6.1 purchase order endpoint
 
-  app.post('/:productId/inventory/purchase', async (c) => {
-    const auth = c.get('auth')
-    const productId = uuidParam.parse(c.req.param('productId'))
-    const input = await parseJson(c, recordPurchaseInputSchema)
-    const data = await recordPurchaseTransaction({
-      db,
-      actor: auth,
-      productId,
-      input,
-      meta: getRequestMeta(c),
-    })
-    return c.json({ data }, 201)
-  })
+  app.post(
+    '/:productId/inventory/purchase',
+    idempotent(db, async (c, transaction) => {
+      const auth = c.get('auth')
+      const productId = uuidParam.parse(c.req.param('productId'))
+      const input = await parseJson(c, recordPurchaseInputSchema)
+      const data = await recordPurchaseTransaction({
+        db,
+        transaction,
+        actor: auth,
+        productId,
+        input,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data }, 201)
+    }),
+  )
 
-  app.post('/:productId/inventory/adjust', async (c) => {
-    const auth = c.get('auth')
-    const productId = uuidParam.parse(c.req.param('productId'))
-    const input = await parseJson(c, recordManualAdjustInputSchema)
-    const data = await recordManualAdjustment({
-      db,
-      actor: auth,
-      productId,
-      input,
-      meta: getRequestMeta(c),
-    })
-    return c.json({ data })
-  })
+  app.post(
+    '/:productId/inventory/adjust',
+    idempotent(db, async (c, transaction) => {
+      const auth = c.get('auth')
+      const productId = uuidParam.parse(c.req.param('productId'))
+      const input = await parseJson(c, recordManualAdjustInputSchema)
+      const data = await recordManualAdjustment({
+        db,
+        transaction,
+        actor: auth,
+        productId,
+        input,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data })
+    }),
+  )
 
   app.get('/:productId/inventory-transactions', async (c) => {
     const auth = c.get('auth')

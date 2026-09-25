@@ -10,8 +10,9 @@ import {
 
 export type { DiscountType }
 
-import { MAX_CART_TABS } from '@/features/pos/constants'
+import { MAX_CART_TABS, POS_ORDER_INTENT } from '@/features/pos/constants'
 import { computeUnitConversionPriceAndStock } from '@/features/pos/utils'
+import { releaseIdempotencyKey } from '@/lib/idempotency'
 
 export interface CartItem {
   id: string
@@ -504,6 +505,9 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   clearCart: () => {
+    // R4: bỏ giỏ thì bỏ luôn khóa lưu đơn của tab, kể cả khi lần lưu trước chưa rõ kết quả:
+    // giỏ kế tiếp dù giống hệt cũng là một lần bán mới
+    releaseIdempotencyKey(`${POS_ORDER_INTENT}:${get().activeTab}`)
     set((state) => updateActiveTab(state, () => createEmptyTab()))
   },
 

@@ -61,6 +61,29 @@ Tắt và cập nhật: khi nhận SIGTERM, API ngừng nhận job nhập mới,
 hàng đợi và chạy lại từ đầu sau khi API lên), đóng pool DB rồi thoát; tổng tối đa 30 giây
 (`stop_grace_period: 45s`).
 
+### Nâng cấp lên bản có bộ đếm mã chứng từ (R4, migration 0053)
+
+Từ migration `0053_document_counters_idempotency`, mã đơn bán (HD), phiếu trả (TH) và phiếu nhập
+(PN) cấp từ bảng `document_counters`, lần đầu trong ngày tiếp nối mã lớn nhất đã có. Bản cũ vẫn cấp mã bằng
+MAX+1 và không biết bộ đếm: nếu bản cũ còn nhận request trong lúc bản mới đã chạy, hai bên cấp
+trùng mã (hoặc request lỗi vì trùng khóa duy nhất). `up -d --build` chạy `migrate` trong lúc api
+cũ còn phục vụ, nên lần nâng cấp này phải dừng api cũ trước:
+
+```bash
+docker compose -f docker-compose.prod.yml stop web api
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Không chạy song song hai phiên bản api (ví dụ triển khai kiểu blue/green) qua mốc này. Các lần
+cập nhật sau, khi mọi instance đều đã dùng bộ đếm, cập nhật bình thường như trên.
+
+Bộ đếm khóa một dòng theo cửa hàng và tiền tố mã (loại chứng từ cộng ngày), nên các đơn bán cùng lúc trong một
+cửa hàng được cấp mã lần lượt (mỗi đơn chờ đơn trước commit). Ở quy mô một cửa hàng việc này
+không đáng kể.
+
+Bảng `idempotency_keys` (chống tạo chứng từ đôi khi bấm lưu lại) tự dọn: api xóa khóa cũ hơn
+7 ngày lúc khởi động và mỗi 6 giờ.
+
 ### Kiểm tra sau migration 0047 (sổ công nợ R3)
 
 Migration `0047_debt_ledger_backfill` đưa dữ liệu công nợ cũ về sổ công nợ duy nhất

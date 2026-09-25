@@ -290,6 +290,8 @@ export const listOrdersQuerySchema = paginationSchema.extend({
     .optional(),
   status: z.enum(['completed', 'cancelled', 'partial_return', 'full_return']).optional(),
   customerId: z.string().uuid().optional(),
+  /** R4: POS tra đơn theo clientId (cũng là Idempotency-Key) khi không rõ lần bán trước đã lưu chưa */
+  clientId: z.string().uuid().optional(),
   paymentMethod: z.enum(['cash', 'transfer', 'qr', 'combined', 'debt']).optional(),
   paymentStatus: z.enum(['paid', 'partial', 'unpaid']).optional(),
   reviewStatus: orderReviewStatusSchema.optional(),
