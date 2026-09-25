@@ -28,6 +28,15 @@ describe('allocateOrderDiscount', () => {
     expect(allocateOrderDiscount([0, 0], 5)).toEqual([0, 0])
   })
 
+  it('phần dư không đẩy dòng vượt thành tiền, dồn sang dòng lớn kế', () => {
+    expect(allocateOrderDiscount([10_000, 10_000, 10_000], 29_999)).toEqual([10_000, 10_000, 9_999])
+    expect(allocateOrderDiscount([10_000, 10_000, 10_000], 30_000)).toEqual([
+      10_000, 10_000, 10_000,
+    ])
+    // Dòng lớn nhất đã đầy sau làm tròn xuống: phần dư sang dòng kế
+    expect(allocateOrderDiscount([3, 2, 2], 6)).toEqual([3, 2, 1])
+  })
+
   it('dòng 0 đồng không nhận phần dư, chiết khấu vượt tổng bị chặn', () => {
     expect(allocateOrderDiscount([0, 3], 10)).toEqual([0, 3])
   })

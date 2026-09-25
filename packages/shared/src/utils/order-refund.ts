@@ -7,7 +7,8 @@
 /**
  * Chia chiết khấu cấp đơn cho các dòng theo tỷ lệ thành tiền dòng (đã trừ chiết khấu dòng).
  * Mỗi dòng nhận phần làm tròn xuống; phần dư làm tròn dồn vào dòng có thành tiền lớn nhất (dòng
- * đầu tiên nếu bằng nhau) để tổng khớp đúng chiết khấu đơn và không dòng nào bị âm.
+ * đầu tiên nếu bằng nhau), dòng đầy thì sang dòng lớn kế, để tổng khớp đúng chiết khấu đơn và không
+ * dòng nào nhận quá thành tiền của nó.
  * Chiết khấu vượt tổng thành tiền được chặn ở tổng thành tiền.
  */
 export function allocateOrderDiscount(lineTotals: number[], orderDiscount: number): number[] {
@@ -19,12 +20,18 @@ export function allocateOrderDiscount(lineTotals: number[], orderDiscount: numbe
   const shares = lineTotals.map((v) =>
     Number((BigInt(Math.max(0, v)) * BigInt(discount)) / BigInt(base)),
   )
-  const rest = discount - shares.reduce((sum, v) => sum + v, 0)
-  let largest = 0
-  for (let i = 1; i < lineTotals.length; i++) {
-    if (lineTotals[i]! > lineTotals[largest]!) largest = i
+  // Phần dư dồn vào dòng lớn nhất, nhưng mỗi dòng không nhận quá thành tiền của nó: dòng đã đầy
+  // thì dồn tiếp sang dòng lớn kế. Tổng sức chứa còn lại luôn đủ vì chiết khấu <= tổng thành tiền.
+  let rest = discount - shares.reduce((sum, v) => sum + v, 0)
+  const bySize = lineTotals
+    .map((v, i) => i)
+    .sort((a, b) => lineTotals[b]! - lineTotals[a]! || a - b)
+  for (const i of bySize) {
+    if (rest <= 0) break
+    const extra = Math.min(rest, Math.max(0, lineTotals[i]!) - shares[i]!)
+    shares[i] = shares[i]! + extra
+    rest -= extra
   }
-  shares[largest] = shares[largest]! + rest
   return shares
 }
 

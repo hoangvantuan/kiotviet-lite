@@ -591,27 +591,37 @@ export async function createOrder({
         const lineBelowCost = priceApproval.belowCostLines.has(itemIdx)
         const lineUnitCost = unitCosts[itemIdx] ?? null
 
-        let effectiveUnitPrice = item.unitPrice
-        let effectiveLineTotal = item.lineTotal
+        const effectiveUnitPrice = item.unitPrice
+        const effectiveLineTotal = item.lineTotal
 
-        // M16: Tu tinh lai gia cho don vi quy doi neu client gui unitPrice <= 0.
-        // Chi ap dung cho don tao truc tiep (source !== 'offline_sync').
-        // Khong ap dung cho dong sua gia co chu dich (M13: ban 0d hop le)
-        // va khong ap dung cho don ngoai tuyen (#34: giu nguyen gia da chot tren thiet bi va ghi doi soat).
+        // M16: đơn vị quy đổi không được bán 0 đ. Máy khách gửi đơn giá <= 0 cho dòng đơn vị quy đổi
+        // (không phải sửa giá có chủ đích, M13) thì từ chối kèm giá máy chủ tính. Không tự sửa dòng
+        // tại đây: tổng đơn, tiền thanh toán, chiết khấu và hạn mức nợ đã chốt theo tổng máy khách
+        // gửi, sửa dòng mà giữ tổng là đơn 0 đ nhưng trả hàng hoàn đủ tiền dòng.
+        // Không áp dụng cho đơn ngoại tuyến (#34: giữ giá đã chốt trên thiết bị và ghi đối soát).
         if (
           source !== 'offline_sync' &&
           item.unitConversionId &&
           effectiveUnitPrice <= 0 &&
-          !effectivePriceOverride
+          !effectivePriceOverride &&
+          resolvedPrice.price > 0
         ) {
-          effectiveUnitPrice = resolvedPrice.price
-          const lineRes = calculateLineTotal({
-            unitPrice: effectiveUnitPrice,
+          const serverLine = calculateLineTotal({
+            unitPrice: resolvedPrice.price,
             quantity: item.quantity,
             discountType: item.discountType,
             discountValue: item.discountValue,
           })
-          effectiveLineTotal = lineRes.lineTotal
+          throw new ApiError(
+            'VALIDATION_ERROR',
+            `${item.productName} (${item.unit ?? 'đơn vị quy đổi'}) chưa có giá trên đơn. Giá hiện hành là ${formatVnd(resolvedPrice.price)}, vui lòng cập nhật lại giỏ hàng`,
+            {
+              reason: 'unit_price_missing',
+              itemIndex: itemIdx,
+              unitPrice: resolvedPrice.price,
+              lineTotal: serverLine.lineTotal,
+            },
+          )
         }
 
         const devicePriceSource: PriceSource = effectivePriceOverride

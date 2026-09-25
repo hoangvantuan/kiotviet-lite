@@ -1,4 +1,5 @@
 /* eslint-disable */
+import { eq } from 'drizzle-orm'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import {
@@ -6,8 +7,10 @@ import {
   categoryDiscounts,
   customerGroups,
   customerPrices,
+  orders,
   priceListItems,
   priceLists,
+  products,
   volumePrices,
 } from '@kiotviet-lite/shared'
 
@@ -296,7 +299,7 @@ describe('PHA 4 POS Integration Tests (M13, M16, M21, M23)', () => {
       expect(body.data[0]?.unitConversionId).toBe(conv.id)
     })
 
-    it('Tạo đơn hàng với đơn vị quy đổi: BE tự sửa giá nếu client gửi unitPrice: 0', async () => {
+    it('Tạo đơn hàng với đơn vị quy đổi gửi unitPrice: 0: từ chối kèm giá máy chủ, không ghi đơn 0 đ', async () => {
       const { base, posApp } = await setup()
       const product = await createProduct(base, {
         sellingPrice: 10_000,
@@ -339,15 +342,26 @@ describe('PHA 4 POS Integration Tests (M13, M16, M21, M23)', () => {
         }),
       })
 
-      expect(res.status).toBe(201)
+      // Trước đây máy chủ sửa dòng thành 240.000 nhưng giữ tổng đơn 0 đ: trả hàng lại hoàn đủ
+      // 240.000 tiền mặt cho một đơn khách chưa trả đồng nào. Nay từ chối, trả giá máy chủ tính
+      // (10.000 × 24) để máy bán cập nhật giỏ hàng.
+      expect(res.status).toBe(400)
       const body = (await res.json()) as {
-        data: {
-          items: Array<{ unitPrice: number; lineTotal: number }>
-        }
+        error: { details?: { reason?: string; unitPrice?: number; lineTotal?: number } }
       }
-      // BE đã tự tính lại unitPrice = 10.000 * 24 = 240.000đ
-      expect(body.data.items[0]?.unitPrice).toBe(240_000)
-      expect(body.data.items[0]?.lineTotal).toBe(240_000)
+      expect(body.error.details).toMatchObject({
+        reason: 'unit_price_missing',
+        unitPrice: 240_000,
+        lineTotal: 240_000,
+      })
+
+      const [after] = await base.db
+        .select({ currentStock: products.currentStock })
+        .from(products)
+        .where(eq(products.id, product.id))
+      expect(after?.currentStock).toBe(100)
+      const saved = await base.db.select({ id: orders.id }).from(orders)
+      expect(saved).toHaveLength(0)
     })
   })
 

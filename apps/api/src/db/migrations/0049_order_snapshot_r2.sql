@@ -56,7 +56,8 @@ SET unit_cost = coalesce(
 FROM orders o, products p
 WHERE o.id = oi.order_id AND p.id = oi.product_id;--> statement-breakpoint
 -- 3. Phân bổ chiết khấu đơn đúng quy tắc allocateOrderDiscount: mỗi dòng làm tròn xuống theo
--- tỷ lệ thành tiền, phần dư vào dòng lớn nhất (bằng nhau thì dòng tạo trước).
+-- tỷ lệ thành tiền, phần dư vào dòng lớn nhất (bằng nhau thì dòng tạo trước), dòng đầy thì sang
+-- dòng lớn kế; không dòng nào nhận quá thành tiền của nó.
 WITH base AS (
   SELECT oi.id, oi.order_id, greatest(oi.line_total, 0) AS lt,
          (sum(greatest(oi.line_total, 0)) OVER (PARTITION BY oi.order_id))::bigint AS base_sum,
@@ -67,15 +68,19 @@ WITH base AS (
   JOIN orders o ON o.id = oi.order_id
   WHERE o.discount_amount > 0
 ), shares AS (
-  SELECT id, order_id, rn, least(discount_amount, base_sum) AS d,
+  SELECT id, order_id, rn, lt, least(discount_amount, base_sum) AS d,
          lt * least(discount_amount, base_sum) / base_sum AS share
   FROM base
   WHERE base_sum > 0
 ), totals AS (
-  SELECT id, rn, d, share, (sum(share) OVER (PARTITION BY order_id))::bigint AS share_sum FROM shares
+  SELECT id, share, lt - share AS room,
+         d - (sum(share) OVER (PARTITION BY order_id))::bigint AS rest,
+         coalesce((sum(lt - share) OVER (PARTITION BY order_id ORDER BY rn
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING))::bigint, 0) AS room_before
+  FROM shares
 )
 UPDATE order_items oi
-SET order_discount_allocated = t.share + CASE WHEN t.rn = 1 THEN t.d - t.share_sum ELSE 0 END
+SET order_discount_allocated = t.share + least(t.room, greatest(0, t.rest - t.room_before))
 FROM totals t
 WHERE oi.id = t.id;--> statement-breakpoint
 -- 4. Khách đã trả lúc bán = tổng đơn - nợ ghi cho đơn. Nợ trước đơn của đơn cũ không suy ra

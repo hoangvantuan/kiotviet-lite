@@ -178,6 +178,7 @@ export async function createReturn({
         customerId: orders.customerId,
         paymentStatus: orders.paymentStatus,
         status: orders.status,
+        total: orders.total,
       })
       .from(orders)
       .where(and(eq(orders.id, orderId), eq(orders.storeId, actor.storeId)))
@@ -280,6 +281,26 @@ export async function createReturn({
         lineTotal,
         reason: returnItem.reason,
       })
+    }
+
+    // Trần hoàn tiền: tổng các phiếu trả của đơn không vượt tổng đơn (số khách thực phải trả).
+    // Với dữ liệu nhất quán công thức trên không chạm trần; trần chặn dữ liệu lệch như đơn cũ đã
+    // hoàn dư (TIEN-101) hay dòng đơn lệch tổng đơn. Đơn đã khóa ở trên nên tổng đã hoàn không đổi.
+    const [refunded] = await tx
+      .select({ sum: sql<string>`COALESCE(SUM(${orderReturns.totalAmount}), 0)` })
+      .from(orderReturns)
+      .where(eq(orderReturns.orderId, orderId))
+    const refundCap = Math.max(0, Number(order.total) - Number(refunded?.sum ?? 0))
+    if (totalAmount > refundCap) {
+      // Cắt phần vượt từ dòng cuối lên để tổng các dòng phiếu trả khớp tổng phiếu
+      let excess = totalAmount - refundCap
+      for (let i = validatedItems.length - 1; i >= 0 && excess > 0; i--) {
+        const line = validatedItems[i]!
+        const cut = Math.min(excess, line.lineTotal)
+        line.lineTotal -= cut
+        excess -= cut
+      }
+      totalAmount = refundCap
     }
 
     // 4. Generate return number with retry

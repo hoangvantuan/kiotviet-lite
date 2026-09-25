@@ -428,6 +428,26 @@ describe('TIEN-101: trả N lần trên đơn có chiết khấu đơn bằng tr
     expect(c!.currentDebt).toBe(0)
   })
 
+  it('trần hoàn tiền: tổng các phiếu trả không vượt tổng đơn kể cả khi dữ liệu dòng lệch', async () => {
+    // Dữ liệu lệch kiểu cũ: dòng cộng 180.000 nhưng tổng đơn chỉ 100.000 (M16 cũ sửa dòng mà
+    // không sửa tổng đơn). Trả hết cả hai dòng chỉ hoàn tối đa 100.000.
+    const orderId = await sell(app, env, discountedOrder({ discountPercent: 0 }))
+    await env.db.update(orders).set({ total: 100_000 }).where(eq(orders.id, orderId))
+    const big = await lineOf(orderId, productId)
+    const kept = await lineOf(orderId, keptId)
+
+    const first = await returnItems(app, env, orderId, [{ orderItemId: big.id, quantity: 3 }])
+    expect(first.totalAmount).toBe(100_000)
+    const second = await returnItems(app, env, orderId, [{ orderItemId: kept.id, quantity: 1 }])
+    expect(second.totalAmount).toBe(0)
+
+    const rows = await env.db
+      .select({ totalAmount: orderReturns.totalAmount })
+      .from(orderReturns)
+      .where(eq(orderReturns.orderId, orderId))
+    expect(rows.reduce((sum, r) => sum + Number(r.totalAmount), 0)).toBe(100_000)
+  })
+
   it('danh sách hàng có thể trả mang đủ ảnh chụp để web xem trước đúng số máy chủ', async () => {
     const orderId = await sell(app, env, discountedOrder())
     const res = await call(app, 'GET', `/api/v1/orders/${orderId}/returnable-items`, env)

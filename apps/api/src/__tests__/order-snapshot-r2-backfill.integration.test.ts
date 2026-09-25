@@ -28,6 +28,10 @@ const ids = {
   l2: '00000000-0000-7000-8000-0000000000c2',
   l3: '00000000-0000-7000-8000-0000000000c3',
   l4: '00000000-0000-7000-8000-0000000000c4',
+  o3: '00000000-0000-7000-8000-0000000000b3',
+  l5: '00000000-0000-7000-8000-0000000000c5',
+  l6: '00000000-0000-7000-8000-0000000000c6',
+  l7: '00000000-0000-7000-8000-0000000000c7',
 }
 
 /** Thư mục migration chỉ tới trước bản chụp số liệu R2, để dựng DB đúng như đang chạy thật. */
@@ -84,12 +88,16 @@ describe('migration điền ngược ảnh chụp chứng từ bán (R2)', () =>
         (gen_random_uuid(), '${ids.store}', '${ids.pack}', 'purchase', 100, 9000, 'PN2', '${ids.owner}', '2026-09-10');
       INSERT INTO orders (id, store_id, order_number, user_id, customer_id, subtotal, discount_amount, total, payment_method, payment_status, created_at) VALUES
         ('${ids.o1}', '${ids.store}', 'HD001', '${ids.owner}', NULL, 200001, 10001, 190000, 'cash', 'paid', '2026-09-05'),
-        ('${ids.o2}', '${ids.store}', 'HD002', '${ids.owner}', '${ids.customer}', 120000, 0, 120000, 'debt', 'partial', '2026-09-06');
+        ('${ids.o2}', '${ids.store}', 'HD002', '${ids.owner}', '${ids.customer}', 120000, 0, 120000, 'debt', 'partial', '2026-09-06'),
+        ('${ids.o3}', '${ids.store}', 'HD003', '${ids.owner}', NULL, 30000, 29999, 1, 'cash', 'paid', '2026-09-07');
       INSERT INTO order_items (id, order_id, product_id, variant_id, product_name, unit, unit_price, quantity, line_total, created_at) VALUES
         ('${ids.l1}', '${ids.o1}', '${ids.pack}', NULL, 'Mì gói', 'thùng', 50000, 2, 100000, '2026-09-05'),
         ('${ids.l2}', '${ids.o1}', '${ids.shirt}', '${ids.shirtRed}', 'Áo', 'cái', 50000, 1, 50000, '2026-09-05'),
         ('${ids.l3}', '${ids.o1}', '${ids.pack}', NULL, 'Mì gói', 'gói', 16667, 3, 50001, '2026-09-05'),
-        ('${ids.l4}', '${ids.o2}', '${ids.pack}', NULL, 'Mì gói', 'lốc', 120000, 1, 120000, '2026-09-06');
+        ('${ids.l4}', '${ids.o2}', '${ids.pack}', NULL, 'Mì gói', 'lốc', 120000, 1, 120000, '2026-09-06'),
+        ('${ids.l5}', '${ids.o3}', '${ids.pack}', NULL, 'Mì gói', 'gói', 10000, 1, 10000, '2026-09-07'),
+        ('${ids.l6}', '${ids.o3}', '${ids.pack}', NULL, 'Mì gói', 'gói', 10000, 1, 10000, '2026-09-07'),
+        ('${ids.l7}', '${ids.o3}', '${ids.pack}', NULL, 'Mì gói', 'gói', 10000, 1, 10000, '2026-09-07');
       INSERT INTO inventory_transactions (id, store_id, product_id, variant_id, type, quantity, note, created_by, created_at) VALUES
         (gen_random_uuid(), '${ids.store}', '${ids.pack}', NULL, 'sale', -48, 'HD001', '${ids.owner}', '2026-09-05'),
         (gen_random_uuid(), '${ids.store}', '${ids.shirt}', '${ids.shirtRed}', 'sale', -1, 'HD001', '${ids.owner}', '2026-09-05'),
@@ -136,6 +144,12 @@ describe('migration điền ngược ảnh chụp chứng từ bán (R2)', () =>
     ).toEqual(expected)
     expect(expected).toEqual([5_001, 2_500, 2_500])
     expect(byId.get(ids.l4)?.order_discount_allocated).toBe('0')
+    // Phần dư làm tròn không đẩy dòng nào vượt thành tiền của nó, dồn sang dòng kế
+    const capped = allocateOrderDiscount([10_000, 10_000, 10_000], 29_999)
+    expect(capped).toEqual([10_000, 10_000, 9_999])
+    expect(
+      [ids.l5, ids.l6, ids.l7].map((id) => Number(byId.get(id)?.order_discount_allocated)),
+    ).toEqual(capped)
 
     const { rows: orders } = await pglite.query<{
       id: string
@@ -145,6 +159,7 @@ describe('migration điền ngược ảnh chụp chứng từ bán (R2)', () =>
     expect(orders).toEqual([
       { id: ids.o1, paid_amount_at_sale: '190000', customer_debt_before: null },
       { id: ids.o2, paid_amount_at_sale: '50000', customer_debt_before: null },
+      { id: ids.o3, paid_amount_at_sale: '1', customer_debt_before: null },
     ])
 
     // Doanh thu ròng các dòng cộng lại đúng tổng đơn

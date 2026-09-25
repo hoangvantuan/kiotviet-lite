@@ -41,8 +41,9 @@
 ### Phân bổ chiết khấu đơn
 
 `allocateOrderDiscount(lineTotals, discount)`: mỗi dòng nhận `floor(lineTotal × discount / tổng)`,
-phần dư vào dòng có thành tiền lớn nhất (bằng nhau thì dòng đầu). Chiết khấu vượt tổng thành tiền bị
-chặn ở tổng. Doanh thu ròng dòng = `line_total - order_discount_allocated`, cộng các dòng ra đúng
+phần dư vào dòng có thành tiền lớn nhất (bằng nhau thì dòng đầu); dòng đã nhận đủ thành tiền của nó thì
+dồn tiếp sang dòng lớn kế, nên không dòng nào có phần phân bổ vượt thành tiền (ví dụ ba dòng 10.000,
+chiết khấu 29.999 ra 10.000, 10.000, 9.999). Chiết khấu vượt tổng thành tiền bị chặn ở tổng. Doanh thu ròng dòng = `line_total - order_discount_allocated`, cộng các dòng ra đúng
 `orders.total`.
 
 ### Tiền hoàn
@@ -59,6 +60,15 @@ luôn ra đúng `N`, không dư làm tròn. `order_return_items.line_total` lưu
 Tổng phiếu trả tách bằng `splitReturnRefund`: cấn vào nợ còn lại của đơn trước (qua sổ công nợ,
 ADR-0008), phần dư hoàn tiền. Hộp trả hàng ở web gọi đúng hai hàm này nên số xem trước khớp số máy
 chủ ghi. Kho hoàn `số lượng trả × conversion_factor`.
+
+Trần hoàn tiền: tổng các phiếu trả của một đơn không vượt `orders.total`. Phiếu vượt trần bị cắt
+xuống phần còn lại (cắt từ dòng cuối lên để các dòng khớp tổng phiếu). Với dữ liệu nhất quán công
+thức trên không chạm trần; trần chặn dữ liệu lệch (đơn cũ đã hoàn dư, dòng lệch tổng đơn).
+
+Máy chủ không tự sửa đơn giá dòng khi tạo đơn (M16 cũ sửa dòng đơn vị quy đổi gửi giá 0 thành giá
+hệ thống nhưng giữ tổng đơn 0, sinh đơn 0 đ mà trả hàng hoàn đủ tiền dòng). Nay từ chối với
+`reason: 'unit_price_missing'` kèm giá máy chủ tính, vì tổng đơn, thanh toán, chiết khấu và hạn mức
+đều đã chốt theo tổng máy khách gửi.
 
 ### Báo cáo và in lại
 
