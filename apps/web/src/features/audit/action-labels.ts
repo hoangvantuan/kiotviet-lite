@@ -81,6 +81,7 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'receipt.created': 'Tạo phiếu thu nợ KH',
   'receipt.printed': 'In phiếu thu',
   'debt_adjustment.created': 'Điều chỉnh nợ khách hàng',
+  'debt_ledger.backfilled': 'Điền ngược sổ công nợ R3',
   'order.returned': 'Trả hàng',
   'print_settings.updated': 'Cập nhật mẫu in',
 }
@@ -215,6 +216,7 @@ export const ACTION_GROUPS: ActionGroup[] = [
       'debt.limit_overridden',
       'order.debt_limit_exceeded',
       'debt_adjustment.created',
+      'debt_ledger.backfilled',
     ],
   },
   {

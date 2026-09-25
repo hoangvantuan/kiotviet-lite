@@ -9,6 +9,54 @@ ALTER TABLE "debts" ALTER COLUMN "type" SET DEFAULT 'sale';--> statement-breakpo
 DROP TYPE "public"."debt_type_old";--> statement-breakpoint
 ALTER TABLE "debts" ADD COLUMN "reduced" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "debts" ADD COLUMN "note" varchar(500);--> statement-breakpoint
+-- Dấu vết kiểm toán: ghi một dòng audit_logs cho mỗi khách mà các bước điền ngược bên dưới sẽ
+-- sửa khoản nợ, trước khi sửa. current_debt không đổi (vẫn là số khách đang thấy); trước và sau
+-- là tổng còn lại của các khoản nợ, kèm phần "paid" chuyển sang giảm trừ. audit_logs bắt buộc
+-- người thực hiện nên ghi chủ cửa hàng, changes.source ghi rõ nguồn là migration.
+-- Liệt kê lại: apps/api/scripts/debt-ledger-backfill-report.sql (xem docs/deploy.md).
+WITH "alloc" AS (
+  SELECT "debt_id", SUM("amount")::bigint AS "total"
+  FROM "receipt_allocations"
+  GROUP BY "debt_id"
+), "g" AS (
+  SELECT "c"."id" AS "customer_id", "c"."store_id", "c"."current_debt",
+         COALESCE(SUM("d"."remaining"), 0)::bigint AS "remaining_before",
+         COALESCE(SUM(GREATEST("d"."paid" - COALESCE("alloc"."total", 0), 0)), 0)::bigint AS "paid_to_reduced",
+         COUNT("d"."id") AS "debt_count"
+  FROM "customers" AS "c"
+  LEFT JOIN "debts" AS "d" ON "d"."customer_id" = "c"."id"
+  LEFT JOIN "alloc" ON "alloc"."debt_id" = "d"."id"
+  GROUP BY "c"."id", "c"."store_id", "c"."current_debt"
+), "fix" AS (
+  -- Cùng điều kiện với điền ngược 1, 2, 3: chuyển paid, lệch tăng, hoặc lệch giảm khi có khoản nợ
+  SELECT "g".*,
+         CASE
+           WHEN "g"."current_debt" > "g"."remaining_before" THEN "g"."current_debt"
+           WHEN "g"."debt_count" > 0 AND "g"."remaining_before" > "g"."current_debt" THEN GREATEST("g"."current_debt", 0)
+           ELSE "g"."remaining_before"
+         END AS "remaining_after"
+  FROM "g"
+  WHERE "g"."paid_to_reduced" > 0
+     OR "g"."current_debt" > "g"."remaining_before"
+     OR ("g"."debt_count" > 0 AND "g"."remaining_before" > "g"."current_debt")
+)
+INSERT INTO "audit_logs" ("id", "store_id", "actor_id", "actor_role", "action", "target_type", "target_id", "changes")
+SELECT gen_random_uuid(), "fix"."store_id", "actor"."id", "actor"."role"::text, 'debt_ledger.backfilled', 'customer', "fix"."customer_id",
+       jsonb_build_object(
+         'reason', 'Điền ngược sổ công nợ R3',
+         'source', 'migration 0047_debt_ledger_backfill',
+         'currentDebt', "fix"."current_debt",
+         'before', jsonb_build_object('debtsRemaining', "fix"."remaining_before"),
+         'after', jsonb_build_object('debtsRemaining', "fix"."remaining_after"),
+         'paidMovedToReduced', "fix"."paid_to_reduced"
+       )
+FROM "fix"
+CROSS JOIN LATERAL (
+  SELECT "u"."id", "u"."role" FROM "users" AS "u"
+  WHERE "u"."store_id" = "fix"."store_id"
+  ORDER BY ("u"."role" = 'owner') DESC, "u"."created_at", "u"."id"
+  LIMIT 1
+) AS "actor";--> statement-breakpoint
 -- Điền ngược 1 (TIEN-01): "paid" trước đây gộp cả cấn trừ trả hàng và điều chỉnh giảm.
 -- Tiền thực thu là tổng phân bổ phiếu thu; phần còn lại của "paid" chuyển sang "reduced".
 WITH "alloc" AS (

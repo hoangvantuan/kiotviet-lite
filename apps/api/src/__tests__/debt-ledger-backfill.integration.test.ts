@@ -14,6 +14,7 @@ import { expectDebtLedgerConsistent } from './helpers/debt-ledger.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const migrationsFolder = resolve(__dirname, '../db/migrations')
+const reportScript = resolve(__dirname, '../../scripts/debt-ledger-backfill-report.sql')
 const BACKFILL_TAG = '0047_debt_ledger_backfill'
 
 const ids = {
@@ -152,5 +153,70 @@ describe('migration điền ngược sổ công nợ (R3)', () => {
       `SELECT id, current_debt::text FROM customers ORDER BY code`,
     )
     expect(debtsNow.rows.map((r) => r.current_debt)).toEqual(['450000', '0', '150000', '70000'])
+
+    // Dấu vết kiểm toán: mỗi khách bị sửa khoản nợ có một dòng, khách không lệch thì không có
+    const audit = await pglite.query<{
+      target_id: string
+      actor_id: string
+      actor_role: string
+      target_type: string
+      changes: Record<string, unknown>
+    }>(
+      `SELECT target_id, actor_id, actor_role, target_type, changes FROM audit_logs
+       WHERE action = 'debt_ledger.backfilled' ORDER BY target_id`,
+    )
+    const trail = (
+      reason: string,
+      currentDebt: number,
+      before: number,
+      after: number,
+      moved: number,
+    ) => ({
+      reason,
+      source: 'migration 0047_debt_ledger_backfill',
+      currentDebt,
+      before: { debtsRemaining: before },
+      after: { debtsRemaining: after },
+      paidMovedToReduced: moved,
+    })
+    const R3 = 'Điền ngược sổ công nợ R3'
+    expect(audit.rows).toEqual([
+      expect.objectContaining({
+        target_id: ids.gapUp,
+        changes: trail(R3, 450_000, 400_000, 450_000, 100_000),
+      }),
+      expect.objectContaining({ target_id: ids.returned, changes: trail(R3, 0, 0, 0, 250_000) }),
+      expect.objectContaining({
+        target_id: ids.gapDown,
+        changes: trail(R3, 150_000, 200_000, 150_000, 0),
+      }),
+    ])
+    for (const row of audit.rows) {
+      expect(row).toMatchObject({
+        actor_id: ids.owner,
+        actor_role: 'owner',
+        target_type: 'customer',
+      })
+    }
+
+    // Script báo cáo trong docs/deploy.md chạy được và liệt kê đúng ba khách trên
+    const report = await pglite.query<{
+      ma_kh: string
+      tong_con_lai_truoc: string
+      tong_con_lai_sau: string
+      khoan_no_dien_nguoc: string | null
+    }>(readFileSync(reportScript, 'utf8'))
+    expect(
+      report.rows.map((r) => [
+        r.ma_kh,
+        String(r.tong_con_lai_truoc),
+        String(r.tong_con_lai_sau),
+        r.khoan_no_dien_nguoc,
+      ]),
+    ).toEqual([
+      ['KH1', '400000', '450000', 'adjustment 50000 (con 50000, giam tru 0)'],
+      ['KH2', '0', '0', null],
+      ['KH3', '200000', '150000', 'sale 100000 (con 50000, giam tru 50000)'],
+    ])
   })
 })
