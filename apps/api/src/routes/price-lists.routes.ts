@@ -49,7 +49,7 @@ export interface PriceListsRoutesDeps {
 export function createPriceListsRoutes({ db }: PriceListsRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
   app.use('*', requirePermission('pricing.manage'))
 
   app.get('/', async (c) => {

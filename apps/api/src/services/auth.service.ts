@@ -1,4 +1,5 @@
 import { and, eq, isNull } from 'drizzle-orm'
+import { randomUUID } from 'node:crypto'
 
 import {
   auditLogs,
@@ -26,20 +27,26 @@ export interface IssuedTokens extends AuthResponse {
   refreshToken: string
 }
 
+export const REGISTER_CONFLICT_MESSAGE =
+  'Không thể đăng ký với thông tin này. Nếu đã có tài khoản, vui lòng đăng nhập'
+
 interface RegisterDeps {
   db: Db
   input: RegisterInput
 }
 
 export async function registerStoreOwner({ db, input }: RegisterDeps): Promise<IssuedTokens> {
+  // BM-101: băm mật khẩu TRƯỚC khi tra số điện thoại để nhánh trùng số tốn cùng thời gian
+  // bcrypt như nhánh tạo mới, không thành thước đo xem số đã có tài khoản hay chưa.
+  const passwordHash = await hashPassword(input.password)
+
   const existing = await db.query.users.findFirst({
     where: eq(users.phone, input.phone),
   })
   if (existing) {
-    throw new ApiError('CONFLICT', 'Số điện thoại đã được sử dụng', { field: 'phone' })
+    // Thông báo chung, không chỉ đích danh trường số điện thoại.
+    throw new ApiError('CONFLICT', REGISTER_CONFLICT_MESSAGE)
   }
-
-  const passwordHash = await hashPassword(input.password)
 
   const created = await db.transaction(async (tx) => {
     const [store] = await tx
@@ -99,14 +106,23 @@ interface LoginDeps {
   userAgent?: string
 }
 
-const DUMMY_HASH = '$2a$12$x/Y5Y5Y5Y5Y5Y5Y5Y5Y5Y.x/Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y5Y'
+/**
+ * Hash bcrypt HỢP LỆ của một chuỗi ngẫu nhiên, băm cùng số vòng với mật khẩu thật.
+ * Nhánh không có tài khoản so mật khẩu với hash này để tốn cùng thời gian bcrypt (BM-101).
+ * Hash sai định dạng làm bcrypt trả về ngay, lộ số điện thoại nào đã đăng ký.
+ */
+let dummyHashPromise: Promise<string> | null = null
+export function getDummyPasswordHash(): Promise<string> {
+  dummyHashPromise ??= hashPassword(randomUUID())
+  return dummyHashPromise
+}
 
 export async function loginUser({ db, input, ip, userAgent }: LoginDeps): Promise<IssuedTokens> {
   const user = await db.query.users.findFirst({
     where: eq(users.phone, input.phone),
   })
   if (!user || !user.isActive) {
-    await verifyPassword(input.password, DUMMY_HASH)
+    await verifyPassword(input.password, await getDummyPasswordHash())
     throw new ApiError('UNAUTHORIZED', 'Số điện thoại hoặc mật khẩu không đúng')
   }
 

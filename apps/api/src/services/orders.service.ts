@@ -37,6 +37,7 @@ import {
   loadProductForUpdate,
   loadVariantForUpdate,
 } from './products-lock.helper.js'
+import { assertStoreOwned } from './store-scope.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -248,6 +249,15 @@ export async function createOrder({
       }
     }
   }
+
+  // BM-02: mọi khóa ngoại trong payload phải thuộc cửa hàng của actor, với MỌI phương thức
+  // thanh toán và cả hai nguồn (POS trực tuyến, đồng bộ ngoại tuyến). Bảng giá không nằm ở đây
+  // vì đơn ngoại tuyến được phép hạ bảng giá lạ về null (ADR-0002), xử lý riêng bên dưới.
+  await assertStoreOwned(db, actor.storeId, {
+    customer: input.customerId,
+    product: input.items.map((item) => item.productId),
+    variant: input.items.map((item) => item.variantId),
+  })
 
   // SF-1: Khi debtLimitOverridden=true, verify PIN server-side trước khi vào transaction.
   // Zod refine đã đảm bảo có debtLimitOverridePin khi debtLimitOverridden=true.
@@ -1492,7 +1502,10 @@ export async function listOrders({
       debtRemaining: debts.remaining,
     })
     .from(orders)
-    .leftJoin(customers, eq(orders.customerId, customers.id))
+    .leftJoin(
+      customers,
+      and(eq(orders.customerId, customers.id), eq(customers.storeId, orders.storeId)),
+    )
     .leftJoin(users, eq(orders.userId, users.id))
     .leftJoin(debts, eq(debts.orderId, orders.id))
     .where(whereClause)
@@ -1503,7 +1516,10 @@ export async function listOrders({
   const totalRows = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(orders)
-    .leftJoin(customers, eq(orders.customerId, customers.id))
+    .leftJoin(
+      customers,
+      and(eq(orders.customerId, customers.id), eq(customers.storeId, orders.storeId)),
+    )
     .where(whereClause)
 
   const total = totalRows[0]?.count ?? 0
@@ -1622,7 +1638,10 @@ export async function getOrderDetail({
       debtRemaining: debts.remaining,
     })
     .from(orders)
-    .leftJoin(customers, eq(orders.customerId, customers.id))
+    .leftJoin(
+      customers,
+      and(eq(orders.customerId, customers.id), eq(customers.storeId, orders.storeId)),
+    )
     .leftJoin(customerGroups, eq(customers.groupId, customerGroups.id))
     .leftJoin(users, eq(orders.userId, users.id))
     .leftJoin(debts, eq(debts.orderId, orders.id))

@@ -21,7 +21,7 @@ export interface OrdersRoutesDeps {
 export function createOrdersRoutes({ db }: OrdersRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
   app.use('*', requirePermission('orders.view'))
 
   // GET / - List orders (paginated, filtered)

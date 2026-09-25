@@ -8,11 +8,13 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { getClientIp } from '../lib/client-ip.js'
 import { clearRefreshCookie, getRefreshCookie, setRefreshCookie } from '../lib/cookies.js'
 import { ApiError } from '../lib/errors.js'
 import { parseJson } from '../lib/http.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import {
+  authPhoneRateLimit,
   authRateLimit,
   refreshRateLimit,
   registerRateLimit,
@@ -47,9 +49,9 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
     return c.json(body, 201)
   })
 
-  app.post('/login', authRateLimit, async (c) => {
+  app.post('/login', authRateLimit, authPhoneRateLimit, async (c) => {
     const input = await parseJson(c, loginSchema)
-    const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip')
+    const ip = getClientIp(c)
     const userAgent = c.req.header('user-agent')
     const result = await loginUser({ db, input, ip, userAgent })
     setRefreshCookie(c, result.refreshToken)
@@ -79,7 +81,7 @@ export function createAuthRoutes(deps: AuthRoutesDeps) {
   app.post('/logout', async (c) => {
     const token = getRefreshCookie(c)
     const auth = c.get('auth') as { userId: string; storeId: string } | undefined
-    const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip')
+    const ip = getClientIp(c)
     const userAgent = c.req.header('user-agent')
     await logoutUser({
       db,

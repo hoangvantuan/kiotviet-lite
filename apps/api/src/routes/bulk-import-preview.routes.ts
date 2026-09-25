@@ -144,7 +144,7 @@ export function createBulkImportPreviewRoutes({
 }) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
   app.use('*', async (c, next) => {
     if (c.get('auth').role !== 'owner')
       throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng được nhập dữ liệu')

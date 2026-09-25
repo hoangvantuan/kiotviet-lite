@@ -46,7 +46,7 @@ const syncFailureCounters = new Map<string, { count: number; lastError: string }
 export function createSyncRoutes({ db }: { db: Db }) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
 
   app.get('/initial', async (c) => {
     const auth = c.get('auth')

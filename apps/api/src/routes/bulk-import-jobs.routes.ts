@@ -85,7 +85,7 @@ export function createBulkImportJobsRoutes(args: { db: Db; storageRoot?: string 
     ),
   )
 
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
   app.use('*', async (c, next) => {
     if (c.get('auth').role !== 'owner') {
       throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được nhập dữ liệu')

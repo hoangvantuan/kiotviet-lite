@@ -44,6 +44,8 @@ export const customers = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    // Đích của khóa ngoại ghép (store_id, customer_id) từ bảng khác: chặn tham chiếu chéo cửa hàng.
+    uniqueIndex('uniq_customers_store_id').on(table.storeId, table.id),
     uniqueIndex('uniq_customers_store_code_alive')
       .on(table.storeId, sql`LOWER(${table.code})`)
       .where(sql`${table.deletedAt} IS NULL`),

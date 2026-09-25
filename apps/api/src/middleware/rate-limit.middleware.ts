@@ -1,20 +1,7 @@
 import type { Context } from 'hono'
 import { rateLimiter } from 'hono-rate-limiter'
 
-/**
- * Extract client IP from request headers.
- * Assumption: In production, this service runs behind a reverse proxy (nginx/Cloudflare)
- * that always sets x-forwarded-for or cf-connecting-ip. The 'unknown' fallback only
- * applies in development or misconfigured environments.
- */
-const getClientIp = (c: Context): string => {
-  return (
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    c.req.header('cf-connecting-ip') ||
-    'unknown'
-  )
-}
+import { getClientIp } from '../lib/client-ip.js'
 
 /**
  * Chỉ cho phép tắt giới hạn tần suất ở môi trường kiểm thử.
@@ -38,6 +25,41 @@ export const authRateLimit = rateLimiter({
   keyGenerator: (c) => getClientIp(c),
   skip: isRateLimitDisabled,
   message: { error: { code: 'RATE_LIMITED', message: 'Quá nhiều yêu cầu, vui lòng thử lại sau' } },
+})
+
+/**
+ * Lấy số điện thoại trong body đăng nhập làm khóa giới hạn. Hono đệm body nên
+ * handler phía sau vẫn đọc lại được. Body lỗi dùng chung một khóa, handler sẽ trả 400.
+ */
+const getLoginPhoneKey = async (c: Context): Promise<string> => {
+  try {
+    const body = (await c.req.json()) as { phone?: unknown }
+    if (typeof body.phone === 'string' && body.phone.trim().length > 0) {
+      return `phone:${body.phone.trim()}`
+    }
+  } catch {
+    // body không phải JSON
+  }
+  return 'phone:invalid'
+}
+
+/**
+ * Rate limit đăng nhập theo tài khoản: 10 lần SAI / 15 phút / số điện thoại, bất kể IP.
+ * Chặn dò mật khẩu phân tán qua nhiều IP. Đăng nhập thành công không bị tính.
+ * Đánh đổi: kẻ xấu biết số điện thoại có thể làm chủ tài khoản chờ tối đa 15 phút.
+ */
+export const authPhoneRateLimit = rateLimiter({
+  windowMs: 15 * 60_000,
+  limit: 10,
+  keyGenerator: getLoginPhoneKey,
+  skipSuccessfulRequests: true,
+  skip: isRateLimitDisabled,
+  message: {
+    error: {
+      code: 'RATE_LIMITED',
+      message: 'Đăng nhập sai quá nhiều lần, vui lòng thử lại sau 15 phút',
+    },
+  },
 })
 
 /**

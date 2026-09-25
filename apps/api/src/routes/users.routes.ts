@@ -28,7 +28,7 @@ export function createUsersRoutes({ db }: UsersRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
 
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
 
   app.post('/verify-pin', async (c) => {
     const auth = c.get('auth')

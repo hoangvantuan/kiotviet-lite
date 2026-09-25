@@ -13,9 +13,27 @@ function optional(name: string, fallback: string): string {
   return value && value.length > 0 ? value : fallback
 }
 
-function validateSecrets(): void {
-  const accessSecret = process.env.JWT_ACCESS_SECRET
-  const refreshSecret = process.env.JWT_REFRESH_SECRET
+/**
+ * Dấu hiệu của secret mẫu hoặc secret dùng cho dev/test, không được phép lên production.
+ * `.env.production.example` công khai trong repo nên ai cũng biết các giá trị `change-me-*`.
+ */
+const PLACEHOLDER_SECRET_PATTERN =
+  /change-?me|please-?change|example|placeholder|min-32-chars|^test-/i
+/** Secret ngẫu nhiên 32 ký tự trở lên luôn có nhiều ký tự khác nhau; ít hơn là chuỗi lặp dễ đoán. */
+const MIN_DISTINCT_SECRET_CHARS = 10
+
+function assertStrongSecret(name: string, value: string): void {
+  if (PLACEHOLDER_SECRET_PATTERN.test(value)) {
+    throw new Error(`${name} is a public placeholder value, generate a random secret`)
+  }
+  if (new Set(value).size < MIN_DISTINCT_SECRET_CHARS) {
+    throw new Error(`${name} is too weak, generate a random secret`)
+  }
+}
+
+export function validateSecrets(source: NodeJS.ProcessEnv = process.env): void {
+  const accessSecret = source.JWT_ACCESS_SECRET
+  const refreshSecret = source.JWT_REFRESH_SECRET
 
   if (!accessSecret || accessSecret.length < 32) {
     throw new Error('JWT_ACCESS_SECRET must be at least 32 characters')
@@ -24,14 +42,32 @@ function validateSecrets(): void {
     throw new Error('JWT_REFRESH_SECRET must be at least 32 characters')
   }
 
-  const ttl = process.env.ACCESS_TOKEN_TTL_SECONDS
+  // GL-05: production từ chối khởi động với secret mẫu công khai hoặc secret yếu
+  if (source.NODE_ENV === 'production') {
+    assertStrongSecret('JWT_ACCESS_SECRET', accessSecret)
+    assertStrongSecret('JWT_REFRESH_SECRET', refreshSecret)
+    if (accessSecret === refreshSecret) {
+      throw new Error('JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be different')
+    }
+    const notificationKey = source.NOTIFICATION_CONFIG_KEY
+    if (notificationKey) {
+      assertStrongSecret('NOTIFICATION_CONFIG_KEY', notificationKey)
+    }
+  }
+
+  const ttl = source.ACCESS_TOKEN_TTL_SECONDS
   if (ttl && isNaN(Number(ttl))) {
     throw new Error('ACCESS_TOKEN_TTL_SECONDS must be a valid number')
   }
 
-  const refreshTtl = process.env.REFRESH_TOKEN_TTL_SECONDS
+  const refreshTtl = source.REFRESH_TOKEN_TTL_SECONDS
   if (refreshTtl && isNaN(Number(refreshTtl))) {
     throw new Error('REFRESH_TOKEN_TTL_SECONDS must be a valid number')
+  }
+
+  const hops = source.TRUSTED_PROXY_HOPS
+  if (hops && !/^\d+$/.test(hops)) {
+    throw new Error('TRUSTED_PROXY_HOPS must be a non-negative integer')
   }
 }
 
@@ -70,6 +106,10 @@ export const env = {
   },
   get highValueOrderThreshold(): number {
     return Number.parseInt(optional('HIGH_VALUE_ORDER_THRESHOLD', '5000000'), 10)
+  },
+  /** Số reverse proxy tin cậy đứng trước API (nginx = 1). 0 = không tin `X-Forwarded-For`. */
+  get trustedProxyHops(): number {
+    return Number.parseInt(optional('TRUSTED_PROXY_HOPS', '0'), 10)
   },
   get jwtGracePeriodDays(): number {
     return Number.parseInt(optional('JWT_GRACE_PERIOD_DAYS', '0'), 10)

@@ -160,7 +160,10 @@ export async function getRevenueByCustomer(
       revenue: sql<number>`coalesce(sum(${orderNetRevenueExpr()}), 0)`.as('revenue'),
     })
     .from(orders)
-    .leftJoin(customers, eq(orders.customerId, customers.id))
+    .leftJoin(
+      customers,
+      and(eq(orders.customerId, customers.id), eq(customers.storeId, orders.storeId)),
+    )
     .where(
       and(
         eq(orders.storeId, storeId),
