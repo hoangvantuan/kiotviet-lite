@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { ChevronLeft, Mail, Pencil, Phone, Tag } from 'lucide-react'
 
 import type { CustomerDetail } from '@kiotviet-lite/shared'
-import { formatDebtLimitLabel, formatPhone } from '@kiotviet-lite/shared'
+import { formatDebtLimitLabel, formatPhone, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'

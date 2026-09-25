@@ -121,7 +121,7 @@ export function AddPriceListItemDialog({
             <Label htmlFor="apl-search">Tìm sản phẩm</Label>
             <Input
               id="apl-search"
-              placeholder="Tên hoặc SKU"
+              placeholder="Tên hoặc mã hàng"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

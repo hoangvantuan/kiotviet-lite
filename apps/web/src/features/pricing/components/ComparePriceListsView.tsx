@@ -207,7 +207,7 @@ export function ComparePriceListsView({ listAId, listBId, onSwap, onBack }: Prop
           </Label>
           <Input
             id="compare-search"
-            placeholder="Tên hoặc SKU…"
+            placeholder="Tên hoặc mã hàng…"
             value={filters.search}
             onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
           />

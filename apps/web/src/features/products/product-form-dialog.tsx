@@ -719,7 +719,7 @@ function BasicSection<T extends FieldValues & ProductFormFields>({
                 })
               }
             >
-              Sinh SKU
+              Sinh mã hàng
             </Button>
           </div>
           {getError(form.formState.errors, 'sku') && (

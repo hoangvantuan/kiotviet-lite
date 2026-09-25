@@ -55,6 +55,6 @@ describe('remainingDebtAllowance và formatDebtLimitLabel', () => {
     expect(remainingDebtAllowance(1_000, 300)).toBe(700)
     expect(formatDebtLimitLabel(null)).toBe('Không giới hạn')
     expect(formatDebtLimitLabel(0)).toBe('Không cho nợ')
-    expect(formatDebtLimitLabel(1_000_000)).toContain('1.000.000')
+    expect(formatDebtLimitLabel(1_000_000)).toBe('1.000.000\xA0đ')
   })
 })

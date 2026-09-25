@@ -48,7 +48,7 @@ export function SelectProductForVolumePricesDialog({ open, onOpenChange, onPick 
         </DialogHeader>
         <div className="space-y-3">
           <Input
-            placeholder="Tìm theo tên hoặc SKU…"
+            placeholder="Tìm theo tên hoặc mã hàng…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             autoFocus
