@@ -8,10 +8,22 @@ import {
   orderItems,
   orders,
   products,
+  productVariants,
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { revenueStatusFilter } from '../lib/order-status.js'
+
+/**
+ * Giá trị tồn của một sản phẩm (BC-11). Sản phẩm có biến thể cộng tồn × giá vốn từng biến thể còn
+ * hoạt động, biến thể chưa có giá vốn riêng lấy giá vốn cha (ADR-0007, như `getEffectiveCostPrice`).
+ * Không dùng tồn cha × giá vốn cha: giá vốn cha chỉ là số tóm tắt, không tính lại khi bán, trả, kiểm kê.
+ */
+const stockValueExpr = sql`CASE WHEN ${products.hasVariants} THEN (
+  SELECT coalesce(sum(${productVariants.stockQuantity}::bigint * coalesce(${productVariants.costPrice}, ${products.costPrice}, 0)), 0)
+  FROM ${productVariants}
+  WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL
+) ELSE ${products.currentStock}::bigint * coalesce(${products.costPrice}, 0) END`
 
 export async function getInventoryCurrent(
   db: Db,
@@ -33,10 +45,9 @@ export async function getInventoryCurrent(
       productName: products.name,
       sku: products.sku,
       currentStock: products.currentStock,
+      stockValue: sql<number>`${stockValueExpr}`.as('stock_value'),
       costPrice: sql<number>`coalesce(${products.costPrice}, 0)`.as('cost_price'),
-      stockValue: sql<number>`${products.currentStock} * coalesce(${products.costPrice}, 0)`.as(
-        'stock_value',
-      ),
+      hasVariants: products.hasVariants,
     })
     .from(products)
     .where(whereCondition)
@@ -47,7 +58,7 @@ export async function getInventoryCurrent(
     db
       .select({
         totalProducts: sql<number>`count(*)::int`,
-        totalStockValue: sql<number>`coalesce(sum(${products.currentStock} * coalesce(${products.costPrice}, 0)), 0)::bigint`,
+        totalStockValue: sql<number>`coalesce(sum(${stockValueExpr}), 0)::bigint`,
       })
       .from(products)
       .where(whereCondition),
@@ -61,7 +72,11 @@ export async function getInventoryCurrent(
     productName: r.productName,
     sku: r.sku,
     currentStock: Number(r.currentStock),
-    costPrice: Number(r.costPrice),
+    // Có biến thể: giá vốn hiển thị là bình quân theo giá trị tồn để tồn × giá vốn khớp giá trị tồn
+    costPrice:
+      r.hasVariants && Number(r.currentStock) > 0
+        ? Math.round(Number(r.stockValue) / Number(r.currentStock))
+        : Number(r.costPrice),
     stockValue: Number(r.stockValue),
   }))
 

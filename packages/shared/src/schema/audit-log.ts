@@ -34,6 +34,7 @@ export const auditActionSchema = z.enum([
   'product.unit_conversion_updated',
   'product.unit_conversion_deleted',
   'inventory.purchase_recorded',
+  'inventory.cost_recalculated',
   'inventory.manual_adjusted',
   'customer.created',
   'customer.updated',
