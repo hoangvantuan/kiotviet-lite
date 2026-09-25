@@ -2,7 +2,7 @@ import { Writable } from 'node:stream'
 import pino from 'pino'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { loggerOptions, withRequestLogContext } from './logger.js'
+import { loggerOptions, withLogContext, withRequestLogContext } from './logger.js'
 
 function createTestLogger(opts?: pino.LoggerOptions) {
   const lines: string[] = []
@@ -162,5 +162,19 @@ describe('logger module', () => {
     const entry = JSON.parse(lines[0]!)
     expect(entry.err.type).toBe('Error')
     expect(JSON.stringify(entry)).not.toContain('123456')
+  })
+
+  // GL-22: log "supplier.created" của job nhập bị rollback trước đây không có gì nối với job.
+  it('log trong tác vụ nền mang jobId, giữ requestId của request khởi tạo', async () => {
+    const { logger, lines } = createTestLogger()
+    await withRequestLogContext('req-1', () =>
+      withLogContext({ jobId: 'job-1' }, async () => {
+        await Promise.resolve()
+        logger.info('supplier.created')
+      }),
+    )
+    logger.info('outside')
+    expect(JSON.parse(lines[0]!)).toMatchObject({ requestId: 'req-1', jobId: 'job-1' })
+    expect(JSON.parse(lines[1]!)).not.toHaveProperty('jobId')
   })
 })

@@ -11,6 +11,7 @@ import { closeDbPool, db } from './db/index.js'
 import { setupGracefulShutdown } from './lib/graceful-shutdown.js'
 import { parseJson } from './lib/http.js'
 import { initLogger, logger } from './lib/logger.js'
+import { opsAlerter, serverErrorSpikeAlert, watchReadiness } from './lib/ops-monitor.js'
 import { requireAuth } from './middleware/auth.middleware.js'
 import { errorHandler } from './middleware/error-handler.js'
 import { requestLoggerMiddleware } from './middleware/request-logger.middleware.js'
@@ -73,6 +74,13 @@ app.use(
 
 app.use('*', securityHeaders)
 app.use('/api/*', requestLoggerMiddleware)
+app.use(
+  '/api/*',
+  serverErrorSpikeAlert({
+    alerter: opsAlerter(),
+    threshold: Number(process.env.OPS_ALERT_5XX_THRESHOLD) || 20,
+  }),
+)
 
 app.onError(errorHandler)
 
@@ -186,6 +194,8 @@ if (process.env.NODE_ENV !== 'test') {
       const server = serve({ fetch: app.fetch, port }, (info) => {
         logger.info({ port: info.port }, 'api server listening')
       })
+      if (opsAlerter().enabled) logger.info('ops alerts enabled')
+      watchReadiness({ db, alerter: opsAlerter() })
 
       // GL-11: tổng hạn 30 s (stop_grace_period của compose là 45 s). Job nhập được 15 s để
       // xong, quá hạn thì dừng tại ranh giới dòng, rollback và trả về hàng đợi (5 s),

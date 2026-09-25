@@ -23,6 +23,23 @@ function isPrivateHost(hostname: string): boolean {
   return false
 }
 
+/** Header chuẩn của webhook KVL; bên nhận kiểm bằng `verifyWebhookSignature`. */
+export function webhookHeaders(body: string, hmacSecret?: string): Record<string, string> {
+  const timestamp = new Date().toISOString()
+  const nonce = randomUUID()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-KVL-Timestamp': timestamp,
+    'X-KVL-Nonce': nonce,
+  }
+  if (hmacSecret) {
+    headers['X-KVL-Signature'] = createHmac('sha256', hmacSecret)
+      .update(`${timestamp}.${nonce}.${body}`, 'utf8')
+      .digest('hex')
+  }
+  return headers
+}
+
 export class WebhookTransport implements Transport {
   readonly name = 'webhook'
 
@@ -55,21 +72,7 @@ export class WebhookTransport implements Transport {
     }
 
     const body = JSON.stringify(event)
-    const timestamp = new Date().toISOString()
-    const nonce = randomUUID()
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'X-KVL-Timestamp': timestamp,
-      'X-KVL-Nonce': nonce,
-    }
-
-    if (hmacSecret) {
-      const signPayload = `${timestamp}.${nonce}.${body}`
-      headers['X-KVL-Signature'] = createHmac('sha256', hmacSecret)
-        .update(signPayload, 'utf8')
-        .digest('hex')
-    }
+    const headers = webhookHeaders(body, hmacSecret)
 
     try {
       const response = await fetch(url, {
