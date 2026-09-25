@@ -9,7 +9,7 @@ Thiết kế chi tiết: [spec](superpowers/specs/2026-06-12-docker-compose-prod
 ```bash
 git clone <repo> && cd kiotviet-lite
 cp .env.production.example .env
-# Sửa .env: mật khẩu Postgres, JWT secrets, ALLOWED_ORIGINS, WEB_PORT,
+# Sửa .env: mật khẩu Postgres, JWT secrets, NOTIFICATION_CONFIG_KEY, ALLOWED_ORIGINS, WEB_PORT,
 # khóa công khai sao lưu và đích ngoài máy (mục 6), kênh cảnh báo (mục 7)
 ```
 
@@ -18,7 +18,20 @@ Không cần Node hay pnpm. `.env` chứa secret, không commit.
 
 JWT secret phải sinh ngẫu nhiên (`openssl rand -base64 48`, hai giá trị khác nhau). API production
 từ chối khởi động nếu secret còn là giá trị mẫu (`change-me-*`), là chuỗi lặp, hoặc hai secret trùng
-nhau; `NOTIFICATION_CONFIG_KEY` khi có đặt cũng bị kiểm như vậy.
+nhau.
+
+`NOTIFICATION_CONFIG_KEY` bắt buộc ở production: khoá AES-256-GCM (64 ký tự hex) mã hoá bot token
+Telegram, URL và khoá ký HMAC của webhook mà chủ cửa hàng lưu trong **Cài đặt → Thông báo**. Sinh
+bằng `openssl rand -hex 32`. API từ chối khởi động nếu thiếu khoá, khoá sai định dạng hoặc là giá
+trị mẫu. Giữ khoá cố định và sao lưu cùng `.env`: đổi khoá thì các kênh đã lưu không giải mã được,
+chủ cửa hàng phải nhập lại bí mật của từng kênh.
+
+Kênh webhook chỉ nhận `https://` tới địa chỉ công khai: API chặn loopback, mạng nội bộ, link-local
+(metadata đám mây `169.254.169.254`) cả lúc lưu lẫn trước mỗi lần gửi, và không theo chuyển hướng.
+
+Request POST/PUT/PATCH/DELETE từ trình duyệt phải có `Origin` nằm trong `ALLOWED_ORIGINS` hoặc cùng
+host với request (nginx giữ `Host` gốc), nếu không API trả 403 `CSRF_ORIGIN_REJECTED`. Truy cập qua
+domain nào thì domain đó phải có trong `ALLOWED_ORIGINS`.
 
 ## 2. Khởi động / cập nhật
 

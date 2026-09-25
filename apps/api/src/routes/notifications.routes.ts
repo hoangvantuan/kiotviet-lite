@@ -4,7 +4,12 @@ import { rateLimiter } from 'hono-rate-limiter'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 
-import { notificationSeverityValues, notificationTypeValues } from '@kiotviet-lite/shared'
+import {
+  createNotificationChannelSchema,
+  notificationSeverityValues,
+  notificationSubscribableTypeValues,
+  updateNotificationChannelSchema,
+} from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { getClientIp } from '../lib/client-ip.js'
@@ -14,6 +19,13 @@ import { logger } from '../lib/logger.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
+import {
+  createNotificationChannel,
+  deleteNotificationChannel,
+  listNotificationChannels,
+  testNotificationChannel,
+  updateNotificationChannel,
+} from '../services/notification-channels.service.js'
 
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX = 60
@@ -24,6 +36,16 @@ const emitRateLimiter = rateLimiter({
   keyGenerator: (c) => getClientIp(c),
   standardHeaders: 'draft-7',
 })
+
+// Gửi thử đi ra mạng ngoài, giới hạn riêng để không bị dùng làm công cụ spam
+const testSendRateLimiter = rateLimiter({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  limit: 10,
+  keyGenerator: (c) => getClientIp(c),
+  standardHeaders: 'draft-7',
+})
+
+const uuidParam = z.string().uuid('ID không hợp lệ')
 
 const MAX_CONTEXT_SIZE = 10_240
 const MAX_CONTEXT_DEPTH = 3
@@ -38,7 +60,7 @@ function getMaxDepth(obj: unknown, current = 0, visited = new WeakSet<object>())
 
 const emitInputSchema = z
   .object({
-    type: z.enum(notificationTypeValues),
+    type: z.enum(notificationSubscribableTypeValues),
     severity: z.enum(notificationSeverityValues),
     title: z.string().min(1).max(200),
     body: z.string().min(1).max(2000),
@@ -134,6 +156,40 @@ export function createNotificationRoutes({ db }: NotificationRoutesDeps) {
         results: safeResults,
       },
     })
+  })
+
+  // GL-15: kênh thông báo của cửa hàng, chỉ owner (bí mật của kênh gửi dữ liệu ra ngoài)
+  const manage = requirePermission('notifications.manage')
+
+  app.get('/channels', authenticate, manage, async (c) => {
+    const auth = c.get('auth')
+    return c.json({ data: await listNotificationChannels(db, auth.storeId) })
+  })
+
+  app.post('/channels', authenticate, manage, async (c) => {
+    const auth = c.get('auth')
+    const input = await parseJson(c, createNotificationChannelSchema)
+    return c.json({ data: await createNotificationChannel(db, auth.storeId, input) }, 201)
+  })
+
+  app.patch('/channels/:id', authenticate, manage, async (c) => {
+    const auth = c.get('auth')
+    const id = uuidParam.parse(c.req.param('id'))
+    const input = await parseJson(c, updateNotificationChannelSchema)
+    return c.json({ data: await updateNotificationChannel(db, auth.storeId, id, input) })
+  })
+
+  app.delete('/channels/:id', authenticate, manage, async (c) => {
+    const auth = c.get('auth')
+    const id = uuidParam.parse(c.req.param('id'))
+    await deleteNotificationChannel(db, auth.storeId, id)
+    return c.body(null, 204)
+  })
+
+  app.post('/channels/:id/test', testSendRateLimiter, authenticate, manage, async (c) => {
+    const auth = c.get('auth')
+    const id = uuidParam.parse(c.req.param('id'))
+    return c.json({ data: await testNotificationChannel(db, auth.storeId, id) })
   })
 
   return app

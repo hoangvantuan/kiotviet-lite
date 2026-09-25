@@ -9,18 +9,12 @@ import { withRetry } from './retry.js'
 import { findMatchingRules, type MatchedRule } from './router.js'
 import { isThrottled } from './throttle.js'
 import type { SendResult, Transport } from './transports/base.js'
-import { ConsoleTransport } from './transports/console.js'
-import { FileTransport } from './transports/file.js'
-import { TelegramTransport } from './transports/telegram.js'
-import { WebhookTransport } from './transports/webhook.js'
+import { getTransport } from './transports/registry.js'
 import type { NotificationDb } from './types.js'
 
-const transports: Record<string, Transport> = {
-  console: new ConsoleTransport(),
-  file: new FileTransport(),
-  webhook: new WebhookTransport(),
-  telegram: new TelegramTransport(),
-}
+export { type ChannelSendResult, sendToChannel } from './channel-send.js'
+export { decrypt, encrypt } from './crypto.js'
+export { checkWebhookTarget, checkWebhookUrl, type WebhookUrlRejectReason } from './url-guard.js'
 
 export interface NotifyOptions {
   configKey?: string
@@ -94,7 +88,7 @@ export async function notify(
       return record({ ok: true, attempts: 0 }, 'throttled')
     }
 
-    const transport = transports[rule.transport]
+    const transport = getTransport(rule.transport)
     if (!transport) {
       return record(
         { ok: false, error: 'Unknown transport', attempts: 0, retriable: false },

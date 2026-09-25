@@ -42,6 +42,7 @@ import { ReportsPage } from '@/pages/reports-page'
 import { RevenueReportPage } from '@/pages/revenue-report-page'
 import { SettingsAuditPage } from '@/pages/settings-audit-page'
 import { SettingsDebtPage } from '@/pages/settings-debt-page'
+import { SettingsNotificationsPage } from '@/pages/settings-notifications-page'
 import { SettingsPage } from '@/pages/settings-page'
 import { SettingsPrintPage } from '@/pages/settings-print-page'
 import { SettingsStaffPage } from '@/pages/settings-staff-page'
@@ -358,6 +359,13 @@ const settingsDebtRoute = createRoute({
   component: SettingsDebtPage,
 })
 
+const settingsNotificationsRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: 'notifications',
+  beforeLoad: requirePermissionGuard('notifications.manage'),
+  component: SettingsNotificationsPage,
+})
+
 const settingsStaffRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: 'staff',
@@ -451,6 +459,7 @@ const routeTree = rootRoute.addChildren([
         settingsStoreRoute,
         settingsPrintRoute,
         settingsDebtRoute,
+        settingsNotificationsRoute,
         settingsStaffRoute,
         settingsAuditRoute,
       ]),

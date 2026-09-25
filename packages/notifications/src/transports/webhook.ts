@@ -2,6 +2,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 
 import type { NotificationEvent } from '@kiotviet-lite/shared'
 
+import { checkWebhookTarget } from '../url-guard.js'
 import type { SendResult, Transport } from './base.js'
 
 function isPrivateHost(hostname: string): boolean {
@@ -62,7 +63,7 @@ export class WebhookTransport implements Transport {
       return { ok: false, error: 'Webhook URL must use HTTPS', attempts: 1, retriable: false }
     }
 
-    if (isPrivateHost(parsed.hostname)) {
+    if (isPrivateHost(parsed.hostname) || !(await checkWebhookTarget(url)).ok) {
       return {
         ok: false,
         error: 'Webhook URL must not target private network',
@@ -80,6 +81,8 @@ export class WebhookTransport implements Transport {
         headers,
         body,
         signal: AbortSignal.timeout(10_000),
+        // Không theo chuyển hướng: URL công khai có thể 302 về địa chỉ nội bộ (SSRF, GL-15)
+        redirect: 'manual',
       })
 
       if (response.ok) {

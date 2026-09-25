@@ -13,6 +13,7 @@ import { parseJson } from './lib/http.js'
 import { initLogger, logger } from './lib/logger.js'
 import { opsAlerter, serverErrorSpikeAlert, watchReadiness } from './lib/ops-monitor.js'
 import { requireAuth } from './middleware/auth.middleware.js'
+import { csrfProtection } from './middleware/csrf.middleware.js'
 import { errorHandler } from './middleware/error-handler.js'
 import { requestLoggerMiddleware } from './middleware/request-logger.middleware.js'
 import { securityHeaders } from './middleware/security-headers.middleware.js'
@@ -81,6 +82,8 @@ app.use(
     threshold: Number(process.env.OPS_ALERT_5XX_THRESHOLD) || 20,
   }),
 )
+// BM-104: request đổi trạng thái phải đến từ origin được phép hoặc cùng host
+app.use('/api/*', csrfProtection({ allowedOrigins: ALLOWED_ORIGINS }))
 
 app.onError(errorHandler)
 

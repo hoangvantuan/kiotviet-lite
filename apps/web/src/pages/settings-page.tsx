@@ -7,13 +7,19 @@ interface SettingsTab {
   value: string
   label: string
   path: string
-  permission: 'store.manage' | 'users.manage' | 'audit.viewOwn'
+  permission: 'store.manage' | 'notifications.manage' | 'users.manage' | 'audit.viewOwn'
 }
 
 const SETTINGS_TABS: SettingsTab[] = [
   { value: 'store', label: 'Cửa hàng', path: '/settings/store', permission: 'store.manage' },
   { value: 'print', label: 'Mẫu in', path: '/settings/print', permission: 'store.manage' },
   { value: 'debt', label: 'Công nợ', path: '/settings/debt', permission: 'store.manage' },
+  {
+    value: 'notifications',
+    label: 'Thông báo',
+    path: '/settings/notifications',
+    permission: 'notifications.manage',
+  },
   { value: 'staff', label: 'Nhân viên', path: '/settings/staff', permission: 'users.manage' },
   {
     value: 'audit',
@@ -27,11 +33,13 @@ export function SettingsPage() {
   const navigate = useNavigate()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const canStore = usePermission('store.manage')
+  const canNotifications = usePermission('notifications.manage')
   const canUsers = usePermission('users.manage')
   const canAudit = usePermission('audit.viewOwn')
 
   const visibleTabs = SETTINGS_TABS.filter((tab) => {
     if (tab.permission === 'store.manage') return canStore
+    if (tab.permission === 'notifications.manage') return canNotifications
     if (tab.permission === 'users.manage') return canUsers
     return canAudit
   })

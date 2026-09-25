@@ -35,7 +35,8 @@ export const deliveryStatusEnum = pgEnum('delivery_status', [
   'dead',
 ])
 
-export const notificationTypeValues = [
+// Loại sự kiện chủ cửa hàng đăng ký nhận qua kênh (quy tắc định tuyến)
+export const notificationSubscribableTypeValues = [
   'auth.login.suspicious',
   'auth.pin.locked',
   'order.high_value',
@@ -46,6 +47,12 @@ export const notificationTypeValues = [
   'sync.failed_repeatedly',
   'audit.price_override',
   'system.error.unhandled',
+] as const
+
+// `notification.test` chỉ dùng cho nút "Gửi thử" để bên nhận webhook phân biệt với sự kiện thật (GL-15)
+export const notificationTypeValues = [
+  ...notificationSubscribableTypeValues,
+  'notification.test',
 ] as const
 
 export const notificationTypeEnum = pgEnum('notification_type', [...notificationTypeValues])
@@ -133,4 +140,5 @@ export const notificationEventSchema = z.object({
 
 export type NotificationEvent = z.infer<typeof notificationEventSchema>
 export type NotificationType = (typeof notificationTypeValues)[number]
+export type NotificationSubscribableType = (typeof notificationSubscribableTypeValues)[number]
 export type NotificationSeverity = (typeof notificationSeverityValues)[number]
