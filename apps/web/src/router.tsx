@@ -2,17 +2,15 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
-  Link, Outlet,
+  Outlet,
   redirect,
 } from '@tanstack/react-router'
-import { FileQuestion } from 'lucide-react'
 import { z } from 'zod'
 
 import { hasPermission, type Permission } from '@kiotviet-lite/shared'
 
 import { AppLayout } from '@/components/layout/app-layout'
 import { ErrorBoundary } from '@/components/layout/error-boundary'
-import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/sonner'
 import { useMediaQuery as useMediaQueryRoot } from '@/hooks/use-media-query'
 import { useNetworkStatus } from '@/hooks/use-network-status'
@@ -22,9 +20,11 @@ import { CustomerPricesPage } from '@/pages/customer-prices-page'
 import { CustomersGroupsPage } from '@/pages/customers-groups-page'
 import { CustomersPage } from '@/pages/customers-page'
 import { DashboardPage } from '@/pages/dashboard-page'
+import { ForbiddenPage } from '@/pages/forbidden-page'
 import { HomePage } from '@/pages/home-page'
 import { InventoryReportPage } from '@/pages/inventory-report-page'
 import { LoginPage } from '@/pages/login-page'
+import { NotFoundPage } from '@/pages/not-found-page'
 import { OrderDetailPage } from '@/pages/order-detail-page'
 import { OrdersPage } from '@/pages/orders-page'
 import { PosPage } from '@/pages/pos-page'
@@ -65,10 +65,6 @@ const rootRoute = createRootRoute({
 
 const loginSearchSchema = z.object({
   redirect: z.string().optional(),
-})
-
-const homeSearchSchema = z.object({
-  error: z.string().optional(),
 })
 
 const loginRoute = createRoute({
@@ -125,7 +121,6 @@ function requirePermissionGuard(perm: Permission) {
 const homeRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/',
-  validateSearch: homeSearchSchema,
   component: HomePage,
 })
 
@@ -414,12 +409,17 @@ const orderDetailRoute = createRoute({
   component: OrderDetailPage,
 })
 
-import { ForbiddenPage } from './pages/forbidden-page'
-
 const forbiddenRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/403',
   component: ForbiddenPage,
+})
+
+// URL không khớp route nào: hiện 404 tiếng Việt trong layout chung (UX-07)
+const notFoundRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '$',
+  component: NotFoundPage,
 })
 
 const posRoute = createRoute({
@@ -474,27 +474,15 @@ const routeTree = rootRoute.addChildren([
         settingsStaffRoute,
         settingsAuditRoute,
       ]),
+      notFoundRoute,
     ]),
     posRoute,
   ]),
 ])
 
-function NotFoundComponent() {
-  return (
-    <div className="flex h-screen w-full flex-col items-center justify-center gap-4 bg-background px-4 text-center">
-      <FileQuestion className="h-16 w-16 text-muted-foreground" />
-      <h1 className="text-2xl font-semibold">404 - Not Found</h1>
-      <p className="text-muted-foreground">Trang bạn tìm kiếm không tồn tại.</p>
-      <Button asChild className="mt-4">
-        <Link to="/">Về trang chủ</Link>
-      </Button>
-    </div>
-  )
-}
-
 export const router = createRouter({
   routeTree,
-  defaultNotFoundComponent: NotFoundComponent,
+  defaultNotFoundComponent: NotFoundPage,
 })
 
 declare module '@tanstack/react-router' {
@@ -519,9 +507,13 @@ function ResponsiveToaster() {
   const isDesktop = useMediaQueryRoot('(min-width: 768px)')
   return (
     <Toaster
-      position={isDesktop ? 'bottom-right' : 'top-center'}
+      // Góc dưới phải đè nút "Thanh toán (F2)" ở POS; đặt trên phải và né header cao 56px (UX-23)
+      position={isDesktop ? 'top-right' : 'top-center'}
+      offset={{ top: 64 }}
+      mobileOffset={{ top: 64 }}
       toastOptions={{
         classNames: { toast: 'md:max-w-sm' },
+        closeButtonAriaLabel: 'Đóng thông báo',
       }}
       closeButton
     />

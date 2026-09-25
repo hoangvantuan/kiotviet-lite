@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/use-auth-store'
 
 export function LoginPage() {
   const networkError = useAuthStore((s) => s.networkError)
-  
+
   return (
     <div className="flex flex-col gap-4">
       {networkError && (

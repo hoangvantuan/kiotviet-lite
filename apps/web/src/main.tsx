@@ -19,10 +19,8 @@ startCartPersistence({
 
 async function bootAuth() {
   const refreshResult = await refreshApi()
-  if (!refreshResult || ('error' in refreshResult)) {
-    if (refreshResult && 'error' in refreshResult && refreshResult.error === 'network') {
-      useAuthStore.getState().setNetworkError(true)
-    }
+  if (refreshResult.status !== 'ok') {
+    useAuthStore.getState().setNetworkError(refreshResult.status === 'network_error')
     useAuthStore.getState().markBooted()
     return
   }

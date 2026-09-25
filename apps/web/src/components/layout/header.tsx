@@ -33,9 +33,10 @@ export function Header() {
         >
           <Menu className="h-5 w-5" />
         </button>
-        <h1 className="text-sm font-semibold text-foreground truncate">
+        {/* Không dùng h1: mỗi trang chỉ có một h1 là tiêu đề trang (UX-25) */}
+        <p className="text-sm font-semibold text-foreground truncate">
           {user?.name ?? 'KiotViet Lite'}
-        </h1>
+        </p>
       </div>
       <div className="flex items-center gap-2">
         <OfflineIndicator />

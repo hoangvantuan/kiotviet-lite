@@ -1,31 +1,40 @@
-import { useEffect } from 'react'
-import { useNavigate, useSearch } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { LayoutDashboard } from 'lucide-react'
 
+import { hasPermission } from '@kiotviet-lite/shared'
+
 import { EmptyState } from '@/components/shared/empty-state'
-import { showWarning } from '@/lib/toast'
 import { useAuthStore } from '@/stores/use-auth-store'
 
 export function HomePage() {
   const user = useAuthStore((s) => s.user)
-  const search = useSearch({ strict: false }) as { error?: string }
   const navigate = useNavigate()
-
-  useEffect(() => {
-    if (search.error === 'forbidden') {
-      showWarning('Bạn không có quyền truy cập trang này')
-      navigate({ to: '/', replace: true, search: {} as never })
-    }
-  }, [search.error, navigate])
+  // Chỉ gợi ý xem báo cáo khi vai trò có quyền xem (staff không có)
+  const canViewReports = !!user?.role && hasPermission(user.role, 'reports.view')
+  const canSell = !!user?.role && hasPermission(user.role, 'pos.sell')
 
   return (
     <div>
-      <h2 className="mb-4 text-xl font-semibold text-foreground">Xin chào, {user?.name || 'bạn'}</h2>
-      <EmptyState
-        icon={LayoutDashboard}
-        title="Chào mừng đến với KiotViet Lite"
-        description="Chào mừng đến với KiotViet Lite. Bạn có thể xem báo cáo chi tiết ở mục Báo cáo."
-      />
+      <h1 className="mb-4 text-xl font-semibold text-foreground">
+        Xin chào, {user?.name || 'bạn'}
+      </h1>
+      {canViewReports ? (
+        <EmptyState
+          icon={LayoutDashboard}
+          title="Chào mừng đến với KiotViet Lite"
+          description="Số liệu doanh thu, lợi nhuận và công nợ nằm trong mục Báo cáo."
+          actionLabel="Xem báo cáo"
+          onAction={() => navigate({ to: '/reports/dashboard' })}
+        />
+      ) : (
+        <EmptyState
+          icon={LayoutDashboard}
+          title="Chào mừng đến với KiotViet Lite"
+          description="Chọn một mục ở menu để bắt đầu làm việc."
+          actionLabel={canSell ? 'Mở màn bán hàng' : undefined}
+          onAction={canSell ? () => navigate({ to: '/pos' }) : undefined}
+        />
+      )}
     </div>
   )
 }
