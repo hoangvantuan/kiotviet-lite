@@ -4,10 +4,10 @@ import { formatVnd } from './receipts.service.js'
 
 describe('formatVnd', () => {
   it('formats integer amount with Vietnamese locale', () => {
-    expect(formatVnd(1_000_000)).toBe('1.000.000đ')
+    expect(formatVnd(1_000_000)).toBe('1.000.000 đ')
   })
 
   it('formats zero', () => {
-    expect(formatVnd(0)).toBe('0đ')
+    expect(formatVnd(0)).toBe('0 đ')
   })
 })
