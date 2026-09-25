@@ -16,6 +16,7 @@ export const NOTIFICATION_EVENT_LABELS: Record<NotificationSubscribableType, str
   'order.high_value': 'Đơn hàng giá trị lớn',
   'order.debt_limit_exceeded': 'Đơn vượt hạn mức công nợ',
   'order.price_mismatch_adjusted': 'Đơn ngoại tuyến bị chỉnh giá khi đồng bộ',
+  'order.policy_violation_offline': 'Đơn ngoại tuyến vi phạm chính sách, chờ duyệt',
   'stock.negative': 'Tồn kho âm',
   'sync.failed_repeatedly': 'Đồng bộ thất bại nhiều lần',
   'audit.price_override': 'Sửa giá bán tại quầy',
