@@ -38,6 +38,8 @@ const preview = {
   newCategories: ['Đồ khô'],
   newBrands: ['Nhãn mới'],
   warnings: ['Kiểm tra dữ liệu trước khi nhập'],
+  sourceFormat: 'template',
+  conversions: [],
   sample: [{ 'Tên sản phẩm': 'Gạo trắng' }],
   digest: 'digest-1',
 }
@@ -178,6 +180,67 @@ test('unchanged export can be confirmed without manufacturing a product update',
   const request = page.waitForRequest('**/api/v1/bulk-import/products/confirm')
   await confirmButton.click()
   expect((await request).postData()).toContain('digest-noop')
+})
+
+test('KiotViet export shows automatic changes and requires approving them before confirm', async ({
+  page,
+}) => {
+  await mockCatalog(page, 'owner')
+  await page.route('**/api/v1/bulk-import/products/preview', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      headers: {
+        'access-control-allow-origin': allowOrigin(route),
+        'access-control-allow-credentials': 'true',
+      },
+      body: JSON.stringify({
+        data: {
+          ...preview,
+          errors: [],
+          newCategories: [],
+          newBrands: [],
+          sourceFormat: 'kiotviet',
+          conversions: [
+            {
+              code: 'unit_blank',
+              message: 'ĐVT trống được điền "Cái"',
+              count: 2466,
+              rows: [2, 5],
+              requiresConfirmation: true,
+            },
+            {
+              code: 'stock_ignored',
+              message: 'Tồn kho không được nhập cùng danh mục hàng',
+              count: 6284,
+              rows: [2],
+              requiresConfirmation: false,
+            },
+          ],
+          digest: 'digest-kv',
+        },
+      }),
+    }),
+  )
+  await page.goto('/products')
+  await page.getByRole('button', { name: 'Nhập Excel' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.locator('input[type=file]').setInputFiles({
+    name: 'DanhSachSanPham_KV.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: Buffer.from('xlsx'),
+  })
+  await dialog.getByRole('button', { name: 'Xem trước' }).click()
+  const changes = dialog.getByRole('list', { name: 'Thay đổi tự động' })
+  await expect(changes).toContainText('ĐVT trống được điền "Cái" (2466 dòng: 2, 5…)')
+  await expect(changes).toContainText('Tồn kho không được nhập')
+  const confirmButton = dialog.getByRole('button', { name: 'Xác nhận nhập' })
+  await expect(confirmButton).toBeDisabled()
+  await dialog.getByRole('checkbox', { name: /đồng ý các thay đổi tự động/ }).check()
+  await expect(confirmButton).toBeEnabled()
+  const request = page.waitForRequest('**/api/v1/bulk-import/products/confirm')
+  await confirmButton.click()
+  const body = (await request).postData() ?? ''
+  expect(body).toMatch(/name="approveConversions"\r\n\r\ntrue/)
 })
 
 test('invalid files cannot reach preview; changing file clears prior preview', async ({ page }) => {

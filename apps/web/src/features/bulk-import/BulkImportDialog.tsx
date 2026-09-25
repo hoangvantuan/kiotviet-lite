@@ -43,6 +43,10 @@ const statuses: Record<ImportJob['status'], string> = {
   cancelled: 'Đã huỷ',
 }
 
+function needsConversionApproval(preview: ImportPreview) {
+  return preview.conversions.some((item) => item.requiresConfirmation)
+}
+
 function messageFor(error: unknown) {
   return error instanceof Error ? error.message : 'Không thể xử lý yêu cầu. Vui lòng thử lại.'
 }
@@ -138,6 +142,7 @@ export function BulkImportDialog({
   const [mode, setMode] = useState<ImportMode>('create-only')
   const [preview, setPreview] = useState<ImportPreview | null>(null)
   const [approved, setApproved] = useState(false)
+  const [approvedConversions, setApprovedConversions] = useState(false)
   const [pending, setPending] = useState<'preview' | 'confirm' | 'cancel' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
@@ -182,6 +187,7 @@ export function BulkImportDialog({
     previewAbort.current = null
     setPreview(null)
     setApproved(false)
+    setApprovedConversions(false)
     setError(null)
     setPending((value) => (value === 'preview' ? null : value))
   }
@@ -235,13 +241,21 @@ export function BulkImportDialog({
       !preview ||
       pending ||
       preview.errors.length > 0 ||
-      ((preview.newCategories.length > 0 || preview.newBrands.length > 0) && !approved)
+      ((preview.newCategories.length > 0 || preview.newBrands.length > 0) && !approved) ||
+      (needsConversionApproval(preview) && !approvedConversions)
     )
       return
     setPending('confirm')
     setError(null)
     try {
-      const job = await confirmImport(kind, file, mode, preview.digest, approved)
+      const job = await confirmImport(
+        kind,
+        file,
+        mode,
+        preview.digest,
+        approved,
+        approvedConversions,
+      )
       setJobId(job.id)
       queryClient.setQueryData(['bulk-import-job', job.id], job)
       void queryClient.invalidateQueries({ queryKey: ['bulk-import-jobs'] })
@@ -330,6 +344,9 @@ export function BulkImportDialog({
               <label htmlFor={`import-file-${kind}`} className="block text-sm font-medium">
                 Tệp Excel (.xlsx, tối đa 8 MiB)
               </label>
+              <p className="text-xs text-muted-foreground">
+                Dùng tệp mẫu của hệ thống hoặc chọn thẳng tệp xuất từ KiotViet, không cần sửa cột.
+              </p>
               <input
                 id={`import-file-${kind}`}
                 type="file"
@@ -428,6 +445,41 @@ export function BulkImportDialog({
                 </ul>
               </section>
             )}
+            {preview.conversions.length > 0 && (
+              <section className="space-y-2 rounded-md border p-3 text-sm">
+                <h3 className="font-medium">
+                  Thay đổi tự động
+                  {preview.sourceFormat === 'kiotviet' && ' (tệp xuất từ KiotViet)'}
+                </h3>
+                <ul className="max-h-56 space-y-1 overflow-y-auto" aria-label="Thay đổi tự động">
+                  {preview.conversions.map((item, index) => (
+                    <li key={index}>
+                      {item.message}
+                      {item.count > 0 && (
+                        <span className="text-muted-foreground">
+                          {' '}
+                          ({item.count} dòng
+                          {item.rows.length > 0 &&
+                            `: ${item.rows.join(', ')}${item.count > item.rows.length ? '…' : ''}`}
+                          )
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {needsConversionApproval(preview) && (
+                  <label className="flex items-start gap-2 rounded-md bg-amber-50 p-2 text-amber-950">
+                    <input
+                      type="checkbox"
+                      checked={approvedConversions}
+                      onChange={(event) => setApprovedConversions(event.target.checked)}
+                      className="mt-1 accent-primary"
+                    />
+                    Tôi đã xem và đồng ý các thay đổi tự động trên.
+                  </label>
+                )}
+              </section>
+            )}
             {needsApproval && (
               <section className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
                 <p className="font-medium">Tên chưa có trong cửa hàng</p>
@@ -514,6 +566,7 @@ export function BulkImportDialog({
                 disabled={
                   !!pending ||
                   (!!needsApproval && !approved) ||
+                  (needsConversionApproval(preview) && !approvedConversions) ||
                   preview.errors.length > 0 ||
                   preview.totalRows === 0
                 }
