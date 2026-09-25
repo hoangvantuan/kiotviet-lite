@@ -36,7 +36,7 @@ describe('Pagination Contract Tests', () => {
       let match
       while ((match = regex.exec(content)) !== null) {
         foundPageSize = true
-        const valStr = match[1]
+        const valStr = match[1]!
         let val: number
 
         if (valStr === 'MAX_PAGE_SIZE') {
