@@ -34,9 +34,11 @@ KiotViet cũng lấy giá vốn nhập là đơn giá sau chiết khấu và ph�
 4. **Biến thể.** Giá vốn bình quân tính riêng cho biến thể trên tồn của biến thể. Biến thể chưa có giá
    vốn riêng thì lấy giá vốn cha làm giá vốn trước. Trong cùng transaction, tồn cha = tổng tồn biến thể.
 5. **Giá vốn sản phẩm cha có biến thể** (`products.cost_price`) là số tóm tắt: bình quân giá vốn các biến
-   thể theo tồn dương, bỏ qua biến thể chưa có giá vốn. Tính lại mỗi lần nhập hàng hay điều chỉnh tồn biến
-   thể. Báo cáo cấp sản phẩm dùng số này; giá vốn để chụp vào đơn bán là giá vốn biến thể, lấy qua
-   `getEffectiveCostPrice` (biến thể trước, không có thì cha).
+   thể theo tồn dương, bỏ qua biến thể chưa có giá vốn. Chỉ tính lại khi nhập hàng (nghiệp vụ đổi giá vốn
+   biến thể); bán, trả, kiểm kê và điều chỉnh tồn tay chỉ đồng bộ tồn cha. Số này chỉ để hiển thị. Giá vốn
+   một đơn vị bán là giá vốn biến thể, không có thì giá vốn cha (`getEffectiveCostPrice`). Giá trị tồn
+   trong báo cáo tồn kho cộng tồn × giá vốn từng biến thể theo đúng quy tắc đó, không lấy tồn cha × giá
+   vốn cha.
 6. **Đơn vị quy đổi.** Dòng phiếu nhập có thể chọn một đơn vị quy đổi đã khai báo của sản phẩm. Số lượng,
    đơn giá, chiết khấu dòng và thành tiền giữ theo đơn vị đó như trên hóa đơn nhà cung cấp; máy chủ nhân
    hệ số ra đơn vị tính cho tồn kho, giá vốn và sổ, và chụp tên đơn vị cùng hệ số vào dòng phiếu.
@@ -45,9 +47,13 @@ KiotViet cũng lấy giá vốn nhập là đơn giá sau chiết khấu và ph�
 
 - Giá vốn của các sản phẩm đã từng nhập có chiết khấu trước bản sửa vẫn đang bị thổi. Script
   `pnpm --filter @kiotviet-lite/api cost:recalc` đi lại sổ nhập, in chênh lệch (mặc định chỉ báo cáo) và
-  với `--apply` thì ghi lại giá vốn, kèm audit `inventory.cost_recalculated`. Sản phẩm có giá vốn đã bị sửa
-  tay sau lần nhập cuối, và giá vốn biến thể cũ, không tự tái lập được: script chỉ liệt kê để xem tay.
-- Bán, trả hàng, kiểm kê không tính lại giá vốn tóm tắt của sản phẩm cha, nên số này có thể lệch nhẹ so
-  với tổng giá trị biến thể giữa hai lần nhập. Báo cáo cần giá trị tồn tuyệt đối đúng nên cộng theo biến thể.
+  với `--apply` thì ghi lại giá vốn, kèm audit `inventory.cost_recalculated` (tác nhân "script cost:recalc").
+  Sản phẩm có giá vốn đã bị sửa tay sau lần nhập cuối, và giá vốn biến thể cũ, không tự tái lập được:
+  script chỉ liệt kê để xem tay; đồng bộ cha theo biến thể chỉ ghi khi có cờ riêng `--apply-variant-parent`.
+  Script không sửa giá vốn đã chụp trên dòng đơn bán cũ.
+- Báo cáo lợi nhuận (`profit-report.service`) và báo cáo giá (`pricing-report.service`) còn đọc giá vốn
+  cha hiện tại, chưa theo quy tắc biến thể; sẽ chuyển sang giá vốn chụp trên dòng đơn bán.
+- Bán, trả hàng, kiểm kê, điều chỉnh tồn tay không tính lại giá vốn tóm tắt của sản phẩm cha, nên số này
+  có thể lệch so với tổng giá trị biến thể giữa hai lần nhập. Báo cáo tồn kho vì thế cộng theo biến thể.
 - `unit_cost` trên sổ là số làm tròn; giá vốn bình quân dùng tiền hàng thực chưa làm tròn nên không cộng dồn
   sai số làm tròn qua các lần nhập.

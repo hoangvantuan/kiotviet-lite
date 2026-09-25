@@ -68,7 +68,9 @@ export function computeWac(args: {
  * Giá vốn dùng cho MỘT đơn vị tính của sản phẩm hoặc biến thể.
  * Sản phẩm có biến thể: giá vốn của biến thể; biến thể chưa có giá vốn thì lấy giá vốn sản phẩm cha.
  * Sản phẩm không biến thể: `products.cost_price`. Trả null khi chưa từng có giá vốn.
- * Đây là nguồn duy nhất cho giá vốn khi cần chụp vào chứng từ (đơn bán, kiểm kê...).
+ * Quy tắc chuẩn cho giá vốn một đơn vị bán (ADR-0007 mục 5). Hiện trạng: đơn bán tự chụp cùng quy
+ * tắc trong `orders.service`, báo cáo tồn kho áp quy tắc này bằng SQL; `profit-report.service` và
+ * `pricing-report.service` còn đọc giá vốn cha hiện tại, sẽ chuyển sang giá vốn chụp trên dòng đơn.
  */
 export async function getEffectiveCostPrice({
   db,
@@ -110,23 +112,21 @@ export async function getEffectiveCostPrice({
 }
 
 /**
- * Đồng bộ tồn kho và giá vốn của sản phẩm cha từ các biến thể còn hoạt động.
+ * Tính tồn và giá vốn tóm tắt của sản phẩm cha từ các biến thể còn hoạt động, không ghi gì.
  * - Tồn cha = tổng tồn biến thể (giống luồng bán, trả, kiểm kê).
  * - Giá vốn cha = bình quân giá vốn các biến thể theo tồn dương; biến thể chưa có giá vốn bị bỏ qua.
  *   Không có biến thể nào tồn dương thì giữ `fallbackCost`.
- * Giá vốn cha chỉ là số tóm tắt cấp sản phẩm cho màn hình và báo cáo; giá vốn thật để bán
- * là giá vốn biến thể (xem `getEffectiveCostPrice`).
  */
-export async function syncParentFromVariants({
-  tx,
+export async function computeParentFromVariants({
+  db,
   productId,
   fallbackCost,
 }: {
-  tx: Db
+  db: Db
   productId: string
   fallbackCost: number | null
 }): Promise<{ currentStock: number; costPrice: number | null }> {
-  const rows = await tx
+  const rows = await db
     .select({
       totalStock: sql<number>`COALESCE(SUM(${productVariants.stockQuantity}), 0)::int`,
       costedQty: sql<string>`COALESCE(SUM(GREATEST(${productVariants.stockQuantity}, 0)) FILTER (WHERE ${productVariants.costPrice} IS NOT NULL), 0)`,
@@ -139,7 +139,29 @@ export async function syncParentFromVariants({
   const costedQty = Number(row?.costedQty ?? 0)
   const costedValue = Number(row?.costedValue ?? 0)
   const costPrice = costedQty > 0 ? Math.round(costedValue / costedQty) : fallbackCost
+  return { currentStock, costPrice }
+}
 
+/**
+ * Đồng bộ tồn kho và giá vốn tóm tắt của sản phẩm cha từ các biến thể (xem
+ * `computeParentFromVariants`). Dùng ở nghiệp vụ đổi giá vốn biến thể (nhập hàng) và script tính lại.
+ * Giá vốn cha chỉ là số tóm tắt cấp sản phẩm cho màn hình; giá vốn thật để bán là giá vốn
+ * biến thể (xem `getEffectiveCostPrice`), giá trị tồn trong báo cáo cộng theo biến thể.
+ */
+export async function syncParentFromVariants({
+  tx,
+  productId,
+  fallbackCost,
+}: {
+  tx: Db
+  productId: string
+  fallbackCost: number | null
+}): Promise<{ currentStock: number; costPrice: number | null }> {
+  const { currentStock, costPrice } = await computeParentFromVariants({
+    db: tx,
+    productId,
+    fallbackCost,
+  })
   await tx.update(products).set({ currentStock, costPrice }).where(eq(products.id, productId))
   return { currentStock, costPrice }
 }

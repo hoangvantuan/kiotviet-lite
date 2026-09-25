@@ -16,9 +16,13 @@ import {
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { logAction, type RequestMeta } from './audit.service.js'
-import { receiveStock, syncParentFromVariants } from './inventory-cost.helper.js'
+import { receiveStock } from './inventory-cost.helper.js'
 import { getProduct } from './products.service.js'
-import { loadProductForUpdate, loadVariantForUpdate } from './products-lock.helper.js'
+import {
+  aggregateVariantStock,
+  loadProductForUpdate,
+  loadVariantForUpdate,
+} from './products-lock.helper.js'
 
 export interface InventoryActor {
   userId: string
@@ -204,12 +208,10 @@ export async function recordManualAdjustment({
         .update(productVariants)
         .set({ stockQuantity: stockAfter })
         .where(eq(productVariants.id, variantId))
-      // Đồng bộ tồn cha ngay như các luồng bán, trả, kiểm kê
-      await syncParentFromVariants({
-        tx: tx as unknown as Db,
-        productId,
-        fallbackCost: product.costPrice === null ? null : Number(product.costPrice),
-      })
+      // Đồng bộ tồn cha như các luồng bán, trả, kiểm kê. Chỉ đồng bộ tồn, không tính lại giá vốn
+      // tóm tắt của cha: điều chỉnh tồn tay không phải nghiệp vụ giá vốn (ADR-0007, Hệ quả)
+      const aggStock = await aggregateVariantStock({ tx: tx as unknown as Db, productId })
+      await tx.update(products).set({ currentStock: aggStock }).where(eq(products.id, productId))
     } else {
       stockBefore = product.currentStock
       stockAfter = stockBefore + input.delta

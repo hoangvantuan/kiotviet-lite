@@ -8,6 +8,7 @@ import {
   purchaseOrderItems,
   purchaseOrders,
   suppliers,
+  users,
 } from '@kiotviet-lite/shared'
 
 import { recalcInflatedPurchaseCosts } from '../services/purchase-cost-recalc.service.js'
@@ -231,7 +232,7 @@ describe('Script tính lại giá vốn bị thổi (KHO-04, quyết định 7)'
     expect((await costOf(p.id)).costPrice).toBe(25_000)
   })
 
-  it('Sản phẩm có biến thể: liệt kê xem tay, --apply đồng bộ tồn và giá vốn cha theo biến thể', async () => {
+  it('Sản phẩm có biến thể: mặc định chỉ liệt kê, --apply không ghi; chỉ --apply-variant-parent mới đồng bộ cha', async () => {
     const parent = await createProduct(env, {
       withVariants: true,
       currentStock: 100,
@@ -251,14 +252,136 @@ describe('Script tính lại giá vốn bị thổi (KHO-04, quyết định 7)'
     ])
 
     const dry = await recalcInflatedPurchaseCosts({ db: env.db, storeId: env.storeId })
-    expect(dry.rows.find((r) => r.productId === parent.id)?.status).toBe('variant_parent')
+    const listed = dry.rows.find((r) => r.productId === parent.id)!
+    expect(listed.status).toBe('variant_parent')
+    // Xem trước số cha sẽ nhận nếu đồng bộ: (60×12.600 + 50×11.900) / 110 = 12.281,8 → 12.282
+    expect(listed.correctedCost).toBe(12_282)
     expect((await costOf(parent.id)).currentStock).toBe(100)
 
-    await recalcInflatedPurchaseCosts({ db: env.db, storeId: env.storeId, apply: true })
+    // --apply chỉ ghi dòng "Sửa được": giá vốn biến thể cũ nhập tay có thể sai, không ghi đè cha
+    const applied = await recalcInflatedPurchaseCosts({
+      db: env.db,
+      storeId: env.storeId,
+      apply: true,
+    })
+    expect(applied.rows.find((r) => r.productId === parent.id)?.applied).toBe(false)
+    expect((await costOf(parent.id)).costPrice).toBe(14_545)
+    expect((await costOf(parent.id)).currentStock).toBe(100)
+
+    const synced = await recalcInflatedPurchaseCosts({
+      db: env.db,
+      storeId: env.storeId,
+      applyVariantParent: true,
+    })
+    expect(synced.rows.find((r) => r.productId === parent.id)?.applied).toBe(true)
     const after = await costOf(parent.id)
     expect(after.currentStock).toBe(110)
-    // (60×12.600 + 50×11.900) / 110 = 12.281,8 → 12.282
     expect(after.costPrice).toBe(12_282)
+
+    // Đã đồng bộ thì không còn liệt kê mãi
+    const again = await recalcInflatedPurchaseCosts({ db: env.db, storeId: env.storeId })
+    expect(again.rows.find((r) => r.productId === parent.id)).toBeUndefined()
+  })
+
+  it('Sản phẩm có biến thể, dòng cũ không chiết khấu và cha đã khớp biến thể → không liệt kê', async () => {
+    const parent = await createProduct(env, {
+      withVariants: true,
+      currentStock: 110,
+      costPrice: 12_282,
+    })
+    const lon = await createVariant(env, parent.id, { stockQuantity: 60, costPrice: 12_600 })
+    await createVariant(env, parent.id, { stockQuantity: 50, costPrice: 11_900 })
+    await insertOldPurchaseOrder('PN-OLD-0007', [
+      {
+        productId: parent.id,
+        variantId: lon.id,
+        quantity: 10,
+        unitPrice: 12_600,
+        costAfter: 12_282,
+        stockAfter: 60,
+      },
+    ])
+    const res = await recalcInflatedPurchaseCosts({ db: env.db, storeId: env.storeId })
+    expect(res.rows).toHaveLength(0)
+  })
+
+  it('Hai dòng cùng sản phẩm trong một phiếu: chiết khấu ghép theo dòng, không trừ hai lần', async () => {
+    // Tồn 0 chưa có giá vốn. Phiếu X: dòng 1 10 × 10.000 chiết khấu dòng 10.000, dòng 2 cùng sản
+    // phẩm 10 × 10.000 không chiết khấu. Mã cũ: 10.000 rồi (10×10.000 + 100.000) / 20 = 10.000.
+    // Đúng: 9.000 rồi (10×9.000 + 100.000) / 20 = 9.500
+    const p = await createProduct(env, { currentStock: 0, costPrice: null })
+    await insertOldPurchaseOrder('PN-OLD-0008', [
+      {
+        productId: p.id,
+        quantity: 10,
+        unitPrice: 10_000,
+        discountAmount: 10_000,
+        costAfter: 10_000,
+        stockAfter: 10,
+      },
+      { productId: p.id, quantity: 10, unitPrice: 10_000, costAfter: 10_000, stockAfter: 20 },
+    ])
+    await env.db
+      .update(products)
+      .set({ currentStock: 20, costPrice: 10_000 })
+      .where(eq(products.id, p.id))
+
+    const res = await recalcInflatedPurchaseCosts({ db: env.db, storeId: env.storeId })
+    const row = res.rows.find((r) => r.productId === p.id)!
+    expect(row.status).toBe('fixable')
+    expect(row.correctedCost).toBe(9_500)
+    expect(row.discountMissed).toBe(10_000)
+    expect(row.affectedPurchaseOrders).toEqual(['PN-OLD-0008'])
+  })
+
+  it('Tồn dương nhưng chưa có giá vốn: mã cũ đặt lại giá vốn theo lô, tái lập đúng như vậy', async () => {
+    // Tồn đầu 10 chưa có giá vốn, phiếu cũ 10 × 10.000 chiết khấu dòng 10.000.
+    // Mã cũ: chưa có giá vốn nên giá vốn = đơn giá 10.000. Đúng: 90.000 / 10 = 9.000
+    const p = await createProduct(env, { currentStock: 10, costPrice: null })
+    await insertOldPurchaseOrder('PN-OLD-0009', [
+      {
+        productId: p.id,
+        quantity: 10,
+        unitPrice: 10_000,
+        discountAmount: 10_000,
+        costAfter: 10_000,
+        stockAfter: 20,
+      },
+    ])
+    await env.db
+      .update(products)
+      .set({ currentStock: 20, costPrice: 10_000 })
+      .where(eq(products.id, p.id))
+
+    const res = await recalcInflatedPurchaseCosts({ db: env.db, storeId: env.storeId })
+    const row = res.rows.find((r) => r.productId === p.id)!
+    expect(row.status).toBe('fixable')
+    expect(row.correctedCost).toBe(9_000)
+    expect(row.inflatedValue).toBe(20_000)
+  })
+
+  it('--apply khi cửa hàng không có chủ → báo lỗi, không bỏ qua im lặng; audit ghi tác nhân là script', async () => {
+    const p = await createProduct(env, { currentStock: 10, costPrice: 30_000 })
+    await insertOldPurchaseOrder(
+      'PN-OLD-0010',
+      [{ productId: p.id, quantity: 10, unitPrice: 30_000, costAfter: 30_000, stockAfter: 10 }],
+      10_000,
+    )
+    await env.db.update(users).set({ role: 'manager' }).where(eq(users.id, env.owner.id))
+    await expect(
+      recalcInflatedPurchaseCosts({ db: env.db, storeId: env.storeId, apply: true }),
+    ).rejects.toThrow(/chủ cửa hàng/)
+    expect((await costOf(p.id)).costPrice).toBe(30_000)
+
+    await env.db.update(users).set({ role: 'owner' }).where(eq(users.id, env.owner.id))
+    await recalcInflatedPurchaseCosts({ db: env.db, storeId: env.storeId, apply: true })
+    expect((await costOf(p.id)).costPrice).toBe(29_000)
+    const [audit] = await env.db
+      .select()
+      .from(auditLogs)
+      .where(and(eq(auditLogs.action, 'inventory.cost_recalculated'), eq(auditLogs.targetId, p.id)))
+    expect(audit?.userAgent).toBe('script cost:recalc')
+    expect((audit?.changes as { performedBy?: string }).performedBy).toBe('script cost:recalc')
   })
 
   it('Phiếu lập theo quy tắc mới không bị tính lại', async () => {

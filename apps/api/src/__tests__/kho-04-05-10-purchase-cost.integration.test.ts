@@ -273,11 +273,12 @@ describe('KHO-05: nhập biến thể cập nhật giá vốn biến thể và t
     expect(parentAfter.currentStock).toBe(110)
     expect(parentAfter.costPrice).toBe(13_864)
 
-    // Báo cáo tồn kho không còn thiếu 10 đơn vị; giá trị ≈ 1.525.000 (sai số làm tròn ≤ 55 đ)
+    // Báo cáo tồn kho không còn thiếu 10 đơn vị; giá trị cộng theo biến thể nên đúng tuyệt đối
     const report = await getInventoryCurrent(env.db, env.storeId)
     const row = report.rows.find((x) => x.productId === parent.id)!
     expect(row.currentStock).toBe(110)
-    expect(Math.abs(row.stockValue - 1_525_000)).toBeLessThanOrEqual(55)
+    expect(row.stockValue).toBe(1_525_000)
+    expect(report.summary.totalStockValue).toBe(1_525_000)
 
     // Giá vốn dùng khi bán (API cho luồng chụp giá vốn đơn bán)
     expect(
@@ -301,6 +302,37 @@ describe('KHO-05: nhập biến thể cập nhật giá vốn biến thể và t
     expect(ledger?.variantId).toBe(lon.id)
     expect(ledger?.unitCost).toBe(30_000)
     expect(ledger?.costAfter).toBe(15_500)
+  })
+
+  it('Báo cáo tồn kho cộng tồn × giá vốn từng biến thể, không lấy tồn cha × giá vốn cha (BC-11)', async () => {
+    // Tái hiện review PR #39: LON 60 × 15.500, CHAI 50 × 11.900, giá vốn cha tóm tắt 13.864, bán 50 lon.
+    // Bán không tính lại giá vốn cha: báo cáo cũ ra 60 × 13.864 = 831.840, thực 10 × 15.500 + 50 × 11.900
+    const parent = await createProduct(env, {
+      withVariants: true,
+      currentStock: 60,
+      costPrice: 13_864,
+    })
+    await createVariant(env, parent.id, { stockQuantity: 10, costPrice: 15_500 })
+    await createVariant(env, parent.id, { stockQuantity: 50, costPrice: 11_900 })
+    // Biến thể chưa có giá vốn riêng lấy giá vốn cha (ADR-0007); biến thể đã xóa không tính
+    await createVariant(env, parent.id, { stockQuantity: 2, costPrice: null })
+    const removed = await createVariant(env, parent.id, { stockQuantity: 5, costPrice: 99_000 })
+    await env.db
+      .update(productVariants)
+      .set({ deletedAt: new Date() })
+      .where(eq(productVariants.id, removed.id))
+    await env.db.update(products).set({ currentStock: 62 }).where(eq(products.id, parent.id))
+    const simple = await createProduct(env, { currentStock: 3, costPrice: 1_000 })
+
+    const report = await getInventoryCurrent(env.db, env.storeId)
+    const row = report.rows.find((x) => x.productId === parent.id)!
+    const expected = 10 * 15_500 + 50 * 11_900 + 2 * 13_864
+    expect(row.stockValue).toBe(expected)
+    // Giá vốn hiển thị là bình quân theo giá trị tồn, khớp tồn × giá vốn
+    expect(row.costPrice).toBe(Math.round(expected / 62))
+    expect(report.rows.find((x) => x.productId === simple.id)!.stockValue).toBe(3_000)
+    const all = report.rows.reduce((s, r) => s + r.stockValue, 0)
+    expect(report.summary.totalStockValue).toBe(all)
   })
 
   it('Biến thể chưa có giá vốn riêng kế thừa giá vốn cha làm giá vốn trước', async () => {
@@ -338,17 +370,25 @@ describe('KHO-05: nhập biến thể cập nhật giá vốn biến thể và t
     expect((await variantRow(v.id)).costPrice).toBe(27_000)
   })
 
-  it('Điều chỉnh tồn biến thể đồng bộ tồn cha ngay', async () => {
-    const parent = await createProduct(env, { withVariants: true, currentStock: 100 })
-    const v1 = await createVariant(env, parent.id, { stockQuantity: 50 })
-    await createVariant(env, parent.id, { stockQuantity: 50 })
+  it('Điều chỉnh tồn biến thể đồng bộ tồn cha ngay, không đổi giá vốn cha', async () => {
+    const parent = await createProduct(env, {
+      withVariants: true,
+      currentStock: 100,
+      costPrice: 13_000,
+    })
+    const v1 = await createVariant(env, parent.id, { stockQuantity: 50, costPrice: 12_600 })
+    await createVariant(env, parent.id, { stockQuantity: 50, costPrice: 11_900 })
     await recordManualAdjustment({
       db: env.db,
       actor: { userId: env.owner.id, storeId: env.storeId, role: 'owner' },
       productId: parent.id,
       input: { variantId: v1.id, delta: -5, reason: 'Hư hỏng' },
     })
-    expect((await productRow(parent.id)).currentStock).toBe(95)
+    const after = await productRow(parent.id)
+    expect(after.currentStock).toBe(95)
+    // Điều chỉnh tồn tay không phải nghiệp vụ giá vốn: giá vốn cha giữ nguyên như bán, trả, kiểm kê
+    expect(after.costPrice).toBe(13_000)
+    expect((await variantRow(v1.id)).costPrice).toBe(12_600)
   })
 })
 

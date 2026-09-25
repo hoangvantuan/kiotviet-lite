@@ -6,13 +6,20 @@
  *   pnpm --filter @kiotviet-lite/api cost:recalc -- --store <storeId>
  *   pnpm --filter @kiotviet-lite/api cost:recalc -- --json
  * Áp dụng (sao lưu DB trước):
- *   pnpm --filter @kiotviet-lite/api cost:recalc -- --apply
+ *   --apply                  ghi giá vốn đã tính lại cho sản phẩm "Sửa được" (không biến thể)
+ *   --apply-variant-parent   ghi đồng bộ tồn và giá vốn tóm tắt của sản phẩm cha "Có biến thể" theo
+ *                            giá vốn biến thể hiện tại. Giá vốn biến thể cũ nhập tay có thể sai, chỉ
+ *                            dùng sau khi đã kiểm tay từng biến thể.
+ * Audit `inventory.cost_recalculated` ghi dưới tài khoản chủ cửa hàng, tác nhân "script cost:recalc".
+ * Script không sửa giá vốn đã chụp trên dòng đơn bán cũ (order_items), nên lợi nhuận các đơn đã bán
+ * trước đó giữ nguyên.
  */
 import { closeDbPool, db } from '../db/index.js'
 import {
   recalcInflatedPurchaseCosts,
   type RecalcRow,
 } from '../services/purchase-cost-recalc.service.js'
+import { parseRecalcArgs } from './recalc-purchase-cost.args.js'
 
 const STATUS_LABEL: Record<RecalcRow['status'], string> = {
   fixable: 'Sửa được',
@@ -24,28 +31,25 @@ function vnd(n: number | null): string {
   return n === null ? '-' : n.toLocaleString('vi-VN')
 }
 
-function parseArgs(argv: string[]) {
-  const apply = argv.includes('--apply')
-  const json = argv.includes('--json')
-  const storeIdx = argv.indexOf('--store')
-  const storeId = storeIdx >= 0 ? argv[storeIdx + 1] : undefined
-  return { apply, json, storeId }
-}
-
 async function main() {
-  const { apply, json, storeId } = parseArgs(process.argv.slice(2))
-  const result = await recalcInflatedPurchaseCosts({ db, storeId, apply })
+  const { apply, applyVariantParent, json, storeId } = parseRecalcArgs(process.argv.slice(2))
+  const result = await recalcInflatedPurchaseCosts({ db, storeId, apply, applyVariantParent })
 
   if (json) {
     console.log(JSON.stringify(result, null, 2))
     return
   }
 
-  console.log(
-    apply
-      ? 'CHẾ ĐỘ ÁP DỤNG: giá vốn các dòng "Sửa được" và "Có biến thể" sẽ được ghi lại'
-      : 'CHẠY THỬ: chỉ báo cáo, không ghi gì. Thêm --apply để áp dụng.',
-  )
+  if (apply) console.log('ÁP DỤNG: ghi lại giá vốn các dòng "Sửa được"')
+  if (applyVariantParent) {
+    console.log('ÁP DỤNG: đồng bộ tồn và giá vốn cha các dòng "Có biến thể" theo biến thể')
+  }
+  if (!apply && !applyVariantParent) {
+    console.log(
+      'CHẠY THỬ: chỉ báo cáo, không ghi gì. --apply ghi dòng "Sửa được", --apply-variant-parent ghi dòng "Có biến thể".',
+    )
+  }
+  console.log('Script không sửa giá vốn đã chụp trên đơn bán cũ.')
   if (result.rows.length === 0) {
     console.log('Không có phiếu nhập cũ nào làm sai giá vốn.')
     return
