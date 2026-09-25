@@ -43,13 +43,15 @@ export function createBulkImportJobsRoutes(args: { db: Db; storageRoot?: string 
       })
     return cleanup
   }
-  const ready = (
-    process.env.NODE_ENV === 'production'
-      ? Promise.resolve()
-      : mkdir(storageRoot, { recursive: true, mode: 0o700 })
-  )
-    .then(() => verifyImportStorageRoot(storageRoot))
-    .then(async () => {
+  let started = false
+  const startup = async () => {
+    if (process.env.NODE_ENV !== 'production') {
+      await mkdir(storageRoot, { recursive: true, mode: 0o700 })
+    }
+    await verifyImportStorageRoot(storageRoot)
+    // Khôi phục job kẹt và khởi động poller/lịch dọn chỉ một lần, kể cả khi startup
+    // phải thử lại: chạy lại recover sau khi poller đã nhận job sẽ đánh hỏng job đang chạy.
+    if (!started) {
       const recovered = await recoverInterruptedBulkImportJobs(db)
       for (const job of recovered) {
         logger.warn(
@@ -63,12 +65,8 @@ export function createBulkImportJobsRoutes(args: { db: Db; storageRoot?: string 
           'Import job recovered after interruption',
         )
       }
-    })
-    .then(() => {
+      started = true
       pollBulkImportQueue({ db, storageRoot })
-      return cleanupExpired()
-    })
-    .then(() => {
       setInterval(() => {
         void cleanupExpired().catch((error: unknown) =>
           logger.error(
@@ -77,20 +75,29 @@ export function createBulkImportJobsRoutes(args: { db: Db; storageRoot?: string 
           ),
         )
       }, RETENTION_INTERVAL_MS).unref()
-    })
-  void ready.catch((error: unknown) =>
-    logger.error(
-      { errorCode: error instanceof ApiError ? error.code : 'UNEXPECTED_ERROR' },
-      'Import storage startup failed',
-    ),
-  )
+    }
+    await cleanupExpired()
+  }
+  // GL-10: promise bị reject không được giữ vĩnh viễn; request sau thử khởi động lại
+  // (ví dụ DB chưa sẵn sàng lúc API bật), thay vì trả 500 cho tới khi restart tiến trình.
+  let ready: Promise<void> | undefined
+  const ensureReady = () =>
+    (ready ??= startup().catch((error: unknown) => {
+      ready = undefined
+      logger.error(
+        { errorCode: error instanceof ApiError ? error.code : 'UNEXPECTED_ERROR' },
+        'Import storage startup failed',
+      )
+      throw error
+    }))
+  void ensureReady().catch(() => {})
 
   app.use('*', requireAuth(db))
   app.use('*', async (c, next) => {
     if (c.get('auth').role !== 'owner') {
       throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được nhập dữ liệu')
     }
-    await ready
+    await ensureReady()
     if (Date.now() - lastCleanup >= RETENTION_INTERVAL_MS) await cleanupExpired()
     await next()
   })

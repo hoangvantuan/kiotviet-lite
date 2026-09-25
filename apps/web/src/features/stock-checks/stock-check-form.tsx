@@ -31,7 +31,11 @@ import {
   type StockCheckPickerSelection,
   StockCheckProductPicker,
 } from './stock-check-product-picker'
-import { computeStockCheckTotals, formatDiff } from './stock-check-utils'
+import {
+  computeStockCheckTotals,
+  formatConfirmStockCheckError,
+  formatDiff,
+} from './stock-check-utils'
 import {
   useConfirmStockCheckMutation,
   useCreateStockCheckMutation,
@@ -230,23 +234,7 @@ export function StockCheckForm({ mode, initial }: StockCheckFormProps) {
       showSuccess(`Đã xác nhận phiếu kiểm ${confirmed.data.code}. Tồn kho đã cập nhật.`)
       navigate({ to: '/inventory/stock-checks/$id', params: { id: stockCheckId } })
     } catch (err) {
-      if (err instanceof ApiClientError) {
-        if (err.code === 'BUSINESS_RULE_VIOLATION') {
-          const details = err.details as
-            | { code?: string; items?: { productName: string; wouldBe: number }[] }
-            | undefined
-          if (details?.code === 'NEGATIVE_STOCK' && Array.isArray(details.items)) {
-            const list = details.items
-              .map((d) => `• ${d.productName} (sẽ còn ${d.wouldBe})`)
-              .join('\n')
-            showError(`Tồn sẽ âm sau khi xác nhận:\n${list}`)
-            return
-          }
-        }
-        showError(err.message)
-      } else {
-        showError('Không xác nhận được phiếu kiểm')
-      }
+      showError(formatConfirmStockCheckError(err))
     }
   }
 

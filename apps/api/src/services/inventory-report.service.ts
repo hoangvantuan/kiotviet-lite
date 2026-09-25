@@ -1,7 +1,8 @@
 import { subDays } from 'date-fns'
-import { and, eq, gt, isNull, sql } from 'drizzle-orm'
+import { and, eq, gt, isNull, type SQL, sql } from 'drizzle-orm'
 
 import {
+  categories,
   type InventoryCurrentResponse,
   type InventoryReorderResponse,
   type InventorySlowResponse,
@@ -25,11 +26,29 @@ const stockValueExpr = sql`CASE WHEN ${products.hasVariants} THEN (
   WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL
 ) ELSE ${products.currentStock}::bigint * coalesce(${products.costPrice}, 0) END`
 
+export interface InventoryReportOptions {
+  page?: number
+  pageSize?: number
+  /** uuid nhóm hàng (tính cả nhóm con) hoặc 'none' cho hàng chưa phân nhóm */
+  categoryId?: string
+}
+
+// Nhóm hàng có 2 cấp: chọn nhóm cha thì lấy luôn hàng thuộc các nhóm con, giống bộ lọc danh sách
+// sản phẩm. Ràng buộc store_id để nhóm của cửa hàng khác không lọc ra được gì (KHO-12)
+function categoryCondition(storeId: string, categoryId: string | undefined): SQL | undefined {
+  if (categoryId === undefined) return undefined
+  if (categoryId === 'none') return isNull(products.categoryId)
+  return sql`${products.categoryId} IN (
+    SELECT ${categories.id} FROM ${categories}
+    WHERE ${categories.storeId} = ${storeId}
+      AND (${categories.id} = ${categoryId} OR ${categories.parentId} = ${categoryId})
+  )`
+}
+
 export async function getInventoryCurrent(
   db: Db,
   storeId: string,
-  page?: number,
-  pageSize?: number,
+  { page, pageSize, categoryId }: InventoryReportOptions = {},
 ): Promise<InventoryCurrentResponse> {
   const isPaged = page !== undefined && pageSize !== undefined
   const offset = isPaged ? (page - 1) * pageSize : 0
@@ -37,6 +56,7 @@ export async function getInventoryCurrent(
     eq(products.storeId, storeId),
     eq(products.trackInventory, true),
     isNull(products.deletedAt),
+    categoryCondition(storeId, categoryId),
   )
 
   const query = db
@@ -95,8 +115,7 @@ export async function getInventoryCurrent(
 export async function getInventoryReorder(
   db: Db,
   storeId: string,
-  page?: number,
-  pageSize?: number,
+  { page, pageSize, categoryId }: InventoryReportOptions = {},
 ): Promise<InventoryReorderResponse> {
   const isPaged = page !== undefined && pageSize !== undefined
   const offset = isPaged ? (page - 1) * pageSize : 0
@@ -105,6 +124,7 @@ export async function getInventoryReorder(
     isNull(products.deletedAt),
     gt(products.minStock, 0),
     sql`${products.currentStock} <= ${products.minStock}`,
+    categoryCondition(storeId, categoryId),
   )
 
   const query = db
@@ -154,8 +174,7 @@ export async function getInventoryReorder(
 export async function getInventorySlow(
   db: Db,
   storeId: string,
-  page?: number,
-  pageSize?: number,
+  { page, pageSize, categoryId }: InventoryReportOptions = {},
 ): Promise<InventorySlowResponse> {
   const isPaged = page !== undefined && pageSize !== undefined
   const offset = isPaged ? (page - 1) * pageSize : 0
@@ -177,6 +196,7 @@ export async function getInventorySlow(
     isNull(products.deletedAt),
     gt(products.currentStock, 0),
     sql`(${lastSoldSubquery.lastSoldDate} IS NULL OR ${lastSoldSubquery.lastSoldDate} < ${thirtyDaysAgo.toISOString().slice(0, 10)})`,
+    categoryCondition(storeId, categoryId),
   )
 
   const query = db

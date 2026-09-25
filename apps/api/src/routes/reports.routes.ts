@@ -14,6 +14,7 @@ import {
 
 import type { Db } from '../db/index.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
+import { errorHandler } from '../middleware/error-handler.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import {
   getDashboardMetrics,
@@ -50,6 +51,7 @@ import {
 
 export function createReportsRoutes({ db }: { db: Db }) {
   const app = new Hono()
+  app.onError(errorHandler)
 
   app.use('*', requireAuth(db), requirePermission('reports.view'))
 
@@ -277,17 +279,19 @@ export function createReportsRoutes({ db }: { db: Db }) {
       tab: c.req.query('tab') || undefined,
       page: c.req.query('page') || undefined,
       pageSize: c.req.query('pageSize') || undefined,
+      categoryId: c.req.query('categoryId') || undefined,
     })
+    const options = { page: query.page, pageSize: query.pageSize, categoryId: query.categoryId }
     let data
     switch (query.tab) {
       case 'current':
-        data = await getInventoryCurrent(db, auth.storeId, query.page, query.pageSize)
+        data = await getInventoryCurrent(db, auth.storeId, options)
         break
       case 'reorder':
-        data = await getInventoryReorder(db, auth.storeId, query.page, query.pageSize)
+        data = await getInventoryReorder(db, auth.storeId, options)
         break
       case 'slow':
-        data = await getInventorySlow(db, auth.storeId, query.page, query.pageSize)
+        data = await getInventorySlow(db, auth.storeId, options)
         break
     }
     return c.json({ data })
@@ -298,7 +302,9 @@ export function createReportsRoutes({ db }: { db: Db }) {
     const auth = c.get('auth')
     const query = inventoryReportQuerySchema.parse({
       tab: c.req.query('tab') || undefined,
+      categoryId: c.req.query('categoryId') || undefined,
     })
+    const options = { categoryId: query.categoryId }
     const format = exportFormatSchema.parse(c.req.query('format'))
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
 
@@ -307,7 +313,7 @@ export function createReportsRoutes({ db }: { db: Db }) {
 
     switch (query.tab) {
       case 'current': {
-        const data = await getInventoryCurrent(db, auth.storeId)
+        const data = await getInventoryCurrent(db, auth.storeId, options)
         headers = ['Sản phẩm', 'SKU', 'Tồn kho', 'Giá vốn', 'Giá trị tồn']
         rows = data.rows.map((r) => [
           r.productName,
@@ -319,7 +325,7 @@ export function createReportsRoutes({ db }: { db: Db }) {
         break
       }
       case 'reorder': {
-        const data = await getInventoryReorder(db, auth.storeId)
+        const data = await getInventoryReorder(db, auth.storeId, options)
         headers = ['Sản phẩm', 'SKU', 'Tồn hiện tại', 'Định mức tối thiểu', 'Cần nhập']
         rows = data.rows.map((r) => [
           r.productName,
@@ -331,7 +337,7 @@ export function createReportsRoutes({ db }: { db: Db }) {
         break
       }
       case 'slow': {
-        const data = await getInventorySlow(db, auth.storeId)
+        const data = await getInventorySlow(db, auth.storeId, options)
         headers = ['Sản phẩm', 'SKU', 'Tồn kho', 'Ngày bán cuối', 'Số ngày']
         rows = data.rows.map((r) => [
           r.productName,

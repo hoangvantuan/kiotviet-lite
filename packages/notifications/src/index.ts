@@ -169,6 +169,16 @@ export async function notify(
 
 export type { NotificationDb, SendResult, Transport }
 export { notificationEventSchema }
+export {
+  createOpsAlerter,
+  formatOpsAlertText,
+  type OpsAlert,
+  type OpsAlertConfig,
+  opsAlertConfigFromEnv,
+  type OpsAlerter,
+  type OpsAlertResult,
+  type OpsAlertSeverity,
+} from './ops-alert.js'
 export { purgeOldDeliveries } from './purge.js'
 export { verifyWebhookSignature } from './transports/webhook.js'
 export type { NotificationEvent } from '@kiotviet-lite/shared'

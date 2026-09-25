@@ -39,6 +39,8 @@ export const inventoryReportQuerySchema = z.object({
   tab: inventoryReportTabSchema.default('current'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  // Lọc theo nhóm hàng (gồm cả nhóm con), 'none' là hàng chưa phân nhóm (KHO-12)
+  categoryId: z.union([z.string().uuid('Nhóm hàng không hợp lệ'), z.literal('none')]).optional(),
 })
 export type InventoryReportQuery = z.infer<typeof inventoryReportQuerySchema>
 

@@ -18,6 +18,8 @@ import { formatVndWithSuffix } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
 import { type CartItem, useCartStore } from '@/stores/use-cart-store'
 
+import { useCartItemCost } from '../hooks/use-cart-item-cost'
+
 interface EditUnitPriceDialogProps {
   item: CartItem | null
   open: boolean
@@ -27,6 +29,7 @@ interface EditUnitPriceDialogProps {
 export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceDialogProps) {
   const updateUnitPrice = useCartStore((s) => s.updateUnitPrice)
   const setPriceOverridePin = useCartStore((s) => s.setPriceOverridePin)
+  const cost = useCartItemCost(item, open)
 
   const [draftPrice, setDraftPrice] = useState<number | null>(null)
   const [reason, setReason] = useState('')
@@ -47,9 +50,9 @@ export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceD
 
   if (!item) return null
 
-  const costPrice = item.costPrice
-  const isCostUnknown = costPrice === null
-  const isBelowCost = !isCostUnknown && draftPrice !== null && draftPrice < costPrice
+  const isCostUnknown = cost.status === 'none'
+  const isCostUnavailable = cost.status === 'unavailable'
+  const isBelowCost = cost.status === 'known' && draftPrice !== null && draftPrice < cost.costPrice
 
   function applyEdit(price: number, reasonText: string | null, pinUsed: boolean) {
     updateUnitPrice(item!.id, price, {
@@ -106,7 +109,11 @@ export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceD
               <div className="mt-1 flex justify-between">
                 <span className="text-muted-foreground">Giá vốn:</span>
                 <span className="font-mono font-medium">
-                  {isCostUnknown ? '—' : formatVndWithSuffix(costPrice)}
+                  {cost.status === 'known'
+                    ? formatVndWithSuffix(cost.costPrice)
+                    : cost.status === 'loading'
+                      ? 'Đang tải...'
+                      : '—'}
                 </span>
               </div>
             </div>
@@ -124,6 +131,12 @@ export function EditUnitPriceDialog({ item, open, onOpenChange }: EditUnitPriceD
                 <p className="flex items-center gap-1.5 text-xs text-amber-600">
                   <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
                   Chưa có giá vốn, không thể xác minh giá dưới vốn.
+                </p>
+              )}
+              {isCostUnavailable && (
+                <p className="flex items-center gap-1.5 text-xs text-amber-600">
+                  <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                  Không tải được giá vốn, không thể xác minh giá dưới vốn.
                 </p>
               )}
               {isBelowCost && (

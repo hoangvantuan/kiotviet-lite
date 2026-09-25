@@ -7,6 +7,7 @@ import {
   type NegativeStockDetail,
   products,
   productVariants,
+  type StaleStockCheckItem,
   type StockCheckCounts,
   type StockCheckDetail,
   type StockCheckItemDetail,
@@ -504,6 +505,7 @@ export async function confirmStockCheck({
       throw new ApiError('BUSINESS_RULE_VIOLATION', 'Phiếu kiểm trống, không thể xác nhận')
     }
 
+    const staleItems: StaleStockCheckItem[] = []
     const negativeErrors: NegativeStockDetail[] = []
     interface ProcessedConfirm {
       itemId: string
@@ -516,9 +518,9 @@ export async function confirmStockCheck({
     }
     const processed: ProcessedConfirm[] = []
 
+    // Khoá dòng sản phẩm/biến thể theo thứ tự productId (itemRows đã sắp) rồi đối chiếu với tồn
+    // lúc đếm. Kể cả dòng chênh 0, vì tồn đổi thì số đếm đó cũng không còn đúng.
     for (const item of itemRows) {
-      if (item.diff === 0) continue
-
       const product = await loadProductForUpdate({
         tx: txDb,
         storeId: actor.storeId,
@@ -538,6 +540,22 @@ export async function confirmStockCheck({
       } else {
         currentStock = product.currentStock
       }
+
+      // KHO-02: tồn đã đổi sau lúc đếm (nhập, bán, trả, phiếu kiểm khác). Áp chênh lệch cũ lên tồn
+      // mới sẽ không đưa tồn về số thực đếm, còn đặt tồn bằng số đếm thì bỏ mất giao dịch xen giữa
+      // mà không ai biết hàng đó đã được đếm hay chưa. Chỉ người đếm trả lời được, nên chặn.
+      if (currentStock !== item.systemQty) {
+        staleItems.push({
+          productId: product.id,
+          variantId: item.variantId,
+          productName: item.productNameSnapshot,
+          variantLabel: item.variantLabelSnapshot,
+          systemQty: item.systemQty,
+          currentStock,
+        })
+        continue
+      }
+      if (item.diff === 0) continue
 
       const newStock = currentStock + item.diff
       if (newStock < 0) {
@@ -562,6 +580,14 @@ export async function confirmStockCheck({
         newStock,
         productCostPrice: product.costPrice === null ? null : Number(product.costPrice),
       })
+    }
+
+    if (staleItems.length > 0) {
+      throw new ApiError(
+        'BUSINESS_RULE_VIOLATION',
+        'Tồn kho đã thay đổi sau lúc đếm. Vui lòng đếm lại các dòng dưới đây và lưu phiếu trước khi xác nhận',
+        { code: 'STOCK_CHANGED_SINCE_COUNT', items: staleItems },
+      )
     }
 
     if (negativeErrors.length > 0) {

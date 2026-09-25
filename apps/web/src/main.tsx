@@ -1,36 +1,20 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
 
 import { meApi, refreshApi } from './features/auth/auth-api'
-import { showError } from './lib/toast'
+import { repriceTabAction } from './features/pos/hooks/use-auto-reprice'
+import { queryClient } from './lib/query-client'
 import { router } from './router'
+import { startCartPersistence } from './stores/cart-persistence'
 import { useAuthStore } from './stores/use-auth-store'
 
 import './globals.css'
 
-const queryClient = new QueryClient({
-  queryCache: new QueryCache({
-    onError: (error, query) => {
-      if (query.meta?.skipGlobalError) return
-      showError(error.message || 'Đã xảy ra lỗi khi tải dữ liệu')
-    },
-  }),
-  mutationCache: new MutationCache({
-    onError: (error, _variables, _context, mutation) => {
-      if (mutation.meta?.skipGlobalError) return
-      if (mutation.options.onError) return
-      showError(error.message || 'Đã xảy ra lỗi')
-    },
-  }),
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-      staleTime: 30_000,
-    },
-  },
+// Giỏ POS khôi phục khi đăng nhập hoặc tải lại; giá có thể đã đổi nên tính lại
+startCartPersistence({
+  onRestore: (tabIndexes) => tabIndexes.forEach((tab) => repriceTabAction(tab)),
 })
 
 async function bootAuth() {

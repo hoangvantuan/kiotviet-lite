@@ -90,6 +90,17 @@ export const negativeStockDetailSchema = z.object({
   wouldBe: z.number().int(),
 })
 
+// Dòng có tồn hệ thống đã đổi (nhập, bán, trả, phiếu kiểm khác) sau lúc đếm: số đếm cũ không
+// còn đối chiếu được với tồn hiện tại, phải đếm lại rồi lưu phiếu trước khi xác nhận (KHO-02)
+export const staleStockCheckItemSchema = z.object({
+  productId: z.string().uuid(),
+  variantId: z.string().uuid().nullable(),
+  productName: z.string(),
+  variantLabel: z.string().nullable(),
+  systemQty: z.number().int(),
+  currentStock: z.number().int(),
+})
+
 export type StockCheckStatus = z.infer<typeof stockCheckStatusSchema>
 export type StockCheckItemInput = z.infer<typeof stockCheckItemInputSchema>
 export type CreateStockCheckInput = z.infer<typeof createStockCheckBodySchema>
@@ -100,3 +111,4 @@ export type StockCheckListItem = z.infer<typeof stockCheckListItemSchema>
 export type StockCheckDetail = z.infer<typeof stockCheckDetailSchema>
 export type StockCheckCounts = z.infer<typeof stockCheckCountsSchema>
 export type NegativeStockDetail = z.infer<typeof negativeStockDetailSchema>
+export type StaleStockCheckItem = z.infer<typeof staleStockCheckItemSchema>

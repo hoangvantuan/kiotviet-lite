@@ -46,6 +46,12 @@ export default tseslint.config(
     },
   },
   {
+    files: ['apps/web/public/**/*.js'],
+    languageOptions: {
+      globals: globals.serviceworker,
+    },
+  },
+  {
     files: ['apps/api/src/**/*.ts'],
     languageOptions: {
       globals: globals.node,

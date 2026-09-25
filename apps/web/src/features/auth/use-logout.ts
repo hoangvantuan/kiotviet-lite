@@ -1,16 +1,15 @@
 import { useMutation } from '@tanstack/react-query'
 
-import { useAuthStore } from '@/stores/use-auth-store'
+import { endSession } from '@/lib/session'
 
 import { logoutApi } from './auth-api'
 
-export function useLogout() {
-  const clearAuth = useAuthStore((s) => s.clearAuth)
+export const logoutMutationOptions = {
+  mutationFn: () => logoutApi(),
+  // Dọn dữ liệu phiên kể cả khi gọi API thất bại (mất mạng), máy vẫn phải sạch
+  onSettled: () => endSession(),
+}
 
-  return useMutation({
-    mutationFn: () => logoutApi(),
-    onSettled: () => {
-      clearAuth()
-    },
-  })
+export function useLogout() {
+  return useMutation(logoutMutationOptions)
 }
