@@ -23,6 +23,7 @@ import {
 
 import type { Db } from '../db/index.js'
 import {
+  orderItemCogsExpr,
   orderItemNetQuantityExpr,
   orderItemNetRevenueExpr,
   orderNetRevenueExpr,
@@ -100,11 +101,10 @@ async function queryMetrics(db: Db, storeId: string, start: Date, end: Date): Pr
 
     db
       .select({
-        totalCogs: sql<number>`coalesce(sum(coalesce(${products.costPrice}, 0) * ${orderItemNetQuantityExpr()}), 0)`,
+        totalCogs: sql<number>`coalesce(sum(${orderItemCogsExpr()}), 0)`,
       })
       .from(orderItems)
       .innerJoin(orders, eq(orderItems.orderId, orders.id))
-      .innerJoin(products, eq(orderItems.productId, products.id))
       .where(whereCondition),
   ])
 
@@ -251,11 +251,10 @@ async function getProfitSparkline(db: Db, storeId: string): Promise<number[]> {
     db
       .select({
         day: truncExpr.as('day'),
-        cogs: sql<number>`coalesce(sum(coalesce(${products.costPrice}, 0) * ${orderItemNetQuantityExpr()}), 0)`,
+        cogs: sql<number>`coalesce(sum(${orderItemCogsExpr()}), 0)`,
       })
       .from(orderItems)
       .innerJoin(orders, eq(orderItems.orderId, orders.id))
-      .innerJoin(products, eq(orderItems.productId, products.id))
       .where(whereCondition)
       .groupBy(truncExpr),
   ])

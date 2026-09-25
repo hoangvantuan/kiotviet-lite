@@ -41,7 +41,13 @@ interface OrderDetailResponse {
   customerPhone: string | null
   customerGroupName: string | null
   customerCurrentDebt?: number | null
+  /** Nợ trước đơn, chụp lúc bán (BC-08). NULL với đơn cũ không suy ra được */
   oldDebt?: number | null
+  customerDebtBefore?: number | null
+  /** Khách đã trả lúc bán; paidAmount là số đã trả tới hiện tại */
+  paidAmountAtSale?: number | null
+  /** Nợ ghi cho đơn lúc bán; debtAmount là nợ còn lại hiện tại */
+  debtAmountAtSale?: number | null
   priceListId?: string | null
   priceListName?: string | null
   createdByName: string | null
@@ -169,6 +175,11 @@ export interface ReturnableItem {
   purchasedQuantity: number
   returnedQuantity: number
   remainingQuantity: number
+  /** Thành tiền dòng lúc bán, sau chiết khấu dòng, trước chiết khấu đơn */
+  lineTotal: number
+  /** Phần chiết khấu đơn đã phân bổ cho dòng lúc bán (ADR-0010) */
+  orderDiscountAllocated: number
+  conversionFactor: number
 }
 
 export interface OrderReturnItemDetail {

@@ -133,7 +133,7 @@ export function OrderInvoiceThermal({ order, store, isReprint, printSettings }: 
         )}
         {order.change > 0 && <ThermalRow label="Tiền thừa" value={formatVnd(order.change)} />}
         {showOldDebt && order.oldDebt != null && order.oldDebt > 0 && (
-          <ThermalRow label="Nợ cũ" value={formatVnd(order.oldDebt)} />
+          <ThermalRow label="Nợ trước đơn" value={formatVnd(order.oldDebt)} />
         )}
         {showNewDebt && order.debtAmount > 0 && (
           <ThermalRow label="Còn nợ" value={formatVnd(order.debtAmount)} />
@@ -316,7 +316,7 @@ export function OrderInvoiceA4({ order, store, isReprint, printSettings }: Invoi
         <p>Thanh toán: {PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}</p>
         <p>Đã trả: {formatVndWithSuffix(order.paidAmount)}</p>
         {showOldDebt && order.oldDebt != null && order.oldDebt > 0 && (
-          <p>Nợ cũ: {formatVndWithSuffix(order.oldDebt)}</p>
+          <p>Nợ trước đơn: {formatVndWithSuffix(order.oldDebt)}</p>
         )}
         {showNewDebt && order.debtAmount > 0 && (
           <p className="font-medium">Còn nợ: {formatVndWithSuffix(order.debtAmount)}</p>
@@ -512,7 +512,7 @@ export function OrderInvoiceA5({ order, store, isReprint, printSettings }: Invoi
           {formatVndWithSuffix(order.paidAmount)}
         </p>
         {showOldDebt && order.oldDebt != null && order.oldDebt > 0 && (
-          <p>Nợ cũ: {formatVndWithSuffix(order.oldDebt)}</p>
+          <p>Nợ trước đơn: {formatVndWithSuffix(order.oldDebt)}</p>
         )}
         {showNewDebt && order.debtAmount > 0 && (
           <p className="font-medium">Còn nợ: {formatVndWithSuffix(order.debtAmount)}</p>

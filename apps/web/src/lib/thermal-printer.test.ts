@@ -90,7 +90,7 @@ describe('thermal-printer buildOrderReceipt', () => {
     expect(text).toContain('Ghi chú: Giao hàng buổi sáng')
     expect(text).toContain('Cảm ơn và hẹn gặp lại!')
     expect(text).not.toContain('SUA-001')
-    expect(text).not.toContain('Nợ cũ:')
+    expect(text).not.toContain('Nợ trước đơn:')
     expect(text).not.toContain('Giá vốn:')
   })
 
@@ -116,12 +116,12 @@ describe('thermal-printer buildOrderReceipt', () => {
     expect(text).not.toContain('SĐT: 0987654321')
     expect(text).not.toContain('Chiết khấu:')
     expect(text).not.toContain('Còn nợ:')
-    expect(text).not.toContain('Nợ cũ:')
+    expect(text).not.toContain('Nợ trước đơn:')
     expect(text).not.toContain('Ghi chú:')
     expect(text).toContain('Tạm biệt!')
   })
 
-  it('in SKU, Nợ cũ, Giá vốn khi các toggle tương ứng được bật', () => {
+  it('in SKU, Nợ trước đơn, Giá vốn khi các toggle tương ứng được bật', () => {
     const options: PrintOptions = {
       paperWidth: '80mm',
       showCustomerName: true,
@@ -139,7 +139,7 @@ describe('thermal-printer buildOrderReceipt', () => {
 
     expect(text).toContain('[SUA-001]')
     expect(text).toContain('[BM-002]')
-    expect(text).toContain('Nợ cũ:')
+    expect(text).toContain('Nợ trước đơn:')
     expect(text).toContain('Còn nợ:')
     expect(text).toContain('Giá vốn:')
   })

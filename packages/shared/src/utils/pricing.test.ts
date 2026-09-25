@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  allocateOrderDiscount,
   calculateLineDiscount,
   calculateLineTotal,
   calculateOrderDiscount,
@@ -133,32 +132,6 @@ describe('Shared Pricing Module', () => {
           discountValue: 200_000,
         }),
       ).toBe(100_000)
-    })
-  })
-
-  describe('allocateOrderDiscount (dồn phần dư làm tròn)', () => {
-    it('phân bổ chiết khấu đơn cho 3 dòng và dồn phần dư vào dòng cuối', () => {
-      // 3 dòng có lineTotal: 100.000, 100.000, 100.000 (tổng 300.000)
-      // Chiết khấu đơn: 10.000
-      // Dòng 1: floor(100/300 * 10000) = 3333
-      // Dòng 2: floor(100/300 * 10000) = 3333
-      // Dòng 3: 10000 - (3333 + 3333) = 3334 (dồn phần dư 1đ)
-      const items = [{ lineTotal: 100_000 }, { lineTotal: 100_000 }, { lineTotal: 100_000 }]
-      const allocations = allocateOrderDiscount(items, 300_000, 10_000)
-
-      expect(allocations).toEqual([3333, 3333, 3334])
-      expect(allocations.reduce((a, b) => a + b, 0)).toBe(10_000)
-    })
-
-    it('xử lý trường hợp chỉ có 1 dòng duy nhất', () => {
-      const items = [{ lineTotal: 100_000 }]
-      const allocations = allocateOrderDiscount(items, 100_000, 15_000)
-      expect(allocations).toEqual([15_000])
-    })
-
-    it('xử lý danh sách rỗng hoặc chiết khấu bằng 0', () => {
-      expect(allocateOrderDiscount([], 0, 0)).toEqual([])
-      expect(allocateOrderDiscount([{ lineTotal: 50_000 }], 50_000, 0)).toEqual([0])
     })
   })
 

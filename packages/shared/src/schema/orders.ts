@@ -57,6 +57,11 @@ export const orders = pgTable(
     reviewedBy: uuid().references(() => users.id),
     reviewedAt: timestamp({ withTimezone: true }),
     reviewNote: text(),
+    // BC-08 (ADR-0010): số liệu lúc bán để in lại hóa đơn cũ không đổi theo phát sinh sau.
+    // Khách đã trả lúc bán (total - nợ ghi cho đơn); NULL chỉ với đơn cũ không suy ra được.
+    paidAmountAtSale: bigint({ mode: 'number' }),
+    // Công nợ của khách ngay trước đơn này; NULL với khách lẻ và đơn cũ trước bản chụp.
+    customerDebtBefore: bigint({ mode: 'number' }),
     priceListId: uuid().references(() => priceLists.id, { onDelete: 'set null' }),
     priceListName: varchar({ length: 100 }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

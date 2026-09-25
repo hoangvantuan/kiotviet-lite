@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, like, sql } from 'drizzle-orm'
 
 import {
+  computeReturnLineRefund,
   type CreateOrderReturnInput,
   debts,
   inventoryTransactions,
@@ -14,6 +15,7 @@ import {
   products,
   productVariants,
   type ReturnableItem,
+  splitReturnRefund,
   type UserRole,
   users,
 } from '@kiotviet-lite/shared'
@@ -114,22 +116,16 @@ export async function getReturnableItems({
       variantName: orderItems.variantName,
       unit: orderItems.unit,
       unitPrice: orderItems.unitPrice,
+      lineTotal: orderItems.lineTotal,
+      orderDiscountAllocated: orderItems.orderDiscountAllocated,
+      conversionFactor: orderItems.conversionFactor,
       purchasedQuantity: orderItems.quantity,
       returnedQuantity: sql<number>`COALESCE(SUM(${orderReturnItems.quantity}), 0)::int`,
     })
     .from(orderItems)
     .leftJoin(orderReturnItems, eq(orderReturnItems.orderItemId, orderItems.id))
     .where(eq(orderItems.orderId, orderId))
-    .groupBy(
-      orderItems.id,
-      orderItems.productId,
-      orderItems.variantId,
-      orderItems.productName,
-      orderItems.variantName,
-      orderItems.unit,
-      orderItems.unitPrice,
-      orderItems.quantity,
-    )
+    .groupBy(orderItems.id)
     .orderBy(asc(orderItems.createdAt))
 
   return items.map((it) => ({
@@ -143,12 +139,16 @@ export async function getReturnableItems({
     purchasedQuantity: Number(it.purchasedQuantity),
     returnedQuantity: Number(it.returnedQuantity),
     remainingQuantity: Number(it.purchasedQuantity) - Number(it.returnedQuantity),
+    lineTotal: Number(it.lineTotal),
+    orderDiscountAllocated: Number(it.orderDiscountAllocated),
+    conversionFactor: Number(it.conversionFactor),
   }))
 }
 
 // ---------------------------------------------------------------------------
 // createReturn
-// TODO(Phase 2): order_items does not store unitConversionId — returns cannot determine original unit conversion. Add column in Phase 2.
+// Tiền hoàn và số hoàn kho đọc ảnh chụp trên dòng đơn (ADR-0010): thành tiền dòng, chiết khấu
+// đơn đã phân bổ, hệ số quy đổi.
 // ---------------------------------------------------------------------------
 
 export interface CreateReturnDeps {
@@ -176,8 +176,6 @@ export async function createReturn({
         storeId: orders.storeId,
         orderNumber: orders.orderNumber,
         customerId: orders.customerId,
-        subtotal: orders.subtotal,
-        total: orders.total,
         paymentStatus: orders.paymentStatus,
         status: orders.status,
       })
@@ -196,7 +194,6 @@ export async function createReturn({
     }
 
     // 2. Load order items + returned quantities
-    // H6: cần lineTotal và discountAmount để tính hoàn tiền chính xác (có chiết khấu)
     const existingItems = await tx
       .select({
         orderItemId: orderItems.id,
@@ -207,34 +204,15 @@ export async function createReturn({
         unit: orderItems.unit,
         unitPrice: orderItems.unitPrice,
         lineTotal: orderItems.lineTotal,
-        discountAmount: orderItems.discountAmount,
+        orderDiscountAllocated: orderItems.orderDiscountAllocated,
+        conversionFactor: orderItems.conversionFactor,
         purchasedQuantity: orderItems.quantity,
         returnedQuantity: sql<number>`COALESCE(SUM(${orderReturnItems.quantity}), 0)::int`,
-        returnedLineTotal: sql<number>`COALESCE(SUM(${orderReturnItems.lineTotal}), 0)::int`,
       })
       .from(orderItems)
       .leftJoin(orderReturnItems, eq(orderReturnItems.orderItemId, orderItems.id))
       .where(eq(orderItems.orderId, orderId))
-      .groupBy(
-        orderItems.id,
-        orderItems.productId,
-        orderItems.variantId,
-        orderItems.productName,
-        orderItems.variantName,
-        orderItems.unit,
-        orderItems.unitPrice,
-        orderItems.lineTotal,
-        orderItems.discountAmount,
-        orderItems.quantity,
-      )
-
-    const priorReturns = await tx
-      .select({
-        priorTotal: sql<number>`COALESCE(SUM(${orderReturns.totalAmount}), 0)::int`,
-      })
-      .from(orderReturns)
-      .where(eq(orderReturns.orderId, orderId))
-    const priorRefundTotal = Number(priorReturns[0]?.priorTotal ?? 0)
+      .groupBy(orderItems.id)
 
     const itemMap = new Map(existingItems.map((it) => [it.orderItemId, it]))
     // CRIT C3: trừ dồn số đã trả trong chính phiếu này. itemMap là snapshot đầu
@@ -243,7 +221,7 @@ export async function createReturn({
     const consumedInThisReturn = new Map<string, number>()
 
     // 3. Validate return items + calculate total
-    let unroundedSubtotal = 0
+    let totalAmount = 0
     const validatedItems: Array<{
       orderItemId: string
       productId: string
@@ -253,6 +231,7 @@ export async function createReturn({
       unit: string | null
       unitPrice: number
       quantity: number
+      conversionFactor: number
       lineTotal: number
       reason: string
     }> = []
@@ -274,23 +253,19 @@ export async function createReturn({
       }
       consumedInThisReturn.set(returnItem.orderItemId, alreadyConsumed + returnItem.quantity)
 
-      // H6: tính hoàn tiền theo tỷ lệ lineTotal/quantity (đã trừ chiết khấu dòng)
-      // Nếu dòng này được trả hết toàn bộ số lượng còn lại:
-      // tiền hoàn = lineTotal dòng - tổng tiền đã hoàn cho dòng này ở các phiếu trước (không để rơi phần dư làm tròn)
-      const purchasedQty = Number(existing.purchasedQuantity)
-      const itemLineTotal = Number(existing.lineTotal)
-      const alreadyReturnedQty = Number(existing.returnedQuantity)
-      const alreadyReturnedLineTotal = Number(existing.returnedLineTotal)
-      const totalReturnedForThisItem = alreadyReturnedQty + alreadyConsumed + returnItem.quantity
-
-      let lineTotal: number
-      if (totalReturnedForThisItem >= purchasedQty) {
-        lineTotal = Math.max(0, itemLineTotal - alreadyReturnedLineTotal)
-      } else {
-        const effectiveUnitPrice = purchasedQty > 0 ? Math.floor(itemLineTotal / purchasedQty) : 0
-        lineTotal = effectiveUnitPrice * returnItem.quantity
-      }
-      unroundedSubtotal += lineTotal
+      // TIEN-101: tiền hoàn tính trên giá trị ròng của dòng (sau chiết khấu dòng và phần chiết khấu
+      // đơn đã phân bổ lúc bán), lấy chênh lệch lũy kế theo số lượng. Tỷ lệ chiết khấu áp đúng một
+      // lần nên trả N lần cộng lại bằng trả một lần, trả hết dòng hoàn đúng giá trị ròng cả dòng.
+      const lineTotal = computeReturnLineRefund(
+        {
+          quantity: Number(existing.purchasedQuantity),
+          lineTotal: Number(existing.lineTotal),
+          orderDiscountAllocated: Number(existing.orderDiscountAllocated),
+        },
+        Number(existing.returnedQuantity) + alreadyConsumed,
+        returnItem.quantity,
+      )
+      totalAmount += lineTotal
 
       validatedItems.push({
         orderItemId: returnItem.orderItemId,
@@ -301,50 +276,10 @@ export async function createReturn({
         unit: existing.unit ?? null,
         unitPrice: Number(existing.unitPrice),
         quantity: returnItem.quantity,
+        conversionFactor: Number(existing.conversionFactor),
         lineTotal,
         reason: returnItem.reason,
       })
-    }
-
-    // Kiểm tra xem sau phiếu này, toàn bộ đơn hàng đã được trả hết chưa
-    let isEntireOrderFullyReturned = true
-    for (const it of existingItems) {
-      const consumed = consumedInThisReturn.get(it.orderItemId) ?? 0
-      const totalReturned = Number(it.returnedQuantity) + consumed
-      if (totalReturned < Number(it.purchasedQuantity)) {
-        isEntireOrderFullyReturned = false
-        break
-      }
-    }
-
-    // H6: phân bổ chiết khấu cấp đơn hàng theo tỷ lệ
-    // Nếu đơn được trả hết toàn bộ: totalAmount = orders.total - tổng đã hoàn ở các phiếu trước
-    // Dồn phần dư làm tròn vào dòng cuối cùng để tổng các dòng khớp 100% với totalAmount
-    const orderTotal = Number(order.total)
-    const orderSubtotal = Number(order.subtotal)
-    const hasOrderDiscount = orderSubtotal > 0 && orderTotal < orderSubtotal
-
-    let totalAmount = unroundedSubtotal
-    if (isEntireOrderFullyReturned) {
-      totalAmount = Math.max(0, orderTotal - priorRefundTotal)
-    } else if (hasOrderDiscount) {
-      const ratio = orderTotal / orderSubtotal
-      totalAmount = Math.round(unroundedSubtotal * ratio)
-    }
-
-    if (hasOrderDiscount || isEntireOrderFullyReturned) {
-      const ratio = orderSubtotal > 0 ? orderTotal / orderSubtotal : 1
-      let allocatedSum = 0
-      for (let i = 0; i < validatedItems.length; i++) {
-        if (i === validatedItems.length - 1) {
-          // Dòng cuối cùng: nhận toàn bộ phần dư còn lại để tổng khớp chính xác
-          validatedItems[i]!.lineTotal = Math.max(0, totalAmount - allocatedSum)
-        } else {
-          const allocated = Math.floor(validatedItems[i]!.lineTotal * ratio)
-          validatedItems[i]!.lineTotal = allocated
-          allocatedSum += allocated
-        }
-      }
     }
 
     // 4. Generate return number with retry
@@ -352,10 +287,6 @@ export async function createReturn({
     let createdReturnId: string | null = null
     let attempts = 0
     const MAX_ATTEMPTS = 3
-
-    // 5. Determine refund vs debt reduction
-    let refundAmount = 0
-    let debtReductionAmount = 0
 
     // TIEN-103: thứ tự khóa chung orders, customers, debts, products (customer-debt-ledger.service.ts)
     if (order.customerId) {
@@ -384,12 +315,11 @@ export async function createReturn({
       productIds: validatedItems.map((item) => item.productId),
     })
 
-    if (debt && Number(debt.remaining) > 0) {
-      debtReductionAmount = Math.min(totalAmount, Number(debt.remaining))
-      refundAmount = totalAmount - debtReductionAmount
-    } else {
-      refundAmount = totalAmount
-    }
+    // 5. Tách phần cấn nợ còn lại của đơn và phần hoàn tiền (cùng hàm hộp trả hàng ở web dùng)
+    const { debtReductionAmount, refundAmount } = splitReturnRefund(
+      totalAmount,
+      debt ? Number(debt.remaining) : 0,
+    )
 
     // 6. Insert order_returns
     while (attempts < MAX_ATTEMPTS && createdReturnId === null) {
@@ -468,6 +398,8 @@ export async function createReturn({
       })
 
       if (product.trackInventory) {
+        // POS-03: trả 1 thùng hoàn đủ số đơn vị gốc trong thùng, theo hệ số chụp lúc bán
+        const restoreQty = item.quantity * item.conversionFactor
         let newStock: number
 
         if (item.variantId) {
@@ -476,7 +408,7 @@ export async function createReturn({
             productId: item.productId,
             variantId: item.variantId,
           })
-          newStock = variant.stockQuantity + item.quantity
+          newStock = variant.stockQuantity + restoreQty
           await tx
             .update(productVariants)
             .set({ stockQuantity: newStock })
@@ -490,7 +422,7 @@ export async function createReturn({
         } else {
           await tx
             .update(products)
-            .set({ currentStock: sql`${products.currentStock} + ${item.quantity}` })
+            .set({ currentStock: sql`${products.currentStock} + ${restoreQty}` })
             .where(eq(products.id, item.productId))
 
           const [updated] = await tx
@@ -498,7 +430,7 @@ export async function createReturn({
             .from(products)
             .where(eq(products.id, item.productId))
             .limit(1)
-          newStock = updated?.currentStock ?? product.currentStock + item.quantity
+          newStock = updated?.currentStock ?? product.currentStock + restoreQty
         }
 
         await tx.insert(inventoryTransactions).values({
@@ -506,7 +438,7 @@ export async function createReturn({
           productId: item.productId,
           variantId: item.variantId,
           type: 'return',
-          quantity: item.quantity,
+          quantity: restoreQty,
           stockAfter: newStock,
           note: returnNumber,
           createdBy: actor.userId,

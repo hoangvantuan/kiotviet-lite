@@ -31,7 +31,7 @@ test.describe('Kiểm thử E2E: Cài đặt Mẫu in Hóa đơn và Hiệu lự
       await showSkuSwitch.click()
     }
 
-    // 5. Bật toggle Nợ cũ (showOldDebt)
+    // 5. Bật toggle Nợ trước đơn (showOldDebt)
     const showOldDebtSwitch = page.locator('#showOldDebt')
     const isOldDebtChecked = await showOldDebtSwitch.getAttribute('aria-checked')
     if (isOldDebtChecked !== 'true') {

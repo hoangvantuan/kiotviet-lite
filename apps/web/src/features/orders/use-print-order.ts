@@ -87,6 +87,25 @@ export interface PrintOrderParams {
 }
 
 /**
+ * BC-08: hóa đơn in lại phải giữ số liệu lúc bán, không lấy số đã trả và nợ còn lại hiện tại
+ * (đã đổi sau khi thu nợ hay trả hàng). Đơn cũ không có ảnh chụp thì giữ số hiện tại.
+ */
+export function withSaleSnapshot<
+  T extends {
+    paidAmount: number
+    debtAmount: number
+    paidAmountAtSale?: number | null
+    debtAmountAtSale?: number | null
+  },
+>(order: T): T {
+  return {
+    ...order,
+    paidAmount: order.paidAmountAtSale ?? order.paidAmount,
+    debtAmount: order.debtAmountAtSale ?? order.debtAmount,
+  }
+}
+
+/**
  * Map dữ liệu order (từ API hoặc POS) sang ThermalOrder dùng cho print.
  * Tránh duplicate mapping logic ở nhiều nơi (M3).
  */

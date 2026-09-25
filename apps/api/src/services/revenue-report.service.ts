@@ -6,7 +6,6 @@ import {
   customers,
   debts,
   orderItems,
-  orderReturnItems,
   orders,
   products,
   type RevenueByCustomerResponse,
@@ -260,23 +259,16 @@ export async function getRevenueByDimension(
   const dimensionId = dimension === 'thuong-hieu' ? brands.id : categories.id
   const dimensionName = dimension === 'thuong-hieu' ? brands.name : categories.name
 
-  // Group first by order: order-level discounts must be allocated across the
-  // original line totals before subtracting the already-discounted refunds.
+  // BC-10: chiết khấu đơn đã phân bổ xuống dòng lúc bán (order_items.order_discount_allocated),
+  // nên cộng doanh thu ròng từng dòng theo chiều là đủ, cùng biểu thức với báo cáo theo sản phẩm.
   const result = await db
     .select({
-      orderId: orders.id,
-      orderTotal: orders.total,
       dimensionId,
       name: dimensionName,
-      gross: sql<number>`coalesce(sum(${orderItems.lineTotal}), 0)`.as('gross'),
-      refunded: sql<number>`coalesce(sum(coalesce((
-        SELECT sum(${orderReturnItems.lineTotal})
-        FROM ${orderReturnItems}
-        WHERE ${orderReturnItems.orderItemId} = ${orderItems.id}
-      ), 0)), 0)`.as('refunded'),
+      revenue: sql<number>`coalesce(sum(${orderItemNetRevenueExpr()}), 0)`.as('revenue'),
     })
-    .from(orders)
-    .leftJoin(orderItems, eq(orderItems.orderId, orders.id))
+    .from(orderItems)
+    .innerJoin(orders, eq(orderItems.orderId, orders.id))
     .leftJoin(products, and(eq(products.id, orderItems.productId), eq(products.storeId, storeId)))
     .leftJoin(brands, and(eq(brands.id, products.brandId), eq(brands.storeId, storeId)))
     .leftJoin(
@@ -291,42 +283,18 @@ export async function getRevenueByDimension(
         lte(orders.createdAt, end),
       ),
     )
-    .groupBy(orders.id, dimensionId, dimensionName)
-    .orderBy(orders.id, dimensionId)
+    .groupBy(dimensionId, dimensionName)
 
   const totals = new Map<
     string | null,
     { dimensionId: string | null; name: string; revenue: number }
   >()
-  for (let i = 0; i < result.length; ) {
-    let endIndex = i + 1
-    let grossTotal = Number(result[i]!.gross)
-    while (endIndex < result.length && result[endIndex]!.orderId === result[i]!.orderId) {
-      grossTotal += Number(result[endIndex]!.gross)
-      endIndex++
-    }
-    const orderTotal = Number(result[i]!.orderTotal)
-    let allocated = 0
-    for (let j = i; j < endIndex; j++) {
-      const group = result[j]!
-      const grossShare =
-        j === endIndex - 1
-          ? orderTotal - allocated
-          : grossTotal > 0
-            ? Math.floor((Number(group.gross) * orderTotal) / grossTotal)
-            : 0
-      allocated += grossShare
-      const revenue = grossShare - Number(group.refunded)
-      const existing = totals.get(group.dimensionId)
-      if (existing) existing.revenue += revenue
-      else
-        totals.set(group.dimensionId, {
-          dimensionId: group.dimensionId,
-          name: group.name ?? 'Chưa phân loại',
-          revenue,
-        })
-    }
-    i = endIndex
+  for (const row of result) {
+    totals.set(row.dimensionId, {
+      dimensionId: row.dimensionId,
+      name: row.name ?? 'Chưa phân loại',
+      revenue: Number(row.revenue),
+    })
   }
 
   const grouped = [...totals.values()]

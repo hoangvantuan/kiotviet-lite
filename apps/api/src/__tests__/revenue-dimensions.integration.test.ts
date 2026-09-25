@@ -88,6 +88,8 @@ beforeEach(async () => {
         unitPrice: 100,
         quantity: 1,
         lineTotal: 100,
+        // Chiết khấu đơn 30 phân bổ lúc bán theo thành tiền dòng (ADR-0010)
+        orderDiscountAllocated: 10,
       },
       {
         orderId: sale!.id,
@@ -96,6 +98,7 @@ beforeEach(async () => {
         unitPrice: 100,
         quantity: 2,
         lineTotal: 200,
+        orderDiscountAllocated: 20,
       },
     ])
     .returning()

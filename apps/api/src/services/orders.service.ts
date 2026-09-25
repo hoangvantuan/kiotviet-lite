@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, ilike, isNull, like, lte, type SQL, sql } from 'drizzle-orm'
 
 import {
+  allocateOrderDiscount,
   calculateLineTotal,
   type CreateOrderInput,
   customerGroups,
@@ -455,6 +456,8 @@ export async function createOrder({
               clientId,
               note: input.note ?? null,
               status: 'completed',
+              // BC-08: số khách đã trả lúc bán, để in lại hóa đơn không đổi theo phát sinh sau
+              paidAmountAtSale: input.total - debtAmount,
             })
             .returning({ id: orders.id })
           if (!row) {
@@ -489,6 +492,8 @@ export async function createOrder({
 
       // Process items: insert order_items + deduct stock
       const processedItems: OrderDetailItem[] = []
+      // Thành tiền thực ghi từng dòng, để phân bổ chiết khấu đơn sau vòng lặp (ADR-0010)
+      const insertedLines: Array<{ id: string; lineTotal: number }> = []
       let isPriceMismatchAdjusted = false
       let negativeStockAlertsEnabled: boolean | undefined
       const mismatchedLines: Array<{
@@ -695,8 +700,12 @@ export async function createOrder({
             priceOverridePinUsed: effectivePriceOverridePinUsed,
             priceSource: itemPriceSource,
             priceSourceDetail: itemPriceSourceDetail,
+            // R2: ảnh chụp hệ số quy đổi và giá vốn một đơn vị gốc, đọc sau khi đã khóa sản phẩm
+            conversionFactor: conv?.conversionFactor ?? 1,
+            unitCost: itemCostPrice,
           })
           .returning({ id: orderItems.id })
+        insertedLines.push({ id: insertedItem!.id, lineTotal: effectiveLineTotal })
 
         if (effectivePriceOverride) {
           await logAction({
@@ -783,8 +792,14 @@ export async function createOrder({
           priceSource: itemPriceSource,
           priceSourceDetail: itemPriceSourceDetail,
           sku: itemSku,
-          // BC-13: chỉ người có quyền xem giá vốn nhận con số; người khác chỉ nhận cờ
-          ...(canViewCost ? { costPrice: itemCostPrice } : {}),
+          // BC-13: chỉ người có quyền xem giá vốn nhận con số; người khác chỉ nhận cờ.
+          // Giá vốn MỘT đơn vị bán (đã nhân hệ số quy đổi), như chi tiết đơn.
+          ...(canViewCost
+            ? {
+                costPrice:
+                  itemCostPrice !== null ? itemCostPrice * (conv?.conversionFactor ?? 1) : null,
+              }
+            : {}),
           belowCost: lineBelowCost,
         })
 
@@ -877,6 +892,22 @@ export async function createOrder({
               })
             }
           }
+        }
+      }
+
+      // BC-10, TIEN-101: chia chiết khấu đơn xuống từng dòng một lần lúc bán. Báo cáo theo sản
+      // phẩm và tiền hoàn khi trả hàng đọc lại đúng phần này, không tự chia lại.
+      if (input.discountAmount > 0) {
+        const shares = allocateOrderDiscount(
+          insertedLines.map((l) => l.lineTotal),
+          input.discountAmount,
+        )
+        for (const [idx, l] of insertedLines.entries()) {
+          if (shares[idx]! === 0) continue
+          await tx
+            .update(orderItems)
+            .set({ orderDiscountAllocated: shares[idx]! })
+            .where(eq(orderItems.id, l.id))
         }
       }
 
@@ -1271,6 +1302,11 @@ export async function createOrder({
         printCustomer = customerRows[0] ?? null
         oldDebt = customerRows[0]?.currentDebt != null ? Number(customerRows[0].currentDebt) : 0
         customerCurrentDebt = oldDebt
+      }
+
+      // BC-08: công nợ khách ngay trước đơn, chụp để in lại không lấy công nợ hiện tại
+      if (oldDebt !== null && printCustomer) {
+        await tx.update(orders).set({ customerDebtBefore: oldDebt }).where(eq(orders.id, createdId))
       }
 
       let reviewStatus: OrderReviewStatus = 'none'
@@ -1817,7 +1853,13 @@ export interface OrderDetailFull {
   customerPhone: string | null
   customerGroupName: string | null
   customerCurrentDebt?: number | null
+  /** Công nợ khách ngay trước đơn, chụp lúc bán (BC-08). null với khách lẻ và đơn cũ */
   oldDebt?: number | null
+  customerDebtBefore: number | null
+  /** Khách đã trả lúc bán; null với đơn cũ không suy ra được */
+  paidAmountAtSale: number | null
+  /** Nợ ghi cho đơn lúc bán (total - paidAmountAtSale) */
+  debtAmountAtSale: number | null
   priceListId?: string | null
   priceListName?: string | null
   createdByName: string | null
@@ -1886,6 +1928,8 @@ export async function getOrderDetail({
       note: orders.note,
       status: orders.status,
       debtLimitExceeded: orders.debtLimitExceeded,
+      paidAmountAtSale: orders.paidAmountAtSale,
+      customerDebtBefore: orders.customerDebtBefore,
       reviewStatus: orders.reviewStatus,
       policyViolations: orders.policyViolations,
       reviewedBy: orders.reviewedBy,
@@ -1931,9 +1975,9 @@ export async function getOrderDetail({
       priceSource: orderItems.priceSource,
       priceSourceDetail: orderItems.priceSourceDetail,
       sku: sql<string | null>`COALESCE(${productVariants.sku}, ${products.sku})`.as('sku'),
-      costPrice: sql<
-        number | null
-      >`COALESCE(${productVariants.costPrice}, ${products.costPrice})`.as('cost_price'),
+      // BC-01, BC-08: giá vốn một đơn vị bán chụp lúc bán, không đọc giá vốn hiện tại
+      unitCost: orderItems.unitCost,
+      conversionFactor: orderItems.conversionFactor,
     })
     .from(orderItems)
     .leftJoin(products, eq(orderItems.productId, products.id))
@@ -1959,7 +2003,11 @@ export async function getOrderDetail({
     priceSource: it.priceSource ?? null,
     priceSourceDetail: it.priceSourceDetail ?? null,
     sku: it.sku ?? null,
-    ...(canViewCost ? { costPrice: it.costPrice != null ? Number(it.costPrice) : null } : {}),
+    ...(canViewCost
+      ? {
+          costPrice: it.unitCost != null ? Number(it.unitCost) * Number(it.conversionFactor) : null,
+        }
+      : {}),
   }))
 
   const totalAmount = Number(row.total)
@@ -1968,7 +2016,10 @@ export async function getOrderDetail({
   // TIEN-01: phần nợ được cấn trừ khi trả hàng hay điều chỉnh giảm không phải tiền đã thu
   const paidAmount = totalAmount - debtAmount - Number(row.debtReduced ?? 0)
   const currentDebt = row.customerCurrentDebt != null ? Number(row.customerCurrentDebt) : null
-  const oldDebt = currentDebt != null ? Math.max(0, currentDebt - debtAmount) : null
+  // BC-08: in lại dùng số chụp lúc bán; đơn cũ chưa có ảnh chụp thì không suy từ công nợ hiện tại
+  const customerDebtBefore = row.customerDebtBefore != null ? Number(row.customerDebtBefore) : null
+  const paidAmountAtSale = row.paidAmountAtSale != null ? Number(row.paidAmountAtSale) : null
+  const debtAmountAtSale = paidAmountAtSale != null ? totalAmount - paidAmountAtSale : null
 
   let reviewedByName: string | null = null
   if (row.reviewedBy) {
@@ -1989,7 +2040,10 @@ export async function getOrderDetail({
     customerPhone: row.customerPhone ?? null,
     customerGroupName: row.customerGroupName ?? null,
     customerCurrentDebt: currentDebt,
-    oldDebt,
+    oldDebt: customerDebtBefore,
+    customerDebtBefore,
+    paidAmountAtSale,
+    debtAmountAtSale,
     priceListId: row.priceListId ?? null,
     priceListName: row.priceListName ?? null,
     createdByName: row.createdByName ?? null,

@@ -4,6 +4,7 @@ import { orderItems, orders, products, type ProfitReportResponse } from '@kiotvi
 
 import type { Db } from '../db/index.js'
 import {
+  orderItemCogsExpr,
   orderItemNetQuantityExpr,
   orderItemNetRevenueExpr,
   revenueStatusFilter,
@@ -25,9 +26,7 @@ export async function getProfitReport(
       sku: sql<string>`max(${products.sku})`.as('sku'),
       quantity: sql<number>`sum(${orderItemNetQuantityExpr()})`.as('quantity'),
       revenue: sql<number>`sum(${orderItemNetRevenueExpr()})`.as('revenue'),
-      cogs: sql<number>`sum(coalesce(${products.costPrice}, 0) * ${orderItemNetQuantityExpr()})`.as(
-        'cogs',
-      ),
+      cogs: sql<number>`sum(${orderItemCogsExpr()})`.as('cogs'),
     })
     .from(orderItems)
     .innerJoin(orders, eq(orderItems.orderId, orders.id))
@@ -41,9 +40,7 @@ export async function getProfitReport(
       ),
     )
     .groupBy(orderItems.productId)
-    .orderBy(
-      sql`(sum(${orderItemNetRevenueExpr()}) - sum(coalesce(${products.costPrice}, 0) * ${orderItemNetQuantityExpr()})) DESC`,
-    )
+    .orderBy(sql`(sum(${orderItemNetRevenueExpr()}) - sum(${orderItemCogsExpr()})) DESC`)
 
   const rows = result.map((r) => {
     const revenue = Number(r.revenue)

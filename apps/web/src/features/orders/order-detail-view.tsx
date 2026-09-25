@@ -26,7 +26,12 @@ import { OrderInvoiceA4, OrderInvoiceA5, OrderInvoiceThermal } from './order-inv
 import { PrintButton } from './print-button'
 import { ReturnDialog } from './return-dialog'
 import { useOrderQuery, useOrderReturnsQuery } from './use-orders'
-import { type PrintFormat, toThermalOrder, usePrintOrder } from './use-print-order'
+import {
+  type PrintFormat,
+  toThermalOrder,
+  usePrintOrder,
+  withSaleSnapshot,
+} from './use-print-order'
 
 interface OrderDetailViewProps {
   orderId: string
@@ -54,7 +59,7 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
     if (!order) return
     const storeInfo = { name: user?.name ?? 'Cửa hàng' }
     printOrder({
-      order: toThermalOrder(order),
+      order: toThermalOrder(withSaleSnapshot(order)),
       store: storeInfo,
       format,
       isReprint: true,
@@ -85,6 +90,7 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
 
   const order = query.data
   const returns = returnsQuery.data ?? []
+  const invoiceOrder = withSaleSnapshot(order)
   const showReturnButton =
     canReturn && (order.status === 'completed' || order.status === 'partial_return')
 
@@ -382,12 +388,13 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
         onOpenChange={setReturnOpen}
         orderId={orderId}
         orderNumber={order.orderNumber}
+        outstandingDebt={order.debtAmount}
       />
 
       {/* Print templates (hidden, only visible during window.print) */}
-      <OrderInvoiceThermal order={order} isReprint printSettings={printSettingsQuery.data} />
-      <OrderInvoiceA4 order={order} isReprint printSettings={printSettingsQuery.data} />
-      <OrderInvoiceA5 order={order} isReprint printSettings={printSettingsQuery.data} />
+      <OrderInvoiceThermal order={invoiceOrder} isReprint printSettings={printSettingsQuery.data} />
+      <OrderInvoiceA4 order={invoiceOrder} isReprint printSettings={printSettingsQuery.data} />
+      <OrderInvoiceA5 order={invoiceOrder} isReprint printSettings={printSettingsQuery.data} />
     </div>
   )
 }
