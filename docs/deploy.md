@@ -48,6 +48,26 @@ Tắt và cập nhật: khi nhận SIGTERM, API ngừng nhận job nhập mới,
 hàng đợi và chạy lại từ đầu sau khi API lên), đóng pool DB rồi thoát; tổng tối đa 30 giây
 (`stop_grace_period: 45s`).
 
+### Kiểm tra sau migration 0047 (sổ công nợ R3)
+
+Migration `0047_debt_ledger_backfill` đưa dữ liệu công nợ cũ về sổ công nợ duy nhất
+([ADR-0008](adr/0008-so-cong-no-khach-duy-nhat.md)). Công nợ khách (`customers.current_debt`)
+giữ nguyên; migration chỉ sửa khoản nợ: chuyển phần `paid` không có phiếu thu sang giảm trừ,
+tạo khoản "Điều chỉnh tăng nợ" cho phần công nợ lớn hơn tổng khoản nợ, và giảm trừ FIFO khi
+tổng khoản nợ lớn hơn công nợ. Mỗi khách bị điều chỉnh có một dòng nhật ký thao tác
+"Điền ngược sổ công nợ R3" (`audit_logs.action = 'debt_ledger.backfilled'`) ghi số trước và sau.
+
+Liệt kê các khách đã được điều chỉnh (chỉ đọc, chạy lại bao nhiêu lần cũng được):
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  < apps/api/scripts/debt-ledger-backfill-report.sql
+```
+
+Không có dòng nào nghĩa là dữ liệu cũ đã khớp sẵn. Nên đối chiếu danh sách với chủ cửa hàng,
+nhất là các khoản nợ có ghi chú "Điều chỉnh điền ngược".
+
 ## 3. Cloudflare Tunnel
 
 cloudflared chạy trên host, trỏ vào nginx:

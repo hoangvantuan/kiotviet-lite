@@ -4,6 +4,7 @@ import { customers, products, productVariants } from '@kiotviet-lite/shared'
 
 import { createOrdersRoutes } from '../routes/orders.routes.js'
 import { createPosRoutes } from '../routes/pos.routes.js'
+import { seedOpeningDebtsForFixtureCustomers } from './helpers/debt-ledger.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 beforeAll(() => {
@@ -42,6 +43,7 @@ describe('Orders detail and print data fields', () => {
         currentDebt: 150_000,
       })
       .returning()
+    await seedOpeningDebtsForFixtureCustomers(env.db, env.storeId)
 
     // 2. Tạo product 1 không variant
     const [prod1] = await env.db

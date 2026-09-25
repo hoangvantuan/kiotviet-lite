@@ -29,6 +29,7 @@ import { logger } from '../lib/logger.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
+import { addCustomerDebt, lockCustomerForDebt } from './customer-debt-ledger.service.js'
 import { emitEvent } from './notification-emitter.js'
 import { verifyPin } from './pin.service.js'
 import { resolveProductPrice } from './pricing.service.js'
@@ -36,6 +37,7 @@ import {
   aggregateVariantStock,
   loadProductForUpdate,
   loadVariantForUpdate,
+  lockProductsInIdOrder,
 } from './products-lock.helper.js'
 import { assertStoreOwned } from './store-scope.js'
 
@@ -415,6 +417,12 @@ export async function createOrder({
     const result = await db.transaction(async (tx) => {
       const txDb = tx as unknown as Db
 
+      // TIEN-103: thứ tự khóa chung customers, debts, products (customer-debt-ledger.service.ts).
+      // Đơn ghi nợ khóa khách trước khi đụng tới kho, thay vì chỉ khóa lúc ghi nợ ở cuối.
+      if (debtAmount > 0 && input.customerId) {
+        await lockCustomerForDebt(txDb, { storeId: actor.storeId, customerId: input.customerId })
+      }
+
       // Generate order number with retry on unique violation
       let orderNumber = await generateOrderNumber({ tx: txDb, storeId: actor.storeId })
       let createdId: string | null = null
@@ -496,6 +504,12 @@ export async function createOrder({
         devicePriceSourceDetail: string | null
         serverPriceSourceDetail: string | null
       }> = []
+
+      await lockProductsInIdOrder({
+        tx: txDb,
+        storeId: actor.storeId,
+        productIds: input.items.map((item) => item.productId),
+      })
 
       for (const item of input.items) {
         const product = await loadProductForUpdate({
@@ -1102,21 +1116,14 @@ export async function createOrder({
           }
         }
 
-        // Insert debt record
-        await tx.insert(debts).values({
+        // Ghi khoản nợ và công nợ khách qua sổ công nợ (R3), khách đã khóa ở trên
+        await addCustomerDebt(txDb, {
           storeId: actor.storeId,
-          orderId: createdId,
           customerId: input.customerId,
+          type: 'sale',
+          orderId: createdId,
           amount: debtAmount,
-          paid: 0,
-          remaining: debtAmount,
         })
-
-        // Update customer current_debt atomically
-        await tx
-          .update(customers)
-          .set({ currentDebt: sql`${customers.currentDebt} + ${debtAmount}` })
-          .where(eq(customers.id, input.customerId))
 
         // Audit debt.created
         await logAction({
@@ -1568,6 +1575,7 @@ export async function listOrders({
       note: orders.note,
       createdAt: orders.createdAt,
       debtRemaining: debts.remaining,
+      debtReduced: debts.reduced,
     })
     .from(orders)
     .leftJoin(
@@ -1597,7 +1605,8 @@ export async function listOrders({
     const totalAmount = Number(r.total)
     // CRIT-3: Lấy debtAmount từ debts.remaining (source of truth)
     const debtAmount = r.debtRemaining != null ? Number(r.debtRemaining) : 0
-    const paidAmount = totalAmount - debtAmount
+    // TIEN-01: phần nợ được cấn trừ khi trả hàng hay điều chỉnh giảm không phải tiền đã thu
+    const paidAmount = totalAmount - debtAmount - Number(r.debtReduced ?? 0)
 
     return {
       id: r.id,
@@ -1704,6 +1713,7 @@ export async function getOrderDetail({
       createdAt: orders.createdAt,
       updatedAt: orders.updatedAt,
       debtRemaining: debts.remaining,
+      debtReduced: debts.reduced,
     })
     .from(orders)
     .leftJoin(
@@ -1774,7 +1784,8 @@ export async function getOrderDetail({
   const totalAmount = Number(row.total)
   // CRIT-3: Lấy debtAmount từ debts.remaining (source of truth)
   const debtAmount = row.debtRemaining != null ? Number(row.debtRemaining) : 0
-  const paidAmount = totalAmount - debtAmount
+  // TIEN-01: phần nợ được cấn trừ khi trả hàng hay điều chỉnh giảm không phải tiền đã thu
+  const paidAmount = totalAmount - debtAmount - Number(row.debtReduced ?? 0)
   const currentDebt = row.customerCurrentDebt != null ? Number(row.customerCurrentDebt) : null
   const oldDebt = currentDebt != null ? Math.max(0, currentDebt - debtAmount) : null
 

@@ -36,6 +36,7 @@ import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
+import { settleCustomerDebts } from './customer-debt-ledger.service.js'
 
 export interface ReceiptsActor {
   userId: string
@@ -79,6 +80,7 @@ export function toOpenDebtItem(row: {
   id: string
   orderId: string | null
   orderCode: string | null
+  type: OpenDebtItem['type']
   amount: number
   paid: number
   remaining: number
@@ -88,6 +90,7 @@ export function toOpenDebtItem(row: {
     id: row.id,
     orderId: row.orderId,
     orderCode: row.orderCode,
+    type: row.type,
     amount: Number(row.amount),
     paid: Number(row.paid),
     remaining: Number(row.remaining),
@@ -216,6 +219,7 @@ async function loadReceiptAllocations(
       debtId: receiptAllocations.debtId,
       orderId: debts.orderId,
       orderCode: orders.orderNumber,
+      type: debts.type,
       amount: receiptAllocations.amount,
       debtCreatedAt: debts.createdAt,
     })
@@ -230,6 +234,7 @@ async function loadReceiptAllocations(
     debtId: row.debtId,
     orderId: row.orderId,
     orderCode: row.orderCode,
+    type: row.type,
     amount: Number(row.amount),
     debtRemainingAfter: debtAfterMap?.get(row.debtId) ?? null,
   }))
@@ -308,6 +313,7 @@ export async function listCustomerOpenDebts({
       id: debts.id,
       orderId: debts.orderId,
       orderCode: orders.orderNumber,
+      type: debts.type,
       amount: debts.amount,
       paid: debts.paid,
       remaining: debts.remaining,
@@ -446,26 +452,19 @@ export async function createReceipt({
       })),
     )
 
-    // 7. Update từng debt
+    // 7. Ghi bút toán thu qua sổ công nợ: trừ từng khoản nợ và công nợ khách cùng lúc
+    await settleCustomerDebts(txDb, {
+      storeId: actor.storeId,
+      customerId: input.customerId,
+      kind: 'payment',
+      allocations: input.allocations,
+    })
     const debtAfterMap = new Map<string, number>()
     for (const a of input.allocations) {
-      await tx
-        .update(debts)
-        .set({
-          paid: sql`${debts.paid} + ${a.amount}`,
-          remaining: sql`${debts.remaining} - ${a.amount}`,
-        })
-        .where(eq(debts.id, a.debtId))
       const before = debtMap.get(a.debtId)!
       debtAfterMap.set(a.debtId, Number(before.remaining) - a.amount)
     }
-
-    // 8. Update customer.current_debt
     const debtAfter = debtBefore - input.amount
-    await tx
-      .update(customers)
-      .set({ currentDebt: sql`${customers.currentDebt} - ${input.amount}` })
-      .where(eq(customers.id, input.customerId))
 
     // 9. Audit log
     await logAction({

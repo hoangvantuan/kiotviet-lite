@@ -1,12 +1,23 @@
 import { sql } from 'drizzle-orm'
-import { bigint, index, pgEnum, pgTable, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import {
+  bigint,
+  check,
+  index,
+  pgEnum,
+  pgTable,
+  timestamp,
+  uniqueIndex,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
 import { customers } from './customers.js'
 import { orders } from './orders.js'
 import { stores } from './stores.js'
 
-export const debtTypeEnum = pgEnum('debt_type', ['sale', 'opening'])
+// sale: nợ sinh từ đơn bán; opening: nợ đầu kỳ (ADR-0003); adjustment: điều chỉnh tăng nợ
+export const debtTypeEnum = pgEnum('debt_type', ['sale', 'opening', 'adjustment'])
 
 export const debts = pgTable(
   'debts',
@@ -23,8 +34,13 @@ export const debts = pgTable(
       .references(() => customers.id, { onDelete: 'restrict' }),
     type: debtTypeEnum().notNull().default('sale'),
     amount: bigint({ mode: 'number' }).notNull(),
+    // Tiền thực thu qua phiếu thu (không gồm cấn trừ trả hàng hay điều chỉnh giảm)
     paid: bigint({ mode: 'number' }).notNull().default(0),
+    // Phần nợ được giảm mà không thu tiền: cấn trừ trả hàng, điều chỉnh giảm nợ
+    reduced: bigint({ mode: 'number' }).notNull().default(0),
     remaining: bigint({ mode: 'number' }).notNull(),
+    // Ghi chú nguồn của khoản nợ không gắn đơn (lý do điều chỉnh tăng, điền ngược)
+    note: varchar({ length: 500 }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -40,5 +56,14 @@ export const debts = pgTable(
     index('idx_debts_store_remaining_created')
       .on(table.storeId, table.createdAt)
       .where(sql`${table.remaining} > 0`),
+    // Mỗi khoản nợ: phát sinh = đã thu + giảm trừ + còn lại
+    check(
+      'chk_debts_balance',
+      sql`${table.amount} = ${table.paid} + ${table.reduced} + ${table.remaining}`,
+    ),
+    check(
+      'chk_debts_non_negative',
+      sql`${table.paid} >= 0 AND ${table.reduced} >= 0 AND ${table.remaining} >= 0`,
+    ),
   ],
 )

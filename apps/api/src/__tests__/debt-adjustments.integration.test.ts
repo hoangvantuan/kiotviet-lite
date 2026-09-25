@@ -6,6 +6,10 @@ import { auditLogs, customers, stores, users } from '@kiotviet-lite/shared'
 import { signAccessToken } from '../lib/jwt.js'
 import { hashPassword } from '../lib/password.js'
 import { createDebtAdjustmentsRoutes } from '../routes/debt-adjustments.routes.js'
+import {
+  expectDebtLedgerConsistent,
+  seedOpeningDebtsForFixtureCustomers,
+} from './helpers/debt-ledger.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 beforeAll(() => {
@@ -99,6 +103,8 @@ async function setup(): Promise<Env> {
       currentDebt: 200_000,
     })
     .returning()
+  await seedOpeningDebtsForFixtureCustomers(base.db, base.storeId)
+  await seedOpeningDebtsForFixtureCustomers(base.db, storeB!.id)
 
   return {
     base,
@@ -110,6 +116,15 @@ async function setup(): Promise<Env> {
     storeBOwnerId: storeBOwner!.id,
     storeBOwnerAuth: { Authorization: `Bearer ${storeBAccessToken}` },
     storeBCustomerId: storeBCustomer!.id,
+  }
+}
+
+/** Diễn đạt "đổi nợ từ X thành Y" theo hợp đồng mới: chiều, số chênh và số nợ đang thấy. */
+function change(expectedCurrentDebt: number, newAmount: number) {
+  return {
+    direction: newAmount > expectedCurrentDebt ? ('increase' as const) : ('decrease' as const),
+    amount: Math.abs(newAmount - expectedCurrentDebt),
+    expectedCurrentDebt,
   }
 }
 
@@ -171,6 +186,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await expectDebtLedgerConsistent(env.base.db, env.base.storeId)
+  await expectDebtLedgerConsistent(env.base.db, env.storeBId)
   await env.base.close()
 })
 
@@ -184,7 +201,7 @@ describe('POST /', () => {
       '/',
       {
         customerId: env.customerWithDebtId,
-        newAmount: 300_000,
+        ...change(500_000, 300_000),
         reason: 'Xoá nợ xấu, KH đã thanh toán bên ngoài',
       },
       env.base.owner.authHeader,
@@ -211,7 +228,7 @@ describe('POST /', () => {
       '/',
       {
         customerId: env.customerWithDebtId,
-        newAmount: 800_000,
+        ...change(500_000, 800_000),
         reason: 'Ghi nhận nợ bổ sung',
       },
       env.base.owner.authHeader,
@@ -234,7 +251,7 @@ describe('POST /', () => {
       '/',
       {
         customerId: env.customerWithDebtId,
-        newAmount: 0,
+        ...change(500_000, 0),
         reason: 'Xoá toàn bộ nợ',
       },
       env.base.owner.authHeader,
@@ -256,7 +273,7 @@ describe('POST /', () => {
       '/',
       {
         customerId: env.customerWithDebtId,
-        newAmount: 100_000,
+        ...change(500_000, 100_000),
         reason: 'Test manager',
       },
       env.base.manager.authHeader,
@@ -272,7 +289,7 @@ describe('POST /', () => {
       '/',
       {
         customerId: env.customerWithDebtId,
-        newAmount: 100_000,
+        ...change(500_000, 100_000),
         reason: 'Test staff',
       },
       env.base.staff.authHeader,
@@ -287,7 +304,7 @@ describe('POST /', () => {
       '/',
       {
         customerId: env.storeBCustomerId,
-        newAmount: 100_000,
+        ...change(200_000, 100_000),
         reason: 'Cross-store test',
       },
       env.base.owner.authHeader,
@@ -302,7 +319,7 @@ describe('POST /', () => {
       '/',
       {
         customerId: env.deletedCustomerId,
-        newAmount: 50_000,
+        ...change(100_000, 50_000),
         reason: 'Deleted customer test',
       },
       env.base.owner.authHeader,
@@ -310,32 +327,56 @@ describe('POST /', () => {
     expect(res.status).toBe(404)
   })
 
-  it('newAmount === currentDebt, 422', async () => {
+  it('TIEN-102: số nợ đang thấy đã cũ, 409 và không ghi gì', async () => {
     const res = await jsonReq<ErrResp>(
       env,
       'POST',
       '/',
       {
         customerId: env.customerWithDebtId,
-        newAmount: 500_000,
-        reason: 'Same amount test',
+        direction: 'decrease',
+        amount: 100_000,
+        expectedCurrentDebt: 400_000,
+        reason: 'Số nợ đã cũ',
       },
       env.base.owner.authHeader,
     )
-    expect(res.status).toBe(422)
-    expect(res.body.error.message).toContain('phải khác')
+    expect(res.status).toBe(409)
+    expect(res.body.error.code).toBe('CONFLICT')
+    expect(res.body.error.message).toContain('tải lại')
+
+    const [customer] = await env.base.db
+      .select({ currentDebt: customers.currentDebt })
+      .from(customers)
+      .where(eq(customers.id, env.customerWithDebtId))
+    expect(Number(customer!.currentDebt)).toBe(500_000)
   })
 
-  it('newAmount < 0, 400 VALIDATION_ERROR', async () => {
+  it('số tiền 0 hoặc âm, 400 VALIDATION_ERROR', async () => {
+    for (const amount of [0, -1000]) {
+      const res = await jsonReq<ErrResp>(
+        env,
+        'POST',
+        '/',
+        {
+          customerId: env.customerWithDebtId,
+          direction: 'decrease',
+          amount,
+          expectedCurrentDebt: 500_000,
+          reason: 'Negative test',
+        },
+        env.base.owner.authHeader,
+      )
+      expect(res.status).toBe(400)
+    }
+  })
+
+  it('hợp đồng cũ gửi newAmount, 400 VALIDATION_ERROR', async () => {
     const res = await jsonReq<ErrResp>(
       env,
       'POST',
       '/',
-      {
-        customerId: env.customerWithDebtId,
-        newAmount: -1000,
-        reason: 'Negative test',
-      },
+      { customerId: env.customerWithDebtId, newAmount: 0, reason: 'Xoá nợ' },
       env.base.owner.authHeader,
     )
     expect(res.status).toBe(400)
@@ -348,7 +389,7 @@ describe('POST /', () => {
       '/',
       {
         customerId: env.customerWithDebtId,
-        newAmount: 100_000,
+        ...change(500_000, 100_000),
         reason: '',
       },
       env.base.owner.authHeader,
@@ -363,7 +404,7 @@ describe('POST /', () => {
       '/',
       {
         customerId: env.customerWithDebtId,
-        newAmount: 200_000,
+        ...change(500_000, 200_000),
         reason: 'Audit test',
       },
       env.base.owner.authHeader,
@@ -383,10 +424,12 @@ describe('POST /', () => {
     expect(changes.oldAmount).toBe(500_000)
     expect(changes.newAmount).toBe(200_000)
     expect(changes.reason).toBe('Audit test')
+    expect(changes.direction).toBe('decrease')
+    expect(changes.amount).toBe(300_000)
     expect(changes.customerName).toBe('KH Có Nợ')
   })
 
-  it('race condition: 2 điều chỉnh tuần tự, oldAmount phiếu 2 = newAmount phiếu 1', async () => {
+  it('2 điều chỉnh tuần tự, oldAmount phiếu 2 = newAmount phiếu 1', async () => {
     // Phiếu 1
     const res1 = await jsonReq<{ data: AdjustmentResp }>(
       env,
@@ -394,7 +437,7 @@ describe('POST /', () => {
       '/',
       {
         customerId: env.customerWithDebtId,
-        newAmount: 300_000,
+        ...change(500_000, 300_000),
         reason: 'Phiếu 1',
       },
       env.base.owner.authHeader,
@@ -410,7 +453,7 @@ describe('POST /', () => {
       '/',
       {
         customerId: env.customerWithDebtId,
-        newAmount: 100_000,
+        ...change(300_000, 100_000),
         reason: 'Phiếu 2',
       },
       env.base.owner.authHeader,
@@ -442,14 +485,14 @@ describe('GET /', () => {
       env,
       'POST',
       '/',
-      { customerId: env.customerWithDebtId, newAmount: 400_000, reason: 'Adj 1' },
+      { customerId: env.customerWithDebtId, ...change(500_000, 400_000), reason: 'Adj 1' },
       env.base.owner.authHeader,
     )
     await jsonReq(
       env,
       'POST',
       '/',
-      { customerId: env.customerWithDebtId, newAmount: 200_000, reason: 'Adj 2' },
+      { customerId: env.customerWithDebtId, ...change(400_000, 200_000), reason: 'Adj 2' },
       env.base.owner.authHeader,
     )
 
@@ -472,7 +515,7 @@ describe('GET /', () => {
       env,
       'POST',
       '/',
-      { customerId: env.storeBCustomerId, newAmount: 100_000, reason: 'Store B adj' },
+      { customerId: env.storeBCustomerId, ...change(200_000, 100_000), reason: 'Store B adj' },
       env.storeBOwnerAuth,
     )
 
@@ -492,7 +535,11 @@ describe('GET /', () => {
       env,
       'POST',
       '/',
-      { customerId: env.customerWithDebtId, newAmount: 300_000, reason: 'For manager test' },
+      {
+        customerId: env.customerWithDebtId,
+        ...change(500_000, 300_000),
+        reason: 'For manager test',
+      },
       env.base.owner.authHeader,
     )
 

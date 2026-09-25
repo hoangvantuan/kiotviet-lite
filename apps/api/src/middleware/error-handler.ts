@@ -6,6 +6,7 @@ import { db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { formatZodIssues } from '../lib/http.js'
 import { logger } from '../lib/logger.js'
+import { getPgErrorCode, isRetryableTxConflict } from '../lib/pg-errors.js'
 import { emitEvent } from '../services/notification-emitter.js'
 
 export const errorHandler: ErrorHandler = (err, c) => {
@@ -36,6 +37,18 @@ export const errorHandler: ErrorHandler = (err, c) => {
         },
       },
       400,
+    )
+  }
+  if (isRetryableTxConflict(err)) {
+    reqLogger.warn({ pgCode: getPgErrorCode(err) }, 'transaction conflict')
+    return c.json(
+      {
+        error: {
+          code: 'CONFLICT',
+          message: 'Hệ thống đang bận xử lý giao dịch khác, vui lòng thử lại',
+        },
+      },
+      409,
     )
   }
   reqLogger.error({ err }, 'unhandled error')

@@ -17,7 +17,7 @@ export const debtItemSchema = z.object({
   id: z.string().uuid(),
   orderId: z.string().uuid().nullable(),
   customerId: z.string().uuid(),
-  type: z.enum(['sale', 'opening']),
+  type: z.enum(['sale', 'opening', 'adjustment']),
   amount: z.number().int().min(0),
   paid: z.number().int().min(0),
   remaining: z.number().int().min(0),

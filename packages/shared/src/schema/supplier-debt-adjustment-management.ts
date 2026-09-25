@@ -1,20 +1,29 @@
 import { z } from 'zod'
 
+import {
+  adjustmentReasonSchema,
+  debtAdjustmentDirectionSchema,
+  expectedCurrentDebtSchema,
+} from './debt-adjustment-management.js'
+
+// Phía NCC chỉ giữ một tổng (ADR-0003), nhưng cùng hợp đồng tăng/giảm kèm số cũ (TIEN-102)
 export const createSupplierDebtAdjustmentSchema = z
   .object({
     supplierId: z.string().uuid({ message: 'Vui lòng chọn nhà cung cấp' }),
-    newAmount: z
-      .number()
+    direction: debtAdjustmentDirectionSchema,
+    amount: z
+      .number({ required_error: 'Vui lòng nhập số tiền điều chỉnh' })
       .int('Số tiền phải là số nguyên')
-      .min(0, 'Số nợ mới không được âm')
+      .min(1, 'Số tiền điều chỉnh phải lớn hơn 0')
       .max(99_999_999_999_999, 'Số tiền vượt giới hạn'),
-    reason: z
-      .string()
-      .trim()
-      .min(1, 'Vui lòng nhập lý do điều chỉnh')
-      .max(500, 'Lý do tối đa 500 ký tự'),
+    expectedCurrentDebt: expectedCurrentDebtSchema,
+    reason: adjustmentReasonSchema,
   })
   .strict()
+  .refine((v) => v.direction === 'increase' || v.amount <= v.expectedCurrentDebt, {
+    message: 'Số tiền giảm không được lớn hơn số nợ hiện tại',
+    path: ['amount'],
+  })
 
 export const listSupplierDebtAdjustmentsQuerySchema = z.object({
   supplierId: z.string().uuid(),

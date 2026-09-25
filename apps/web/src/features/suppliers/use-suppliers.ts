@@ -21,7 +21,7 @@ import {
   updateSupplierApi,
 } from './suppliers-api'
 
-const SUPPLIERS_KEY = ['suppliers'] as const
+export const SUPPLIERS_KEY = ['suppliers'] as const
 
 export function useSuppliersQuery(query: Partial<ListSuppliersQuery>) {
   return useQuery({

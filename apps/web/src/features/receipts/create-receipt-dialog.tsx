@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Search, X } from 'lucide-react'
 
-import type { CreateReceiptInput, OpenDebtItem, ReceiptDetail } from '@kiotviet-lite/shared'
+import {
+  type CreateReceiptInput,
+  debtSourceLabel,
+  type OpenDebtItem,
+  type ReceiptDetail,
+} from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
 import { Badge } from '@/components/ui/badge'
@@ -345,7 +350,7 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
                                 />
                               </td>
                             )}
-                            <td className="p-2 font-mono text-xs">{d.orderCode ?? 'Nợ đầu kỳ'}</td>
+                            <td className="p-2 font-mono text-xs">{debtSourceLabel(d)}</td>
                             <td className="p-2 text-xs text-muted-foreground">
                               {new Date(d.createdAt).toLocaleDateString('vi-VN')}
                             </td>

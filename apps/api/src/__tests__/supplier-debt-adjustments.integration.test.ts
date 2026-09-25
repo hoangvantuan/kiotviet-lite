@@ -61,12 +61,23 @@ describe('supplier debt adjustments and opening debt', () => {
   }
 
   it('only owner can adjust with a reason; keeps before/after and audit trail', async () => {
-    const input = { supplierId, newAmount: 250_000, reason: 'Đối chiếu hóa đơn cũ' }
+    const input = {
+      supplierId,
+      direction: 'increase',
+      amount: 250_000,
+      expectedCurrentDebt: 0,
+      reason: 'Đối chiếu hóa đơn cũ',
+    }
     for (const auth of [env.manager.authHeader, env.staff.authHeader]) {
       expect((await post('/', input, auth)).status).toBe(403)
     }
     expect((await post('/', { ...input, reason: '  ' })).status).toBe(400)
-    expect((await post('/', { ...input, newAmount: -1 })).status).toBe(400)
+    expect((await post('/', { ...input, amount: -1 })).status).toBe(400)
+    expect((await post('/', { ...input, amount: 0 })).status).toBe(400)
+    // Hợp đồng cũ gửi số nợ mới tuyệt đối bị từ chối
+    expect((await post('/', { supplierId, newAmount: 250_000, reason: input.reason })).status).toBe(
+      400,
+    )
     const created = await post('/', input)
     expect(created.status).toBe(201)
     expect(created.body.data).toMatchObject({
@@ -78,12 +89,32 @@ describe('supplier debt adjustments and opening debt', () => {
     })
     const changed = await post('/', {
       ...input,
-      newAmount: 100_000,
+      direction: 'decrease',
+      amount: 150_000,
+      expectedCurrentDebt: 250_000,
       reason: 'Điều chỉnh sau đối chiếu',
     })
     expect(changed.status).toBe(201)
     expect(changed.body.data).toMatchObject({ oldAmount: 250_000, newAmount: 100_000 })
-    expect((await post('/', { ...input, newAmount: 100_000 })).status).toBe(422)
+    // Số nợ đang thấy đã cũ (còn 250k trong khi thật là 100k): 409, không ghi đè
+    const stale = await post('/', {
+      ...input,
+      direction: 'decrease',
+      amount: 50_000,
+      expectedCurrentDebt: 250_000,
+    })
+    expect(stale.status).toBe(409)
+    expect(stale.body.error?.code).toBe('CONFLICT')
+    expect(
+      (
+        await post('/', {
+          ...input,
+          direction: 'decrease',
+          amount: 100_001,
+          expectedCurrentDebt: 100_000,
+        })
+      ).status,
+    ).toBe(400)
     const list = await adjustments.request(`/?supplierId=${supplierId}`, {
       headers: env.owner.authHeader,
     })
@@ -143,7 +174,15 @@ describe('supplier debt adjustments and opening debt', () => {
       Authorization: `Bearer ${signAccessToken({ userId: otherOwner!.id, storeId: other!.id, role: 'owner' })}`,
     }
     expect(
-      (await post('/', { supplierId: foreignSupplier!.id, newAmount: 100, reason: 'Thử' })).status,
+      (
+        await post('/', {
+          supplierId: foreignSupplier!.id,
+          direction: 'increase',
+          amount: 100,
+          expectedCurrentDebt: 0,
+          reason: 'Thử',
+        })
+      ).status,
     ).toBe(404)
     expect(
       (
@@ -153,9 +192,15 @@ describe('supplier debt adjustments and opening debt', () => {
         })
       ).status,
     ).toBe(404)
-    expect((await post('/', { supplierId, newAmount: 100, reason: 'Thử' }, otherAuth)).status).toBe(
-      404,
-    )
+    expect(
+      (
+        await post(
+          '/',
+          { supplierId, direction: 'increase', amount: 100, expectedCurrentDebt: 0, reason: 'Thử' },
+          otherAuth,
+        )
+      ).status,
+    ).toBe(404)
     const list = await adjustments.request(`/?supplierId=${foreignSupplier!.id}`, {
       headers: env.owner.authHeader,
     })

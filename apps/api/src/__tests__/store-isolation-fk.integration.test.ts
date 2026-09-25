@@ -814,10 +814,22 @@ describe('POST /customer-prices: khóa ngoại: customerId, productId', () => {
 // POST /debt-adjustments (chỉ owner)
 // ---------------------------------------------------------------------------
 describe('POST /debt-adjustments: khóa ngoại: customerId', () => {
+  // Hợp đồng điều chỉnh theo bút toán (TIEN-102): số nợ đang thấy phải khớp số thật. Đọc lại
+  // ngay lúc gọi vì các describe khác (đơn ghi nợ POS) làm đổi công nợ của customerB.
+  async function currentDebtOf(customerId: string) {
+    const [row] = await fx.base.db
+      .select({ currentDebt: customers.currentDebt })
+      .from(customers)
+      .where(eq(customers.id, customerId))
+    return Number(row?.currentDebt ?? 0)
+  }
+
   it('control: customerId thuộc B -> thành công', async () => {
     const res = await call(fx.app, 'POST', '/api/v1/debt-adjustments', fx.ownerB.authHeader, {
       customerId: fx.customerB.id,
-      newAmount: 50_000,
+      direction: 'increase',
+      amount: 50_000,
+      expectedCurrentDebt: await currentDebtOf(fx.customerB.id),
       reason: 'Điều chỉnh test',
     })
     expectSuccess(res.status)
@@ -826,7 +838,9 @@ describe('POST /debt-adjustments: khóa ngoại: customerId', () => {
   it('customerId thuộc A -> 404', async () => {
     const res = await call(fx.app, 'POST', '/api/v1/debt-adjustments', fx.ownerB.authHeader, {
       customerId: fx.customerA.id,
-      newAmount: 50_000,
+      direction: 'increase',
+      amount: 50_000,
+      expectedCurrentDebt: await currentDebtOf(fx.customerA.id),
       reason: 'Điều chỉnh test',
     })
     expectRejected(res.status, [404])
@@ -1167,13 +1181,29 @@ describe('POST/PATCH /stock-checks: khóa ngoại: items[].productId', () => {
 // POST /supplier-debt-adjustments (chỉ owner): supplierId
 // ---------------------------------------------------------------------------
 describe('POST /supplier-debt-adjustments: khóa ngoại: supplierId', () => {
+  // Như debt-adjustments: số nợ đang thấy phải khớp số thật, nhập hàng trả sau ở describe khác
+  // làm đổi công nợ của supplierB.
+  async function currentDebtOf(supplierId: string) {
+    const [row] = await fx.base.db
+      .select({ currentDebt: suppliers.currentDebt })
+      .from(suppliers)
+      .where(eq(suppliers.id, supplierId))
+    return Number(row?.currentDebt ?? 0)
+  }
+
   it('control: supplierId thuộc B -> thành công', async () => {
     const res = await call(
       fx.app,
       'POST',
       '/api/v1/supplier-debt-adjustments',
       fx.ownerB.authHeader,
-      { supplierId: fx.supplierB.id, newAmount: 20_000, reason: 'Điều chỉnh test' },
+      {
+        supplierId: fx.supplierB.id,
+        direction: 'increase',
+        amount: 20_000,
+        expectedCurrentDebt: await currentDebtOf(fx.supplierB.id),
+        reason: 'Điều chỉnh test',
+      },
     )
     expectSuccess(res.status)
   })
@@ -1184,7 +1214,13 @@ describe('POST /supplier-debt-adjustments: khóa ngoại: supplierId', () => {
       'POST',
       '/api/v1/supplier-debt-adjustments',
       fx.ownerB.authHeader,
-      { supplierId: fx.supplierA.id, newAmount: 20_000, reason: 'Điều chỉnh test' },
+      {
+        supplierId: fx.supplierA.id,
+        direction: 'increase',
+        amount: 20_000,
+        expectedCurrentDebt: await currentDebtOf(fx.supplierA.id),
+        reason: 'Điều chỉnh test',
+      },
     )
     expectRejected(res.status, [404])
   })

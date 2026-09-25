@@ -60,10 +60,25 @@ export const listReceiptsQuerySchema = paginationSchema
     },
   )
 
+export const customerDebtTypeSchema = z.enum(['sale', 'opening', 'adjustment'])
+
+/**
+ * Tên khoản nợ hiện cho người dùng: đơn bán ghi mã đơn, nợ đầu kỳ và khoản điều chỉnh tăng nợ
+ * ghi rõ loại. Dùng chung cho sổ công nợ, lập phiếu thu, chi tiết và bản in phiếu thu.
+ */
+export function debtSourceLabel(debt: {
+  type: z.infer<typeof customerDebtTypeSchema>
+  orderCode: string | null
+}): string {
+  if (debt.orderCode) return debt.orderCode
+  return debt.type === 'adjustment' ? 'Điều chỉnh tăng nợ' : 'Nợ đầu kỳ'
+}
+
 export const openDebtItemSchema = z.object({
   id: z.string().uuid(),
   orderId: z.string().uuid().nullable(),
   orderCode: z.string().nullable(),
+  type: customerDebtTypeSchema,
   amount: z.number().int(),
   paid: z.number().int(),
   remaining: z.number().int(),
@@ -83,6 +98,7 @@ export const receiptAllocationItemSchema = z.object({
   debtId: z.string().uuid(),
   orderId: z.string().uuid().nullable(),
   orderCode: z.string().nullable(),
+  type: customerDebtTypeSchema,
   amount: z.number().int(),
   debtRemainingAfter: z.number().int().nullable(),
 })

@@ -139,6 +139,17 @@ export async function createCustomer(env: TestEnv, overrides: CustomerOverrides 
     })
     .returning()
   if (!row) throw new Error('createCustomer failed')
+  // Sổ công nợ (R3): khách có nợ sẵn phải có khoản nợ đầu kỳ tương ứng
+  if (row.currentDebt > 0) {
+    await env.db.insert(debts).values({
+      storeId: row.storeId,
+      customerId: row.id,
+      type: 'opening',
+      amount: row.currentDebt,
+      paid: 0,
+      remaining: row.currentDebt,
+    })
+  }
   return row
 }
 

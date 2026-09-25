@@ -41,3 +41,12 @@ export function isUniqueViolation(err: unknown, constraintName: string): boolean
 export function isFkViolation(err: unknown): boolean {
   return getPgErrorCode(err) === '23503'
 }
+
+/**
+ * Postgres hủy transaction vì deadlock (40P01) hoặc xung đột tuần tự hóa (40001). Transaction đã
+ * rollback sạch nên thao tác thử lại được an toàn.
+ */
+export function isRetryableTxConflict(err: unknown): boolean {
+  const code = getPgErrorCode(err)
+  return code === '40P01' || code === '40001'
+}

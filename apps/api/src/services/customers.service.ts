@@ -43,6 +43,7 @@ import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { parseDateRangeBoundary } from '../lib/timezone.js'
 import { diffObjects, logAction, type RequestMeta } from './audit.service.js'
+import { addCustomerDebt } from './customer-debt-ledger.service.js'
 import { lockCodeStore, nextEntityCode } from './entity-codes.service.js'
 import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
@@ -870,22 +871,13 @@ export async function createOpeningDebt({
       throw new ApiError('BUSINESS_RULE_VIOLATION', 'Khách hàng đã có công nợ')
     }
 
-    const [debt] = await tx
-      .insert(debts)
-      .values({
-        storeId: actor.storeId,
-        customerId: targetId,
-        orderId: null,
-        type: 'opening',
-        amount: input.amount,
-        remaining: input.amount,
-        createdAt: incurredAt,
-      })
-      .returning({ id: debts.id })
-    if (!debt) {
-      throw new ApiError('INTERNAL_ERROR', 'Không tạo được nợ đầu kỳ')
-    }
-    await tx.update(customers).set({ currentDebt: input.amount }).where(eq(customers.id, targetId))
+    const debt = await addCustomerDebt(tx as unknown as Db, {
+      storeId: actor.storeId,
+      customerId: targetId,
+      type: 'opening',
+      amount: input.amount,
+      createdAt: incurredAt,
+    })
     await logAction({
       db: tx as unknown as Db,
       storeId: actor.storeId,
@@ -941,7 +933,9 @@ export async function getCustomerDebts({
       date: debts.createdAt,
       originalAmount: debts.amount,
       paidAmount: debts.paid,
+      reducedAmount: debts.reduced,
       remainingAmount: debts.remaining,
+      note: debts.note,
     })
     .from(debts)
     .leftJoin(orders, eq(debts.orderId, orders.id))
@@ -959,7 +953,9 @@ export async function getCustomerDebts({
       date: row.date.toISOString(),
       originalAmount: Number(row.originalAmount),
       paidAmount: Number(row.paidAmount),
+      reducedAmount: Number(row.reducedAmount),
       remainingAmount: Number(row.remainingAmount),
+      note: row.note ?? null,
     })),
   }
 }
