@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { useSupplierQuery } from '@/features/suppliers/use-suppliers'
+import { useSupplierQuery, useSuppliersQuery } from '@/features/suppliers/use-suppliers'
 import { asFormSetError, handleApiError } from '@/lib/api-error'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { showSuccess } from '@/lib/toast'
@@ -60,6 +60,8 @@ export function CreateSupplierPaymentDialog({
   }, [open, form])
 
   const supplierId = useWatch({ control: form.control, name: 'supplierId' })
+  const checkDebtQuery = useSuppliersQuery({ pageSize: 1, hasDebt: 'yes' })
+  const noSuppliersWithDebt = !checkDebtQuery.isLoading && checkDebtQuery.data?.data.length === 0
   const { data: supplierDetail } = useSupplierQuery(supplierId || undefined)
   const selectedSupplier = supplierDetail
   const currentDebt = selectedSupplier?.currentDebt ?? 0
@@ -115,11 +117,15 @@ export function CreateSupplierPaymentDialog({
               Nhà cung cấp <span className="text-destructive">*</span>
             </Label>
             <SupplierCombobox
+              disabled={noSuppliersWithDebt}
               value={supplierId || undefined}
               onChange={(v) => form.setValue('supplierId', v ?? '', { shouldValidate: true })}
               hasDebt="yes"
               showDebt={true}
             />
+            {noSuppliersWithDebt && (
+              <p className="text-xs text-muted-foreground">Hiện không có NCC nào còn nợ phải trả</p>
+            )}
 
             {errors.supplierId?.message && (
               <p className="text-xs text-destructive">{errors.supplierId.message}</p>

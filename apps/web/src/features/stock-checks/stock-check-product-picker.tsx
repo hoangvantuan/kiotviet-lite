@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 
-import type { ProductListItem } from '@kiotviet-lite/shared'
+import { MAX_PAGE_SIZE, type ProductListItem } from '@kiotviet-lite/shared'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -33,7 +33,6 @@ export interface StockCheckProductPickerProps {
   onConfirm: (selections: StockCheckPickerSelection[]) => void
 }
 
-import { MAX_PAGE_SIZE } from '@kiotviet-lite/shared'
 const MAX_BULK_SIZE = MAX_PAGE_SIZE
 
 export function StockCheckProductPicker({

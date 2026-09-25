@@ -116,12 +116,11 @@ export function CreateCustomerPriceDialog({
             <Label>
               Khách hàng <span className="text-destructive">*</span>
             </Label>
-            <div className={defaultCustomerId ? 'pointer-events-none opacity-50' : ''}>
-              <CustomerCombobox
-                value={customerId}
-                onChange={(v) => form.setValue('customerId', v ?? '', { shouldValidate: true })}
-              />
-            </div>
+            <CustomerCombobox
+              value={customerId}
+              onChange={(v) => form.setValue('customerId', v ?? '', { shouldValidate: true })}
+              disabled={Boolean(defaultCustomerId)}
+            />
             {form.formState.errors.customerId && (
               <p className="text-sm text-destructive">{form.formState.errors.customerId.message}</p>
             )}
@@ -131,13 +130,12 @@ export function CreateCustomerPriceDialog({
             <Label>
               Sản phẩm <span className="text-destructive">*</span>
             </Label>
-            <div className={defaultProductId ? 'pointer-events-none opacity-50' : ''}>
-              <ProductCombobox
-                value={productId}
-                onChange={(v) => form.setValue('productId', v ?? '', { shouldValidate: true })}
-                status="active"
-              />
-            </div>
+            <ProductCombobox
+              value={productId}
+              onChange={(v) => form.setValue('productId', v ?? '', { shouldValidate: true })}
+              status="active"
+              disabled={Boolean(defaultProductId)}
+            />
             {form.formState.errors.productId && (
               <p className="text-sm text-destructive">{form.formState.errors.productId.message}</p>
             )}
