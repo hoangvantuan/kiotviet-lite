@@ -12,6 +12,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { getClientIp } from '../lib/client-ip.js'
 
 export interface RequestMeta {
   ipAddress?: string
@@ -19,9 +20,8 @@ export interface RequestMeta {
 }
 
 export function getRequestMeta(c: Context): RequestMeta {
-  const ipHeader =
-    c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? c.req.header('cf-connecting-ip')
-  const ipAddress = ipHeader ? ipHeader.split(',')[0]?.trim() : undefined
+  const ip = getClientIp(c)
+  const ipAddress = ip === 'unknown' ? undefined : ip
   const userAgent = c.req.header('user-agent') ?? undefined
   return { ipAddress, userAgent }
 }

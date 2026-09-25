@@ -103,7 +103,7 @@ const clientDiagnosticSchema = z
 
 app.post(
   '/api/v1/client-diagnostics',
-  requireAuth,
+  requireAuth(db),
   rateLimiter({
     windowMs: 60_000,
     limit: 60,
@@ -156,7 +156,7 @@ app.route('/api/v1/notifications', createNotificationRoutes({ db }))
 app.route('/api/v1/orders', createOrdersRoutes({ db }))
 app.route('/api/v1/sync', createSyncRoutes({ db }))
 
-app.get('/api/v1/me', requireAuth, async (c) => {
+app.get('/api/v1/me', requireAuth(db), async (c) => {
   const auth = c.get('auth')
   const user = await db.query.users.findFirst({
     where: eq(users.id, auth.userId),

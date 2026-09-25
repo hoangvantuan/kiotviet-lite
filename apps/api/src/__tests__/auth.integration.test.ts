@@ -94,7 +94,7 @@ describe('POST /register', () => {
     expect(cookie.toLowerCase()).toContain('httponly')
   })
 
-  it('phone trùng trả CONFLICT với field=phone', async () => {
+  it('phone trùng trả CONFLICT với thông báo chung, không chỉ ra trường phone (BM-06)', async () => {
     await request(env.app, '/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -106,9 +106,12 @@ describe('POST /register', () => {
       body: JSON.stringify(validRegister),
     })
     expect(res.status).toBe(409)
-    const body = (await res.json()) as { error: { code: string; details?: { field?: string } } }
+    const body = (await res.json()) as {
+      error: { code: string; message: string; details?: { field?: string } }
+    }
     expect(body.error.code).toBe('CONFLICT')
-    expect(body.error.details?.field).toBe('phone')
+    expect(body.error.details?.field).toBeUndefined()
+    expect(body.error.message).not.toMatch(/số điện thoại/i)
   })
 
   it('phone sai format trả VALIDATION_ERROR', async () => {

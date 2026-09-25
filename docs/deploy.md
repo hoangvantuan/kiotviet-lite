@@ -13,6 +13,10 @@ cp .env.production.example .env
 
 Yêu cầu trên server: Docker + Docker Compose plugin. Không cần Node hay pnpm.
 
+JWT secret phải sinh ngẫu nhiên (`openssl rand -base64 48`, hai giá trị khác nhau). API production
+từ chối khởi động nếu secret còn là giá trị mẫu (`change-me-*`), là chuỗi lặp, hoặc hai secret trùng
+nhau; `NOTIFICATION_CONFIG_KEY` khi có đặt cũng bị kiểm như vậy.
+
 ## 2. Khởi động / cập nhật
 
 ```bash
@@ -41,6 +45,12 @@ ingress:
 ```
 
 Nginx chỉ bind `127.0.0.1` nên không truy cập được từ internet trực tiếp.
+
+IP client (dùng cho giới hạn đăng nhập và audit): nginx lấy IP thật từ `CF-Connecting-IP` (chỉ
+khi kết nối tới từ địa chỉ nội bộ, tức cloudflared), rồi GHI ĐÈ `X-Forwarded-For` bằng IP đó.
+API đặt `TRUSTED_PROXY_HOPS=1` trong compose nên chỉ tin đúng một địa chỉ do nginx ghi. Chạy API
+không qua nginx thì bỏ biến này (mặc định 0), API dùng địa chỉ socket và bỏ qua mọi header IP.
+Đăng nhập còn bị giới hạn 10 lần sai / 15 phút / số điện thoại, bất kể IP.
 
 ## 4. Log và điều tra sự cố
 

@@ -46,7 +46,7 @@ const syncFailureCounters = new Map<string, { count: number; lastError: string }
 export function createSyncRoutes({ db }: { db: Db }) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
 
   app.get('/initial', async (c) => {
     const auth = c.get('auth')
@@ -223,6 +223,7 @@ export function createSyncRoutes({ db }: { db: Db }) {
           clientId: offlineOrder.clientId,
           serverId: order.id,
           status: order.isDuplicate ? 'duplicate' : 'synced',
+          ...(order.warnings ? { warnings: order.warnings } : {}),
         })
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error'

@@ -51,7 +51,7 @@ import {
 export function createReportsRoutes({ db }: { db: Db }) {
   const app = new Hono()
 
-  app.use('*', requireAuth, requirePermission('reports.view'))
+  app.use('*', requireAuth(db), requirePermission('reports.view'))
 
   app.get('/dashboard', async (c) => {
     const auth = c.get('auth')

@@ -26,7 +26,7 @@ export interface ReceiptsRoutesDeps {
 export function createReceiptsRoutes({ db }: ReceiptsRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
   app.use('*', requirePermission('customers.manage'))
 
   app.get('/', async (c) => {

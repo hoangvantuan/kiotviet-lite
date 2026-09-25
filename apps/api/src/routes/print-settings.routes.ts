@@ -8,10 +8,7 @@ import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
-import {
-  getPrintSettings,
-  upsertPrintSettings,
-} from '../services/print-settings.service.js'
+import { getPrintSettings, upsertPrintSettings } from '../services/print-settings.service.js'
 
 export interface PrintSettingsRoutesDeps {
   db: Db
@@ -21,7 +18,7 @@ export function createPrintSettingsRoutes({ db }: PrintSettingsRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
 
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
 
   app.get('/', async (c) => {
     const auth = c.get('auth')

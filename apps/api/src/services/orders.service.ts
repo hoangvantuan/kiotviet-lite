@@ -37,6 +37,7 @@ import {
   loadProductForUpdate,
   loadVariantForUpdate,
 } from './products-lock.helper.js'
+import { assertStoreOwned } from './store-scope.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -95,6 +96,13 @@ export interface OrderDetail {
   customerCurrentDebt?: number | null
   isDuplicate?: boolean
   debtLimitExceeded?: boolean
+  /** Sai lệch máy chủ đã tự xử lý khi nhận đơn ngoại tuyến, trả về để máy khách hiển thị. */
+  warnings?: OrderSyncWarning[]
+}
+
+export interface OrderSyncWarning {
+  code: 'CUSTOMER_NOT_IN_STORE' | 'PRICE_LIST_NOT_IN_STORE'
+  message: string
 }
 
 export interface StockInfoVariant {
@@ -181,13 +189,14 @@ export interface CreateOrderDeps {
 export async function createOrder({
   db,
   actor,
-  input,
+  input: requestedInput,
   meta,
   source = 'pos',
   clientId: explicitClientId,
   offlineCreatedAt,
   skipDebtLimitCheck = false,
 }: CreateOrderDeps): Promise<OrderDetail> {
+  let input = requestedInput
   if (input.items.length === 0) {
     throw new ApiError('VALIDATION_ERROR', 'Đơn hàng phải có ít nhất 1 sản phẩm')
   }
@@ -248,6 +257,41 @@ export async function createOrder({
       }
     }
   }
+
+  // BM-02 + ADR-0002: đơn ngoại tuyến đã bán xong tại quầy, từ chối vĩnh viễn chỉ vì khách lạ sẽ kẹt đơn
+  // trên thiết bị. Đơn đã trả đủ tiền: hạ khách về null như bảng giá lạ, vẫn nhận đơn và ghi sai lệch.
+  // Đơn có ghi nợ thì phải từ chối: không thể ghi nợ cho khách không thuộc cửa hàng.
+  let customerDiscrepancy: { requestedCustomerId: string; reason: string } | null = null
+  if (source === 'offline_sync' && input.customerId) {
+    const [owned] = await db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(and(eq(customers.id, input.customerId), eq(customers.storeId, actor.storeId)))
+      .limit(1)
+    if (!owned) {
+      if ((input.debtAmount ?? 0) > 0 || input.paymentMethod === 'debt') {
+        throw new ApiError(
+          'BUSINESS_RULE_VIOLATION',
+          'Khách hàng của đơn ghi nợ không thuộc cửa hàng này nên không thể ghi nợ. Vui lòng lập lại đơn với khách của cửa hàng',
+          { reason: 'customer_not_in_store' },
+        )
+      }
+      customerDiscrepancy = {
+        requestedCustomerId: input.customerId,
+        reason: 'Khách hàng không tồn tại hoặc không thuộc cửa hàng trên máy chủ',
+      }
+      input = { ...input, customerId: null }
+    }
+  }
+
+  // BM-02: mọi khóa ngoại trong payload phải thuộc cửa hàng của actor, với MỌI phương thức
+  // thanh toán và cả hai nguồn (POS trực tuyến, đồng bộ ngoại tuyến). Bảng giá không nằm ở đây
+  // vì đơn ngoại tuyến được phép hạ bảng giá lạ về null (ADR-0002), xử lý riêng bên dưới.
+  await assertStoreOwned(db, actor.storeId, {
+    customer: input.customerId,
+    product: input.items.map((item) => item.productId),
+    variant: input.items.map((item) => item.variantId),
+  })
 
   // SF-1: Khi debtLimitOverridden=true, verify PIN server-side trước khi vào transaction.
   // Zod refine đã đảm bảo có debtLimitOverridePin khi debtLimitOverridden=true.
@@ -351,6 +395,20 @@ export async function createOrder({
     }
   } else if (source === 'offline_sync') {
     snapshotPriceListName = input.priceListName ?? null
+  }
+
+  const warnings: OrderSyncWarning[] = []
+  if (customerDiscrepancy) {
+    warnings.push({
+      code: 'CUSTOMER_NOT_IN_STORE',
+      message: 'Khách hàng không thuộc cửa hàng, đơn được ghi nhận là khách lẻ',
+    })
+  }
+  if (priceListDiscrepancy) {
+    warnings.push({
+      code: 'PRICE_LIST_NOT_IN_STORE',
+      message: 'Bảng giá không còn trên máy chủ, đơn được ghi nhận không kèm bảng giá',
+    })
   }
 
   try {
@@ -844,6 +902,25 @@ export async function createOrder({
         })
       }
 
+      if (customerDiscrepancy) {
+        await logAction({
+          db: txDb,
+          storeId: actor.storeId,
+          actorId: actor.userId,
+          actorRole: actor.role,
+          action: 'order.customer_mismatch_dropped',
+          targetType: 'order',
+          targetId: createdId,
+          changes: {
+            orderId: createdId,
+            orderNumber,
+            customerDiscrepancy,
+          },
+          ipAddress: meta?.ipAddress,
+          userAgent: meta?.userAgent,
+        })
+      }
+
       if (priceListDiscrepancy) {
         await logAction({
           db: txDb,
@@ -1179,6 +1256,7 @@ export async function createOrder({
         oldDebt,
         customerCurrentDebt,
         debtLimitExceeded: isDebtLimitExceeded,
+        ...(warnings.length > 0 ? { warnings } : {}),
       } satisfies OrderDetail
     })
 
@@ -1492,7 +1570,10 @@ export async function listOrders({
       debtRemaining: debts.remaining,
     })
     .from(orders)
-    .leftJoin(customers, eq(orders.customerId, customers.id))
+    .leftJoin(
+      customers,
+      and(eq(orders.customerId, customers.id), eq(customers.storeId, orders.storeId)),
+    )
     .leftJoin(users, eq(orders.userId, users.id))
     .leftJoin(debts, eq(debts.orderId, orders.id))
     .where(whereClause)
@@ -1503,7 +1584,10 @@ export async function listOrders({
   const totalRows = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(orders)
-    .leftJoin(customers, eq(orders.customerId, customers.id))
+    .leftJoin(
+      customers,
+      and(eq(orders.customerId, customers.id), eq(customers.storeId, orders.storeId)),
+    )
     .where(whereClause)
 
   const total = totalRows[0]?.count ?? 0
@@ -1622,7 +1706,10 @@ export async function getOrderDetail({
       debtRemaining: debts.remaining,
     })
     .from(orders)
-    .leftJoin(customers, eq(orders.customerId, customers.id))
+    .leftJoin(
+      customers,
+      and(eq(orders.customerId, customers.id), eq(customers.storeId, orders.storeId)),
+    )
     .leftJoin(customerGroups, eq(customers.groupId, customerGroups.id))
     .leftJoin(users, eq(orders.userId, users.id))
     .leftJoin(debts, eq(debts.orderId, orders.id))

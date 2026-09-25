@@ -46,5 +46,7 @@ export const syncPushResultSchema = z.object({
       message: z.string(),
     })
     .optional(),
+  // Sai lệch máy chủ đã tự xử lý nhưng vẫn nhận đơn (khách hoặc bảng giá không thuộc cửa hàng)
+  warnings: z.array(z.object({ code: z.string(), message: z.string() })).optional(),
 })
 export type SyncPushResult = z.infer<typeof syncPushResultSchema>

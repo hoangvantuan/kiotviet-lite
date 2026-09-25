@@ -18,7 +18,7 @@ export interface DebtAdjustmentsRoutesDeps {
 export function createDebtAdjustmentsRoutes({ db }: DebtAdjustmentsRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
   app.use('*', requirePermission('customers.manage'))
 
   app.get('/', async (c) => {

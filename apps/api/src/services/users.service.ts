@@ -61,6 +61,9 @@ export async function createUser({
   input,
   meta,
 }: CreateUserDeps): Promise<UserListItem> {
+  // Số điện thoại là khóa đăng nhập, duy nhất toàn hệ thống, nên trùng số buộc phải báo 409 để
+  // chủ cửa hàng biết đổi số. Đánh đổi: người có quyền users.manage dò được một số đã đăng ký ở
+  // cửa hàng nào đó; route giới hạn 20 lần tạo / giờ / người dùng để làm chậm việc dò (BM-101).
   const existing = await db.query.users.findFirst({
     where: eq(users.phone, input.phone),
   })

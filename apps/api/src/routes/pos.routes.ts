@@ -22,7 +22,7 @@ export interface PosRoutesDeps {
 export function createPosRoutes({ db }: PosRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', requireAuth)
+  app.use('*', requireAuth(db))
   app.use('*', requirePermission('pos.sell'))
 
   // Issue #35 - List active valid price lists for POS selection
