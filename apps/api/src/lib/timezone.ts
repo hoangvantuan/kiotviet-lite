@@ -72,3 +72,28 @@ export function dateTruncLocal(
   const tz = getStoreTimezone()
   return sql`date_trunc(${sql.raw(`'${unit}'`)}, ${column} AT TIME ZONE ${sql.raw(`'${tz}'`)})::date`
 }
+
+/**
+ * n ngày gần nhất tính theo lịch của múi giờ cửa hàng, kết thúc ở hôm nay.
+ * Khóa `key` (YYYY-MM-DD) khớp với `dateTruncLocal('day')`, nên dùng được làm khóa gộp.
+ * Không dùng startOfDay của date-fns vì hàm đó theo múi giờ của tiến trình (UTC trên máy chủ),
+ * từ 17:00 UTC trở đi "hôm nay" của tiến trình sẽ trễ một ngày so với giờ Việt Nam.
+ */
+export function lastLocalDays(
+  n: number,
+  now: Date = new Date(),
+): { start: Date; days: Array<{ key: string; dayOfWeek: number }> } {
+  const todayKey = new Intl.DateTimeFormat('en-CA', {
+    timeZone: getStoreTimezone(),
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+  const [y, m, d] = todayKey.split('-').map(Number) as [number, number, number]
+  const todayUtc = Date.UTC(y, m - 1, d)
+  const days = Array.from({ length: n }, (_, i) => {
+    const day = new Date(todayUtc - (n - 1 - i) * 86_400_000)
+    return { key: day.toISOString().slice(0, 10), dayOfWeek: day.getUTCDay() }
+  })
+  return { start: new Date(`${days[0]!.key}T00:00:00${getTimezoneOffset()}`), days }
+}

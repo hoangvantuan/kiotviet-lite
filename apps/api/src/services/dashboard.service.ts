@@ -1,6 +1,4 @@
 import {
-  eachDayOfInterval,
-  format,
   startOfDay,
   startOfMonth,
   startOfWeek,
@@ -30,7 +28,7 @@ import {
   orderNetRevenueExpr,
   revenueStatusFilter,
 } from '../lib/order-status.js'
-import { dateTruncLocal } from '../lib/timezone.js'
+import { dateTruncLocal, lastLocalDays } from '../lib/timezone.js'
 
 interface PeriodRange {
   start: Date
@@ -121,9 +119,7 @@ async function queryMetrics(db: Db, storeId: string, start: Date, end: Date): Pr
 }
 
 async function getSparkline(db: Db, storeId: string): Promise<number[]> {
-  const now = new Date()
-  const sevenDaysAgo = subDays(startOfDay(now), 6)
-  const days = eachDayOfInterval({ start: sevenDaysAgo, end: startOfDay(now) })
+  const { start: sevenDaysAgo, days } = lastLocalDays(7)
   const truncExpr = dateTruncLocal('day')
 
   const result = await db
@@ -142,8 +138,7 @@ async function getSparkline(db: Db, storeId: string): Promise<number[]> {
     revenueByDay.set(String(r.day), Number(r.revenue))
   }
 
-  return days.map((d: Date) => {
-    const key = format(d, 'yyyy-MM-dd')
+  return days.map(({ key }) => {
     return revenueByDay.get(key) ?? 0
   })
 }
@@ -209,9 +204,7 @@ export async function getDashboardMetrics(
 }
 
 async function getOrderCountSparkline(db: Db, storeId: string): Promise<number[]> {
-  const now = new Date()
-  const sevenDaysAgo = subDays(startOfDay(now), 6)
-  const days = eachDayOfInterval({ start: sevenDaysAgo, end: startOfDay(now) })
+  const { start: sevenDaysAgo, days } = lastLocalDays(7)
   const truncExpr = dateTruncLocal('day')
 
   const result = await db
@@ -230,16 +223,13 @@ async function getOrderCountSparkline(db: Db, storeId: string): Promise<number[]
     countByDay.set(String(r.day), Number(r.cnt))
   }
 
-  return days.map((d: Date) => {
-    const key = format(d, 'yyyy-MM-dd')
+  return days.map(({ key }) => {
     return countByDay.get(key) ?? 0
   })
 }
 
 async function getProfitSparkline(db: Db, storeId: string): Promise<number[]> {
-  const now = new Date()
-  const sevenDaysAgo = subDays(startOfDay(now), 6)
-  const days = eachDayOfInterval({ start: sevenDaysAgo, end: startOfDay(now) })
+  const { start: sevenDaysAgo, days } = lastLocalDays(7)
   const truncExpr = dateTruncLocal('day')
   const whereCondition = and(
     eq(orders.storeId, storeId),
@@ -279,8 +269,7 @@ async function getProfitSparkline(db: Db, storeId: string): Promise<number[]> {
     cogsByDay.set(String(r.day), Number(r.cogs))
   }
 
-  return days.map((d: Date) => {
-    const key = format(d, 'yyyy-MM-dd')
+  return days.map(({ key }) => {
     const rev = revByDay.get(key) ?? 0
     const cogs = cogsByDay.get(key) ?? 0
     return rev - cogs
@@ -301,9 +290,7 @@ export async function getRevenueChart(
   db: Db,
   storeId: string,
 ): Promise<DashboardResponse['revenueChart']> {
-  const now = new Date()
-  const sevenDaysAgo = subDays(startOfDay(now), 6)
-  const days = eachDayOfInterval({ start: sevenDaysAgo, end: startOfDay(now) })
+  const { start: sevenDaysAgo, days } = lastLocalDays(7)
   const truncExpr = dateTruncLocal('day')
 
   const result = await db
@@ -326,12 +313,11 @@ export async function getRevenueChart(
     })
   }
 
-  return days.map((d: Date) => {
-    const key = format(d, 'yyyy-MM-dd')
+  return days.map(({ key, dayOfWeek }) => {
     const data = dataByDay.get(key)
     return {
       date: key,
-      label: DAY_LABELS[d.getDay()] ?? '',
+      label: DAY_LABELS[dayOfWeek] ?? '',
       revenue: data?.revenue ?? 0,
       orderCount: data?.orderCount ?? 0,
     }
