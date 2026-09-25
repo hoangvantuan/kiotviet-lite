@@ -18,6 +18,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useSupplierQuery, useSuppliersQuery } from '@/features/suppliers/use-suppliers'
+import { useGuardedOpenChange } from '@/hooks/use-document-mutation'
 import { asFormSetError, handleApiError } from '@/lib/api-error'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { showSuccess } from '@/lib/toast'
@@ -46,6 +47,7 @@ export function CreateSupplierPaymentDialog({
   onCreated,
 }: CreateSupplierPaymentDialogProps) {
   const mutation = useCreateSupplierPaymentMutation()
+  const handleOpenChange = useGuardedOpenChange(onOpenChange, mutation)
 
   const form = useForm<CreateSupplierPaymentInput>({
     resolver: zodResolver(createSupplierPaymentSchema),
@@ -103,7 +105,7 @@ export function CreateSupplierPaymentDialog({
   const disabled = !form.formState.isValid || isPending
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Tạo phiếu chi</DialogTitle>
@@ -185,7 +187,12 @@ export function CreateSupplierPaymentDialog({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={isPending}
+              onClick={() => handleOpenChange(false)}
+            >
               Huỷ
             </Button>
             <Button type="submit" disabled={disabled}>

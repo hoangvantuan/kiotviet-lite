@@ -15,6 +15,7 @@ import { ApiError } from '../lib/errors.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
+import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import {
@@ -180,22 +181,27 @@ export function createCustomersRoutes({ db }: CustomersRoutesDeps) {
     return c.json({ data })
   })
 
-  app.post('/:id/opening-debt', requirePermission('customers.manage'), async (c) => {
-    const auth = c.get('auth')
-    if (auth.role !== 'owner') {
-      throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được nạp nợ đầu kỳ')
-    }
-    const targetId = uuidParam.parse(c.req.param('id'))
-    const input = await parseJson(c, createCustomerOpeningDebtSchema)
-    const data = await createOpeningDebt({
-      db,
-      actor: auth,
-      targetId,
-      input,
-      meta: getRequestMeta(c),
-    })
-    return c.json({ data }, 201)
-  })
+  app.post(
+    '/:id/opening-debt',
+    requirePermission('customers.manage'),
+    idempotent(db, async (c, transaction) => {
+      const auth = c.get('auth')
+      if (auth.role !== 'owner') {
+        throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được nạp nợ đầu kỳ')
+      }
+      const targetId = uuidParam.parse(c.req.param('id'))
+      const input = await parseJson(c, createCustomerOpeningDebtSchema)
+      const data = await createOpeningDebt({
+        db,
+        transaction,
+        actor: auth,
+        targetId,
+        input,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data }, 201)
+    }),
+  )
 
   app.get('/:id/stats', requirePermission('customers.view'), async (c) => {
     const auth = c.get('auth')

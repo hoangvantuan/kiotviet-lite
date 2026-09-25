@@ -12,6 +12,7 @@ import { ApiError } from '../lib/errors.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
+import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import {
@@ -41,34 +42,42 @@ export function createSupplierDebtAdjustmentsRoutes({ db }: { db: Db }) {
     })
   })
 
-  app.post('/', async (c) => {
-    const auth = c.get('auth')
-    if (auth.role !== 'owner')
-      throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được điều chỉnh công nợ nhà cung cấp')
-    const input = await parseJson(c, createSupplierDebtAdjustmentSchema)
-    const data = await createSupplierDebtAdjustment({
-      db,
-      actor: auth,
-      input,
-      meta: getRequestMeta(c),
-    })
-    return c.json({ data }, 201)
-  })
+  app.post(
+    '/',
+    idempotent(db, async (c, transaction) => {
+      const auth = c.get('auth')
+      if (auth.role !== 'owner')
+        throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được điều chỉnh công nợ nhà cung cấp')
+      const input = await parseJson(c, createSupplierDebtAdjustmentSchema)
+      const data = await createSupplierDebtAdjustment({
+        db,
+        transaction,
+        actor: auth,
+        input,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data }, 201)
+    }),
+  )
 
-  app.post('/:id/opening-debt', async (c) => {
-    const auth = c.get('auth')
-    if (auth.role !== 'owner')
-      throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được nạp nợ đầu kỳ')
-    const supplierId = z.string().uuid('ID không hợp lệ').parse(c.req.param('id'))
-    const input = await parseJson(c, createOpeningDebtSchema)
-    const data = await createSupplierOpeningDebt({
-      db,
-      actor: auth,
-      supplierId,
-      input,
-      meta: getRequestMeta(c),
-    })
-    return c.json({ data }, 201)
-  })
+  app.post(
+    '/:id/opening-debt',
+    idempotent(db, async (c, transaction) => {
+      const auth = c.get('auth')
+      if (auth.role !== 'owner')
+        throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được nạp nợ đầu kỳ')
+      const supplierId = z.string().uuid('ID không hợp lệ').parse(c.req.param('id'))
+      const input = await parseJson(c, createOpeningDebtSchema)
+      const data = await createSupplierOpeningDebt({
+        db,
+        transaction,
+        actor: auth,
+        supplierId,
+        input,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data }, 201)
+    }),
+  )
   return app
 }

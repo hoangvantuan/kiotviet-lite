@@ -1,14 +1,16 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import type { CreateOrderInput, DebtInfo, PriceSource } from '@kiotviet-lite/shared'
 
-import { apiClient } from '@/lib/api-client'
+import { useDocumentMutation } from '@/hooks/use-document-mutation'
+import { apiClient, ApiClientError } from '@/lib/api-client'
 import { saveOfflineOrder } from '@/lib/offline-orders'
 import { getPGliteRaw, initializeOfflineDB } from '@/lib/pglite'
 import { useAuthStore } from '@/stores/use-auth-store'
 import { useOfflineStore } from '@/stores/use-offline-store'
 
+import { POS_ORDER_INTENT } from '../constants'
 import type { OrderDetail, StockInfo } from '../types'
 
 interface CheckoutPayload {
@@ -54,6 +56,12 @@ interface CheckoutPayload {
   }[]
 }
 
+export interface CheckoutVariables {
+  /** Tab giỏ hàng đang thanh toán: mỗi tab là một ý định bán, giữ khóa riêng */
+  tab: number
+  order: CheckoutPayload
+}
+
 interface CheckoutResponse {
   data: OrderDetail
 }
@@ -66,11 +74,83 @@ interface CustomerDebtResponse {
   data: DebtInfo
 }
 
+/** Mã lỗi khi lần bán trước (cùng khóa) có vẻ đã được lưu: `details` là {@link PreviousOrderSaved} */
+export const PREVIOUS_ORDER_SAVED = 'PREVIOUS_ORDER_SAVED'
+
+export interface PreviousOrderSaved {
+  orderId: string
+  orderNumber: string
+}
+
+/**
+ * Phần của đơn quyết định khóa: hàng, khách, bảng giá, chiết khấu, tổng. Không gồm cách trả tiền,
+ * tiền khách đưa, PIN hay người duyệt: đóng rồi mở lại hộp thanh toán thì các ô này bị đặt lại,
+ * thu ngân nhập lại khác đi (chọn mệnh giá khác, đổi sang chuyển khoản) vẫn là cùng một lần bán.
+ */
+export function checkoutFingerprint({ tab, order }: CheckoutVariables) {
+  return {
+    tab,
+    customerId: order.customerId ?? null,
+    priceListId: order.priceListId ?? null,
+    subtotal: order.subtotal,
+    discountType: order.discountType,
+    discountValue: order.discountValue,
+    discountAmount: order.discountAmount,
+    total: order.total,
+    items: order.items.map((item) => ({
+      productId: item.productId,
+      variantId: item.variantId,
+      unitConversionId: item.unitConversionId,
+      unitPrice: item.unitPrice,
+      quantity: item.quantity,
+      discountType: item.discountType,
+      discountValue: item.discountValue,
+      discountAmount: item.discountAmount,
+      lineTotal: item.lineTotal,
+    })),
+  }
+}
+
+function isKeyReused(error: unknown): boolean {
+  return (
+    error instanceof ApiClientError &&
+    (error.details as { reason?: string } | undefined)?.reason === 'idempotency_key_reused'
+  )
+}
+
+/**
+ * Cùng khóa nhưng phần trả tiền khác lần trước: máy chủ từ chối (422) vì lần trước đã lưu. Tra đơn
+ * theo clientId để thu ngân mở ra kiểm tra thay vì bán lại. Không tìm thấy thì trả lỗi gốc (hook
+ * bỏ khóa, lần sau là đơn mới).
+ */
+async function previousOrderError(clientId: string, original: unknown): Promise<unknown> {
+  try {
+    const res = await apiClient.get<{ data: Array<{ id: string; orderNumber: string }> }>(
+      `/api/v1/orders?clientId=${clientId}&pageSize=1`,
+    )
+    const order = res.data[0]
+    if (!order) return original
+    const details: PreviousOrderSaved = { orderId: order.id, orderNumber: order.orderNumber }
+    return new ApiClientError(422, {
+      code: PREVIOUS_ORDER_SAVED,
+      message: `Đơn trước có thể đã được lưu (${order.orderNumber}). Mở đơn để kiểm tra trước khi bán lại, nếu đúng thì xóa giỏ hàng này.`,
+      details,
+    })
+  } catch {
+    return original
+  }
+}
+
 export function useCheckoutMutation() {
   const qc = useQueryClient()
-  return useMutation({
-    networkMode: 'always',
-    mutationFn: async (payload: CheckoutPayload) => {
+  return useDocumentMutation({
+    intent: POS_ORDER_INTENT,
+    instance: ({ tab }: CheckoutVariables) => String(tab),
+    fingerprint: checkoutFingerprint,
+    // R4 (OFF-07): khóa của lần bán cũng là clientId của đơn, dùng chung cho request trực tuyến
+    // và hàng chờ ngoại tuyến. Mất phản hồi rồi lưu lại (trực tuyến hay ngoại tuyến) vẫn ra một đơn.
+    mutationFn: async ({ order }: CheckoutVariables, clientId) => {
+      const payload = { ...order, clientId }
       const isOffline =
         useOfflineStore.getState().status === 'offline' ||
         (typeof navigator !== 'undefined' && !navigator.onLine)
@@ -82,7 +162,7 @@ export function useCheckoutMutation() {
         const storeId = useAuthStore.getState().user?.storeId
         if (!storeId) throw new Error('Chưa đăng nhập')
 
-        const clientId = await saveOfflineOrder(pglite, storeId, payload as CreateOrderInput)
+        await saveOfflineOrder(pglite, storeId, payload as CreateOrderInput, clientId)
         toast.success('Đơn hàng đã lưu (ngoại tuyến, chờ đồng bộ)')
 
         const debtAmount = payload.debtAmount ?? 0
@@ -144,9 +224,15 @@ export function useCheckoutMutation() {
         return { data: offlineOrder }
       }
 
-      return apiClient.post<CheckoutResponse>('/api/v1/pos/orders', payload)
+      try {
+        return await apiClient.post<CheckoutResponse>('/api/v1/pos/orders', payload, {
+          idempotencyKey: clientId,
+        })
+      } catch (error) {
+        throw isKeyReused(error) ? await previousOrderError(clientId, error) : error
+      }
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: (_data, { order: variables }) => {
       qc.invalidateQueries({ queryKey: ['pos-products'] })
       qc.invalidateQueries({ queryKey: ['low-stock-count'] })
       qc.invalidateQueries({ queryKey: ['low-stock-list'] })

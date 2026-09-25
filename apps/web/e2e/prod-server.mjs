@@ -19,6 +19,7 @@ const ROOT = path.resolve(
 )
 const PORT = Number(process.env.WEB_PROD_PORT ?? 4173)
 const API = new URL(process.env.E2E_API_URL ?? 'http://localhost:3000')
+const PROXY_READ_TIMEOUT_MS = 90_000
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -77,7 +78,14 @@ function proxyToApi(req, res) {
       upstreamRes.pipe(res)
     },
   )
+  // Như proxy_read_timeout 90s của nginx: API im lặng quá lâu thì trả 504 (trang HTML, không phải JSON)
+  upstream.setTimeout(PROXY_READ_TIMEOUT_MS, () => {
+    if (!res.headersSent) res.writeHead(504, { 'content-type': 'text/html' })
+    res.end('<html><body>504 Gateway Time-out</body></html>')
+    upstream.destroy()
+  })
   upstream.on('error', () => {
+    if (res.writableEnded) return
     if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' })
     res.end('502 Bad Gateway')
   })

@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
+import { useGuardedOpenChange } from '@/hooks/use-document-mutation'
 import { ApiClientError } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
@@ -129,10 +130,13 @@ export function ReturnDialog({
     setShowResult(null)
     onOpenChange(false)
   }
+  const closeDialog = useGuardedOpenChange((next) => {
+    if (!next) handleClose()
+  }, mutation)
 
   if (showResult) {
     return (
-      <Dialog open={open} onOpenChange={handleClose}>
+      <Dialog open={open} onOpenChange={closeDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Trả hàng thành công</DialogTitle>
@@ -171,7 +175,7 @@ export function ReturnDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={closeDialog}>
       <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Trả hàng</DialogTitle>
@@ -308,7 +312,11 @@ export function ReturnDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
+          <Button
+            variant="outline"
+            disabled={mutation.isPending}
+            onClick={() => closeDialog(false)}
+          >
             Hủy
           </Button>
           <Button onClick={handleSubmit} disabled={!hasSelection || mutation.isPending}>

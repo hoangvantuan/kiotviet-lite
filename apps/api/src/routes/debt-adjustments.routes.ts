@@ -7,6 +7,7 @@ import { ApiError } from '../lib/errors.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
+import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import { createDebtAdjustment, listDebtAdjustments } from '../services/debt-adjustments.service.js'
@@ -36,20 +37,24 @@ export function createDebtAdjustmentsRoutes({ db }: DebtAdjustmentsRoutesDeps) {
     })
   })
 
-  app.post('/', async (c) => {
-    const auth = c.get('auth')
-    if (auth.role !== 'owner') {
-      throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được điều chỉnh nợ')
-    }
-    const input = await parseJson(c, createDebtAdjustmentSchema)
-    const data = await createDebtAdjustment({
-      db,
-      actor: auth,
-      input,
-      meta: getRequestMeta(c),
-    })
-    return c.json({ data }, 201)
-  })
+  app.post(
+    '/',
+    idempotent(db, async (c, transaction) => {
+      const auth = c.get('auth')
+      if (auth.role !== 'owner') {
+        throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được điều chỉnh nợ')
+      }
+      const input = await parseJson(c, createDebtAdjustmentSchema)
+      const data = await createDebtAdjustment({
+        db,
+        transaction,
+        actor: auth,
+        input,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data }, 201)
+    }),
+  )
 
   return app
 }

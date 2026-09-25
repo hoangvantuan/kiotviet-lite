@@ -7,6 +7,7 @@ import type { Db } from '../db/index.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
+import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import {
@@ -49,17 +50,21 @@ export function createPurchaseOrdersRoutes({ db }: PurchaseOrdersRoutesDeps) {
     return c.json({ data })
   })
 
-  app.post('/', async (c) => {
-    const auth = c.get('auth')
-    const input = await parseJson(c, createPurchaseOrderSchema)
-    const data = await createPurchaseOrder({
-      db,
-      actor: auth,
-      input,
-      meta: getRequestMeta(c),
-    })
-    return c.json({ data }, 201)
-  })
+  app.post(
+    '/',
+    idempotent(db, async (c, transaction) => {
+      const auth = c.get('auth')
+      const input = await parseJson(c, createPurchaseOrderSchema)
+      const data = await createPurchaseOrder({
+        db,
+        transaction,
+        actor: auth,
+        input,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data }, 201)
+    }),
+  )
 
   return app
 }

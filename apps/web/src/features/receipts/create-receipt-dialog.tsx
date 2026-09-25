@@ -26,6 +26,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { useCustomersQuery } from '@/features/customers/use-customers'
 import { useDebounced } from '@/hooks/use-debounced'
+import { useGuardedOpenChange } from '@/hooks/use-document-mutation'
 import { handleApiError } from '@/lib/api-error'
 import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
 
@@ -50,6 +51,7 @@ type Mode = 'fifo' | 'manual'
 
 export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateReceiptDialogProps) {
   const mutation = useCreateReceiptMutation()
+  const handleOpenChange = useGuardedOpenChange(onOpenChange, mutation)
 
   const [generation, setGeneration] = useState(0)
 
@@ -166,7 +168,7 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
   }
 
   return (
-    <Dialog key={generation} open={open} onOpenChange={onOpenChange}>
+    <Dialog key={generation} open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Tạo phiếu thu nợ</DialogTitle>
@@ -434,7 +436,12 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={mutation.isPending}
+            onClick={() => handleOpenChange(false)}
+          >
             Huỷ
           </Button>
           <Button type="button" onClick={submit} disabled={!canSubmit}>

@@ -37,8 +37,8 @@ export function getReceiptApi(id: string) {
   return apiClient.get<Envelope<ReceiptDetail>>(`/api/v1/receipts/${id}`)
 }
 
-export function createReceiptApi(input: CreateReceiptInput) {
-  return apiClient.post<Envelope<ReceiptDetail>>('/api/v1/receipts', input)
+export function createReceiptApi(input: CreateReceiptInput, idempotencyKey?: string) {
+  return apiClient.post<Envelope<ReceiptDetail>>('/api/v1/receipts', input, { idempotencyKey })
 }
 
 export function getCustomerOpenDebtsApi(customerId: string) {

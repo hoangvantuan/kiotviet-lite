@@ -10,6 +10,8 @@ import type {
   UpdateProductInput,
 } from '@kiotviet-lite/shared'
 
+import { useDocumentMutation } from '@/hooks/use-document-mutation'
+
 import {
   createProductApi,
   createUnitConversionApi,
@@ -187,8 +189,10 @@ export function useInventoryTransactionsQuery(
 
 export function useRecordPurchaseMutation(productId: string) {
   const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: RecordPurchaseInput) => recordPurchaseApi(productId, input),
+  return useDocumentMutation({
+    intent: `product.inventory-purchase:${productId}`,
+    mutationFn: (input: RecordPurchaseInput, idempotencyKey) =>
+      recordPurchaseApi(productId, input, idempotencyKey),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: PRODUCTS_KEY })
       qc.invalidateQueries({ queryKey: LOW_STOCK_COUNT_KEY })
@@ -201,8 +205,10 @@ export function useRecordPurchaseMutation(productId: string) {
 
 export function useRecordManualAdjustmentMutation(productId: string) {
   const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: RecordManualAdjustInput) => recordManualAdjustmentApi(productId, input),
+  return useDocumentMutation({
+    intent: `product.inventory-adjust:${productId}`,
+    mutationFn: (input: RecordManualAdjustInput, idempotencyKey) =>
+      recordManualAdjustmentApi(productId, input, idempotencyKey),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: PRODUCTS_KEY })
       qc.invalidateQueries({ queryKey: LOW_STOCK_COUNT_KEY })

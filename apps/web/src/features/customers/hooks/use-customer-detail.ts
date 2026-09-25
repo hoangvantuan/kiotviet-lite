@@ -1,10 +1,12 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type {
   CreateDebtAdjustmentInput,
   CreateOpeningDebtInput,
   ListCustomerOrdersQuery,
 } from '@kiotviet-lite/shared'
+
+import { useDocumentMutation } from '@/hooks/use-document-mutation'
 
 import {
   createDebtAdjustmentApi,
@@ -45,8 +47,10 @@ export function useCustomerDebts(id: string | undefined) {
 
 export function useCreateOpeningDebtMutation(customerId: string) {
   const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (input: CreateOpeningDebtInput) => createOpeningDebtApi(customerId, input),
+  return useDocumentMutation({
+    intent: `customer.opening-debt:${customerId}`,
+    mutationFn: (input: CreateOpeningDebtInput, idempotencyKey) =>
+      createOpeningDebtApi(customerId, input, idempotencyKey),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] })
       queryClient.invalidateQueries({ queryKey: ['customer-open-debts', customerId] })
@@ -76,8 +80,10 @@ export function useDebtAdjustments(customerId: string | undefined, page = 1) {
 
 export function useCreateDebtAdjustmentMutation() {
   const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (input: CreateDebtAdjustmentInput) => createDebtAdjustmentApi(input),
+  return useDocumentMutation({
+    intent: 'customer.debt-adjustment',
+    mutationFn: (input: CreateDebtAdjustmentInput, idempotencyKey) =>
+      createDebtAdjustmentApi(input, idempotencyKey),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: [...CUSTOMER_DETAIL_KEY, variables.customerId],

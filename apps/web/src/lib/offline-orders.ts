@@ -18,14 +18,26 @@ export interface OfflineOrder {
   lastRetryAt: string | null
 }
 
+/**
+ * Lưu đơn vào hàng chờ ngoại tuyến. `clientId` do nơi gọi cấp và PHẢI trùng với clientId đã gửi
+ * trong lần bán trực tuyến trước đó (nếu có): lần gửi đó có thể đã được máy chủ lưu mà mất phản
+ * hồi, khi đồng bộ máy chủ nhận ra cùng clientId và không tạo đơn thứ hai (R4, OFF-07).
+ * Gọi lại với cùng clientId không thêm dòng mới.
+ */
 export async function saveOfflineOrder(
   pglite: PGlite,
   storeId: string,
   orderData: CreateOrderInput,
+  clientId: string,
 ): Promise<string> {
   createOrderSchema.parse(orderData)
 
-  const clientId = crypto.randomUUID()
+  const existing = await pglite.query<{ client_id: string }>(
+    `SELECT client_id FROM offline_orders WHERE client_id = $1 LIMIT 1`,
+    [clientId],
+  )
+  if (existing.rows.length > 0) return clientId
+
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
 

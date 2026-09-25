@@ -12,6 +12,7 @@ import { ApiError } from '../lib/errors.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
+import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import { BULK_IMPORT_MAX_BYTES } from '../services/bulk-import-preview.service.js'
@@ -149,17 +150,21 @@ export function createStockChecksRoutes({ db }: StockChecksRoutesDeps) {
   })
 
   // Mount /:id/confirm BEFORE /:id (although Hono usually handles, defensive)
-  app.post('/:id/confirm', async (c) => {
-    const auth = c.get('auth')
-    const id = uuidParam.parse(c.req.param('id'))
-    const data = await confirmStockCheck({
-      db,
-      actor: auth,
-      stockCheckId: id,
-      meta: getRequestMeta(c),
-    })
-    return c.json({ data })
-  })
+  app.post(
+    '/:id/confirm',
+    idempotent(db, async (c, transaction) => {
+      const auth = c.get('auth')
+      const id = uuidParam.parse(c.req.param('id'))
+      const data = await confirmStockCheck({
+        db,
+        transaction,
+        actor: auth,
+        stockCheckId: id,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data })
+    }),
+  )
 
   app.get('/:id', async (c) => {
     const auth = c.get('auth')

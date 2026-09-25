@@ -37,6 +37,7 @@ import { logger } from '../lib/logger.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import { settleCustomerDebts } from './customer-debt-ledger.service.js'
+import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
 export interface ReceiptsActor {
   userId: string
@@ -337,17 +338,21 @@ export async function listCustomerOpenDebts({
 
 export interface CreateReceiptDeps {
   db: Db
+  // Transaction của request có Idempotency-Key: chứng từ và phản hồi lưu cùng một lần commit
+  transaction?: ServiceTransaction
   actor: ReceiptsActor
   input: CreateReceiptInput
   meta?: RequestMeta
 }
 
 export async function createReceipt({
-  db,
+  db: rootDb,
+  transaction,
   actor,
   input,
   meta,
 }: CreateReceiptDeps): Promise<ReceiptDetail> {
+  const db = serviceDb(rootDb, transaction)
   return db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
 

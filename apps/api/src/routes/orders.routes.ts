@@ -12,6 +12,7 @@ import type { Db } from '../db/index.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { errorHandler } from '../middleware/error-handler.js'
+import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import { countPendingReview, reviewOrder } from '../services/order-review.service.js'
@@ -100,19 +101,24 @@ export function createOrdersRoutes({ db }: OrdersRoutesDeps) {
   })
 
   // POST /:id/returns - Create a return
-  app.post('/:id/returns', requirePermission('orders.return'), async (c) => {
-    const auth = c.get('auth')
-    const id = uuidParam.parse(c.req.param('id'))
-    const input = await parseJson(c, createOrderReturnSchema)
-    const data = await createReturn({
-      db,
-      actor: auth,
-      orderId: id,
-      input,
-      meta: getRequestMeta(c),
-    })
-    return c.json({ data }, 201)
-  })
+  app.post(
+    '/:id/returns',
+    requirePermission('orders.return'),
+    idempotent(db, async (c, transaction) => {
+      const auth = c.get('auth')
+      const id = uuidParam.parse(c.req.param('id'))
+      const input = await parseJson(c, createOrderReturnSchema)
+      const data = await createReturn({
+        db,
+        transaction,
+        actor: auth,
+        orderId: id,
+        input,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data }, 201)
+    }),
+  )
 
   return app
 }

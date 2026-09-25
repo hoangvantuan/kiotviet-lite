@@ -8,6 +8,8 @@ import type {
   UpdateSupplierInput,
 } from '@kiotviet-lite/shared'
 
+import { useDocumentMutation } from '@/hooks/use-document-mutation'
+
 import {
   createSupplierApi,
   createSupplierDebtAdjustmentApi,
@@ -98,9 +100,10 @@ export function useSupplierDebtAdjustments(supplierId: string | undefined, page 
 
 export function useCreateSupplierDebtAdjustmentMutation() {
   const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: CreateSupplierDebtAdjustmentInput) =>
-      createSupplierDebtAdjustmentApi(input),
+  return useDocumentMutation({
+    intent: 'supplier.debt-adjustment',
+    mutationFn: (input: CreateSupplierDebtAdjustmentInput, idempotencyKey) =>
+      createSupplierDebtAdjustmentApi(input, idempotencyKey),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: SUPPLIERS_KEY })
       qc.invalidateQueries({ queryKey: ['supplier-payments'] })
@@ -111,8 +114,10 @@ export function useCreateSupplierDebtAdjustmentMutation() {
 
 export function useCreateSupplierOpeningDebtMutation(supplierId: string) {
   const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: CreateOpeningDebtInput) => createSupplierOpeningDebtApi(supplierId, input),
+  return useDocumentMutation({
+    intent: `supplier.opening-debt:${supplierId}`,
+    mutationFn: (input: CreateOpeningDebtInput, idempotencyKey) =>
+      createSupplierOpeningDebtApi(supplierId, input, idempotencyKey),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: SUPPLIERS_KEY })
       qc.invalidateQueries({ queryKey: ['supplier-payments'] })

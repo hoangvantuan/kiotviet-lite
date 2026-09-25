@@ -866,18 +866,22 @@ export async function listCustomerOrders({
 }
 
 export async function createOpeningDebt({
-  db,
+  db: rootDb,
+  transaction,
   actor,
   targetId,
   input,
   meta,
 }: {
   db: Db
+  // Transaction của request có Idempotency-Key: chứng từ và phản hồi lưu cùng một lần commit
+  transaction?: ServiceTransaction
   actor: CustomersActor
   targetId: string
   input: CreateCustomerOpeningDebtInput
   meta?: RequestMeta
 }): Promise<OpeningDebt> {
+  const db = serviceDb(rootDb, transaction)
   if (actor.role !== 'owner') {
     throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được nạp nợ đầu kỳ')
   }

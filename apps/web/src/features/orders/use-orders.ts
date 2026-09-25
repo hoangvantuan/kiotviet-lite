@@ -2,6 +2,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 
 import type { ReviewOrderInput } from '@kiotviet-lite/shared'
 
+import { useDocumentMutation } from '@/hooks/use-document-mutation'
+
 import {
   type CreateOrderReturnInput,
   createReturnApi,
@@ -53,9 +55,12 @@ export function useOrderReturnsQuery(orderId: string | undefined) {
 
 export function useCreateReturnMutation() {
   const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({ orderId, input }: { orderId: string; input: CreateOrderReturnInput }) =>
-      createReturnApi(orderId, input),
+  return useDocumentMutation({
+    intent: 'order-return.create',
+    mutationFn: (
+      { orderId, input }: { orderId: string; input: CreateOrderReturnInput },
+      idempotencyKey,
+    ) => createReturnApi(orderId, input, idempotencyKey),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: [...ORDERS_KEY, 'detail', variables.orderId] })
       queryClient.invalidateQueries({ queryKey: [...ORDERS_KEY, 'returns', variables.orderId] })

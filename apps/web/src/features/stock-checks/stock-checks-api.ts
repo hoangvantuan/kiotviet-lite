@@ -57,8 +57,14 @@ export function updateStockCheckApi(id: string, input: UpdateStockCheckInput) {
   return apiClient.patch<Envelope<StockCheckDetail>>(`/api/v1/stock-checks/${id}`, input)
 }
 
-export function confirmStockCheckApi(id: string) {
-  return apiClient.post<Envelope<StockCheckDetail>>(`/api/v1/stock-checks/${id}/confirm`)
+export function confirmStockCheckApi(id: string, idempotencyKey?: string) {
+  return apiClient.post<Envelope<StockCheckDetail>>(
+    `/api/v1/stock-checks/${id}/confirm`,
+    undefined,
+    {
+      idempotencyKey,
+    },
+  )
 }
 
 export function deleteStockCheckApi(id: string) {

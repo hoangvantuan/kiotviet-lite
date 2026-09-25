@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { useDebounced } from '@/hooks/use-debounced'
+import { useBlockNavigationWhileSaving } from '@/hooks/use-document-mutation'
 import { ApiClientError } from '@/lib/api-client'
 import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
@@ -94,6 +95,7 @@ const nextTempId = () => `t-${++TEMP_ID_COUNTER}-${Date.now()}`
 export function PurchaseOrderForm() {
   const navigate = useNavigate()
   const createMutation = useCreatePurchaseOrderMutation()
+  useBlockNavigationWhileSaving(createMutation)
 
   const [supplierId, setSupplierId] = useState<string>('')
   const [supplierSearch, setSupplierSearch] = useState('')
@@ -637,6 +639,7 @@ export function PurchaseOrderForm() {
           <Button
             type="button"
             variant="outline"
+            disabled={createMutation.isPending}
             onClick={() => navigate({ to: '/inventory/purchase-orders' })}
           >
             Hủy

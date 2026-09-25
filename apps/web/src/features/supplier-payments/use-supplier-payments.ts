@@ -1,6 +1,8 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type { CreateSupplierPaymentInput, ListSupplierPaymentsQuery } from '@kiotviet-lite/shared'
+
+import { useDocumentMutation } from '@/hooks/use-document-mutation'
 
 import {
   createSupplierPaymentApi,
@@ -28,8 +30,10 @@ export function useSupplierPaymentQuery(id: string | undefined) {
 
 export function useCreateSupplierPaymentMutation() {
   const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: CreateSupplierPaymentInput) => createSupplierPaymentApi(input),
+  return useDocumentMutation({
+    intent: 'supplier-payment.create',
+    mutationFn: (input: CreateSupplierPaymentInput, idempotencyKey) =>
+      createSupplierPaymentApi(input, idempotencyKey),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: SUPPLIER_PAYMENTS_KEY })
       qc.invalidateQueries({ queryKey: ['suppliers'] })

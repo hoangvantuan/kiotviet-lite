@@ -105,3 +105,57 @@ describe('apiFetch request correlation', () => {
     })
   })
 })
+
+describe('R4 UX-03: request ghi mất phản hồi báo "chưa rõ đã lưu hay chưa"', () => {
+  it('POST có Idempotency-Key bị mất kết nối: nói rõ lưu lại an toàn', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+
+    const error = await apiFetch('/api/v1/receipts', {
+      method: 'POST',
+      body: {},
+      idempotencyKey: '5b3c1e7a-0b7e-4d5e-9d61-3c1f0d7c2a11',
+    }).catch((e: unknown) => e)
+
+    expect(error).toMatchObject({ code: 'NETWORK_ERROR', details: { outcomeUnknown: true } })
+    expect((error as ApiClientError).message).toContain('Chưa rõ đã lưu hay chưa')
+    expect((error as ApiClientError).message).toContain('không tạo bản trùng')
+  })
+
+  it('POST không có khóa: chỉ chỗ kiểm tra trước khi thao tác lại', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+
+    const error = await apiFetch('/api/v1/customers', {
+      method: 'POST',
+      body: {},
+      unknownOutcomeHint: 'Xem lại danh sách khách hàng.',
+    }).catch((e: unknown) => e)
+
+    expect((error as ApiClientError).message).toContain('Chưa rõ đã lưu hay chưa')
+    expect((error as ApiClientError).message).toContain('Xem lại danh sách khách hàng.')
+  })
+
+  it('nginx trả 504 cho POST: cũng là chưa rõ kết quả', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('<html>504 Gateway Time-out</html>', { status: 504 })),
+    )
+
+    const error = await apiFetch('/api/v1/pos/orders', {
+      method: 'POST',
+      body: {},
+      idempotencyKey: '5b3c1e7a-0b7e-4d5e-9d61-3c1f0d7c2a11',
+    }).catch((e: unknown) => e)
+
+    expect(error).toMatchObject({ status: 504, details: { outcomeUnknown: true } })
+  })
+
+  it('GET mất kết nối giữ thông báo cũ, không gửi Idempotency-Key', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const error = await apiFetch('/api/v1/products').catch((e: unknown) => e)
+
+    expect((error as ApiClientError).message).toContain('Không thể kết nối đến máy chủ')
+    expect((fetchMock.mock.calls[0]![1].headers as Headers).get('Idempotency-Key')).toBeNull()
+  })
+})

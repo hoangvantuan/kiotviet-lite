@@ -61,6 +61,29 @@ Tắt và cập nhật: khi nhận SIGTERM, API ngừng nhận job nhập mới,
 hàng đợi và chạy lại từ đầu sau khi API lên), đóng pool DB rồi thoát; tổng tối đa 30 giây
 (`stop_grace_period: 45s`).
 
+### Nâng cấp lên bản có bộ đếm mã chứng từ (R4, migration 0053)
+
+Từ migration `0053_document_counters_idempotency`, mã đơn bán (HD), phiếu trả (TH) và phiếu nhập
+(PN) cấp từ bảng `document_counters`, lần đầu trong ngày tiếp nối mã lớn nhất đã có. Bản cũ vẫn cấp mã bằng
+MAX+1 và không biết bộ đếm: nếu bản cũ còn nhận request trong lúc bản mới đã chạy, hai bên cấp
+trùng mã (hoặc request lỗi vì trùng khóa duy nhất). `up -d --build` chạy `migrate` trong lúc api
+cũ còn phục vụ, nên lần nâng cấp này phải dừng api cũ trước:
+
+```bash
+docker compose -f docker-compose.prod.yml stop web api
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Không chạy song song hai phiên bản api (ví dụ triển khai kiểu blue/green) qua mốc này. Các lần
+cập nhật sau, khi mọi instance đều đã dùng bộ đếm, cập nhật bình thường như trên.
+
+Bộ đếm khóa một dòng theo cửa hàng và tiền tố mã (loại chứng từ cộng ngày), nên các đơn bán cùng lúc trong một
+cửa hàng được cấp mã lần lượt (mỗi đơn chờ đơn trước commit). Ở quy mô một cửa hàng việc này
+không đáng kể.
+
+Bảng `idempotency_keys` (chống tạo chứng từ đôi khi bấm lưu lại) tự dọn: api xóa khóa cũ hơn
+7 ngày lúc khởi động và mỗi 6 giờ.
+
 ### Kiểm tra sau migration 0047 (sổ công nợ R3)
 
 Migration `0047_debt_ledger_backfill` đưa dữ liệu công nợ cũ về sổ công nợ duy nhất
@@ -118,6 +141,20 @@ khi kết nối tới từ địa chỉ nội bộ, tức cloudflared), rồi GH
 API đặt `TRUSTED_PROXY_HOPS=1` trong compose nên chỉ tin đúng một địa chỉ do nginx ghi. Chạy API
 không qua nginx thì bỏ biến này (mặc định 0), API dùng địa chỉ socket và bỏ qua mọi header IP.
 Đăng nhập còn bị giới hạn 10 lần sai / 15 phút / số điện thoại, bất kể IP.
+
+Thời gian chờ giữa nginx và API (`deploy/nginx.conf`, khối `location /api/`):
+
+| Thiết lập               | Giá trị | Lý do                                                                             |
+| ----------------------- | ------- | --------------------------------------------------------------------------------- |
+| `proxy_connect_timeout` | 5s      | api cùng mạng Docker, không kết nối được trong 5s là api không chạy               |
+| `proxy_send_timeout`    | 60s     | gửi body lên API (file import tối đa 20 MB theo `client_max_body_size`)           |
+| `proxy_read_timeout`    | 90s     | chờ API trả lời; dưới ngưỡng 100s của Cloudflare (lỗi 524) để nginx báo 504 trước |
+
+Hết thời gian chờ không có nghĩa request bị hủy: API vẫn có thể lưu xong chứng từ. Vì vậy mọi
+thao tác tạo đơn, phiếu thu, phiếu chi, phiếu nhập, phiếu trả gửi kèm `Idempotency-Key` (R4). Web
+coi mất kết nối, 502, 504, 524 với request ghi là "chưa rõ đã lưu hay chưa": giữ nguyên form, người
+dùng bấm lưu lại với cùng khóa, API trả lại đúng chứng từ đã lưu (header `Idempotent-Replayed: true`)
+thay vì tạo bản thứ hai. Tăng `proxy_read_timeout` thì giữ dưới 100s nếu đi qua Cloudflare.
 
 ## 4. Log và điều tra sự cố
 
