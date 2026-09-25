@@ -79,6 +79,21 @@ test.describe('Issue #35: POS Price List Selection (Desktop & Mobile)', () => {
     const fallbackBadge = fallbackRow.locator('[data-testid="price-source-badge"]')
     await expect(fallbackBadge).toContainText(/dự phòng/i)
 
+    // 5b. Bảng công thức "Giá VIP" (giảm 5% so với giá sỉ, làm tròn trăm) có dòng giá thật:
+    // Cà rốt 21.250 x 95% = 20.187,5 làm tròn thành 20.200, mặt hàng ngoài bảng vẫn dự phòng
+    await priceListSelect.click()
+    await page.getByRole('option', { name: 'Giá VIP' }).click()
+    await expect(priceListSelect).toContainText('Giá VIP')
+    await expect(carrotRow.getByRole('button', { name: 'Sửa giá bán' })).toContainText('20.200')
+    await expect(carrotBadge).toContainText(/Giá VIP|Bảng giá/)
+    await expect(fallbackRow.getByRole('button', { name: 'Sửa giá bán' })).toContainText('150.000')
+    await expect(fallbackBadge).toContainText(/dự phòng/i)
+
+    // Quay lại "Giá sỉ" cho các bước sau
+    await priceListSelect.click()
+    await page.getByRole('option', { name: 'Giá sỉ' }).click()
+    await expect(carrotRow.getByRole('button', { name: 'Sửa giá bán' })).toContainText('21.250')
+
     // 6. Independent tabs:
     // Switch to Tab 2
     const tab2Btn = page.getByRole('tab', { name: /Đơn 2|Hoá đơn 2/i })
