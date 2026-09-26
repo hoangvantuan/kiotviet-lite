@@ -84,7 +84,8 @@ async function expectDayFilter(path: string, fromKey: string, toKey: string) {
 describe('R7: lọc danh sách theo ngày YYYY-MM-DD theo giờ cửa hàng khi máy chủ chạy UTC', () => {
   it('phiếu thu', async () => {
     await base.db.insert(receipts).values(
-      MOMENTS.map((createdAt) => ({
+      MOMENTS.map((createdAt, i) => ({
+        code: `PT-R7-A${i}`,
         storeId: base.storeId,
         customerId,
         amount: 10_000,
@@ -166,7 +167,8 @@ describe('R7: lọc danh sách theo ngày YYYY-MM-DD theo giờ cửa hàng khi 
 
   it('vẫn nhận thời điểm ISO đầy đủ và giữ nguyên', async () => {
     await base.db.insert(receipts).values(
-      MOMENTS.map((createdAt) => ({
+      MOMENTS.map((createdAt, i) => ({
+        code: `PT-R7-B${i}`,
         storeId: base.storeId,
         customerId,
         amount: 10_000,

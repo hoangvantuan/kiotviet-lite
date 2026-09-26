@@ -337,6 +337,7 @@ describe('Công nợ: TIEN-112 tuổi nợ theo ngày lịch, BC-14 tổng hợp
   it('BC-14: debt-summary from=to=hôm nay (YYYY-MM-DD) đếm phiếu thu trong ngày giờ VN', async () => {
     const day = todayKey()
     await env.base.db.insert(receipts).values({
+      code: 'PT-R7-0001',
       storeId: env.base.storeId,
       customerId,
       amount: 30_000,
