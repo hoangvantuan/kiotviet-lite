@@ -13,11 +13,14 @@ import {
   type SQL,
   sql,
 } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/pg-core'
 
 import {
+  type CancelDocumentInput,
   type CreateReceiptInput,
   customers,
   debts,
+  type DocumentStatus,
   formatCurrencyVnd as formatVnd,
   type ListReceiptsQuery,
   type OpenDebtItem,
@@ -37,7 +40,12 @@ import { logger } from '../lib/logger.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { parseDateRangeBoundary } from '../lib/timezone.js'
 import { logAction, type RequestMeta } from './audit.service.js'
-import { settleCustomerDebts } from './customer-debt-ledger.service.js'
+import {
+  lockCustomerForDebt,
+  reverseCustomerPayments,
+  settleCustomerDebts,
+} from './customer-debt-ledger.service.js'
+import { alreadyCancelledError, authorizeDocumentCancel } from './document-cancel.helper.js'
 import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
 export interface ReceiptsActor {
@@ -57,6 +65,11 @@ interface ReceiptRow {
   amount: number
   note: string | null
   allocationCount: number
+  status: string
+  cancelledAt: Date | null
+  cancelledBy: string | null
+  cancelledByName: string | null
+  cancelReason: string | null
   createdBy: string
   createdByName: string | null
   createdAt: Date
@@ -72,6 +85,11 @@ export function toReceiptListItem(row: ReceiptRow): ReceiptListItem {
     amount: Number(row.amount),
     note: row.note,
     allocationCount: Number(row.allocationCount),
+    status: row.status as DocumentStatus,
+    cancelledAt: row.cancelledAt ? row.cancelledAt.toISOString() : null,
+    cancelledBy: row.cancelledBy,
+    cancelledByName: row.cancelledByName,
+    cancelReason: row.cancelReason,
     createdBy: row.createdBy,
     createdByName: row.createdByName,
     createdAt: row.createdAt.toISOString(),
@@ -106,6 +124,8 @@ const allocationCountSubquery = sql<number>`(
   WHERE ${receiptAllocations.receiptId} = ${receipts.id}
 )`
 
+const cancellers = alias(users, 'receipt_cancellers')
+
 const receiptSelectColumns = {
   id: receipts.id,
   customerId: receipts.customerId,
@@ -115,6 +135,11 @@ const receiptSelectColumns = {
   amount: receipts.amount,
   note: receipts.note,
   allocationCount: allocationCountSubquery,
+  status: receipts.status,
+  cancelledAt: receipts.cancelledAt,
+  cancelledBy: receipts.cancelledBy,
+  cancelledByName: cancellers.name,
+  cancelReason: receipts.cancelReason,
   createdBy: receipts.createdBy,
   createdByName: users.name,
   createdAt: receipts.createdAt,
@@ -171,6 +196,7 @@ export async function listReceipts({
     .from(receipts)
     .leftJoin(customers, eq(receipts.customerId, customers.id))
     .leftJoin(users, eq(receipts.createdBy, users.id))
+    .leftJoin(cancellers, eq(receipts.cancelledBy, cancellers.id))
     .where(whereClause)
     .orderBy(desc(receipts.createdAt), desc(receipts.id))
     .limit(pageSize)
@@ -242,6 +268,7 @@ export async function getReceipt({
     .from(receipts)
     .leftJoin(customers, eq(receipts.customerId, customers.id))
     .leftJoin(users, eq(receipts.createdBy, users.id))
+    .leftJoin(cancellers, eq(receipts.cancelledBy, cancellers.id))
     .where(and(eq(receipts.id, targetId), eq(receipts.storeId, storeId)))
     .limit(1)
 
@@ -523,6 +550,11 @@ export async function createReceipt({
       amount: input.amount,
       note: noteNormalized,
       allocationCount: input.allocations.length,
+      status: 'active',
+      cancelledAt: null,
+      cancelledBy: null,
+      cancelledByName: null,
+      cancelReason: null,
       createdBy: actor.userId,
       createdByName: actorRows[0]?.name ?? null,
       createdAt: receiptRow.createdAt.toISOString(),
@@ -530,4 +562,102 @@ export async function createReceipt({
       allocations,
     }
   })
+}
+
+export interface CancelReceiptDeps {
+  db: Db
+  transaction?: ServiceTransaction
+  actor: ReceiptsActor
+  receiptId: string
+  input: CancelDocumentInput
+  meta?: RequestMeta
+}
+
+/**
+ * TIEN-107: hủy phiếu thu. Phiếu không bị xóa, đổi sang 'cancelled' kèm người hủy, lúc hủy, lý do.
+ * Số đã thu trả lại đúng các khoản nợ phiếu đã phân bổ (bút toán đảo trong sổ công nợ), dòng
+ * phân bổ giữ làm vết. Thứ tự khóa: phiếu thu, khách, các khoản nợ theo id (ADR-0008).
+ * Phiếu đã hủy thì 409, không đảo lần hai.
+ */
+export async function cancelReceipt({
+  db: rootDb,
+  transaction,
+  actor,
+  receiptId,
+  input,
+  meta,
+}: CancelReceiptDeps): Promise<ReceiptDetail> {
+  const db = serviceDb(rootDb, transaction)
+  const approver = await authorizeDocumentCancel({ db, actor, input, meta })
+  await db.transaction(async (tx) => {
+    const txDb = tx as unknown as Db
+    const [receipt] = await tx
+      .select()
+      .from(receipts)
+      .where(and(eq(receipts.id, receiptId), eq(receipts.storeId, actor.storeId)))
+      .for('update')
+      .limit(1)
+    if (!receipt) {
+      throw new ApiError('NOT_FOUND', 'Không tìm thấy phiếu thu')
+    }
+    if (receipt.status === 'cancelled') {
+      throw alreadyCancelledError('Phiếu thu')
+    }
+
+    const customer = await lockCustomerForDebt(txDb, {
+      storeId: actor.storeId,
+      customerId: receipt.customerId,
+    })
+    const allocationRows = await tx
+      .select({ debtId: receiptAllocations.debtId, amount: receiptAllocations.amount })
+      .from(receiptAllocations)
+      .where(eq(receiptAllocations.receiptId, receipt.id))
+    const allocations = allocationRows.map((a) => ({ debtId: a.debtId, amount: Number(a.amount) }))
+
+    await reverseCustomerPayments(txDb, {
+      storeId: actor.storeId,
+      customerId: receipt.customerId,
+      allocations,
+    })
+
+    const reason = input.reason.trim()
+    await tx
+      .update(receipts)
+      .set({
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        cancelledBy: actor.userId,
+        cancelReason: reason,
+      })
+      .where(eq(receipts.id, receipt.id))
+
+    const debtBefore = customer.currentDebt
+    const debtAfter = debtBefore + Number(receipt.amount)
+    await logAction({
+      db: txDb,
+      storeId: actor.storeId,
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: 'receipt.cancelled',
+      targetType: 'receipt',
+      targetId: receipt.id,
+      changes: {
+        customerId: receipt.customerId,
+        amount: Number(receipt.amount),
+        reason,
+        debtBefore,
+        debtAfter,
+        allocations,
+        approvedBy: approver?.userId ?? null,
+        approvedByName: approver?.name ?? null,
+      },
+      ipAddress: meta?.ipAddress,
+      userAgent: meta?.userAgent,
+    })
+    logger.info(
+      { storeId: actor.storeId, actorId: actor.userId, receiptId: receipt.id, debtAfter },
+      'receipt.cancelled',
+    )
+  })
+  return getReceipt({ db, storeId: actor.storeId, targetId: receiptId })
 }

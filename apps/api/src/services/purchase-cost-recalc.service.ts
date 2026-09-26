@@ -169,6 +169,26 @@ async function replayInflation(
     )
     .orderBy(asc(inventoryTransactions.createdAt), asc(inventoryTransactions.id))
 
+  // KHO-11: hủy phiếu nhập, trả hàng nhập rút lại lô theo giá nhập thực (ADR-0012), δ không còn
+  // đi theo công thức pha loãng ở dưới, nên sản phẩm có các giao dịch này phải xem tay
+  const [removal] = await db
+    .select({ id: inventoryTransactions.id })
+    .from(inventoryTransactions)
+    .where(
+      and(
+        eq(inventoryTransactions.productId, productId),
+        inArray(inventoryTransactions.type, ['purchase_cancel', 'purchase_return']),
+      ),
+    )
+    .limit(1)
+  if (removal) {
+    return {
+      delta: 0,
+      lastCostAfter: null,
+      broken: 'Có hủy phiếu nhập hoặc trả hàng nhập, không tính lại tự động được, cần xem tay',
+    }
+  }
+
   // Lần tính lại đã áp dụng trước đó: giá vốn đã đúng tại thời điểm đó, δ về 0 (chạy lại an toàn)
   const recalcs = await db
     .select({ changes: auditLogs.changes, createdAt: auditLogs.createdAt })

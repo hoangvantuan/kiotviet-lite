@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 
 import {
+  cancelDocumentSchema,
   createOrderReturnSchema,
   hasPermission,
   listOrdersQuerySchema,
@@ -15,6 +16,7 @@ import { errorHandler } from '../middleware/error-handler.js'
 import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
+import { cancelOrder } from '../services/order-cancel.service.js'
 import { countPendingReview, reviewOrder } from '../services/order-review.service.js'
 import { getOrderDetail, listOrders } from '../services/orders.service.js'
 import {
@@ -117,6 +119,25 @@ export function createOrdersRoutes({ db }: OrdersRoutesDeps) {
         meta: getRequestMeta(c),
       })
       return c.json({ data }, 201)
+    }),
+  )
+
+  // TIEN-107: hủy đơn bán. Nhân viên được gọi nhưng phải kèm PIN của người có quyền hủy
+  app.post(
+    '/:id/cancel',
+    idempotent(db, async (c, transaction) => {
+      const auth = c.get('auth')
+      const id = uuidParam.parse(c.req.param('id'))
+      const input = await parseJson(c, cancelDocumentSchema)
+      const data = await cancelOrder({
+        db,
+        transaction,
+        actor: auth,
+        orderId: id,
+        input,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data })
     }),
   )
 

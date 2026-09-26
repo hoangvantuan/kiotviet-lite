@@ -16,6 +16,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { activePurchaseOrderFilter } from '../lib/document-status.js'
 import { localDateKey, parseDateRangeLocal } from '../lib/timezone.js'
 
 export async function getPriceOverrides(
@@ -168,6 +169,7 @@ export async function getPriceHistory(
 
   const conditions = [
     eq(purchaseOrders.storeId, storeId),
+    activePurchaseOrderFilter(),
     gte(purchaseOrders.purchaseDate, start),
     lte(purchaseOrders.purchaseDate, end),
   ]

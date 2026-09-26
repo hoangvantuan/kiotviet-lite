@@ -1,9 +1,13 @@
 import { and, desc, eq, gte, ilike, isNull, lte, or, type SQL, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/pg-core'
 
 import {
+  type CancelDocumentInput,
   type CreateSupplierPaymentInput,
+  type DocumentStatus,
   formatCurrencyVnd as formatVnd,
   type ListSupplierPaymentsQuery,
+  purchaseOrders,
   type SupplierPaymentDetail,
   type SupplierPaymentListItem,
   supplierPayments,
@@ -18,6 +22,11 @@ import { logger } from '../lib/logger.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { parseDateRangeBoundary } from '../lib/timezone.js'
 import { logAction, type RequestMeta } from './audit.service.js'
+import { alreadyCancelledError } from './document-cancel.helper.js'
+import {
+  loadPurchaseOrderPayables,
+  refreshPurchaseOrderPaymentStatus,
+} from './purchase-orders.service.js'
 import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
 export interface SupplierPaymentsActor {
@@ -33,6 +42,13 @@ interface SupplierPaymentRow {
   supplierPhone: string | null
   amount: number
   note: string | null
+  purchaseOrderId: string | null
+  purchaseOrderCode: string | null
+  status: string
+  cancelledAt: Date | null
+  cancelledBy: string | null
+  cancelledByName: string | null
+  cancelReason: string | null
   createdBy: string
   createdByName: string | null
   createdAt: Date
@@ -46,6 +62,13 @@ export function toSupplierPaymentListItem(row: SupplierPaymentRow): SupplierPaym
     supplierPhone: row.supplierPhone,
     amount: Number(row.amount),
     note: row.note,
+    purchaseOrderId: row.purchaseOrderId,
+    purchaseOrderCode: row.purchaseOrderCode,
+    status: row.status as DocumentStatus,
+    cancelledAt: row.cancelledAt ? row.cancelledAt.toISOString() : null,
+    cancelledBy: row.cancelledBy,
+    cancelledByName: row.cancelledByName,
+    cancelReason: row.cancelReason,
     createdBy: row.createdBy,
     createdByName: row.createdByName,
     createdAt: row.createdAt.toISOString(),
@@ -64,6 +87,8 @@ export function toSupplierPaymentDetail(
 
 export { formatVnd }
 
+const cancellers = alias(users, 'supplier_payment_cancellers')
+
 const supplierPaymentSelectColumns = {
   id: supplierPayments.id,
   supplierId: supplierPayments.supplierId,
@@ -71,6 +96,13 @@ const supplierPaymentSelectColumns = {
   supplierPhone: suppliers.phone,
   amount: supplierPayments.amount,
   note: supplierPayments.note,
+  purchaseOrderId: supplierPayments.purchaseOrderId,
+  purchaseOrderCode: purchaseOrders.code,
+  status: supplierPayments.status,
+  cancelledAt: supplierPayments.cancelledAt,
+  cancelledBy: supplierPayments.cancelledBy,
+  cancelledByName: cancellers.name,
+  cancelReason: supplierPayments.cancelReason,
   createdBy: supplierPayments.createdBy,
   createdByName: users.name,
   createdAt: supplierPayments.createdAt,
@@ -123,6 +155,8 @@ export async function listSupplierPayments({
     .from(supplierPayments)
     .leftJoin(suppliers, eq(supplierPayments.supplierId, suppliers.id))
     .leftJoin(users, eq(supplierPayments.createdBy, users.id))
+    .leftJoin(purchaseOrders, eq(supplierPayments.purchaseOrderId, purchaseOrders.id))
+    .leftJoin(cancellers, eq(supplierPayments.cancelledBy, cancellers.id))
     .where(whereClause)
     .orderBy(desc(supplierPayments.createdAt), desc(supplierPayments.id))
     .limit(pageSize)
@@ -162,6 +196,8 @@ export async function getSupplierPayment({
     .from(supplierPayments)
     .leftJoin(suppliers, eq(supplierPayments.supplierId, suppliers.id))
     .leftJoin(users, eq(supplierPayments.createdBy, users.id))
+    .leftJoin(purchaseOrders, eq(supplierPayments.purchaseOrderId, purchaseOrders.id))
+    .leftJoin(cancellers, eq(supplierPayments.cancelledBy, cancellers.id))
     .where(and(eq(supplierPayments.id, targetId), eq(supplierPayments.storeId, storeId)))
     .limit(1)
 
@@ -197,6 +233,28 @@ export async function createSupplierPayment({
   return db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
 
+    // TIEN-104: phiếu chi gắn phiếu nhập. Khóa phiếu nhập trước NCC (thứ tự khóa chứng từ, NCC,
+    // sản phẩm như hủy phiếu nhập), phiếu phải còn hiệu lực, cùng NCC, và chi không vượt số còn
+    // phải trả của phiếu.
+    const purchaseOrderId = input.purchaseOrderId ?? null
+    let purchaseOrderCode: string | null = null
+    let purchaseOrderOutstanding: number | null = null
+    if (purchaseOrderId) {
+      const payables = await loadPurchaseOrderPayables(txDb, {
+        storeId: actor.storeId,
+        purchaseOrderId,
+        forUpdate: true,
+      })
+      if (payables.supplierId !== input.supplierId) {
+        throw new ApiError('VALIDATION_ERROR', 'Phiếu nhập không thuộc nhà cung cấp này')
+      }
+      if (payables.status !== 'active') {
+        throw new ApiError('BUSINESS_RULE_VIOLATION', 'Phiếu nhập đã hủy, không chi tiền được')
+      }
+      purchaseOrderCode = payables.code
+      purchaseOrderOutstanding = payables.outstanding
+    }
+
     const supplierRows = await tx
       .select()
       .from(suppliers)
@@ -229,6 +287,15 @@ export async function createSupplierPayment({
       )
     }
 
+    if (purchaseOrderOutstanding !== null && input.amount > purchaseOrderOutstanding) {
+      throw new ApiError(
+        'BUSINESS_RULE_VIOLATION',
+        `Số tiền chi (${formatVnd(input.amount)}) vượt quá số còn phải trả của phiếu ${purchaseOrderCode} (${formatVnd(
+          Math.max(0, purchaseOrderOutstanding),
+        )})`,
+      )
+    }
+
     const noteNormalized = input.note?.trim() || null
 
     const [paymentRow] = await tx
@@ -238,6 +305,7 @@ export async function createSupplierPayment({
         supplierId: input.supplierId,
         amount: input.amount,
         note: noteNormalized,
+        purchaseOrderId,
         createdBy: actor.userId,
       })
       .returning({ id: supplierPayments.id, createdAt: supplierPayments.createdAt })
@@ -253,6 +321,9 @@ export async function createSupplierPayment({
         currentDebt: sql`${suppliers.currentDebt} - ${input.amount}`,
       })
       .where(and(eq(suppliers.id, input.supplierId), eq(suppliers.storeId, actor.storeId)))
+    if (purchaseOrderId) {
+      await refreshPurchaseOrderPaymentStatus(txDb, purchaseOrderId)
+    }
 
     const actorRows = await tx
       .select({ name: users.name })
@@ -273,6 +344,8 @@ export async function createSupplierPayment({
         supplierName: supplier.name,
         amount: input.amount,
         note: noteNormalized,
+        purchaseOrderId,
+        purchaseOrderCode,
         debtBefore,
         debtAfter: debtAfterValue,
       },
@@ -301,6 +374,13 @@ export async function createSupplierPayment({
         supplierPhone: supplier.phone,
         amount: input.amount,
         note: noteNormalized,
+        purchaseOrderId,
+        purchaseOrderCode,
+        status: 'active',
+        cancelledAt: null,
+        cancelledBy: null,
+        cancelledByName: null,
+        cancelReason: null,
         createdBy: actor.userId,
         createdByName: actorRows[0]?.name ?? null,
         createdAt: paymentRow.createdAt,
@@ -308,4 +388,110 @@ export async function createSupplierPayment({
       debtAfterValue,
     )
   })
+}
+
+export interface CancelSupplierPaymentDeps {
+  db: Db
+  transaction?: ServiceTransaction
+  actor: SupplierPaymentsActor
+  paymentId: string
+  input: CancelDocumentInput
+  meta?: RequestMeta
+}
+
+/**
+ * TIEN-107: hủy phiếu chi NCC. Chỉ chủ cửa hàng, cùng quyền với lập phiếu chi. Phiếu không bị xóa,
+ * đổi sang 'cancelled'; số đã chi cộng lại vào công nợ NCC, phiếu nhập được gắn (nếu có) tính lại
+ * trạng thái thanh toán. Thứ tự khóa: phiếu chi, phiếu nhập, NCC. Hủy lần hai thì 409.
+ */
+export async function cancelSupplierPayment({
+  db: rootDb,
+  transaction,
+  actor,
+  paymentId,
+  input,
+  meta,
+}: CancelSupplierPaymentDeps): Promise<SupplierPaymentDetail> {
+  const db = serviceDb(rootDb, transaction)
+  if (actor.role !== 'owner') {
+    throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được hủy phiếu chi')
+  }
+  await db.transaction(async (tx) => {
+    const txDb = tx as unknown as Db
+    const [payment] = await tx
+      .select()
+      .from(supplierPayments)
+      .where(and(eq(supplierPayments.id, paymentId), eq(supplierPayments.storeId, actor.storeId)))
+      .for('update')
+      .limit(1)
+    if (!payment) {
+      throw new ApiError('NOT_FOUND', 'Không tìm thấy phiếu chi')
+    }
+    if (payment.status === 'cancelled') {
+      throw alreadyCancelledError('Phiếu chi')
+    }
+    if (payment.purchaseOrderId) {
+      await loadPurchaseOrderPayables(txDb, {
+        storeId: actor.storeId,
+        purchaseOrderId: payment.purchaseOrderId,
+        forUpdate: true,
+      })
+    }
+    const [supplier] = await tx
+      .select({ id: suppliers.id, currentDebt: suppliers.currentDebt })
+      .from(suppliers)
+      .where(and(eq(suppliers.id, payment.supplierId), eq(suppliers.storeId, actor.storeId)))
+      .for('update')
+      .limit(1)
+    if (!supplier) {
+      throw new ApiError('NOT_FOUND', 'Không tìm thấy nhà cung cấp')
+    }
+
+    const amount = Number(payment.amount)
+    const debtBefore = Number(supplier.currentDebt)
+    const debtAfter = debtBefore + amount
+    await tx
+      .update(suppliers)
+      .set({ currentDebt: sql`${suppliers.currentDebt} + ${amount}` })
+      .where(eq(suppliers.id, supplier.id))
+
+    const reason = input.reason.trim()
+    await tx
+      .update(supplierPayments)
+      .set({
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        cancelledBy: actor.userId,
+        cancelReason: reason,
+      })
+      .where(eq(supplierPayments.id, payment.id))
+    if (payment.purchaseOrderId) {
+      await refreshPurchaseOrderPaymentStatus(txDb, payment.purchaseOrderId)
+    }
+
+    await logAction({
+      db: txDb,
+      storeId: actor.storeId,
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: 'supplier_payment.cancelled',
+      targetType: 'supplier_payment',
+      targetId: payment.id,
+      changes: {
+        supplierId: payment.supplierId,
+        amount,
+        reason,
+        purchaseOrderId: payment.purchaseOrderId,
+        debtBefore,
+        debtAfter,
+      },
+      ipAddress: meta?.ipAddress,
+      userAgent: meta?.userAgent,
+    })
+    logger.info(
+      { storeId: actor.storeId, paymentId: payment.id, debtAfter },
+      'supplier_payment.cancelled',
+    )
+  })
+  return getSupplierPayment({ db, storeId: actor.storeId, targetId: paymentId })
 }

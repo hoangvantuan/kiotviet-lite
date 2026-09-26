@@ -1822,6 +1822,9 @@ export interface OrderDetailFull {
   reviewedByName: string | null
   reviewedAt: string | null
   reviewNote: string | null
+  cancelledAt: string | null
+  cancelledByName: string | null
+  cancelReason: string | null
   items: OrderDetailItem[]
   createdAt: string
   updatedAt: string
@@ -1874,6 +1877,9 @@ export async function getOrderDetail({
       reviewedBy: orders.reviewedBy,
       reviewedAt: orders.reviewedAt,
       reviewNote: orders.reviewNote,
+      cancelledAt: orders.cancelledAt,
+      cancelledBy: orders.cancelledBy,
+      cancelReason: orders.cancelReason,
       createdAt: orders.createdAt,
       updatedAt: orders.updatedAt,
       debtRemaining: debts.remaining,
@@ -1969,6 +1975,16 @@ export async function getOrderDetail({
       .limit(1)
     reviewedByName = reviewer?.name ?? null
   }
+  // TIEN-107: đơn đã hủy kèm người hủy, lúc hủy, lý do
+  let cancelledByName: string | null = null
+  if (row.cancelledBy) {
+    const [canceller] = await db
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, row.cancelledBy))
+      .limit(1)
+    cancelledByName = canceller?.name ?? null
+  }
 
   return {
     id: row.id,
@@ -2006,6 +2022,9 @@ export async function getOrderDetail({
     reviewedByName,
     reviewedAt: row.reviewedAt?.toISOString() ?? null,
     reviewNote: row.reviewNote ?? null,
+    cancelledAt: row.cancelledAt?.toISOString() ?? null,
+    cancelledByName,
+    cancelReason: row.cancelReason ?? null,
     items,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

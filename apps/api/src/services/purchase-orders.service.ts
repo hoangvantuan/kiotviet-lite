@@ -1,8 +1,10 @@
-import { and, asc, desc, eq, gte, ilike, lte, or, type SQL, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, ilike, inArray, lte, or, type SQL, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/pg-core'
 
 import {
   type CreatePurchaseOrderInput,
   type DiscountType,
+  type DocumentStatus,
   inventoryTransactions,
   type ListPurchaseOrdersQuery,
   type PaymentStatus,
@@ -12,6 +14,10 @@ import {
   purchaseOrderItems,
   type PurchaseOrderListItem,
   purchaseOrders,
+  type PurchaseReturn,
+  purchaseReturnItems,
+  purchaseReturns,
+  supplierPayments,
   suppliers,
   type UserRole,
   users,
@@ -47,6 +53,120 @@ export function determinePaymentStatus(totalAmount: number, paidAmount: number):
   if (paidAmount === 0) return 'unpaid'
   if (paidAmount === totalAmount) return 'paid'
   return 'partial'
+}
+
+/**
+ * Trạng thái thanh toán của phiếu nhập sau phát sinh (TIEN-104, KHO-11): so số đã trả ròng với số
+ * phải trả ròng (tổng phiếu trừ hàng đã trả NCC). Trả hết hàng thì không còn gì phải trả.
+ */
+export function derivePurchaseOrderPaymentStatus(payable: number, paid: number): PaymentStatus {
+  if (payable <= 0) return 'paid'
+  if (paid <= 0) return 'unpaid'
+  if (paid >= payable) return 'paid'
+  return 'partial'
+}
+
+/** Tổng phiếu chi còn hiệu lực gắn với phiếu nhập (TIEN-104) */
+function linkedPaymentSubquery(): SQL<string> {
+  return sql<string>`COALESCE((
+    SELECT SUM(${supplierPayments.amount}) FROM ${supplierPayments}
+    WHERE ${supplierPayments.purchaseOrderId} = ${purchaseOrders.id}
+      AND ${supplierPayments.status} = 'active'
+  ), 0)`
+}
+
+export interface PurchaseOrderPayables {
+  id: string
+  code: string
+  supplierId: string
+  status: DocumentStatus
+  totalAmount: number
+  discountTotal: number
+  initialPaidAmount: number
+  linkedPaymentAmount: number
+  returnedAmount: number
+  returnRefundAmount: number
+  /** Tổng phiếu trừ hàng đã trả NCC */
+  payable: number
+  /** Trả lúc nhập + phiếu chi gắn phiếu - NCC hoàn khi trả hàng */
+  paidNet: number
+  /** Còn phải trả cho phiếu; có thể âm khi đã trả dư qua phiếu chi không gắn phiếu */
+  outstanding: number
+}
+
+/**
+ * Đọc (và khóa khi `forUpdate`) phiếu nhập cùng số phải trả, đã trả ròng. Phiếu nhập là chứng từ
+ * nên khóa trước NCC và sản phẩm.
+ */
+export async function loadPurchaseOrderPayables(
+  db: Db,
+  {
+    storeId,
+    purchaseOrderId,
+    forUpdate = false,
+  }: { storeId: string; purchaseOrderId: string; forUpdate?: boolean },
+): Promise<PurchaseOrderPayables> {
+  const query = db
+    .select({
+      id: purchaseOrders.id,
+      code: purchaseOrders.code,
+      supplierId: purchaseOrders.supplierId,
+      status: purchaseOrders.status,
+      totalAmount: purchaseOrders.totalAmount,
+      discountTotal: purchaseOrders.discountTotal,
+      paidAmount: purchaseOrders.paidAmount,
+      returnedAmount: purchaseOrders.returnedAmount,
+      returnRefundAmount: purchaseOrders.returnRefundAmount,
+    })
+    .from(purchaseOrders)
+    .where(and(eq(purchaseOrders.id, purchaseOrderId), eq(purchaseOrders.storeId, storeId)))
+    .limit(1)
+  const [row] = forUpdate ? await query.for('update') : await query
+  if (!row) {
+    throw new ApiError('NOT_FOUND', 'Không tìm thấy phiếu nhập')
+  }
+  const [linked] = await db
+    .select({ sum: sql<string>`COALESCE(SUM(${supplierPayments.amount}), 0)` })
+    .from(supplierPayments)
+    .where(and(eq(supplierPayments.purchaseOrderId, row.id), eq(supplierPayments.status, 'active')))
+  const totalAmount = Number(row.totalAmount)
+  const initialPaidAmount = Number(row.paidAmount)
+  const linkedPaymentAmount = Number(linked?.sum ?? 0)
+  const returnedAmount = Number(row.returnedAmount)
+  const returnRefundAmount = Number(row.returnRefundAmount)
+  const payable = totalAmount - returnedAmount
+  const paidNet = initialPaidAmount + linkedPaymentAmount - returnRefundAmount
+  return {
+    id: row.id,
+    code: row.code,
+    supplierId: row.supplierId,
+    status: row.status as DocumentStatus,
+    totalAmount,
+    discountTotal: Number(row.discountTotal),
+    initialPaidAmount,
+    linkedPaymentAmount,
+    returnedAmount,
+    returnRefundAmount,
+    payable,
+    paidNet,
+    outstanding: payable - paidNet,
+  }
+}
+
+/** Ghi lại trạng thái thanh toán của phiếu nhập còn hiệu lực sau phiếu chi, hủy phiếu chi, trả hàng */
+export async function refreshPurchaseOrderPaymentStatus(db: Db, purchaseOrderId: string) {
+  const [row] = await db
+    .select({ storeId: purchaseOrders.storeId })
+    .from(purchaseOrders)
+    .where(eq(purchaseOrders.id, purchaseOrderId))
+    .limit(1)
+  if (!row) return
+  const p = await loadPurchaseOrderPayables(db, { storeId: row.storeId, purchaseOrderId })
+  if (p.status !== 'active') return
+  await db
+    .update(purchaseOrders)
+    .set({ paymentStatus: derivePurchaseOrderPaymentStatus(p.payable, p.paidNet) })
+    .where(eq(purchaseOrders.id, purchaseOrderId))
 }
 
 // Giới hạn số lượng một dòng sau khi quy ra đơn vị tính, cùng mức với schema dòng nhập
@@ -438,6 +558,16 @@ export async function getPurchaseOrder({
       totalAmount: purchaseOrders.totalAmount,
       paidAmount: purchaseOrders.paidAmount,
       paymentStatus: purchaseOrders.paymentStatus,
+      status: purchaseOrders.status,
+      returnedAmount: purchaseOrders.returnedAmount,
+      returnRefundAmount: purchaseOrders.returnRefundAmount,
+      linkedPaymentAmount: linkedPaymentSubquery(),
+      cancelledAt: purchaseOrders.cancelledAt,
+      cancelledBy: purchaseOrders.cancelledBy,
+      cancelledByName: poCancellers.name,
+      cancelReason: purchaseOrders.cancelReason,
+      cancelDebtReduction: purchaseOrders.cancelDebtReduction,
+      cancelSupplierRefund: purchaseOrders.cancelSupplierRefund,
       note: purchaseOrders.note,
       purchaseDate: purchaseOrders.purchaseDate,
       createdBy: purchaseOrders.createdBy,
@@ -450,6 +580,7 @@ export async function getPurchaseOrder({
     .from(purchaseOrders)
     .innerJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
     .leftJoin(users, eq(purchaseOrders.createdBy, users.id))
+    .leftJoin(poCancellers, eq(purchaseOrders.cancelledBy, poCancellers.id))
     .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.storeId, storeId)))
     .limit(1)
 
@@ -486,7 +617,13 @@ export async function getPurchaseOrder({
     unitCost: it.unitCost === null ? null : Number(it.unitCost),
     costAfter: it.costAfter === null ? null : Number(it.costAfter),
     stockAfter: it.stockAfter,
+    returnedQuantity: it.returnedQuantity,
   }))
+
+  const returns = await listPurchaseReturns({ db, purchaseOrderId: orderId, items: itemRows })
+  const initialPaidAmount = Number(row.paidAmount)
+  const linkedPaymentAmount = Number(row.linkedPaymentAmount)
+  const returnRefundAmount = Number(row.returnRefundAmount)
 
   return {
     id: row.id,
@@ -500,8 +637,20 @@ export async function getPurchaseOrder({
     discountTotalType: row.discountTotalType as DiscountType,
     discountTotalValue: Number(row.discountTotalValue),
     totalAmount: Number(row.totalAmount),
-    paidAmount: Number(row.paidAmount),
+    paidAmount: initialPaidAmount + linkedPaymentAmount - returnRefundAmount,
+    returnedAmount: Number(row.returnedAmount),
     paymentStatus: row.paymentStatus as PaymentStatus,
+    status: row.status as DocumentStatus,
+    initialPaidAmount,
+    linkedPaymentAmount,
+    returnRefundAmount,
+    cancelledAt: row.cancelledAt ? row.cancelledAt.toISOString() : null,
+    cancelledBy: row.cancelledBy,
+    cancelledByName: row.cancelledByName,
+    cancelReason: row.cancelReason,
+    cancelDebtReduction: Number(row.cancelDebtReduction),
+    cancelSupplierRefund: Number(row.cancelSupplierRefund),
+    returns,
     note: row.note,
     purchaseDate: row.purchaseDate.toISOString(),
     createdBy: row.createdBy,
@@ -515,6 +664,82 @@ export async function getPurchaseOrder({
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
+}
+
+const poCancellers = alias(users, 'purchase_order_cancellers')
+const returnCreators = alias(users, 'purchase_return_creators')
+
+/** Các phiếu trả hàng nhập của một phiếu nhập, mới nhất trước */
+export async function listPurchaseReturns({
+  db,
+  purchaseOrderId,
+  items,
+}: {
+  db: Db
+  purchaseOrderId: string
+  items: Array<typeof purchaseOrderItems.$inferSelect>
+}): Promise<PurchaseReturn[]> {
+  const headers = await db
+    .select({
+      id: purchaseReturns.id,
+      code: purchaseReturns.code,
+      purchaseOrderId: purchaseReturns.purchaseOrderId,
+      supplierId: purchaseReturns.supplierId,
+      totalAmount: purchaseReturns.totalAmount,
+      debtReductionAmount: purchaseReturns.debtReductionAmount,
+      supplierRefundAmount: purchaseReturns.supplierRefundAmount,
+      note: purchaseReturns.note,
+      createdBy: purchaseReturns.createdBy,
+      createdByName: returnCreators.name,
+      createdAt: purchaseReturns.createdAt,
+    })
+    .from(purchaseReturns)
+    .leftJoin(returnCreators, eq(purchaseReturns.createdBy, returnCreators.id))
+    .where(eq(purchaseReturns.purchaseOrderId, purchaseOrderId))
+    .orderBy(desc(purchaseReturns.createdAt), desc(purchaseReturns.id))
+  if (headers.length === 0) return []
+  const lines = await db
+    .select()
+    .from(purchaseReturnItems)
+    .where(
+      inArray(
+        purchaseReturnItems.purchaseReturnId,
+        headers.map((h) => h.id),
+      ),
+    )
+    .orderBy(asc(purchaseReturnItems.createdAt))
+  const itemById = new Map(items.map((it) => [it.id, it]))
+  return headers.map((h) => ({
+    id: h.id,
+    code: h.code,
+    purchaseOrderId: h.purchaseOrderId,
+    supplierId: h.supplierId,
+    totalAmount: Number(h.totalAmount),
+    debtReductionAmount: Number(h.debtReductionAmount),
+    supplierRefundAmount: Number(h.supplierRefundAmount),
+    note: h.note,
+    createdBy: h.createdBy,
+    createdByName: h.createdByName,
+    createdAt: h.createdAt.toISOString(),
+    items: lines
+      .filter((l) => l.purchaseReturnId === h.id)
+      .map((l) => {
+        const source = itemById.get(l.purchaseOrderItemId)
+        return {
+          id: l.id,
+          purchaseOrderItemId: l.purchaseOrderItemId,
+          productId: l.productId,
+          variantId: l.variantId,
+          productNameSnapshot: source?.productNameSnapshot ?? '',
+          variantLabelSnapshot: source?.variantLabelSnapshot ?? null,
+          unitName: source?.unitNameSnapshot ?? null,
+          quantity: l.quantity,
+          conversionFactor: l.conversionFactor,
+          baseQuantity: l.baseQuantity,
+          lineTotal: Number(l.lineTotal),
+        }
+      }),
+  }))
 }
 
 export interface ListPurchaseOrdersDeps {
@@ -536,7 +761,7 @@ export async function listPurchaseOrders({
   storeId,
   query,
 }: ListPurchaseOrdersDeps): Promise<ListPurchaseOrdersResult> {
-  const { page, pageSize, search, supplierId, paymentStatus, fromDate, toDate } = query
+  const { page, pageSize, search, supplierId, paymentStatus, status, fromDate, toDate } = query
   const conditions: SQL[] = [eq(purchaseOrders.storeId, storeId)]
 
   const trimmedSearch = search?.trim()
@@ -555,6 +780,9 @@ export async function listPurchaseOrders({
   }
   if (paymentStatus) {
     conditions.push(eq(purchaseOrders.paymentStatus, paymentStatus))
+  }
+  if (status) {
+    conditions.push(eq(purchaseOrders.status, status))
   }
   // R7: ngày YYYY-MM-DD hiểu theo lịch cửa hàng, không theo UTC
   const from = parseDateRangeBoundary(fromDate, 'start')
@@ -575,7 +803,11 @@ export async function listPurchaseOrders({
       discountTotal: purchaseOrders.discountTotal,
       totalAmount: purchaseOrders.totalAmount,
       paidAmount: purchaseOrders.paidAmount,
+      linkedPaymentAmount: linkedPaymentSubquery(),
+      returnedAmount: purchaseOrders.returnedAmount,
+      returnRefundAmount: purchaseOrders.returnRefundAmount,
       paymentStatus: purchaseOrders.paymentStatus,
+      status: purchaseOrders.status,
       purchaseDate: purchaseOrders.purchaseDate,
       createdAt: purchaseOrders.createdAt,
       itemCount: sql<number>`(SELECT COUNT(*)::int FROM ${purchaseOrderItems} WHERE ${purchaseOrderItems.purchaseOrderId} = ${purchaseOrders.id})`,
@@ -605,8 +837,10 @@ export async function listPurchaseOrders({
     subtotal: Number(r.subtotal),
     discountTotal: Number(r.discountTotal),
     totalAmount: Number(r.totalAmount),
-    paidAmount: Number(r.paidAmount),
+    paidAmount: Number(r.paidAmount) + Number(r.linkedPaymentAmount) - Number(r.returnRefundAmount),
+    returnedAmount: Number(r.returnedAmount),
     paymentStatus: r.paymentStatus as PaymentStatus,
+    status: r.status as DocumentStatus,
     purchaseDate: r.purchaseDate.toISOString(),
     createdAt: r.createdAt.toISOString(),
   }))

@@ -256,3 +256,108 @@ export async function receiveStock({
     productStockAfter: stockAfter,
   }
 }
+
+/**
+ * Giá vốn bình quân sau khi rút lại một lô đã nhập (hủy phiếu nhập, trả hàng nhập), ADR-0012.
+ * Lấy giá trị tồn hiện tại trừ đi giá trị thực của lô (theo giá nhập thực chụp trên dòng phiếu),
+ * chia cho tồn còn lại. Đây là phép ngược của `computeWac`, nên rút một lô vừa nhập mà chưa bán gì
+ * thì giá vốn trở về đúng như trước khi nhập (sai tối đa 1 đồng do làm tròn).
+ * Tồn còn lại ≤ 0, hoặc giá trị còn lại ≤ 0 (hàng đã bán bớt ở giá vốn thấp hơn), thì giữ giá vốn
+ * hiện tại: không sinh giá vốn âm hay giá vốn phi lý.
+ */
+export function computeWacAfterRemoval(args: {
+  costBefore: number | null
+  stockBefore: number
+  quantity: number
+  totalCost: number
+}): number | null {
+  const { costBefore, stockBefore, quantity, totalCost } = args
+  if (costBefore === null) return null
+  const stockAfter = stockBefore - quantity
+  if (stockAfter <= 0) return costBefore
+  const remainingValue = stockBefore * costBefore - totalCost
+  if (remainingValue <= 0) return costBefore
+  return Math.round(remainingValue / stockAfter)
+}
+
+export interface RemoveReceivedStockResult {
+  costBefore: number | null
+  costAfter: number | null
+  stockBefore: number
+  stockAfter: number
+  productStockAfter: number
+}
+
+/**
+ * Rút khỏi kho một lượng hàng đã nhập (hủy phiếu nhập, trả hàng nhập) và tính lại giá vốn bình
+ * quân theo `computeWacAfterRemoval`. `quantity` theo đơn vị tính, `totalCost` là giá trị thực
+ * của phần rút. Người gọi đã khóa sản phẩm và đã kiểm đủ tồn; ở đây kiểm lại để phòng vệ.
+ * Người gọi tự ghi sổ giao dịch kho và chứng từ.
+ */
+export async function removeReceivedStock({
+  tx,
+  storeId,
+  productId,
+  variantId,
+  quantity,
+  totalCost,
+}: {
+  tx: Db
+  storeId: string
+  productId: string
+  variantId: string | null
+  quantity: number
+  totalCost: number
+}): Promise<RemoveReceivedStockResult> {
+  if (quantity <= 0) {
+    throw new ApiError('BUSINESS_RULE_VIOLATION', 'Số lượng rút khỏi kho phải > 0')
+  }
+  const product = await loadProductForUpdate({ tx, storeId, productId })
+  const productCost = product.costPrice === null ? null : Number(product.costPrice)
+
+  if (variantId) {
+    const variant = await loadVariantForUpdate({ tx, productId, variantId })
+    const costBefore = variant.costPrice === null ? productCost : Number(variant.costPrice)
+    const stockBefore = variant.stockQuantity
+    if (stockBefore < quantity) {
+      throw new ApiError('BUSINESS_RULE_VIOLATION', `Tồn kho của ${product.name} không đủ`)
+    }
+    const costAfter = computeWacAfterRemoval({ costBefore, stockBefore, quantity, totalCost })
+    const stockAfter = stockBefore - quantity
+    await tx
+      .update(productVariants)
+      .set({ stockQuantity: stockAfter, costPrice: costAfter })
+      .where(eq(productVariants.id, variantId))
+    const parent = await syncParentFromVariants({ tx, productId, fallbackCost: productCost })
+    return {
+      costBefore,
+      costAfter,
+      stockBefore,
+      stockAfter,
+      productStockAfter: parent.currentStock,
+    }
+  }
+
+  const stockBefore = product.currentStock
+  if (stockBefore < quantity) {
+    throw new ApiError('BUSINESS_RULE_VIOLATION', `Tồn kho của ${product.name} không đủ`)
+  }
+  const costAfter = computeWacAfterRemoval({
+    costBefore: productCost,
+    stockBefore,
+    quantity,
+    totalCost,
+  })
+  const stockAfter = stockBefore - quantity
+  await tx
+    .update(products)
+    .set({ currentStock: stockAfter, costPrice: costAfter })
+    .where(eq(products.id, productId))
+  return {
+    costBefore: productCost,
+    costAfter,
+    stockBefore,
+    stockAfter,
+    productStockAfter: stockAfter,
+  }
+}

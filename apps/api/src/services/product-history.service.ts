@@ -15,6 +15,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { activePurchaseOrderFilter } from '../lib/document-status.js'
 import { ApiError } from '../lib/errors.js'
 
 async function ensureProductInStore({
@@ -67,6 +68,7 @@ export async function listProductPurchaseHistory({
   const conditions = [
     eq(purchaseOrderItems.productId, productId),
     eq(purchaseOrders.storeId, storeId),
+    activePurchaseOrderFilter(),
   ]
   if (variantId) {
     conditions.push(eq(purchaseOrderItems.variantId, variantId))

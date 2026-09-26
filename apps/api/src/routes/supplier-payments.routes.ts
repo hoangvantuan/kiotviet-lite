@@ -1,7 +1,11 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 
-import { createSupplierPaymentSchema, listSupplierPaymentsQuerySchema } from '@kiotviet-lite/shared'
+import {
+  cancelDocumentSchema,
+  createSupplierPaymentSchema,
+  listSupplierPaymentsQuerySchema,
+} from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
@@ -12,6 +16,7 @@ import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import {
+  cancelSupplierPayment,
   createSupplierPayment,
   getSupplierPayment,
   listSupplierPayments,
@@ -68,6 +73,28 @@ export function createSupplierPaymentsRoutes({ db }: SupplierPaymentsRoutesDeps)
         meta: getRequestMeta(c),
       })
       return c.json({ data }, 201)
+    }),
+  )
+
+  // TIEN-107: hủy phiếu chi, chỉ chủ cửa hàng (như lập phiếu chi)
+  app.post(
+    '/:id/cancel',
+    idempotent(db, async (c, transaction) => {
+      const auth = c.get('auth')
+      if (auth.role !== 'owner') {
+        throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được hủy phiếu chi')
+      }
+      const paymentId = uuidParam.parse(c.req.param('id'))
+      const input = await parseJson(c, cancelDocumentSchema)
+      const data = await cancelSupplierPayment({
+        db,
+        transaction,
+        actor: auth,
+        paymentId,
+        input,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data })
     }),
   )
 

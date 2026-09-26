@@ -1,7 +1,11 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 
-import { createReceiptSchema, listReceiptsQuerySchema } from '@kiotviet-lite/shared'
+import {
+  cancelDocumentSchema,
+  createReceiptSchema,
+  listReceiptsQuerySchema,
+} from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { parseJson } from '../lib/http.js'
@@ -11,6 +15,7 @@ import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import {
+  cancelReceipt,
   createReceipt,
   getReceipt,
   listCustomerOpenDebts,
@@ -73,6 +78,25 @@ export function createReceiptsRoutes({ db }: ReceiptsRoutesDeps) {
         meta: getRequestMeta(c),
       })
       return c.json({ data }, 201)
+    }),
+  )
+
+  // TIEN-107: hủy phiếu thu, đảo bút toán thu trong sổ công nợ
+  app.post(
+    '/:id/cancel',
+    idempotent(db, async (c, transaction) => {
+      const auth = c.get('auth')
+      const receiptId = uuidParam.parse(c.req.param('id'))
+      const input = await parseJson(c, cancelDocumentSchema)
+      const data = await cancelReceipt({
+        db,
+        transaction,
+        actor: auth,
+        receiptId,
+        input,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data })
     }),
   )
 

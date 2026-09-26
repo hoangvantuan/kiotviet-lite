@@ -1,7 +1,12 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 
-import { createPurchaseOrderSchema, listPurchaseOrdersQuerySchema } from '@kiotviet-lite/shared'
+import {
+  cancelDocumentSchema,
+  createPurchaseOrderSchema,
+  createPurchaseReturnSchema,
+  listPurchaseOrdersQuerySchema,
+} from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { parseJson } from '../lib/http.js'
@@ -10,6 +15,10 @@ import { errorHandler } from '../middleware/error-handler.js'
 import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
+import {
+  cancelPurchaseOrder,
+  createPurchaseReturn,
+} from '../services/purchase-order-reversal.service.js'
 import {
   createPurchaseOrder,
   getPurchaseOrder,
@@ -59,6 +68,44 @@ export function createPurchaseOrdersRoutes({ db }: PurchaseOrdersRoutesDeps) {
         db,
         transaction,
         actor: auth,
+        input,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data }, 201)
+    }),
+  )
+
+  // KHO-11: hủy phiếu nhập, rút lại hàng và công nợ NCC của phiếu
+  app.post(
+    '/:id/cancel',
+    idempotent(db, async (c, transaction) => {
+      const auth = c.get('auth')
+      const purchaseOrderId = uuidParam.parse(c.req.param('id'))
+      const input = await parseJson(c, cancelDocumentSchema)
+      const data = await cancelPurchaseOrder({
+        db,
+        transaction,
+        actor: auth,
+        purchaseOrderId,
+        input,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data })
+    }),
+  )
+
+  // KHO-11: trả hàng nhập theo phiếu nhập gốc (chứng từ mới, mã THN- từ bộ đếm)
+  app.post(
+    '/:id/returns',
+    idempotent(db, async (c, transaction) => {
+      const auth = c.get('auth')
+      const purchaseOrderId = uuidParam.parse(c.req.param('id'))
+      const input = await parseJson(c, createPurchaseReturnSchema)
+      const data = await createPurchaseReturn({
+        db,
+        transaction,
+        actor: auth,
+        purchaseOrderId,
         input,
         meta: getRequestMeta(c),
       })
