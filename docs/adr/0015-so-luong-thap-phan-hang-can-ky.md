@@ -31,8 +31,10 @@ hàng tính theo kg): `products.current_stock`, `products.min_stock`,
 `purchase_return_items.quantity`, `.base_quantity`, `.stock_after`,
 `inventory_transactions.quantity`, `.stock_after`, `stock_check_items` và `stock_check_logs`
 (`system_qty`, `actual_qty`, `diff`), `stock_checks.total_diff_positive`, `.total_diff_negative`,
-`volume_prices.min_qty`. `category_discounts.min_qty` giữ số nguyên (ngưỡng số dòng hàng). Bản sao danh mục và hàng chờ
-ngoại tuyến trên PGlite đổi theo ở migration `v006`.
+`volume_prices.min_qty`, `category_discounts.min_qty` (ngưỡng so với số lượng dòng, có thể lẻ; đầu vào
+vẫn nhận số nguyên). Bản sao danh mục và hàng chờ ngoại tuyến trên PGlite đổi theo ở migration `v006`.
+Câu SQL so ngưỡng với số lượng dòng ép tham số `::numeric`, không để Postgres suy kiểu tham số theo
+cột.
 
 Migration đổi kiểu bằng `USING col::numeric(14,3)`, giữ nguyên dữ liệu. Hệ số quy đổi
 (`conversion_factor`) giữ số nguyên dương: "1 thùng = 24 lon". Tiền giữ `bigint` đồng.
@@ -56,8 +58,12 @@ bán, trả, nhập phải dương. API nhận số lượng dạng số JSON; m
   không lưu đơn vị quy đổi nên trả theo đơn vị lớn lấy cờ của sản phẩm (chặt nhất).
 - Kiểm kê, điều chỉnh tồn tay, tồn ban đầu khi tạo sản phẩm theo cờ sản phẩm. Tồn ban đầu của biến
   thể giữ số nguyên; biến thể có tồn lẻ qua kiểm kê hoặc nhập hàng.
-- Chỉ tắt được cờ khi tồn của sản phẩm và mọi biến thể đã nguyên (422 nếu không). Bất biến `I10`
-  của `invariants.sql` kiểm hàng không bật cờ thì tồn nguyên.
+- Chỉ tắt được cờ khi tồn của sản phẩm và mọi biến thể còn hoạt động đã nguyên (422 nếu không).
+  Bất biến `I10` của `invariants.sql` kiểm hàng không bật cờ thì tồn nguyên (bỏ biến thể đã xóa).
+- Cờ đã tắt mà trả hàng, hủy đơn, trả hàng nhập, hủy phiếu nhập làm tồn sản phẩm hoặc biến thể thành
+  số lẻ thì trả `422 BUSINESS_RULE_VIOLATION` "Bật lại cho phép số lượng lẻ cho mặt hàng này để
+  trả/hủy phần lẻ" (`assertStockStaysWhole`), cả chứng từ rollback. Ví dụ bán 1,5 kg và 0,5 kg (tồn
+  8), tắt cờ, trả 0,5 kg của đơn đầu thì bị chặn thay vì để tồn thành 8,5.
 
 ### 3. Biểu diễn trong mã: số đã chuẩn hóa, phép tính trên nghìn đơn vị
 
@@ -89,8 +95,10 @@ dòng rồi mới cộng, như tiền dòng.
 
 ### 5. Nhập và hiển thị ở giao diện
 
-- Ô số lượng nhận dấu phẩy kiểu Việt Nam (`1,5`); dấu chấm cũng hiểu là dấu thập phân vì bàn phím
-  số gõ ra dấu chấm. Ô số lượng không nhận dấu phân cách hàng nghìn. Mặt hàng không bật cờ chỉ
+- Ô số lượng đọc theo `vi-VN` (`parseQuantityInput`): dấu phẩy là dấu thập phân (`1,5`). Dấu chấm
+  theo sau đúng 3 chữ số, có thể lặp nhóm 3, là phân cách hàng nghìn (`1.500` là 1500,
+  `1.250.000` là 1250000, `1.250,5` là 1250,5). Dấu chấm khác là dấu thập phân vì bàn phím số gõ ra
+  dấu chấm (`1.5`, `1.25`, `0.255`). Muốn gõ 1,255 kg thì dùng dấu phẩy. Mặt hàng không bật cờ chỉ
   nhận số nguyên; nút tăng giảm vẫn bước 1.
 - Hiển thị tối đa 3 chữ số lẻ, bỏ số 0 thừa, theo `vi-VN` (`1,5`, `1,255`, `12`) ở giỏ hàng, hóa
   đơn in, chi tiết chứng từ và báo cáo (`formatQuantity`).
@@ -105,7 +113,7 @@ dòng rồi mới cộng, như tiền dòng.
 ### 7. Bản sao danh mục ngoại tuyến
 
 PGlite `v006` đổi `catalog_products.current_stock`, `catalog_variants.stock_quantity`,
-`catalog_volume_prices.min_qty` sang `NUMERIC(14,3)`, thêm cờ ở sản phẩm và đơn vị quy đổi, rồi xóa
+`catalog_volume_prices.min_qty`, `catalog_category_discounts.min_qty` sang `NUMERIC(14,3)`, thêm cờ ở sản phẩm và đơn vị quy đổi, rồi xóa
 con trỏ đồng bộ để lần kéo sau nạp lại toàn bộ danh mục kèm cờ. Máy chủ bản cũ chưa gửi cờ thì bản
 sao ghi `false`. Tìm hàng và tính giá ngoại tuyến đọc số lượng qua `parseQuantity`, nên ra cùng giá
 với trực tuyến.
