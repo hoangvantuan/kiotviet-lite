@@ -32,6 +32,7 @@ import {
   type PriceListListItem,
   priceLists,
   products,
+  productVariants,
   type RoundingRule,
   type UpdatePriceListInput,
   type UserRole,
@@ -42,6 +43,7 @@ import { ApiError } from '../lib/errors.js'
 import { isFkViolation, isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { diffObjects, logAction, type RequestMeta } from './audit.service.js'
+import { variantNameSql } from './price-variant-scope.js'
 
 export interface PriceListsActor {
   userId: string
@@ -368,13 +370,68 @@ async function validateProductsAlive({
   }
 }
 
-function detectDuplicateProducts(items: { productId: string }[]): string | null {
+/**
+ * POS-08: dòng bảng giá khóa theo sản phẩm cộng biến thể; biến thể trống là dòng áp cho mọi biến
+ * thể của sản phẩm. Các bảng công thức, nối chuỗi tính theo đúng khóa này.
+ */
+function itemKey(productId: string, variantId: string | null | undefined): string {
+  return `${productId}:${variantId ?? ''}`
+}
+
+function splitItemKey(key: string): { productId: string; variantId: string | null } {
+  const [productId, variantId] = key.split(':')
+  return { productId: productId!, variantId: variantId ? variantId : null }
+}
+
+function detectDuplicateProducts(
+  items: { productId: string; variantId?: string | null }[],
+): string | null {
   const seen = new Set<string>()
   for (const it of items) {
-    if (seen.has(it.productId)) return it.productId
-    seen.add(it.productId)
+    const key = itemKey(it.productId, it.variantId)
+    if (seen.has(key)) return it.productId
+    seen.add(key)
   }
   return null
+}
+
+/** Biến thể trong danh sách giá phải thuộc đúng sản phẩm của dòng, cùng cửa hàng, chưa xóa */
+async function validateVariantsOfProducts({
+  db,
+  storeId,
+  items,
+}: {
+  db: Db
+  storeId: string
+  items: { productId: string; variantId?: string | null }[]
+}): Promise<void> {
+  const wanted = items.filter((it) => it.variantId)
+  if (wanted.length === 0) return
+  const rows = await db
+    .select({ id: productVariants.id, productId: productVariants.productId })
+    .from(productVariants)
+    .where(
+      and(
+        eq(productVariants.storeId, storeId),
+        inArray(
+          productVariants.id,
+          wanted.map((it) => it.variantId as string),
+        ),
+        isNull(productVariants.deletedAt),
+      ),
+    )
+  const owner = new Map(rows.map((r) => [r.id, r.productId]))
+  const missing = wanted.filter((it) => owner.get(it.variantId as string) !== it.productId)
+  if (missing.length > 0) {
+    throw new ApiError(
+      'VALIDATION_ERROR',
+      'Một hoặc nhiều biến thể không thuộc sản phẩm của dòng',
+      {
+        field: 'items',
+        missing: missing.map((it) => it.variantId),
+      },
+    )
+  }
 }
 
 // Max 10 cấp tổng cộng (bao gồm cả bảng giá mới + tổ tiên).
@@ -455,10 +512,16 @@ async function resolveChainPrices({
 
   if (row.method === 'direct') {
     const items = await tx
-      .select({ productId: priceListItems.productId, price: priceListItems.price })
+      .select({
+        productId: priceListItems.productId,
+        variantId: priceListItems.variantId,
+        price: priceListItems.price,
+      })
       .from(priceListItems)
       .where(eq(priceListItems.priceListId, listId))
-    const map = new Map<string, number>(items.map((it) => [it.productId, Number(it.price)]))
+    const map = new Map<string, number>(
+      items.map((it) => [itemKey(it.productId, it.variantId), Number(it.price)]),
+    )
     memo.set(listId, map)
     return map
   }
@@ -487,10 +550,10 @@ async function resolveChainPrices({
   const roundingRule = row.roundingRule as RoundingRule
 
   const result = new Map<string, number>()
-  for (const [productId, basePrice] of basePrices.entries()) {
+  for (const [key, basePrice] of basePrices.entries()) {
     const computed = applyFormula(basePrice, formulaType, formulaValue)
     const final = Math.max(0, applyRounding(computed, roundingRule))
-    result.set(productId, final)
+    result.set(key, final)
   }
 
   memo.set(listId, result)
@@ -525,6 +588,7 @@ export async function createPriceList({
       storeId: actor.storeId,
       productIds: input.items.map((i) => i.productId),
     })
+    await validateVariantsOfProducts({ db, storeId: actor.storeId, items: input.items })
 
     return db.transaction(async (tx) => {
       let createdId: string
@@ -560,6 +624,7 @@ export async function createPriceList({
           input.items.map((it) => ({
             priceListId: createdId,
             productId: it.productId,
+            variantId: it.variantId ?? null,
             price: applyRounding(it.price, input.roundingRule),
             isOverridden: false,
           })),
@@ -634,6 +699,7 @@ export async function createPriceList({
     storeId: actor.storeId,
     productIds: input.overrides.map((o) => o.productId),
   })
+  await validateVariantsOfProducts({ db, storeId: actor.storeId, items: input.overrides })
 
   const persistedMethod = input.method
 
@@ -648,21 +714,34 @@ export async function createPriceList({
       })
     } else {
       const baseItems = await tx
-        .select({ productId: priceListItems.productId, price: priceListItems.price })
+        .select({
+          productId: priceListItems.productId,
+          variantId: priceListItems.variantId,
+          price: priceListItems.price,
+        })
         .from(priceListItems)
         .where(eq(priceListItems.priceListId, input.baseListId))
-      basePriceMap = new Map(baseItems.map((it) => [it.productId, Number(it.price)]))
+      basePriceMap = new Map(
+        baseItems.map((it) => [itemKey(it.productId, it.variantId), Number(it.price)]),
+      )
     }
 
-    const overrideMap = new Map(input.overrides.map((o) => [o.productId, o.price]))
-    const productIdsAccumulated = new Set<string>()
-    const itemsToInsert: { productId: string; price: number; isOverridden: boolean }[] = []
+    const overrideMap = new Map(
+      input.overrides.map((o) => [itemKey(o.productId, o.variantId), o.price]),
+    )
+    const keysAccumulated = new Set<string>()
+    const itemsToInsert: {
+      productId: string
+      variantId: string | null
+      price: number
+      isOverridden: boolean
+    }[] = []
 
-    for (const [productId, basePrice] of basePriceMap.entries()) {
-      productIdsAccumulated.add(productId)
-      const override = overrideMap.get(productId)
+    for (const [key, basePrice] of basePriceMap.entries()) {
+      keysAccumulated.add(key)
+      const override = overrideMap.get(key)
       if (override !== undefined) {
-        itemsToInsert.push({ productId, price: override, isOverridden: true })
+        itemsToInsert.push({ ...splitItemKey(key), price: override, isOverridden: true })
       } else {
         const computed = applyFormula(
           basePrice,
@@ -670,14 +749,20 @@ export async function createPriceList({
           input.formulaValue,
         )
         const final = Math.max(0, applyRounding(computed, input.roundingRule))
-        itemsToInsert.push({ productId, price: final, isOverridden: false })
+        itemsToInsert.push({ ...splitItemKey(key), price: final, isOverridden: false })
       }
     }
 
     for (const o of input.overrides) {
-      if (!productIdsAccumulated.has(o.productId)) {
-        itemsToInsert.push({ productId: o.productId, price: o.price, isOverridden: true })
-        productIdsAccumulated.add(o.productId)
+      const key = itemKey(o.productId, o.variantId)
+      if (!keysAccumulated.has(key)) {
+        itemsToInsert.push({
+          productId: o.productId,
+          variantId: o.variantId ?? null,
+          price: o.price,
+          isOverridden: true,
+        })
+        keysAccumulated.add(key)
       }
     }
 
@@ -714,6 +799,7 @@ export async function createPriceList({
         itemsToInsert.map((it) => ({
           priceListId: createdId,
           productId: it.productId,
+          variantId: it.variantId,
           price: it.price,
           isOverridden: it.isOverridden,
         })),
@@ -1096,39 +1182,53 @@ export async function recalculatePriceList({
       })
     } else {
       const baseItems = await tx
-        .select({ productId: priceListItems.productId, price: priceListItems.price })
+        .select({
+          productId: priceListItems.productId,
+          variantId: priceListItems.variantId,
+          price: priceListItems.price,
+        })
         .from(priceListItems)
         .where(eq(priceListItems.priceListId, target.basePriceListId as string))
-      baseMap = new Map(baseItems.map((it) => [it.productId, Number(it.price)]))
+      baseMap = new Map(
+        baseItems.map((it) => [itemKey(it.productId, it.variantId), Number(it.price)]),
+      )
     }
 
     const existingItems = await tx
       .select({
         id: priceListItems.id,
         productId: priceListItems.productId,
+        variantId: priceListItems.variantId,
         price: priceListItems.price,
         isOverridden: priceListItems.isOverridden,
       })
       .from(priceListItems)
       .where(eq(priceListItems.priceListId, targetId))
 
-    const existingMap = new Map(existingItems.map((it) => [it.productId, it]))
+    const existingMap = new Map(
+      existingItems.map((it) => [itemKey(it.productId, it.variantId), it]),
+    )
 
     let updatedCount = 0
     let addedCount = 0
     let removedCount = 0
     let preservedOverrideCount = 0
 
-    const inserts: { productId: string; price: number; isOverridden: boolean }[] = []
+    const inserts: {
+      productId: string
+      variantId: string | null
+      price: number
+      isOverridden: boolean
+    }[] = []
     const updates: { id: string; price: number }[] = []
     const deletes: string[] = []
 
-    for (const [productId, basePrice] of baseMap.entries()) {
+    for (const [key, basePrice] of baseMap.entries()) {
       const computed = applyFormula(basePrice, formulaType, formulaValue)
       const final = Math.max(0, applyRounding(computed, roundingRule))
-      const existing = existingMap.get(productId)
+      const existing = existingMap.get(key)
       if (!existing) {
-        inserts.push({ productId, price: final, isOverridden: false })
+        inserts.push({ ...splitItemKey(key), price: final, isOverridden: false })
         addedCount++
       } else if (existing.isOverridden) {
         preservedOverrideCount++
@@ -1139,7 +1239,7 @@ export async function recalculatePriceList({
     }
 
     for (const existing of existingItems) {
-      if (!baseMap.has(existing.productId) && !existing.isOverridden) {
+      if (!baseMap.has(itemKey(existing.productId, existing.variantId)) && !existing.isOverridden) {
         deletes.push(existing.id)
         removedCount++
       }
@@ -1150,6 +1250,7 @@ export async function recalculatePriceList({
         inserts.map((it) => ({
           priceListId: targetId,
           productId: it.productId,
+          variantId: it.variantId,
           price: it.price,
           isOverridden: it.isOverridden,
         })),
@@ -1205,19 +1306,37 @@ export async function comparePriceLists({
 
   const [itemsA, itemsB] = await Promise.all([
     db
-      .select({ productId: priceListItems.productId, price: priceListItems.price })
+      .select({
+        productId: priceListItems.productId,
+        variantId: priceListItems.variantId,
+        price: priceListItems.price,
+      })
       .from(priceListItems)
       .where(eq(priceListItems.priceListId, listAId)),
     db
-      .select({ productId: priceListItems.productId, price: priceListItems.price })
+      .select({
+        productId: priceListItems.productId,
+        variantId: priceListItems.variantId,
+        price: priceListItems.price,
+      })
       .from(priceListItems)
       .where(eq(priceListItems.priceListId, listBId)),
   ])
 
-  const mapA = new Map<string, number>(itemsA.map((it) => [it.productId, Number(it.price)]))
-  const mapB = new Map<string, number>(itemsB.map((it) => [it.productId, Number(it.price)]))
+  const toMap = (items: typeof itemsA) =>
+    new Map<string, number>(
+      items.map((it) => [itemKey(it.productId, it.variantId), Number(it.price)]),
+    )
+  const mapA = toMap(itemsA)
+  const mapB = toMap(itemsB)
 
-  const productIds = Array.from(new Set([...mapA.keys(), ...mapB.keys()]))
+  // POS-08: mỗi dòng so sánh là một cặp sản phẩm, biến thể
+  const keys = Array.from(new Set([...mapA.keys(), ...mapB.keys()]))
+  const productIds = Array.from(new Set(keys.map((k) => splitItemKey(k).productId)))
+  const variantIds = keys.flatMap((k) => {
+    const { variantId } = splitItemKey(k)
+    return variantId ? [variantId] : []
+  })
 
   if (productIds.length === 0) {
     return {
@@ -1254,20 +1373,52 @@ export async function comparePriceLists({
       ),
     )
 
-  const rows = productRows.map((p) =>
-    computeCompareRow({
-      productId: p.id,
-      productName: p.name,
-      productSku: p.sku,
-      productImageUrl: p.imageUrl ?? null,
-      productSellingPrice: Number(p.sellingPrice),
-      productCostPrice: p.costPrice === null ? null : Number(p.costPrice),
-      priceA: mapA.has(p.id) ? (mapA.get(p.id) as number) : null,
-      priceB: mapB.has(p.id) ? (mapB.get(p.id) as number) : null,
-    }),
-  )
+  const variantRows =
+    variantIds.length > 0
+      ? await db
+          .select({
+            id: productVariants.id,
+            name: variantNameSql,
+            sellingPrice: productVariants.sellingPrice,
+            costPrice: productVariants.costPrice,
+          })
+          .from(productVariants)
+          .where(and(inArray(productVariants.id, variantIds), isNull(productVariants.deletedAt)))
+      : []
 
-  rows.sort((a, b) => a.productName.localeCompare(b.productName, 'vi'))
+  const productById = new Map(productRows.map((p) => [p.id, p]))
+  const variantById = new Map(variantRows.map((v) => [v.id, v]))
+
+  const rows = keys.flatMap((key) => {
+    const { productId, variantId } = splitItemKey(key)
+    const p = productById.get(productId)
+    if (!p) return []
+    const v = variantId ? variantById.get(variantId) : undefined
+    if (variantId && !v) return []
+    const sellingPrice =
+      v && Number(v.sellingPrice) > 0 ? Number(v.sellingPrice) : Number(p.sellingPrice)
+    const costPrice = v?.costPrice ?? p.costPrice
+    return [
+      computeCompareRow({
+        productId,
+        variantId,
+        variantName: v?.name ?? null,
+        productName: p.name,
+        productSku: p.sku,
+        productImageUrl: p.imageUrl ?? null,
+        productSellingPrice: sellingPrice,
+        productCostPrice: costPrice === null ? null : Number(costPrice),
+        priceA: mapA.has(key) ? (mapA.get(key) as number) : null,
+        priceB: mapB.has(key) ? (mapB.get(key) as number) : null,
+      }),
+    ]
+  })
+
+  rows.sort(
+    (a, b) =>
+      a.productName.localeCompare(b.productName, 'vi') ||
+      (a.variantName ?? '').localeCompare(b.variantName ?? '', 'vi'),
+  )
 
   const summary = computeCompareSummary(rows)
 
@@ -1333,7 +1484,11 @@ export async function clonePriceList({
     }
 
     const sourceItems = await tx
-      .select({ productId: priceListItems.productId, price: priceListItems.price })
+      .select({
+        productId: priceListItems.productId,
+        variantId: priceListItems.variantId,
+        price: priceListItems.price,
+      })
       .from(priceListItems)
       .where(eq(priceListItems.priceListId, sourceId))
 
@@ -1342,6 +1497,7 @@ export async function clonePriceList({
         sourceItems.map((it) => ({
           priceListId: createdId,
           productId: it.productId,
+          variantId: it.variantId,
           price: Number(it.price),
           isOverridden: false,
         })),
@@ -1454,6 +1610,8 @@ export async function importPriceList({
   const { headers, rows } = parseCsv(input.csvText)
   const codeIdx = headers.indexOf('product_code')
   const priceIdx = headers.indexOf('price')
+  // POS-08: cột variant_code (mã biến thể) không bắt buộc; để trống là giá cho mọi biến thể
+  const variantIdx = headers.indexOf('variant_code')
   if (codeIdx < 0 || priceIdx < 0) {
     throw new ApiError('VALIDATION_ERROR', 'CSV phải có header: product_code,price')
   }
@@ -1463,10 +1621,11 @@ export async function importPriceList({
 
   const totalRows = rows.length
   const errors: ImportPriceListSummary['errors'] = []
-  const validInputs: { row: number; code: string; price: number }[] = []
+  const validInputs: { row: number; code: string; variantCode: string; price: number }[] = []
 
   rows.forEach(({ rowNumber, cells }) => {
     const rawCode = (cells[codeIdx] ?? '').trim()
+    const rawVariantCode = variantIdx >= 0 ? (cells[variantIdx] ?? '').trim() : ''
     const rawPrice = (cells[priceIdx] ?? '').trim()
     if (!rawCode) {
       errors.push({ row: rowNumber, code: rawCode, reason: 'Mã sản phẩm trống' })
@@ -1481,7 +1640,12 @@ export async function importPriceList({
       errors.push({ row: rowNumber, code: rawCode, reason: `Giá không hợp lệ: '${rawPrice}'` })
       return
     }
-    validInputs.push({ row: rowNumber, code: rawCode, price: priceNum })
+    validInputs.push({
+      row: rowNumber,
+      code: rawCode,
+      variantCode: rawVariantCode,
+      price: priceNum,
+    })
   })
 
   // Lookup theo LOWER(sku) vì DB index dùng LOWER(sku) - SKU lookup phải case-insensitive.
@@ -1504,23 +1668,66 @@ export async function importPriceList({
     codeToProductId = new Map(productRows.map((p) => [p.sku.toLowerCase(), p.id]))
   }
 
+  const variantCodes = Array.from(
+    new Set(validInputs.flatMap((v) => (v.variantCode ? [v.variantCode.toLowerCase()] : []))),
+  )
+  let codeToVariant = new Map<string, { id: string; productId: string }>()
+  if (variantCodes.length > 0) {
+    const variantRows = await db
+      .select({
+        id: productVariants.id,
+        productId: productVariants.productId,
+        sku: productVariants.sku,
+      })
+      .from(productVariants)
+      .where(
+        and(
+          eq(productVariants.storeId, actor.storeId),
+          sql`LOWER(${productVariants.sku}) IN (${sql.join(
+            variantCodes.map((c) => sql`${c}`),
+            sql`, `,
+          )})`,
+          isNull(productVariants.deletedAt),
+        ),
+      )
+    codeToVariant = new Map(
+      variantRows.map((v) => [v.sku.toLowerCase(), { id: v.id, productId: v.productId }]),
+    )
+  }
+
   const roundingRule = target.roundingRule as RoundingRule
 
   const itemsByProductId = new Map<string, number>()
-  const seenProductIds = new Set<string>()
   for (const v of validInputs) {
     const productId = codeToProductId.get(v.code.toLowerCase())
     if (!productId) {
       errors.push({ row: v.row, code: v.code, reason: 'Không tìm thấy SKU' })
       continue
     }
-    if (seenProductIds.has(productId)) {
-      errors.push({ row: v.row, code: v.code, reason: 'SKU trùng dòng trước' })
+    let variantId: string | null = null
+    if (v.variantCode) {
+      const variant = codeToVariant.get(v.variantCode.toLowerCase())
+      if (!variant || variant.productId !== productId) {
+        errors.push({
+          row: v.row,
+          code: v.code,
+          reason: `Không tìm thấy biến thể '${v.variantCode}' của sản phẩm`,
+        })
+        continue
+      }
+      variantId = variant.id
+    }
+    const key = itemKey(productId, variantId)
+    if (itemsByProductId.has(key)) {
+      errors.push({
+        row: v.row,
+        code: v.code,
+        reason: variantId ? 'Biến thể trùng dòng trước' : 'SKU trùng dòng trước',
+      })
       continue
     }
-    seenProductIds.add(productId)
     const finalPrice = Math.max(0, applyRounding(v.price, roundingRule))
-    itemsByProductId.set(productId, finalPrice)
+    itemsByProductId.set(key, finalPrice)
   }
 
   const imported = itemsByProductId.size
@@ -1541,9 +1748,9 @@ export async function importPriceList({
     }
 
     if (itemsByProductId.size > 0) {
-      const values = Array.from(itemsByProductId.entries()).map(([productId, price]) => ({
+      const values = Array.from(itemsByProductId.entries()).map(([key, price]) => ({
         priceListId,
-        productId,
+        ...splitItemKey(key),
         price,
         isOverridden: false,
       }))
@@ -1552,7 +1759,8 @@ export async function importPriceList({
         .insert(priceListItems)
         .values(values)
         .onConflictDoUpdate({
-          target: [priceListItems.priceListId, priceListItems.productId],
+          // Ràng buộc NULLS NOT DISTINCT: dòng theo sản phẩm (biến thể null) cũng khớp để cập nhật
+          target: [priceListItems.priceListId, priceListItems.productId, priceListItems.variantId],
           set: {
             price: sql`EXCLUDED.price`,
             isOverridden: sql`false`,

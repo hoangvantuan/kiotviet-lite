@@ -8,6 +8,7 @@ import {
   type ClonePriceListInput,
   clonePriceListSchema,
   type CreatePriceListInput,
+  type CreatePriceListItemInput,
   createPriceListSchema,
   formatRoundingLabel,
   formatVndWithSuffix,
@@ -17,6 +18,7 @@ import {
   type ImportPriceListSummary,
   MAX_PAGE_SIZE,
   type PriceListListItem,
+  type ProductListItem,
   type RoundingRule,
   roundingRuleSchema,
 } from '@kiotviet-lite/shared'
@@ -45,7 +47,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ApiClientError } from '@/lib/api-client'
 import { showError, showSuccess } from '@/lib/toast'
 
-import { useProductsQuery } from '../../products/use-products'
+import { useProductQuery, useProductsQuery } from '../../products/use-products'
 import {
   useAllPriceListsQuery,
   useChainBaseListsQuery,
@@ -56,6 +58,7 @@ import {
   usePriceListItemsQuery,
   usePriceListsQuery,
 } from '../use-price-lists'
+import { VariantSelect } from './VariantSelect'
 
 const ROUNDING_OPTIONS: { value: RoundingRule; label: string }[] = roundingRuleSchema.options.map(
   (value) => ({ value, label: formatRoundingLabel(value) }),
@@ -200,6 +203,11 @@ interface DirectFormProps {
   onClose: () => void
 }
 
+interface DirectItemValue {
+  variantId: string | null
+  price: number
+}
+
 function DirectForm({ onBack, onClose }: DirectFormProps) {
   const mutation = useCreatePriceListMutation()
   const productsQuery = useProductsQuery({ status: 'active', pageSize: MAX_PAGE_SIZE, page: 1 })
@@ -218,14 +226,14 @@ function DirectForm({ onBack, onClose }: DirectFormProps) {
     },
   })
 
-  const [itemPrices, setItemPrices] = useState<Record<string, number>>({})
+  const [itemPrices, setItemPrices] = useState<Record<string, DirectItemValue>>({})
 
   const submit = form.handleSubmit(async (values) => {
-    const items: { productId: string; price: number }[] = []
+    const items: CreatePriceListItemInput[] = []
     for (const p of products) {
-      const price = itemPrices[p.id]
-      if (typeof price === 'number' && price >= 0) {
-        items.push({ productId: p.id, price })
+      const value = itemPrices[p.id]
+      if (value && typeof value.price === 'number' && value.price >= 0) {
+        items.push({ productId: p.id, variantId: value.variantId, price: value.price })
       }
     }
 
@@ -276,31 +284,19 @@ function DirectForm({ onBack, onClose }: DirectFormProps) {
         ) : (
           <div className="max-h-80 overflow-y-auto rounded-md border">
             {products.map((p) => (
-              <div
+              <DirectProductRow
                 key={p.id}
-                className="flex items-center gap-3 border-b border-border px-3 py-2 last:border-b-0"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{p.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    Mã hàng {p.sku} • Gốc {formatVndWithSuffix(p.sellingPrice)}
-                  </p>
-                </div>
-                <div className="w-40">
-                  <CurrencyInput
-                    value={itemPrices[p.id] ?? null}
-                    onChange={(v) => {
-                      setItemPrices((prev) => {
-                        const next = { ...prev }
-                        if (v === null) delete next[p.id]
-                        else next[p.id] = v
-                        return next
-                      })
-                    }}
-                    placeholder="Giá"
-                  />
-                </div>
-              </div>
+                product={p}
+                value={itemPrices[p.id]}
+                onChange={(v) => {
+                  setItemPrices((prev) => {
+                    const next = { ...prev }
+                    if (v === null) delete next[p.id]
+                    else next[p.id] = v
+                    return next
+                  })
+                }}
+              />
             ))}
           </div>
         )}
@@ -316,6 +312,55 @@ function DirectForm({ onBack, onClose }: DirectFormProps) {
         </Button>
       </DialogFooter>
     </form>
+  )
+}
+
+interface DirectProductRowProps {
+  product: ProductListItem
+  value: DirectItemValue | undefined
+  onChange: (v: DirectItemValue | null) => void
+}
+
+function DirectProductRow({ product, value, onChange }: DirectProductRowProps) {
+  // Chỉ tải chi tiết (kèm biến thể) khi sản phẩm có biến thể, tránh gọi thừa
+  const detailQuery = useProductQuery(product.hasVariants ? product.id : undefined)
+  const variants = detailQuery.data?.variantsConfig?.variants ?? []
+  // Giữ lựa chọn biến thể ngay cả khi ô giá đang trống (chưa tạo dòng)
+  const [localVariantId, setLocalVariantId] = useState<string | null>(value?.variantId ?? null)
+  const selectedVariant = variants.find((v) => v.id === localVariantId) ?? null
+  const referencePrice = selectedVariant?.sellingPrice ?? product.sellingPrice
+
+  return (
+    <div className="flex items-center gap-3 border-b border-border px-3 py-2 last:border-b-0">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{product.name}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          Mã hàng {product.sku} • Gốc {formatVndWithSuffix(referencePrice)}
+        </p>
+        {variants.length > 0 && (
+          <div className="mt-1 max-w-[240px]">
+            <VariantSelect
+              variants={variants}
+              value={localVariantId}
+              onChange={(v) => {
+                setLocalVariantId(v)
+                if (value) onChange({ variantId: v, price: value.price })
+              }}
+            />
+          </div>
+        )}
+      </div>
+      <div className="w-40">
+        <CurrencyInput
+          value={value?.price ?? null}
+          onChange={(v) => {
+            if (v === null) onChange(null)
+            else onChange({ variantId: localVariantId, price: v })
+          }}
+          placeholder="Giá"
+        />
+      </div>
+    </div>
   )
 }
 
@@ -1059,7 +1104,9 @@ function ImportForm({ onBack, onClose }: ImportFormProps) {
         <Label>File CSV</Label>
         <Input type="file" accept=".csv,text/csv" onChange={onFileChange} />
         <p className="text-xs text-muted-foreground">
-          Định dạng: header <code>product_code,price</code>. Tối đa 5000 dòng.
+          Định dạng: header <code>product_code,price</code>, có thể thêm cột tùy chọn{' '}
+          <code>variant_code</code> (mã biến thể, để trống áp dụng cho toàn bộ sản phẩm). Tối đa
+          5000 dòng.
         </p>
       </div>
 
@@ -1068,7 +1115,7 @@ function ImportForm({ onBack, onClose }: ImportFormProps) {
         <Textarea
           id="csv-text"
           rows={6}
-          placeholder={'product_code,price\nSP001,100000\nSP002,150000'}
+          placeholder={'product_code,price,variant_code\nSP001,100000,\nSP002,150000,SP002-do-xl'}
           {...form.register('csvText')}
         />
         {form.formState.errors.csvText && (

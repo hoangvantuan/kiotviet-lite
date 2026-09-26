@@ -217,6 +217,34 @@ export function StoreSettingsForm() {
           kho âm. Hãy bật lại sau khi kiểm kê xong.
         </p>
       </section>
+      <section className="space-y-3 rounded-lg border bg-card p-4">
+        <h2 className="text-lg font-semibold text-foreground">Bán vượt tồn kho</h2>
+        <div className="flex items-center gap-3">
+          <Switch
+            id="allow-negative-stock"
+            checked={storeQuery.data?.allowNegativeStock ?? true}
+            disabled={isPending}
+            onCheckedChange={async (enabled) => {
+              try {
+                await updateMutation.mutateAsync({ allowNegativeStock: enabled })
+                showSuccess(enabled ? 'Đã cho bán vượt tồn kho' : 'Đã chặn bán vượt tồn kho')
+              } catch {
+                showError('Không thể thay đổi thiết lập bán vượt tồn kho')
+              }
+            }}
+          />
+          <Label htmlFor="allow-negative-stock">
+            {(storeQuery.data?.allowNegativeStock ?? true)
+              ? 'Đang cho bán vượt tồn kho'
+              : 'Đang chặn bán vượt tồn kho'}
+          </Label>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Khi cho bán, POS chỉ cảnh báo lúc số lượng trong giỏ vượt tồn kho và tồn kho có thể âm.
+          Khi chặn, POS không cho thêm, sửa số lượng hay quét mã vạch vượt tồn kho, máy chủ cũng từ
+          chối đơn. Đơn bán ngoại tuyến đã giao hàng vẫn được ghi nhận khi đồng bộ.
+        </p>
+      </section>
       {storeQuery.data && <CashSettingsSection store={storeQuery.data} />}
     </div>
   )

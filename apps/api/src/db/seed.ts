@@ -1000,8 +1000,9 @@ export async function seed(db: Db) {
     {
       id: groupIds.le,
       storeId,
-      name: 'Khách lẻ',
-      description: 'Khách mua lẻ',
+      // POS-20: "Khách lẻ" là đơn không gắn khách hàng, nhóm mẫu đặt tên khác để khỏi lẫn
+      name: 'Khách thường',
+      description: 'Khách mua lẻ thường xuyên',
       debtLimit: 5_000_000,
     },
   ])
@@ -1095,6 +1096,12 @@ export async function seed(db: Db) {
     if (price < pricing.cost) throw new Error(`Seed: giá sỉ dưới giá vốn (${productId})`)
     return { productId, price }
   })
+  // POS-08: một dòng giá theo biến thể, biến thể còn lại của cùng sản phẩm không có dòng riêng
+  const heinekenChai = stockItems.get('BH001-CHAI')!
+  if (14_500 < heinekenChai.cost) throw new Error('Seed: giá sỉ biến thể dưới giá vốn')
+  const wholesaleVariantItems = [
+    { productId: heinekenChai.productId, variantId: heinekenChai.variantId!, price: 14_500 },
+  ]
   const wholesaleList = await createPriceList({
     db,
     actor: priceListActor,
@@ -1103,7 +1110,7 @@ export async function seed(db: Db) {
       name: 'Giá sỉ',
       description: 'Bảng giá dành cho khách sỉ, bằng 85% giá bán lẻ',
       roundingRule: 'none',
-      items: wholesaleItems,
+      items: [...wholesaleItems, ...wholesaleVariantItems],
     }),
   })
 
@@ -1293,7 +1300,9 @@ export async function seed(db: Db) {
   console.log(`  Nhóm KH:     3`)
   console.log(`  Khách hàng:   10`)
   console.log(`  NCC:          5`)
-  console.log(`  Bảng giá:     2 (Giá sỉ ${wholesaleItems.length} mặt hàng + VIP công thức)`)
+  console.log(
+    `  Bảng giá:     2 (Giá sỉ ${wholesaleItems.length} mặt hàng, ${wholesaleVariantItems.length} dòng biến thể + VIP công thức)`,
+  )
   console.log(`  Phiếu nhập:   3`)
   console.log(
     `  Giao dịch kho: ${openingCount + purchaseTxCount} (${openingCount} tồn đầu kỳ + ${purchaseTxCount} nhập)`,

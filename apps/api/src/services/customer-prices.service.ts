@@ -7,6 +7,7 @@ import {
   customers,
   type ListCustomerPricesQuery,
   products,
+  productVariants,
   type UpdateCustomerPriceInput,
   type UserRole,
 } from '@kiotviet-lite/shared'
@@ -17,6 +18,13 @@ import { paginationMeta } from '../lib/pagination.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { diffObjects, logAction, type RequestMeta } from './audit.service.js'
+import {
+  aliveVariantCondition,
+  effectiveCostPriceSql,
+  effectiveSellingPriceSql,
+  ensureVariantOfProduct,
+  variantNameSql,
+} from './price-variant-scope.js'
 
 export interface CustomerPricesActor {
   userId: string
@@ -33,6 +41,8 @@ interface CustomerPriceRow {
   productName: string
   productSku: string
   productImageUrl: string | null
+  variantId: string | null
+  variantName: string | null
   productSellingPrice: number
   productCostPrice: number | null
   price: number
@@ -51,6 +61,8 @@ function toCustomerPriceListItem(row: CustomerPriceRow): CustomerPriceListItem {
     productName: row.productName,
     productSku: row.productSku,
     productImageUrl: row.productImageUrl,
+    variantId: row.variantId,
+    variantName: row.variantName,
     productSellingPrice: Number(row.productSellingPrice),
     productCostPrice: row.productCostPrice === null ? null : Number(row.productCostPrice),
     price: Number(row.price),
@@ -70,8 +82,10 @@ function buildSelectColumns() {
     productName: products.name,
     productSku: products.sku,
     productImageUrl: products.imageUrl,
-    productSellingPrice: products.sellingPrice,
-    productCostPrice: products.costPrice,
+    variantId: customerPrices.variantId,
+    variantName: variantNameSql,
+    productSellingPrice: effectiveSellingPriceSql(products.sellingPrice),
+    productCostPrice: effectiveCostPriceSql(products.costPrice),
     price: customerPrices.price,
     note: customerPrices.note,
     createdAt: customerPrices.createdAt,
@@ -104,6 +118,7 @@ export async function listCustomerPrices({
     eq(customerPrices.storeId, storeId),
     isNull(customers.deletedAt),
     isNull(products.deletedAt),
+    aliveVariantCondition(customerPrices.variantId),
   ]
 
   if (customerId) {
@@ -131,6 +146,7 @@ export async function listCustomerPrices({
     .from(customerPrices)
     .innerJoin(customers, eq(customerPrices.customerId, customers.id))
     .innerJoin(products, eq(customerPrices.productId, products.id))
+    .leftJoin(productVariants, eq(customerPrices.variantId, productVariants.id))
     .where(whereClause)
     .orderBy(desc(customerPrices.createdAt), asc(customers.name))
     .limit(pageSize)
@@ -141,6 +157,7 @@ export async function listCustomerPrices({
     .from(customerPrices)
     .innerJoin(customers, eq(customerPrices.customerId, customers.id))
     .innerJoin(products, eq(customerPrices.productId, products.id))
+    .leftJoin(productVariants, eq(customerPrices.variantId, productVariants.id))
     .where(whereClause)
 
   const total = totalRows[0]?.count ?? 0
@@ -165,6 +182,7 @@ async function getCustomerPriceRow({
     .from(customerPrices)
     .innerJoin(customers, eq(customerPrices.customerId, customers.id))
     .innerJoin(products, eq(customerPrices.productId, products.id))
+    .leftJoin(productVariants, eq(customerPrices.variantId, productVariants.id))
     .where(and(eq(customerPrices.id, id), eq(customerPrices.storeId, storeId)))
     .limit(1)
   const row = rows[0]
@@ -239,6 +257,12 @@ export async function createCustomerPrice({
 }: CreateCustomerPriceDeps): Promise<CustomerPriceListItem> {
   await ensureCustomerAlive({ db, storeId: actor.storeId, customerId: input.customerId })
   await ensureProductAlive({ db, storeId: actor.storeId, productId: input.productId })
+  await ensureVariantOfProduct({
+    db,
+    storeId: actor.storeId,
+    productId: input.productId,
+    variantId: input.variantId,
+  })
 
   return db.transaction(async (tx) => {
     let createdId: string
@@ -249,6 +273,7 @@ export async function createCustomerPrice({
           storeId: actor.storeId,
           customerId: input.customerId,
           productId: input.productId,
+          variantId: input.variantId ?? null,
           price: input.price,
           note: input.note ?? null,
         })
@@ -257,10 +282,14 @@ export async function createCustomerPrice({
       createdId = row.id
     } catch (err) {
       if (err instanceof ApiError) throw err
-      if (isUniqueViolation(err, 'uniq_customer_prices_customer_product')) {
-        throw new ApiError('CONFLICT', 'Khách hàng đã có giá riêng cho sản phẩm này', {
-          field: 'productId',
-        })
+      if (isUniqueViolation(err, 'uniq_customer_prices_customer_product_variant')) {
+        throw new ApiError(
+          'CONFLICT',
+          input.variantId
+            ? 'Khách hàng đã có giá riêng cho biến thể này'
+            : 'Khách hàng đã có giá riêng cho sản phẩm này',
+          { field: input.variantId ? 'variantId' : 'productId' },
+        )
       }
       throw err
     }
@@ -276,6 +305,7 @@ export async function createCustomerPrice({
       changes: {
         customerId: input.customerId,
         productId: input.productId,
+        variantId: input.variantId ?? null,
         price: input.price,
         note: input.note ?? null,
       },
@@ -408,6 +438,7 @@ export async function deleteCustomerPrice({
       changes: {
         customerId: target.customerId,
         productId: target.productId,
+        variantId: target.variantId,
         price: Number(target.price),
         note: target.note,
       },

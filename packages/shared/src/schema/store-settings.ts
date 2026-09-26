@@ -36,6 +36,8 @@ export const updateStoreSchema = z
       .regex(DEBT_OVERDUE_DAYS_REGEX, 'Sai định dạng mốc quá hạn (VD: 30,60,90)')
       .optional(),
     negativeStockAlertsEnabled: z.boolean().optional(),
+    // POS-13: tắt thì POS không cho bán quá tồn kho (hàng có theo dõi tồn kho)
+    allowNegativeStock: z.boolean().optional(),
     // POS-06: bật ca bán hàng thì POS yêu cầu mở ca trước khi bán
     shiftsEnabled: z.boolean().optional(),
     // POS-07: tài khoản nhận chuyển khoản cho mã VietQR
@@ -67,6 +69,7 @@ export const updateStoreSchema = z
       data.debtWarningPercent !== undefined ||
       data.debtOverdueDays !== undefined ||
       data.negativeStockAlertsEnabled !== undefined ||
+      data.allowNegativeStock !== undefined ||
       data.shiftsEnabled !== undefined ||
       data.bankBin !== undefined ||
       data.bankAccountNumber !== undefined ||
@@ -83,6 +86,7 @@ export const storeSettingsSchema = z.object({
   debtWarningPercent: z.number().int(),
   debtOverdueDays: z.string(),
   negativeStockAlertsEnabled: z.boolean(),
+  allowNegativeStock: z.boolean(),
   shiftsEnabled: z.boolean(),
   bankBin: z.string().nullable(),
   bankAccountNumber: z.string().nullable(),

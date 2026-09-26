@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { type KeyboardEvent, useRef } from 'react'
 import { CheckCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -21,10 +21,13 @@ import {
 import type { OrderDetailResponse } from '../../orders/orders-api'
 import { PrintButton } from '../../orders/print-button'
 import { useInvoiceStoreInfo } from '../../orders/use-invoice-store-info'
-import { type PrintFormat, toThermalOrder, usePrintOrder } from '../../orders/use-print-order'
+import {
+  getDefaultFormat,
+  type PrintFormat,
+  toThermalOrder,
+  usePrintOrder,
+} from '../../orders/use-print-order'
 import type { OrderDetail } from '../types'
-
-const AUTO_CLOSE_MS = 3000
 
 /** Adapt POS OrderDetail to OrderDetailResponse for print templates */
 function toOrderDetailResponse(order: OrderDetail): OrderDetailResponse {
@@ -67,72 +70,34 @@ export function OrderCompletionDialog({
   order,
   onNewOrder,
 }: OrderCompletionDialogProps) {
-  const [countdown, setCountdown] = useState(AUTO_CLOSE_MS / 1000)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const autoCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const userInteracted = useRef(false)
+  const newOrderRef = useRef<HTMLButtonElement>(null)
 
   const { printOrder } = usePrintOrder()
   const printSettingsQuery = usePrintSettingsQuery()
   const storeInfo = useInvoiceStoreInfo()
 
-  // Ref to always hold the latest onNewOrder callback (avoids stale closure)
-  const onNewOrderRef = useRef(onNewOrder)
-  useEffect(() => {
-    onNewOrderRef.current = onNewOrder
-  }, [onNewOrder])
-
-  const clearTimers = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current)
-      timerRef.current = null
-    }
-    if (autoCloseRef.current) {
-      clearTimeout(autoCloseRef.current)
-      autoCloseRef.current = null
-    }
-  }, [])
-
-  // Start auto-close countdown when dialog opens
-  useEffect(() => {
-    if (!open) {
-      clearTimers()
-      return
-    }
-
-    userInteracted.current = false
-    setCountdown(AUTO_CLOSE_MS / 1000)
-
-    timerRef.current = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) return 0
-        return prev - 1
-      })
-    }, 1000)
-
-    autoCloseRef.current = setTimeout(() => {
-      if (!userInteracted.current) {
-        clearTimers()
-        onNewOrderRef.current()
-      }
-    }, AUTO_CLOSE_MS)
-
-    return clearTimers
-  }, [open, clearTimers])
-
-  function handleInteraction() {
-    userInteracted.current = true
-    clearTimers()
-    setCountdown(0)
-  }
-
+  // POS-17: hộp thoại không tự đóng; người bán chủ động bấm In hoặc Đơn hàng mới
   function handleNewOrder() {
-    clearTimers()
     onNewOrder()
   }
 
+  /** Phím tắt: Enter mở đơn mới, P hoặc Ctrl+P in hoá đơn theo khổ mặc định */
+  function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.defaultPrevented || e.altKey) return
+    const target = e.target as HTMLElement
+    // Nút khác đang được chọn (menu khổ in) thì để Enter bấm đúng nút đó
+    if (e.key === 'Enter' && (target === newOrderRef.current || target.tagName !== 'BUTTON')) {
+      e.preventDefault()
+      handleNewOrder()
+      return
+    }
+    if (e.key.toLowerCase() === 'p' && !e.shiftKey) {
+      e.preventDefault()
+      handlePrint(getDefaultFormat())
+    }
+  }
+
   function handlePrint(format: PrintFormat) {
-    handleInteraction()
     if (!order) return
     printOrder({
       order: toThermalOrder({
@@ -160,8 +125,12 @@ export function OrderCompletionDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           className="sm:max-w-md"
-          onPointerDown={handleInteraction}
-          onKeyDown={handleInteraction}
+          onKeyDown={handleKeyDown}
+          onOpenAutoFocus={(e) => {
+            // Chọn sẵn nút Đơn hàng mới để Enter luôn mở đơn mới, không lỡ tay in
+            e.preventDefault()
+            newOrderRef.current?.focus()
+          }}
         >
           <DialogHeader>
             <DialogTitle className="sr-only">Đơn hàng hoàn thành</DialogTitle>
@@ -234,17 +203,21 @@ export function OrderCompletionDialog({
           {/* Actions */}
           <div className="flex gap-2">
             <PrintButton onPrint={handlePrint} label="In hoá đơn" />
-            <Button type="button" onClick={handleNewOrder} className="flex-1">
+            <Button
+              ref={newOrderRef}
+              type="button"
+              onClick={handleNewOrder}
+              className="flex-1"
+              aria-keyshortcuts="Enter"
+            >
               Đơn hàng mới
             </Button>
           </div>
 
-          {/* Countdown */}
-          {countdown > 0 && !userInteracted.current && (
-            <p className="text-center text-xs text-muted-foreground">
-              Tự động đóng sau {countdown} giây...
-            </p>
-          )}
+          <p className="text-center text-xs text-muted-foreground">
+            Phím tắt: <kbd className="font-mono">Enter</kbd> đơn hàng mới,{' '}
+            <kbd className="font-mono">P</kbd> in hoá đơn
+          </p>
         </DialogContent>
       </Dialog>
 

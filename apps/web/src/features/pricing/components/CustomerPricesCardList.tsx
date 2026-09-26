@@ -5,6 +5,8 @@ import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Button } from '@/components/ui/button'
 
+import { VariantNameHint } from './VariantSelect'
+
 interface Props {
   items: CustomerPriceListItem[]
   onEdit: (p: CustomerPriceListItem) => void
@@ -30,6 +32,7 @@ export function CustomerPricesCardList({ items, onEdit, onDelete }: Props) {
                   <span className="font-medium">{p.productName}</span>
                   <span className="ml-2 text-xs text-muted-foreground">Mã hàng {p.productSku}</span>
                 </div>
+                <VariantNameHint variantName={p.variantName} />
                 <div className="mt-1 text-sm">
                   Giá riêng: <span className="font-semibold">{formatVndWithSuffix(p.price)}</span>
                   <span className="ml-2 text-xs text-muted-foreground">

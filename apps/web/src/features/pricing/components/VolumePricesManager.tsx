@@ -40,6 +40,8 @@ interface ActiveTarget {
   productSku: string
   productSellingPrice: number
   productCostPrice: number | null
+  variantId: string | null
+  variantName: string | null
 }
 
 export function VolumePricesManager() {
@@ -71,6 +73,8 @@ export function VolumePricesManager() {
       productSku: item.productSku,
       productSellingPrice: item.productSellingPrice,
       productCostPrice: item.productCostPrice,
+      variantId: item.variantId,
+      variantName: item.variantName,
     })
   }
 
@@ -83,7 +87,7 @@ export function VolumePricesManager() {
     try {
       await clearMutation.mutateAsync({
         productId: clearTarget.productId,
-        input: { tiers: [] },
+        input: { variantId: clearTarget.variantId, tiers: [] },
       })
       showSuccess('Đã xoá toàn bộ mức giá theo số lượng')
       setClearTarget(null)
@@ -103,6 +107,8 @@ export function VolumePricesManager() {
       productSku: p.sku,
       productSellingPrice: p.sellingPrice,
       productCostPrice: p.costPrice,
+      variantId: null,
+      variantName: null,
     })
   }
 
@@ -185,6 +191,7 @@ export function VolumePricesManager() {
         productSku={active?.productSku}
         productSellingPrice={active?.productSellingPrice}
         productCostPrice={active?.productCostPrice ?? null}
+        initialVariantId={active?.variantId ?? null}
       />
 
       <AlertDialog
@@ -195,10 +202,16 @@ export function VolumePricesManager() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Xoá toàn bộ mức giá của {clearTarget?.productName}?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Xoá toàn bộ mức giá của {clearTarget?.productName}
+              {clearTarget?.variantName ? ` (biến thể ${clearTarget.variantName})` : ''}?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Tất cả {clearTarget?.tierCount ?? 0} mức giá theo số lượng cho sản phẩm này sẽ bị xoá.
-              Hành động không thể hoàn tác.
+              Tất cả {clearTarget?.tierCount ?? 0} mức giá theo số lượng cho{' '}
+              {clearTarget?.variantName
+                ? `biến thể ${clearTarget.variantName} của sản phẩm này`
+                : 'sản phẩm này'}{' '}
+              sẽ bị xoá. Hành động không thể hoàn tác.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

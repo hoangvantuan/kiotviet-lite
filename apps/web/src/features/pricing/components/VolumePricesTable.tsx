@@ -14,6 +14,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
+import { VariantNameHint } from './VariantSelect'
+
 interface Props {
   items: VolumePricesListItem[]
   onEdit: (item: VolumePricesListItem) => void
@@ -36,10 +38,11 @@ export function VolumePricesTable({ items, onEdit, onClear }: Props) {
         </TableHeader>
         <TableBody>
           {items.map((p) => (
-            <TableRow key={p.productId}>
+            <TableRow key={`${p.productId}-${p.variantId ?? 'all'}`}>
               <TableCell className="align-top">
                 <div className="font-medium">{p.productName}</div>
                 <div className="text-xs text-muted-foreground">Mã hàng {p.productSku}</div>
+                <VariantNameHint variantName={p.variantName} />
               </TableCell>
               <TableCell className="text-right tabular-nums">
                 {formatVndWithSuffix(p.productSellingPrice)}

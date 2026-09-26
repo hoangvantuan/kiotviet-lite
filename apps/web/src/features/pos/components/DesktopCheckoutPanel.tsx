@@ -32,9 +32,8 @@ export function DesktopCheckoutPanel({ onPayment }: DesktopCheckoutPanelProps) {
   const subtotal = useCartStore((s) =>
     (s.tabs[s.activeTab]?.items ?? []).reduce((sum, i) => sum + i.lineTotal, 0),
   )
-  const totalQty = useCartStore((s) =>
-    (s.tabs[s.activeTab]?.items ?? []).reduce((sum, i) => sum + i.quantity, 0),
-  )
+  // POS-20: "Tổng tiền hàng (N sản phẩm)" đếm số dòng hàng, không cộng số lượng
+  const lineCount = useCartStore((s) => (s.tabs[s.activeTab]?.items ?? []).length)
   const clearCart = useCartStore((s) => s.clearCart)
 
   useAutoReprice()
@@ -62,7 +61,7 @@ export function DesktopCheckoutPanel({ onPayment }: DesktopCheckoutPanelProps) {
       {/* Bottom: Totals and Checkout Button */}
       <div className="shrink-0 space-y-3 border-t border-border pt-3">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Tổng tiền hàng ({totalQty} sản phẩm)</span>
+          <span className="text-muted-foreground">Tổng tiền hàng ({lineCount} sản phẩm)</span>
           <span className="font-mono font-medium text-foreground">
             {formatVndWithSuffix(subtotal)}
           </span>

@@ -4,6 +4,8 @@ import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
+import { VariantNameHint } from './VariantSelect'
+
 interface Props {
   rows: CompareRow[]
 }
@@ -35,7 +37,7 @@ export function ComparePriceListsCardList({ rows }: Props) {
         const onlyInLabel = row.isMissingA ? 'Chỉ có ở B' : row.isMissingB ? 'Chỉ có ở A' : null
         return (
           <div
-            key={row.productId}
+            key={`${row.productId}-${row.variantId ?? 'all'}`}
             className={cn(
               'rounded-lg border border-border bg-card p-3 space-y-2',
               row.diffPercent !== null &&
@@ -51,6 +53,7 @@ export function ComparePriceListsCardList({ rows }: Props) {
               )}
               <div className="flex-1 min-w-0">
                 <div className="font-medium leading-tight">{row.productName}</div>
+                <VariantNameHint variantName={row.variantName} />
                 <div className="text-xs text-muted-foreground">{row.productSku}</div>
                 {row.productCostPrice !== null && (
                   <div className="text-xs text-muted-foreground mt-1">

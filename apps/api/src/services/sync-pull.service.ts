@@ -172,6 +172,7 @@ const ENTITY_SPECS: Record<Exclude<SyncPullEntity, 'tombstones'>, EntitySpec> = 
       id: priceListItems.id,
       priceListId: priceListItems.priceListId,
       productId: priceListItems.productId,
+      variantId: priceListItems.variantId,
       price: priceListItems.price,
     },
     // Bảng này không có store_id: lọc theo cửa hàng của bảng giá cha
@@ -186,6 +187,7 @@ const ENTITY_SPECS: Record<Exclude<SyncPullEntity, 'tombstones'>, EntitySpec> = 
       id: customerPrices.id,
       customerId: customerPrices.customerId,
       productId: customerPrices.productId,
+      variantId: customerPrices.variantId,
       price: customerPrices.price,
     },
     storeFilter: (storeId) => eq(customerPrices.storeId, storeId),
@@ -197,6 +199,7 @@ const ENTITY_SPECS: Record<Exclude<SyncPullEntity, 'tombstones'>, EntitySpec> = 
     columns: {
       id: volumePrices.id,
       productId: volumePrices.productId,
+      variantId: volumePrices.variantId,
       minQty: volumePrices.minQty,
       price: volumePrices.price,
     },

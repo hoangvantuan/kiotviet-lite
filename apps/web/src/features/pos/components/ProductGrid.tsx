@@ -47,10 +47,8 @@ export function ProductGrid({ products, isLoading, onSelectProduct }: ProductGri
     )
   }
 
+  // Hết hàng vẫn bấm được: bước thêm vào giỏ báo rõ và áp cài đặt bán âm của cửa hàng (POS-13)
   function handleClick(product: PosProductItem) {
-    const isOutOfStock = product.trackInventory && product.stockQuantity <= 0
-    if (isOutOfStock) return
-
     if (product.hasVariants) {
       onSelectProduct(product)
       return
@@ -71,11 +69,10 @@ export function ProductGrid({ products, isLoading, onSelectProduct }: ProductGri
           <button
             key={product.id}
             type="button"
-            disabled={isOutOfStock}
             onClick={() => handleClick(product)}
             aria-label={`${product.name}, ${formatVndWithSuffix(product.basePrice)}${isOutOfStock ? ', hết hàng' : ''}`}
             className={`group relative flex flex-col overflow-hidden rounded-lg border border-border bg-card text-left transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-              isOutOfStock ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+              isOutOfStock ? 'cursor-pointer opacity-60' : 'cursor-pointer'
             }`}
           >
             <div className="relative aspect-square w-full overflow-hidden bg-muted">

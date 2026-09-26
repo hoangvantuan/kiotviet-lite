@@ -11,6 +11,8 @@ import {
 function makeRow(overrides: Partial<CompareRow>): CompareRow {
   return {
     productId: 'p',
+    variantId: null,
+    variantName: null,
     productName: 'Sản phẩm',
     productSku: 'SP',
     productImageUrl: null,
@@ -54,6 +56,13 @@ describe('applyCompareFilters', () => {
       priceA: null,
       diffPercent: null,
     }),
+    makeRow({
+      productId: '5',
+      productName: 'Nón bảo hiểm',
+      productSku: 'NBH01',
+      variantId: 'v1',
+      variantName: 'Xanh - L',
+    }),
   ]
 
   it('Empty filter trả nguyên rows', () => {
@@ -77,7 +86,7 @@ describe('applyCompareFilters', () => {
   it('onlyBoth lọc bỏ row missing', () => {
     const filters: CompareFiltersState = { ...DEFAULT_COMPARE_FILTERS, onlyBoth: true }
     const result = applyCompareFilters(rows, filters)
-    expect(result.length).toBe(3)
+    expect(result.length).toBe(4)
     expect(result.find((r) => r.productId === '4')).toBeUndefined()
   })
 
@@ -93,6 +102,13 @@ describe('applyCompareFilters', () => {
     const result = applyCompareFilters(rows, filters)
     expect(result.length).toBe(1)
     expect(result[0]?.productId).toBe('2')
+  })
+
+  it('Search match tên biến thể', () => {
+    const filters: CompareFiltersState = { ...DEFAULT_COMPARE_FILTERS, search: 'xanh' }
+    const result = applyCompareFilters(rows, filters)
+    expect(result.length).toBe(1)
+    expect(result[0]?.productId).toBe('5')
   })
 
   it('AND giữa các filter (search + onlyBelowCostB)', () => {

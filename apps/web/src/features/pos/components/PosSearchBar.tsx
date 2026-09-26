@@ -68,9 +68,7 @@ export function PosSearchBar({ searchRef, onOpenScanner, onSelectProduct }: PosS
 
   const handleSelect = useCallback(
     (product: PosProductItem) => {
-      const isOutOfStock = product.trackInventory && product.stockQuantity <= 0
-      if (isOutOfStock) return
-
+      // Hết hàng không chặn im lặng ở đây: bước thêm vào giỏ báo rõ và áp cài đặt bán âm (POS-13)
       if (product.hasVariants || mode === 'normal') {
         onSelectProduct(product)
       } else {
@@ -228,11 +226,10 @@ export function PosSearchBar({ searchRef, onOpenScanner, onSelectProduct }: PosS
               >
                 <button
                   type="button"
-                  disabled={isOutOfStock}
                   onClick={() => handleSelect(product)}
                   className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors ${
                     index === highlightIndex ? 'bg-accent' : 'hover:bg-accent/50'
-                  } ${isOutOfStock ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                  } cursor-pointer ${isOutOfStock ? 'opacity-60' : ''}`}
                 >
                   <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted">
                     {product.imageUrl ? (

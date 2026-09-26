@@ -40,6 +40,7 @@ import { usePosKeyboard } from '../hooks/use-pos-keyboard'
 import { usePosProducts } from '../hooks/use-pos-products'
 import { usePosStoreConfig } from '../hooks/use-pos-store-config'
 import { priceApprovalFromError, requiredPriceApproval } from '../price-approval'
+import { usePosStockPolicy } from '../stock-guard'
 import type { OrderDetail, PosProductItem } from '../types'
 import { BarcodeScanner } from './BarcodeScanner'
 import { CartPanel } from './CartPanel'
@@ -179,6 +180,11 @@ export function PosScreen() {
   const handlePaymentOpenChange = useGuardedOpenChange(setPaymentDialogOpen, checkoutMutation)
   const addToCart = useAddToCart()
   const posConfig = usePosStoreConfig()
+  // POS-13: mọi đường thêm hàng vào giỏ đọc cùng một cờ bán âm kho của cửa hàng
+  const allowNegativeStock = posConfig?.allowNegativeStock ?? true
+  useEffect(() => {
+    usePosStockPolicy.getState().setAllowNegativeStock(allowNegativeStock)
+  }, [allowNegativeStock])
 
   const shiftGate = usePosShiftGate(isOffline)
   const { ensureShift } = shiftGate

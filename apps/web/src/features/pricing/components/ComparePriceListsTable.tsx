@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 
+import { VariantNameHint } from './VariantSelect'
+
 interface Props {
   rows: CompareRow[]
 }
@@ -59,7 +61,7 @@ export function ComparePriceListsTable({ rows }: Props) {
             const onlyInLabel = row.isMissingA ? 'Chỉ có ở B' : row.isMissingB ? 'Chỉ có ở A' : null
             return (
               <TableRow
-                key={row.productId}
+                key={`${row.productId}-${row.variantId ?? 'all'}`}
                 className={cn(isHighlight && 'bg-amber-50 dark:bg-amber-950/30')}
               >
                 <TableCell>
@@ -75,6 +77,7 @@ export function ComparePriceListsTable({ rows }: Props) {
                 </TableCell>
                 <TableCell>
                   <div className="font-medium">{row.productName}</div>
+                  <VariantNameHint variantName={row.variantName} />
                   <div className="text-xs text-muted-foreground">{row.productSku}</div>
                 </TableCell>
                 <TableCell className="text-right tabular-nums text-muted-foreground">

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { Plus, Trash2 } from 'lucide-react'
 
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useProductQuery } from '@/features/products/use-products'
 import { handleApiError } from '@/lib/api-error'
 import { showError, showSuccess } from '@/lib/toast'
 
@@ -24,6 +25,7 @@ import {
   useReplaceVolumePricesMutation,
   useVolumePricesForProductQuery,
 } from '../use-volume-prices'
+import { VariantSelect } from './VariantSelect'
 
 const MAX_TIERS = 5
 
@@ -44,6 +46,7 @@ interface Props {
   productSku?: string
   productSellingPrice?: number
   productCostPrice?: number | null
+  initialVariantId?: string | null
 }
 
 export function VolumePricesDialog({
@@ -54,8 +57,18 @@ export function VolumePricesDialog({
   productSku,
   productSellingPrice,
   productCostPrice,
+  initialVariantId,
 }: Props) {
-  const detailQuery = useVolumePricesForProductQuery(productId ?? undefined, {
+  const [variantId, setVariantId] = useState<string | null>(initialVariantId ?? null)
+
+  useEffect(() => {
+    if (open) setVariantId(initialVariantId ?? null)
+  }, [open, productId, initialVariantId])
+
+  const productDetailQuery = useProductQuery(open && productId ? productId : undefined)
+  const variants = productDetailQuery.data?.variantsConfig?.variants ?? []
+
+  const detailQuery = useVolumePricesForProductQuery(productId ?? undefined, variantId, {
     enabled: open && Boolean(productId),
   })
   const mutation = useReplaceVolumePricesMutation()
@@ -92,7 +105,7 @@ export function VolumePricesDialog({
       const seedPrice = productSellingPrice ?? 0
       form.reset({ tiers: [{ minQty: 1, price: seedPrice }] })
     }
-  }, [open, detail, detailQuery.isLoading, productId, productSellingPrice, form])
+  }, [open, detail, detailQuery.isLoading, productId, variantId, productSellingPrice, form])
 
   const watchedTiers = form.watch('tiers')
 
@@ -115,6 +128,7 @@ export function VolumePricesDialog({
       return
     }
     const cleaned: ReplaceVolumePricesInput = {
+      variantId,
       tiers: values.tiers
         .filter(
           (t): t is { minQty: number; price: number } => t.minQty !== null && t.price !== null,
@@ -152,6 +166,12 @@ export function VolumePricesDialog({
                 ? ` • Giá vốn: ${formatVndWithSuffix(displayCostPrice)}`
                 : ''}
             </div>
+            {variants.length > 0 && (
+              <div className="mt-2 max-w-xs space-y-1">
+                <Label className="text-xs text-muted-foreground">Biến thể</Label>
+                <VariantSelect variants={variants} value={variantId} onChange={setVariantId} />
+              </div>
+            )}
           </div>
         )}
 

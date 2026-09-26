@@ -291,36 +291,6 @@ export async function createOrder({
   // hàng đợi đồng bộ kèm lỗi thay vì ghi một khoản giảm giá không có thật (ADR-0009)
   assertDiscountAmounts(input)
 
-  const unitCosts = await loadLineUnitCosts(db, actor.storeId, input.items)
-  const priceApproval = await evaluatePriceApproval({
-    db,
-    actor,
-    input,
-    source,
-    unitCosts,
-    meta,
-  })
-  // POS-04: vượt hạn mức cần PIN của người giữ pos.overrideDebtLimit, không phải PIN người bán
-  const debtLimitApprover = await resolveDebtLimitApproval({ db, actor, input, source, meta })
-  // ADR-0009: đơn ngoại tuyến vi phạm chính sách vẫn nhận (hàng đã giao) nhưng chờ chủ duyệt
-  const policyViolations: OrderPolicyViolation[] =
-    source === 'offline_sync' ? [...offlineViolations] : []
-  // OFF-11 (ADR-0014): đơn ngoại tuyến ghi theo giờ bán trên máy bán, đã kiểm giới hạn
-  const receivedAt = new Date()
-  let offlineSale: ReturnType<typeof resolveOfflineSoldAt> | null = null
-  if (source === 'offline_sync') {
-    const [store] = await db
-      .select({ createdAt: stores.createdAt })
-      .from(stores)
-      .where(eq(stores.id, actor.storeId))
-      .limit(1)
-    offlineSale = resolveOfflineSoldAt(offlineCreatedAt, receivedAt, store?.createdAt ?? null)
-  }
-  if (offlineSale?.violation) policyViolations.push(offlineSale.violation)
-  const priceIssue = priceViolation(priceApproval)
-  if (priceIssue) policyViolations.push(priceIssue)
-  const canViewCost = actorHasPermission(actor, 'products.viewCost')
-
   // Validate manual price list if selected
   let snapshotPriceListName: string | null = null
   let effectivePriceListId: string | null = null
@@ -380,6 +350,56 @@ export async function createOrder({
   } else if (source === 'offline_sync') {
     snapshotPriceListName = input.priceListName ?? null
   }
+
+  // POS-08, R1: giá hệ thống từng dòng tính trước khi duyệt giá, để dòng lấy giá đặc biệt (bảng giá,
+  // giá riêng khách, chiết khấu danh mục, giá theo số lượng) dưới giá vốn cũng phải qua duyệt dưới
+  // giá vốn. Kết quả dùng lại khi đối chiếu đơn giá trong giao dịch.
+  const orderDate = new Date()
+  const resolvedPrices = await Promise.all(
+    input.items.map((item) =>
+      resolveProductPrice({
+        db,
+        storeId: actor.storeId,
+        customerId: input.customerId ?? null,
+        priceListId: effectivePriceListId,
+        productId: item.productId,
+        variantId: item.variantId ?? null,
+        unitConversionId: item.unitConversionId ?? null,
+        quantity: item.quantity,
+        context: { orderDate },
+      }),
+    ),
+  )
+  const unitCosts = await loadLineUnitCosts(db, actor.storeId, input.items)
+  const priceApproval = await evaluatePriceApproval({
+    db,
+    actor,
+    input,
+    source,
+    unitCosts,
+    lineSources: resolvedPrices.map((r) => r.source),
+    meta,
+  })
+  // POS-04: vượt hạn mức cần PIN của người giữ pos.overrideDebtLimit, không phải PIN người bán
+  const debtLimitApprover = await resolveDebtLimitApproval({ db, actor, input, source, meta })
+  // ADR-0009: đơn ngoại tuyến vi phạm chính sách vẫn nhận (hàng đã giao) nhưng chờ chủ duyệt
+  const policyViolations: OrderPolicyViolation[] =
+    source === 'offline_sync' ? [...offlineViolations] : []
+  // OFF-11 (ADR-0014): đơn ngoại tuyến ghi theo giờ bán trên máy bán, đã kiểm giới hạn
+  const receivedAt = new Date()
+  let offlineSale: ReturnType<typeof resolveOfflineSoldAt> | null = null
+  if (source === 'offline_sync') {
+    const [store] = await db
+      .select({ createdAt: stores.createdAt })
+      .from(stores)
+      .where(eq(stores.id, actor.storeId))
+      .limit(1)
+    offlineSale = resolveOfflineSoldAt(offlineCreatedAt, receivedAt, store?.createdAt ?? null)
+  }
+  if (offlineSale?.violation) policyViolations.push(offlineSale.violation)
+  const priceIssue = priceViolation(priceApproval)
+  if (priceIssue) policyViolations.push(priceIssue)
+  const canViewCost = actorHasPermission(actor, 'products.viewCost')
 
   const warnings: OrderSyncWarning[] = []
   if (customerDiscrepancy) {
@@ -469,6 +489,8 @@ export async function createOrder({
       const insertedLines: Array<{ id: string; lineTotal: number }> = []
       let isPriceMismatchAdjusted = false
       let negativeStockAlertsEnabled: boolean | undefined
+      // POS-13: đọc một lần khi có dòng làm tồn âm
+      let allowNegativeStock: boolean | undefined
       const mismatchedLines: Array<{
         productId: string
         productName: string
@@ -544,19 +566,7 @@ export async function createOrder({
         }
 
         // T10: Máy chủ đối chiếu đơn giá với giá tự tính
-        const resolvedPrice = await resolveProductPrice({
-          db: txDb,
-          storeId: actor.storeId,
-          customerId: input.customerId ?? null,
-          priceListId: effectivePriceListId,
-          productId: item.productId,
-          variantId: item.variantId ?? null,
-          unitConversionId: item.unitConversionId ?? null,
-          quantity: item.quantity,
-          context: {
-            orderDate: new Date(),
-          },
-        })
+        const resolvedPrice = resolvedPrices[itemIdx]!
 
         const effectivePriceOverride = item.priceOverride ?? false
         // Cờ PIN do máy chủ đặt theo kết quả duyệt, không theo cờ máy khách gửi (ADR-0002)
@@ -853,13 +863,33 @@ export async function createOrder({
 
           // Chỉ đọc thiết lập khi cần cảnh báo; phần ghi sổ kho ở trên luôn chạy.
           if (newStock < 0) {
-            if (negativeStockAlertsEnabled === undefined) {
+            if (negativeStockAlertsEnabled === undefined || allowNegativeStock === undefined) {
               const setting = await tx.query.stores.findFirst({
                 where: eq(stores.id, actor.storeId),
-                columns: { negativeStockAlertsEnabled: true },
+                columns: { negativeStockAlertsEnabled: true, allowNegativeStock: true },
               })
               if (!setting) throw new ApiError('NOT_FOUND', 'Không tìm thấy cửa hàng')
               negativeStockAlertsEnabled = setting.negativeStockAlertsEnabled
+              allowNegativeStock = setting.allowNegativeStock
+            }
+            // POS-13: cửa hàng không cho bán âm kho thì chặn đơn POS (hàng đã khóa nên số tồn là
+            // số thật tại lúc bán). Đơn ngoại tuyến đã giao hàng tại quầy nên vẫn ghi, kèm cảnh báo.
+            if (!allowNegativeStock && source === 'pos') {
+              const available = Math.max(0, newStock + deductQty)
+              const label = item.variantName
+                ? `${item.productName} (${item.variantName})`
+                : item.productName
+              throw new ApiError(
+                'BUSINESS_RULE_VIOLATION',
+                `Không đủ tồn kho: ${label} chỉ còn ${available} ${product.unit}`,
+                {
+                  reason: 'insufficient_stock',
+                  itemIndex: itemIdx,
+                  productId: item.productId,
+                  variantId: item.variantId ?? null,
+                  available,
+                },
+              )
             }
             if (negativeStockAlertsEnabled) {
               emitEvent(rootDb, {
@@ -1001,14 +1031,19 @@ export async function createOrder({
           ipAddress: meta?.ipAddress,
           userAgent: meta?.userAgent,
         })
-        // Dòng sửa giá đã có cảnh báo riêng ở trên, chỉ cảnh báo thêm khi đơn chỉ có chiết khấu
+        // Dòng sửa giá đã có cảnh báo riêng ở trên, chỉ cảnh báo thêm khi đơn chỉ có chiết khấu hay
+        // chỉ có giá đặc biệt dưới giá vốn
         if (!priceApproval.hasOverride)
           emitEvent(rootDb, {
             storeId: actor.storeId,
             type: 'audit.price_override',
             severity: 'warn',
-            title: `Đơn ngoại tuyến chiết khấu chưa được duyệt: ${orderNumber}`,
-            body: `Đơn ${orderNumber} có chiết khấu vượt quyền người bán mà chưa được duyệt (${priceApproval.missingReason ?? 'không rõ lý do'}). Tổng tiền đã chốt: ${formatVnd(input.total)}.`,
+            title: priceApproval.hasDiscount
+              ? `Đơn ngoại tuyến chiết khấu chưa được duyệt: ${orderNumber}`
+              : `Đơn ngoại tuyến bán dưới giá vốn chưa được duyệt: ${orderNumber}`,
+            body: priceApproval.hasDiscount
+              ? `Đơn ${orderNumber} có chiết khấu vượt quyền người bán mà chưa được duyệt (${priceApproval.missingReason ?? 'không rõ lý do'}). Tổng tiền đã chốt: ${formatVnd(input.total)}.`
+              : `Đơn ${orderNumber} có dòng lấy giá đặc biệt dưới giá vốn mà chưa được chủ cửa hàng duyệt (${priceApproval.missingReason ?? 'không rõ lý do'}). Tổng tiền đã chốt: ${formatVnd(input.total)}.`,
             context: {
               orderId: createdId,
               orderNumber,

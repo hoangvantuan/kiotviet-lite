@@ -97,10 +97,15 @@ export async function getPriceComparison(
     })
     .from(priceListItems)
     .where(
-      sql`${priceListItems.priceListId} IN (${sql.join(
-        priceListIds.map((id) => sql`${id}`),
-        sql`, `,
-      )})`,
+      and(
+        sql`${priceListItems.priceListId} IN (${sql.join(
+          priceListIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})`,
+        // Báo cáo theo sản phẩm: chỉ dòng áp cho mọi biến thể, dòng riêng của biến thể (POS-08)
+        // không đè giá theo sản phẩm
+        isNull(priceListItems.variantId),
+      ),
     )
 
   const priceMap = new Map<string, Map<string, number>>()

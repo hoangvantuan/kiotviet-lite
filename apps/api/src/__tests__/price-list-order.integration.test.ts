@@ -1040,8 +1040,9 @@ describe('Issue #35: Price List Selection & Order Snapshot', () => {
 
   describe('6. Unit Conversion Precedence with Manual Price List', () => {
     it('manual price list price wins unitConversion.sellingPrice (scales base price by conversionFactor) with preview and checkout agreement', async () => {
-      // Product base price: 10,000 (Cái)
-      const p1 = await createProduct(env.base, { sellingPrice: 10_000 })
+      // Product base price: 10,000 (Cái). Giá vốn 5.000: bảng giá 80.000/thùng vẫn trên giá vốn,
+      // không vướng duyệt dưới giá vốn cho giá đặc biệt (POS-08, R1)
+      const p1 = await createProduct(env.base, { sellingPrice: 10_000, costPrice: 5_000 })
       // Unit conversion: Thùng = 10 Cái, sellingPrice = 120,000 (cao hơn 10 * 10,000)
       const uc = await createUnitConversion(env.base, p1.id, {
         conversionFactor: 10,

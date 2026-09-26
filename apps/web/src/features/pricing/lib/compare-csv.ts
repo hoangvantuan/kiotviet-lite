@@ -5,6 +5,7 @@ import { buildCsv } from '../../../lib/csv'
 const HEADERS = [
   'product_sku',
   'product_name',
+  'variant_name',
   'cost_price',
   'price_a',
   'margin_a_percent',
@@ -34,6 +35,7 @@ export function buildCompareCsv(rows: CompareRow[]): string {
   const dataRows: (string | number | null)[][] = rows.map((r) => [
     r.productSku,
     r.productName,
+    r.variantName ?? '',
     numOrEmpty(r.productCostPrice),
     numOrEmpty(r.priceA),
     floatOrEmpty(r.marginA),

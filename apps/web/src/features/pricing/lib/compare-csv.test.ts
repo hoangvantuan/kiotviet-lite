@@ -7,6 +7,8 @@ import { buildCompareCsv } from './compare-csv'
 function makeRow(overrides: Partial<CompareRow>): CompareRow {
   return {
     productId: 'p',
+    variantId: null,
+    variantName: null,
     productName: 'Sản phẩm 1',
     productSku: 'SP1',
     productImageUrl: null,
@@ -31,7 +33,7 @@ describe('buildCompareCsv', () => {
     const csv = buildCompareCsv([])
     const lines = csv.split('\r\n')
     expect(lines[0]).toBe(
-      'product_sku,product_name,cost_price,price_a,margin_a_percent,price_b,margin_b_percent,diff_amount,diff_percent,below_cost_a,below_cost_b',
+      'product_sku,product_name,variant_name,cost_price,price_a,margin_a_percent,price_b,margin_b_percent,diff_amount,diff_percent,below_cost_a,below_cost_b',
     )
     expect(lines.length).toBe(1)
   })
@@ -40,7 +42,7 @@ describe('buildCompareCsv', () => {
     const csv = buildCompareCsv([makeRow({})])
     const lines = csv.split('\r\n')
     expect(lines.length).toBe(2)
-    expect(lines[1]).toBe('SP1,Sản phẩm 1,50000,80000,37.50,90000,44.44,10000,12.50,0,0')
+    expect(lines[1]).toBe('SP1,Sản phẩm 1,,50000,80000,37.50,90000,44.44,10000,12.50,0,0')
   })
 
   it('Biên âm và chênh lệch âm ghi là số, không thêm dấu nháy (review #55)', () => {
@@ -48,7 +50,7 @@ describe('buildCompareCsv', () => {
       makeRow({ priceA: 40000, marginA: -12.5, diffAmount: -5000, diffPercent: -12.5 }),
     ])
     expect(csv.split('\r\n')[1]).toBe(
-      'SP1,Sản phẩm 1,50000,40000,-12.50,90000,44.44,-5000,-12.50,0,0',
+      'SP1,Sản phẩm 1,,50000,40000,-12.50,90000,44.44,-5000,-12.50,0,0',
     )
   })
 
@@ -68,7 +70,7 @@ describe('buildCompareCsv', () => {
       }),
     ])
     const dataLine = csv.split('\r\n')[1]
-    expect(dataLine).toBe('SP1,Sản phẩm 1,50000,,,90000,44.44,,,0,0')
+    expect(dataLine).toBe('SP1,Sản phẩm 1,,50000,,,90000,44.44,,,0,0')
   })
 
   it('Row below cost B: below_cost_b=1', () => {
@@ -86,12 +88,18 @@ describe('buildCompareCsv', () => {
     expect(dataLine).toContain('"Áo, sơ mi"')
   })
 
+  it('Có biến thể: variant_name điền tên biến thể', () => {
+    const csv = buildCompareCsv([makeRow({ variantName: 'Đỏ - XL' })])
+    const dataLine = csv.split('\r\n')[1]
+    expect(dataLine).toBe('SP1,Sản phẩm 1,Đỏ - XL,50000,80000,37.50,90000,44.44,10000,12.50,0,0')
+  })
+
   it('Cost price null → empty cell', () => {
     const csv = buildCompareCsv([makeRow({ productCostPrice: null })])
     const dataLine = csv.split('\r\n')[1]
-    // Vị trí 3 (index 2) là cost_price → empty
+    // Vị trí 4 (index 3) là cost_price → empty
     const cells = dataLine?.split(',') ?? []
-    expect(cells[2]).toBe('')
+    expect(cells[3]).toBe('')
   })
 
   it('3 row: number of lines = 4 (header + 3 rows)', () => {

@@ -14,6 +14,8 @@ export const createCustomerPriceSchema = z
   .object({
     customerId: z.string().uuid('Khách hàng không hợp lệ'),
     productId: z.string().uuid('Sản phẩm không hợp lệ'),
+    // POS-08: null hoặc bỏ trống là giá riêng cho mọi biến thể của sản phẩm
+    variantId: z.string().uuid('Biến thể không hợp lệ').nullable().optional(),
     price: priceSchema,
     note: customerPriceNoteSchema,
   })
@@ -44,6 +46,9 @@ export const customerPriceListItemSchema = z.object({
   productName: z.string(),
   productSku: z.string(),
   productImageUrl: z.string().nullable(),
+  variantId: z.string().uuid().nullable(),
+  variantName: z.string().nullable(),
+  /** Giá bán, giá vốn của biến thể nếu dòng gắn biến thể, ngược lại của sản phẩm */
   productSellingPrice: z.number(),
   productCostPrice: z.number().nullable(),
   price: z.number(),
