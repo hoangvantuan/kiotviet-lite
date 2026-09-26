@@ -32,7 +32,11 @@ import { createSyncRoutes } from '../routes/sync.routes.js'
 import { createBulkImportJob } from '../services/bulk-import-jobs.service.js'
 import { previewBulkImport } from '../services/bulk-import-preview.service.js'
 import { runBulkImportJob } from '../services/bulk-import-runner.service.js'
-import { createCustomer } from './helpers/factories.js'
+import {
+  createCustomer,
+  createProduct as createProductRow,
+  createVariant,
+} from './helpers/factories.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 // GL-07, POS-09 (ADR-0015): số lượng thập phân cho hàng cân ký. Sau mỗi ca, bộ bất biến GL-14
@@ -429,6 +433,33 @@ describe('GL-07: bán, trả, nhập, kiểm kê với số lượng thập phâ
     )
     expect(cancelled.status).toBe(200)
     expect(await stockOf(pork.id)).toBe(2)
+  })
+
+  it('m2: biến thể đã xóa còn tồn lẻ không chặn tắt bán số lẻ', async () => {
+    const shirt = await createProductRow(env, {
+      name: 'Áo thun',
+      allowDecimalQuantity: true,
+      withVariants: true,
+      currentStock: 2,
+    })
+    const live = await createVariant(env, shirt.id, { stockQuantity: 2 })
+    const gone = await createVariant(env, shirt.id, { stockQuantity: 0.5, deletedAt: new Date() })
+    // Sổ kho khớp tồn để bất biến I6 sạch
+    await env.db.insert(inventoryTransactions).values(
+      [
+        { variantId: live.id, quantity: 2 },
+        { variantId: gone.id, quantity: 0.5 },
+      ].map((l) => ({
+        storeId: env.storeId,
+        productId: shirt.id,
+        type: 'stock_check',
+        stockAfter: l.quantity,
+        createdBy: env.owner.id,
+        ...l,
+      })),
+    )
+    const off = await call('PATCH', `/products/${shirt.id}`, { allowDecimalQuantity: false })
+    expect(off.status).toBe(200)
   })
 
   it('B1: chiết khấu danh mục với số lượng lẻ, có khách: tính giá, tạo đơn, đồng bộ ngoại tuyến không 500', async () => {

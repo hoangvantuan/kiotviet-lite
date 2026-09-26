@@ -897,6 +897,7 @@ async function hasDecimalVariantStock(db: Db, productId: string): Promise<boolea
     .where(
       and(
         eq(productVariants.productId, productId),
+        isNull(productVariants.deletedAt),
         sql`${productVariants.stockQuantity} <> trunc(${productVariants.stockQuantity})`,
       ),
     )
