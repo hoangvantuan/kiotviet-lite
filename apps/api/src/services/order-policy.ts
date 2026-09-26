@@ -18,6 +18,7 @@ import {
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
+import { getStoreTimezone } from '../lib/timezone.js'
 import {
   type ApprovalRequester,
   assertApprovalAllowed,
@@ -573,7 +574,7 @@ export function resolveOfflineSoldAt(
 }
 
 function formatVnDateTime(date: Date): string {
-  return date.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false })
+  return date.toLocaleString('vi-VN', { timeZone: getStoreTimezone(), hour12: false })
 }
 
 /** Quyền được liệt kê người duyệt; cũng là tập quyền hợp lệ cho `/verify-pin` của người khác. */
