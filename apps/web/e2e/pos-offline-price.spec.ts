@@ -28,8 +28,14 @@ test.describe('#34 POS Offline Price Warning & Checkout Smoke Test', () => {
     loginAs,
   }) => {
     await loginAs('owner')
+    // GL-03: chờ lượt đồng bộ danh mục đầu tiên xong (loại dữ liệu cuối) rồi mới rút mạng
+    const catalogSynced = page.waitForResponse(
+      (res) => res.url().includes('/api/v1/sync/pull?entity=category_discounts') && res.ok(),
+      { timeout: 30_000 },
+    )
     await page.goto('/pos')
     await page.waitForURL('**/pos')
+    await catalogSynced
 
     // Add the item while online so its catalog data is available locally.
     await addProductToCart(page, 'Cà rốt')
@@ -42,7 +48,9 @@ test.describe('#34 POS Offline Price Warning & Checkout Smoke Test', () => {
     await waitForOfflineDB(page)
     await page.context().setOffline(true)
     await expect(offlineWarning).toBeVisible({ timeout: 5000 })
-    await expect(offlineWarning).toContainText('Đang ngoại tuyến: Không thể cập nhật giá')
+    await expect(offlineWarning).toContainText(
+      'Đang ngoại tuyến: giá, tồn kho và công nợ theo dữ liệu đồng bộ lúc',
+    )
     await expect(offlineWarning).toContainText(
       'Giá đang hiện trên từng dòng sẽ được giữ nguyên khi hoàn tất đơn',
     )

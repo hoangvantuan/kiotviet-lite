@@ -227,7 +227,16 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   idempotencyKey?: string
   /** R4: chỉ chỗ kiểm tra khi không rõ máy chủ đã lưu chưa, ví dụ "Xem danh sách phiếu thu" */
   unknownOutcomeHint?: string
+  /** Thời gian chờ riêng cho request này (ms); mặc định REQUEST_TIMEOUT_MS, 0 là không giới hạn */
+  timeoutMs?: number
 }
+
+/**
+ * OFF-06: thời gian chờ mặc định của mọi request. Có Wi-Fi nhưng không tới được máy chủ thì fetch
+ * có thể treo cả phút; hết thời gian này request bị hủy và báo NETWORK_ERROR như mất mạng, để nơi
+ * gọi chuyển sang đường ngoại tuyến. Cấu hình tập trung ở đây, chỗ nào cần khác thì truyền timeoutMs.
+ */
+export const REQUEST_TIMEOUT_MS = 20_000
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 // 502, 504: nginx mất kết nối hoặc hết giờ chờ API; 524: Cloudflare hết giờ chờ nginx
@@ -342,12 +351,15 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const {
     body,
     auth = true,
-    skipRefresh = false,
     headers,
     idempotencyKey,
-    unknownOutcomeHint,
+    timeoutMs = REQUEST_TIMEOUT_MS,
+    signal: callerSignal,
     ...rest
   } = options
+  // Tùy chọn riêng của api-client, không đưa vào fetch
+  delete rest.skipRefresh
+  delete rest.unknownOutcomeHint
   const requestId = crypto.randomUUID()
   const finalHeaders = new Headers(headers)
   finalHeaders.set('X-Request-Id', requestId)
@@ -362,16 +374,87 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     }
   }
 
+  const deadline = requestDeadline(callerSignal ?? undefined, timeoutMs)
+  try {
+    return await sendRequest<T>(path, options, {
+      requestId,
+      init: {
+        ...rest,
+        headers: finalHeaders,
+        credentials: 'include',
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: deadline.signal,
+      },
+      timedOut: deadline.timedOut,
+    })
+  } finally {
+    deadline.clear()
+  }
+}
+
+/** Gộp signal của nơi gọi với hẹn giờ hủy; `timedOut()` cho biết lần hủy là do hết giờ */
+function requestDeadline(callerSignal: AbortSignal | undefined, timeoutMs: number) {
+  if (!timeoutMs) {
+    return { signal: callerSignal, timedOut: () => false, clear: () => undefined }
+  }
+  const controller = new AbortController()
+  let expired = false
+  const onCallerAbort = () => controller.abort(callerSignal?.reason)
+  if (callerSignal?.aborted) onCallerAbort()
+  else callerSignal?.addEventListener('abort', onCallerAbort, { once: true })
+  const timer = setTimeout(() => {
+    expired = true
+    controller.abort(new DOMException('Hết thời gian chờ máy chủ', 'TimeoutError'))
+  }, timeoutMs)
+  return {
+    signal: controller.signal,
+    timedOut: () => expired,
+    clear: () => {
+      clearTimeout(timer)
+      callerSignal?.removeEventListener('abort', onCallerAbort)
+    },
+  }
+}
+
+function isAbort(error: unknown): boolean {
+  return (
+    error instanceof DOMException && (error.name === 'AbortError' || error.name === 'TimeoutError')
+  )
+}
+
+/** Hết thời gian chờ: coi như mất kết nối; request ghi thì chưa rõ máy chủ đã lưu hay chưa */
+function timeoutError(options: RequestOptions, requestId: string, status = 0): ApiClientError {
+  queueBrowserDiagnostic({ kind: 'request_network_error', requestId, code: 'NETWORK_ERROR' })
+  return new ApiClientError(
+    status,
+    isUnsafeRequest(options)
+      ? {
+          code: 'NETWORK_ERROR',
+          message: unknownOutcomeMessage(options),
+          details: { outcomeUnknown: true, timeout: true },
+        }
+      : {
+          code: 'NETWORK_ERROR',
+          message: 'Máy chủ không phản hồi, vui lòng kiểm tra kết nối',
+          details: { timeout: true },
+        },
+    requestId,
+  )
+}
+
+async function sendRequest<T>(
+  path: string,
+  options: RequestOptions,
+  ctx: { requestId: string; init: RequestInit; timedOut: () => boolean },
+): Promise<T> {
+  const { auth = true, skipRefresh = false, idempotencyKey, unknownOutcomeHint } = options
+  const { requestId } = ctx
   let res: Response
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, {
-      ...rest,
-      headers: finalHeaders,
-      credentials: 'include',
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    })
+    res = await fetch(`${API_BASE_URL}${path}`, ctx.init)
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') throw error
+    if (ctx.timedOut()) throw timeoutError(options, requestId)
+    if (isAbort(error)) throw error
     queueBrowserDiagnostic({ kind: 'request_network_error', requestId, code: 'NETWORK_ERROR' })
     throw new ApiClientError(
       0,
@@ -411,7 +494,12 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   try {
     text = await res.text()
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') throw error
+    if (ctx.timedOut()) {
+      throw res.ok
+        ? timeoutError(options, receivedRequestId, res.status)
+        : timeoutError({}, receivedRequestId, res.status)
+    }
+    if (isAbort(error)) throw error
     queueBrowserDiagnostic({
       kind: 'request_network_error',
       requestId: receivedRequestId,

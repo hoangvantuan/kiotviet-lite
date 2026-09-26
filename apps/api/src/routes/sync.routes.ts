@@ -1,29 +1,16 @@
-import { and, eq, gt, inArray } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 
 import {
   hasPermission,
   PGLITE_SCHEMA_VERSION,
-  syncIncrementalQuerySchema,
-  syncInitialQuerySchema,
+  syncPullQuerySchema,
   syncPushOrderSchema,
   syncPushRequestSchema,
   type SyncPushResult,
   type UserRole,
 } from '@kiotviet-lite/shared'
-import {
-  categories,
-  customerGroups,
-  customers,
-  orders,
-  priceListItems,
-  priceLists,
-  printSettings,
-  products,
-  productUnitConversions,
-  productVariants,
-  users,
-} from '@kiotviet-lite/shared/schema'
+import { orders, users } from '@kiotviet-lite/shared/schema'
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
@@ -35,30 +22,7 @@ import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import { emitEvent } from '../services/notification-emitter.js'
 import { createOrder, type OrdersActor } from '../services/orders.service.js'
-
-async function getStorePriceListIds(db: Db, storeId: string) {
-  const lists = await db
-    .select({ id: priceLists.id })
-    .from(priceLists)
-    .where(eq(priceLists.storeId, storeId))
-  return lists.map((l) => l.id)
-}
-
-/**
- * BC-13: bỏ cột giá vốn khỏi dòng sản phẩm và biến thể khi người đồng bộ không có quyền
- * products.viewCost. Thiết bị của nhân viên không bao giờ nhận giá vốn, kể cả khi ngoại tuyến.
- */
-function stripCost<T extends { costPrice: unknown }>(
-  rows: T[],
-  canViewCost: boolean,
-): Array<Omit<T, 'costPrice'>> {
-  if (canViewCost) return rows
-  return rows.map((row) => {
-    const copy: Partial<T> = { ...row }
-    delete copy.costPrice
-    return copy as Omit<T, 'costPrice'>
-  })
-}
+import { pullSyncPage } from '../services/sync-pull.service.js'
 
 interface ResolvedSeller {
   actor: OrdersActor
@@ -129,148 +93,17 @@ export function createSyncRoutes({ db }: { db: Db }) {
   app.onError(errorHandler)
   app.use('*', requireAuth(db))
 
-  app.get('/initial', async (c) => {
+  // GL-03: một trang của một loại dữ liệu danh mục, xem sync-pull.service.ts
+  app.get('/pull', async (c) => {
     const auth = c.get('auth')
-    const query = syncInitialQuerySchema.parse(c.req.query())
-    const limit = query.limit
-    const storeId = auth.storeId
-    const canViewCost = hasPermission(auth.role, 'products.viewCost')
-
-    const plIds = await getStorePriceListIds(db, storeId)
-
-    const [
-      productsData,
-      variantsData,
-      categoriesData,
-      customersData,
-      customerGroupsData,
-      priceListsData,
-      priceListItemsData,
-      printSettingsData,
-      unitsData,
-    ] = await Promise.all([
-      db.select().from(products).where(eq(products.storeId, storeId)).limit(limit),
-      db.select().from(productVariants).where(eq(productVariants.storeId, storeId)).limit(limit),
-      db.select().from(categories).where(eq(categories.storeId, storeId)).limit(limit),
-      db.select().from(customers).where(eq(customers.storeId, storeId)).limit(limit),
-      db.select().from(customerGroups).where(eq(customerGroups.storeId, storeId)).limit(limit),
-      db.select().from(priceLists).where(eq(priceLists.storeId, storeId)).limit(limit),
-      plIds.length > 0
-        ? db
-            .select()
-            .from(priceListItems)
-            .where(inArray(priceListItems.priceListId, plIds))
-            .limit(limit)
-        : Promise.resolve([]),
-      db.select().from(printSettings).where(eq(printSettings.storeId, storeId)).limit(limit),
-      db
-        .select()
-        .from(productUnitConversions)
-        .where(eq(productUnitConversions.storeId, storeId))
-        .limit(limit),
-    ])
-
-    return c.json({
-      data: {
-        products: stripCost(productsData, canViewCost),
-        variants: stripCost(variantsData, canViewCost),
-        categories: categoriesData,
-        customers: customersData,
-        customerGroups: customerGroupsData,
-        priceLists: priceListsData,
-        priceListItems: priceListItemsData,
-        printSettings: printSettingsData,
-        units: unitsData,
-      },
-      meta: {
-        syncedAt: new Date().toISOString(),
-      },
+    const query = syncPullQuerySchema.parse(c.req.query())
+    const page = await pullSyncPage({
+      db,
+      storeId: auth.storeId,
+      canViewCost: hasPermission(auth.role, 'products.viewCost'),
+      query,
     })
-  })
-
-  app.get('/incremental', async (c) => {
-    const auth = c.get('auth')
-    const query = syncIncrementalQuerySchema.parse(c.req.query())
-    const since = new Date(query.since)
-    const storeId = auth.storeId
-    const canViewCost = hasPermission(auth.role, 'products.viewCost')
-
-    const plIds = await getStorePriceListIds(db, storeId)
-
-    const [
-      productsData,
-      variantsData,
-      categoriesData,
-      customersData,
-      customerGroupsData,
-      priceListsData,
-      priceListItemsData,
-      printSettingsData,
-      unitsData,
-    ] = await Promise.all([
-      db
-        .select()
-        .from(products)
-        .where(and(eq(products.storeId, storeId), gt(products.updatedAt, since))),
-      db
-        .select()
-        .from(productVariants)
-        .where(and(eq(productVariants.storeId, storeId), gt(productVariants.updatedAt, since))),
-      db
-        .select()
-        .from(categories)
-        .where(and(eq(categories.storeId, storeId), gt(categories.updatedAt, since))),
-      db
-        .select()
-        .from(customers)
-        .where(and(eq(customers.storeId, storeId), gt(customers.updatedAt, since))),
-      db
-        .select()
-        .from(customerGroups)
-        .where(and(eq(customerGroups.storeId, storeId), gt(customerGroups.updatedAt, since))),
-      db
-        .select()
-        .from(priceLists)
-        .where(and(eq(priceLists.storeId, storeId), gt(priceLists.updatedAt, since))),
-      plIds.length > 0
-        ? db
-            .select()
-            .from(priceListItems)
-            .where(
-              and(inArray(priceListItems.priceListId, plIds), gt(priceListItems.updatedAt, since)),
-            )
-        : Promise.resolve([]),
-      db
-        .select()
-        .from(printSettings)
-        .where(and(eq(printSettings.storeId, storeId), gt(printSettings.updatedAt, since))),
-      db
-        .select()
-        .from(productUnitConversions)
-        .where(
-          and(
-            eq(productUnitConversions.storeId, storeId),
-            gt(productUnitConversions.updatedAt, since),
-          ),
-        ),
-    ])
-
-    return c.json({
-      data: {
-        products: stripCost(productsData, canViewCost),
-        variants: stripCost(variantsData, canViewCost),
-        categories: categoriesData,
-        customers: customersData,
-        customerGroups: customerGroupsData,
-        priceLists: priceListsData,
-        priceListItems: priceListItemsData,
-        printSettings: printSettingsData,
-        units: unitsData,
-      },
-      meta: {
-        syncedAt: new Date().toISOString(),
-      },
-    })
+    return c.json(page)
   })
 
   app.get('/schema-version', async (c) => {

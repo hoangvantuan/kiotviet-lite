@@ -8,21 +8,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { apiClient } from '@/lib/api-client'
 import { showWarning } from '@/lib/toast'
 import { useCartStore } from '@/stores/use-cart-store'
 
 import { useAddToCart } from '../hooks/use-add-to-cart'
+import { searchPosProducts } from '../hooks/use-pos-products'
 import type { PosProductItem } from '../types'
 
 interface BarcodeScannerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSelectProduct: (product: PosProductItem) => void
-}
-
-interface PosSearchResponse {
-  data: PosProductItem[]
 }
 
 export function BarcodeScanner({ open, onOpenChange, onSelectProduct }: BarcodeScannerProps) {
@@ -55,10 +51,7 @@ export function BarcodeScanner({ open, onOpenChange, onSelectProduct }: BarcodeS
           // Ignore
         }
 
-        const result = await apiClient.get<PosSearchResponse>(
-          `/api/v1/pos/products/search?q=${encodeURIComponent(barcode)}`,
-        )
-        const products = result.data
+        const products = await searchPosProducts({ q: barcode })
         if (products.length === 0) {
           showWarning(`Không tìm thấy sản phẩm với mã: ${barcode}`)
           onOpenChange(false)

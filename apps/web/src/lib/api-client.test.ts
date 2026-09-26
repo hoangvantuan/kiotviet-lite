@@ -8,6 +8,7 @@ import {
   clearBrowserDiagnostics,
   queueBrowserDiagnostic,
   REFRESH_UNAVAILABLE_MESSAGE,
+  REQUEST_TIMEOUT_MS,
 } from './api-client'
 
 const SERVER_ID = 'c85c283b-6907-4195-a75b-f7d2a54c35f9'
@@ -310,5 +311,67 @@ describe('OFF-22: chẩn đoán trình duyệt gắn với cửa hàng', () => {
     clearBrowserDiagnostics()
     expect(stored.has('kiotviet-browser-diagnostics')).toBe(false)
     vi.unstubAllGlobals()
+  })
+})
+
+describe('OFF-06: có Wi-Fi nhưng không tới được máy chủ, request phải hết giờ', () => {
+  /** fetch treo tới khi bị hủy, như kết nối không có phản hồi */
+  function hangingFetch() {
+    return vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => reject(init.signal!.reason))
+        }),
+    )
+  }
+
+  it('POST tạo đơn hết giờ: NETWORK_ERROR, chưa rõ kết quả, có cờ timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.stubGlobal('fetch', hangingFetch())
+      const pending = apiFetch('/api/v1/pos/orders', {
+        method: 'POST',
+        body: {},
+        idempotencyKey: '5b3c1e7a-0b7e-4d5e-9d61-3c1f0d7c2a11',
+      }).catch((e: unknown) => e)
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS)
+      const error = await pending
+      expect(error).toBeInstanceOf(ApiClientError)
+      expect(error).toMatchObject({
+        status: 0,
+        code: 'NETWORK_ERROR',
+        details: { outcomeUnknown: true, timeout: true },
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('GET hết giờ theo timeoutMs riêng: NETWORK_ERROR, không phải lỗi hủy', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.stubGlobal('fetch', hangingFetch())
+      const pending = apiFetch('/api/v1/pos/products/search?q=a', { timeoutMs: 3_000 }).catch(
+        (e: unknown) => e,
+      )
+      await vi.advanceTimersByTimeAsync(3_000)
+      const error = await pending
+      expect(error).toMatchObject({ code: 'NETWORK_ERROR', details: { timeout: true } })
+      expect((error as ApiClientError).message).toContain('Máy chủ không phản hồi')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('nơi gọi tự hủy thì vẫn là lỗi hủy như cũ, không bị đổi thành mất mạng', async () => {
+    vi.stubGlobal('fetch', hangingFetch())
+    const controller = new AbortController()
+    const pending = apiFetch('/api/v1/products', { signal: controller.signal }).catch(
+      (e: unknown) => e,
+    )
+    controller.abort(new DOMException('hủy', 'AbortError'))
+    const error = await pending
+    expect(error).toBeInstanceOf(DOMException)
+    expect((error as DOMException).name).toBe('AbortError')
   })
 })

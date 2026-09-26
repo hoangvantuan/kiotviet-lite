@@ -9,6 +9,12 @@ vi.hoisted(() => {
   vi.stubGlobal('navigator', { onLine: false })
 })
 
+// GL-03: kéo danh mục nằm ở sync-engine (có test riêng); ở đây chỉ cần một lượt kéo thất bại với
+// lỗi mang dữ liệu riêng tư để kiểm cách order-sync giữ mốc và che thông tin
+vi.mock('./sync-engine', () => ({
+  runIncrementalSync: vi.fn().mockRejectedValue(new Error('Customer private data')),
+}))
+
 it('keeps the incremental watermark while exposing only a safe local failure ID', async () => {
   const stored = new Map<string, string>()
   vi.stubGlobal('localStorage', {
@@ -22,23 +28,9 @@ it('keeps the incremental watermark while exposing only a safe local failure ID'
     query: vi.fn(async (sql: string) => {
       if (sql.includes('SELECT * FROM offline_orders')) return { rows: [] }
       if (sql.includes('COUNT(*)')) return { rows: [] }
-      if (sql.includes('INSERT INTO products')) throw new Error('Customer private data')
       return { rows: [] }
     }),
   } as unknown as PGlite
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: { products: [{ id: 'product-1', name: 'private product' }] },
-          meta: { syncedAt: '2026-02-01T00:00:00.000Z' },
-        }),
-        { status: 200 },
-      ),
-    ),
-  )
-
   const watermark = await startSyncCycle(pglite, undefined, undefined, '2026-01-01T00:00:00.000Z')
   expect(watermark).toBe('2026-01-01T00:00:00.000Z')
   expect(useOfflineStore.getState().status).toBe('error')

@@ -2,13 +2,12 @@ import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 're
 import { Loader2, ScanBarcode, Search } from 'lucide-react'
 
 import { useMediaQuery } from '@/hooks/use-media-query'
-import { apiClient } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { showWarning } from '@/lib/toast'
 import { useCartStore } from '@/stores/use-cart-store'
 
 import { useAddToCart } from '../hooks/use-add-to-cart'
-import { usePosSearch } from '../hooks/use-pos-products'
+import { searchPosProducts, usePosSearch } from '../hooks/use-pos-products'
 import type { PosProductItem } from '../types'
 
 interface PosSearchBarProps {
@@ -143,10 +142,7 @@ export function PosSearchBar({ searchRef, onOpenScanner, onSelectProduct }: PosS
       }
 
       try {
-        const res = await apiClient.get<{ data: PosProductItem[] }>(
-          `/api/v1/pos/products/search?q=${encodeURIComponent(query)}`,
-        )
-        const items = res.data ?? []
+        const items = await searchPosProducts({ q: query })
         if (items.length === 0) {
           showWarning(`Không tìm thấy sản phẩm với mã: ${query}`)
           return

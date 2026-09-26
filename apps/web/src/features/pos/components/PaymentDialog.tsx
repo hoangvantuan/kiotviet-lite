@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog'
 import { PinDialog } from '@/features/auth/pin-dialog'
 import { formatVndWithSuffix } from '@/lib/currency'
+import { formatDateTime } from '@/lib/date'
 import { cn } from '@/lib/utils'
 import type { BankConfig } from '@/lib/vietqr'
 import { useOfflineStore } from '@/stores/use-offline-store'
@@ -103,6 +104,9 @@ export function PaymentDialog({
   // Customer debt query: chỉ chạy khi có customerId VÀ method hiện tại là debt (lazy)
   const debtInfoQuery = useCustomerDebtQuery(method === 'debt' ? customerId : null)
   const debtInfo = debtInfoQuery.data ?? null
+  // OFF-15: số liệu lấy từ bản sao trên máy (không tới được máy chủ) thì duyệt như ngoại tuyến
+  const debtFromCatalog = debtInfo?.syncedAt != null
+  const offlineCheckout = isOffline || debtFromCatalog
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -191,7 +195,7 @@ export function PaymentDialog({
         if (debtAmount === 0) return true
         // Nếu vượt limit và chưa override → chặn. Ngoại tuyến không xác thực PIN được: đơn vẫn
         // ghi và máy chủ gắn cờ vượt hạn mức khi đồng bộ (ADR-0001)
-        if (exceedsLimit && !debtLimitOverridden && !isOffline) return false
+        if (exceedsLimit && !debtLimitOverridden && !offlineCheckout) return false
         return true
     }
   }
@@ -420,6 +424,16 @@ export function PaymentDialog({
                       debtAmount={debtAmount}
                     />
 
+                    {debtFromCatalog && (
+                      <p className="text-xs text-muted-foreground" data-testid="debt-synced-at">
+                        Nợ và hạn mức theo dữ liệu đồng bộ lúc {formatDateTime(debtInfo.syncedAt)}
+                        {debtInfo.pendingDebt
+                          ? `, đã cộng ${formatVndWithSuffix(debtInfo.pendingDebt)} của đơn chờ đồng bộ`
+                          : ''}
+                        . Máy chủ sẽ kiểm lại khi có mạng.
+                      </p>
+                    )}
+
                     <div>
                       <label className="mb-1 block text-sm font-medium text-foreground">
                         Tiền mặt trả trước (tuỳ chọn)
@@ -482,9 +496,9 @@ export function PaymentDialog({
                                 <p>Nợ thêm tối đa: {formatVndWithSuffix(maxAdditional)}</p>
                               </>
                             )}
-                            {isOffline && (
+                            {offlineCheckout && (
                               <p>
-                                Đang ngoại tuyến: đơn vẫn được ghi nợ và sẽ bị gắn cờ vượt hạn mức
+                                Đang ngoại tuyến: đơn vẫn được ghi nợ và sẽ chờ chủ cửa hàng duyệt
                                 khi đồng bộ.
                               </p>
                             )}

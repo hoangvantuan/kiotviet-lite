@@ -5,6 +5,7 @@ import { idempotencyKeys } from '@kiotviet-lite/shared'
 import type { Db } from '../db/index.js'
 import { isShuttingDown } from '../lib/lifecycle.js'
 import { logger } from '../lib/logger.js'
+import { purgeExpiredSyncTombstones } from './sync-pull.service.js'
 
 /**
  * R4: khóa chống trùng chỉ cần sống qua các lần bấm lưu lại của một lần thao tác (web bỏ khóa sau
@@ -45,6 +46,9 @@ export function startIdempotencyKeyCleanup(args: { db: Db; intervalMs?: number }
     try {
       const deleted = await purgeExpiredIdempotencyKeys({ db: args.db })
       if (deleted > 0) logger.info({ deleted }, 'idempotency keys purged')
+      // GL-03: dấu xóa đồng bộ danh mục cũng chỉ cần giữ trong một khoảng, dọn chung nhịp này
+      const tombstones = await purgeExpiredSyncTombstones({ db: args.db })
+      if (tombstones > 0) logger.info({ deleted: tombstones }, 'sync tombstones purged')
     } catch (err) {
       logger.warn({ err }, 'idempotency key cleanup failed')
     }
