@@ -227,6 +227,58 @@ describe('OFF-05, OFF-13: hàng chờ lưu người bán, không lưu PIN', () =
   })
 })
 
+describe('OFF-04: tab chủ đóng đúng lúc đang ghi đơn', () => {
+  /** Tab chủ chết sau khi lệnh INSERT đã ghi: PGliteWorker báo lỗi, không rõ đã ghi hay chưa */
+  function leaderDiesAfterInsert(db: PGlite) {
+    let died = false
+    return new Proxy(db, {
+      get(target, prop, receiver) {
+        if (prop !== 'query') return Reflect.get(target, prop, receiver)
+        return async (sql: string, params?: unknown[]) => {
+          const result = await target.query(sql, params)
+          if (!died && sql.includes('INSERT INTO offline_orders')) {
+            died = true
+            throw new Error('Leader changed, pending operation in indeterminate state')
+          }
+          return result
+        }
+      },
+    })
+  }
+
+  it('lệnh ghi đã vào mà mất phản hồi: tự thử lại qua tab chủ mới, không nhân đôi đơn', async () => {
+    const clientId = crypto.randomUUID()
+    await saveOfflineOrder(
+      leaderDiesAfterInsert(pglite),
+      { storeId: STORE_A, userId: SELLER_1 },
+      { ...order, clientId },
+      clientId,
+    )
+
+    const rows = await pglite.query('SELECT client_id FROM offline_orders')
+    expect(rows.rows).toEqual([{ client_id: clientId }])
+    expect(useOfflineStore.getState().pendingOrderCount).toBe(1)
+  })
+
+  it('lỗi khác không tự thử lại', async () => {
+    const broken = new Proxy(pglite, {
+      get(target, prop, receiver) {
+        if (prop !== 'query') return Reflect.get(target, prop, receiver)
+        return vi.fn().mockRejectedValue(new Error('disk full'))
+      },
+    })
+    const clientId = crypto.randomUUID()
+    await expect(
+      saveOfflineOrder(
+        broken,
+        { storeId: STORE_A, userId: SELLER_1 },
+        { ...order, clientId },
+        clientId,
+      ),
+    ).rejects.toThrow('disk full')
+  })
+})
+
 describe('OFF-14: lỗi tạm thời thử lại lùi dần, lỗi nghiệp vụ không tự thử', () => {
   it('lỗi tạm thời giữ pending, hẹn giờ 5s rồi 10s; chưa tới giờ thì không lấy', async () => {
     const clientId = await sell(pglite, STORE_A, SELLER_1)

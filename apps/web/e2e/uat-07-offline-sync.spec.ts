@@ -241,15 +241,99 @@ test('OFF-05: nhân viên bán ngoại tuyến, đăng xuất, chủ đăng nh�
     .toBe(SEED_USERS.staff.name)
 })
 
+interface E2EHooks {
+  seedOfflineOrders: (n: number, order: unknown) => Promise<string[]>
+  offlineDBIsLeader: () => boolean | null
+}
+
+/** Đơn tiền mặt một dòng của sản phẩm seed M3001, dùng cho móc ghi thẳng hàng chờ */
+async function bulkOrderData() {
+  const products = await apiGet<Listed<ProductRow>>(`/api/v1/products?search=${BULK_PRODUCT_SKU}`)
+  const product = products.data[0]!
+  const price = product.sellingPrice
+  return {
+    subtotal: price,
+    discountAmount: 0,
+    total: price,
+    paymentMethod: 'cash',
+    paymentStatus: 'paid',
+    cashAmount: price,
+    items: [
+      {
+        productId: product.id,
+        productName: product.name,
+        unit: product.unit,
+        unitPrice: price,
+        quantity: 1,
+        discountAmount: 0,
+        lineTotal: price,
+      },
+    ],
+  }
+}
+
+function isLeader(page: Page) {
+  return page.evaluate(() =>
+    (window as unknown as { __kvlE2E: E2EHooks }).__kvlE2E.offlineDBIsLeader(),
+  )
+}
+
+test('OFF-04: đóng tab CHỦ trong lúc tab kia đang ghi đơn: tab kia lên làm chủ, không mất đơn', async ({
+  page,
+  context,
+  loginAs,
+}) => {
+  test.setTimeout(120_000)
+  const COUNT = 100
+  const orderData = await bulkOrderData()
+
+  await loginAs('owner')
+  await page.goto('/pos')
+  await waitForServiceWorker(page)
+  await waitForOfflineDB(page)
+  // Tab mở trước làm chủ, giữ cơ sở dữ liệu trong IndexedDB đúng tên mà worker dò tab bản cũ
+  expect(await isLeader(page)).toBe(true)
+  expect(
+    await page.evaluate(async () => (await indexedDB.databases()).map((db) => db.name)),
+  ).toContain('/pglite/kiotviet-lite')
+
+  const second = await context.newPage()
+  await second.goto('/pos')
+  await waitForOfflineDB(second)
+  expect(await isLeader(second)).toBe(false)
+
+  await context.setOffline(true)
+  const writing = second.evaluate(
+    ({ count, order }) =>
+      (window as unknown as { __kvlE2E: E2EHooks }).__kvlE2E.seedOfflineOrders(count, order),
+    { count: COUNT, order: orderData },
+  )
+  // Đóng tab chủ khi tab kia đang ghi giữa chừng
+  await second.waitForFunction(() =>
+    /\d+ đơn ngoại tuyến chưa đồng bộ/.test(
+      document.querySelector('[data-testid="offline-indicator"]')?.getAttribute('aria-label') ?? '',
+    ),
+  )
+  await page.close()
+
+  const clientIds = await writing
+  expect(clientIds).toHaveLength(COUNT)
+  await expect.poll(() => isLeader(second), { timeout: 15_000 }).toBe(true)
+  await expectPending(second, COUNT)
+
+  await context.setOffline(false)
+  await expect(indicator(second)).toBeHidden({ timeout: 60_000 })
+  const found = await Promise.all(clientIds.map(orderByClientId))
+  expect(found.filter(Boolean)).toHaveLength(COUNT)
+})
+
 test('OFF-10: 120 đơn ngoại tuyến đồng bộ hết theo lô, kiểm qua API', async ({
   page,
   context,
   loginAs,
 }) => {
   test.setTimeout(240_000)
-  const products = await apiGet<Listed<ProductRow>>(`/api/v1/products?search=${BULK_PRODUCT_SKU}`)
-  const product = products.data[0]!
-  const price = product.sellingPrice
+  const orderData = await bulkOrderData()
 
   await loginAs('owner')
   await page.goto('/pos')
@@ -258,33 +342,8 @@ test('OFF-10: 120 đơn ngoại tuyến đồng bộ hết theo lô, kiểm qua 
   await waitForOfflineDB(page)
   await context.setOffline(true)
   const clientIds = await page.evaluate(
-    async ({ productId, productName, unit, price }) => {
-      const hooks = (
-        window as unknown as {
-          __kvlE2E: { seedOfflineOrders: (n: number, order: unknown) => Promise<string[]> }
-        }
-      ).__kvlE2E
-      return hooks.seedOfflineOrders(120, {
-        subtotal: price,
-        discountAmount: 0,
-        total: price,
-        paymentMethod: 'cash',
-        paymentStatus: 'paid',
-        cashAmount: price,
-        items: [
-          {
-            productId,
-            productName,
-            unit,
-            unitPrice: price,
-            quantity: 1,
-            discountAmount: 0,
-            lineTotal: price,
-          },
-        ],
-      })
-    },
-    { productId: product.id, productName: product.name, unit: product.unit, price },
+    (order) => (window as unknown as { __kvlE2E: E2EHooks }).__kvlE2E.seedOfflineOrders(120, order),
+    orderData,
   )
   expect(clientIds).toHaveLength(120)
   await expectPending(page, 120)

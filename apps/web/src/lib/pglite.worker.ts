@@ -9,6 +9,12 @@ import { worker } from '@electric-sql/pglite/worker'
 
 import { pgliteMigrations } from '@kiotviet-lite/shared/migrations/pglite'
 
+import {
+  OFFLINE_DB_STATUS_CHANNEL,
+  type OfflineDBStatus,
+  pgliteIndexedDBName,
+  waitForOtherConnectionsClosed,
+} from './offline-db-status'
 import { runPGliteMigrations } from './pglite-migrations'
 
 /** Chờ giữa các lần thử mở lại: 1, 2, 4, 8 rồi tối đa 15 giây */
@@ -39,6 +45,29 @@ async function openWithRetry(dataDir: string | undefined): Promise<PGlite> {
   }
 }
 
+function broadcastStatus(status: OfflineDBStatus) {
+  const channel = new BroadcastChannel(OFFLINE_DB_STATUS_CHANNEL)
+  channel.postMessage(status)
+  channel.close()
+}
+
+/**
+ * Tab bản cũ (mở PGlite thẳng, không khóa) còn giữ IndexedDB thì chưa mở, chờ tab đó đóng hoặc tải
+ * lại để hai bên không ghi đè nhau (xem offline-db-status.ts). Chỉ kiểm một lần trước lần mở đầu.
+ */
+async function open(dataDir: string | undefined): Promise<PGlite> {
+  const name = pgliteIndexedDBName(dataDir)
+  if (name && typeof indexedDB !== 'undefined') {
+    await waitForOtherConnectionsClosed(indexedDB, name, () => {
+      console.warn('[PGlite] Một tab bản cũ đang mở cơ sở dữ liệu ngoại tuyến, chờ tab đó đóng')
+      broadcastStatus({ type: 'legacy-tab-open' })
+    })
+  }
+  const pglite = await openWithRetry(dataDir)
+  broadcastStatus({ type: 'opened' })
+  return pglite
+}
+
 void worker({
-  init: (options) => openWithRetry(options.dataDir),
+  init: (options) => open(options.dataDir),
 })

@@ -60,18 +60,28 @@ function stripCost<T extends { costPrice: unknown }>(
   })
 }
 
+interface ResolvedSeller {
+  actor: OrdersActor
+  /** Người bán đã bị khóa hoặc mất quyền bán sau khi bán ngoại tuyến */
+  inactiveName: string | null
+}
+
 /**
  * OFF-05: người bán gốc của đơn ngoại tuyến. Máy khách gửi, nên máy chủ kiểm: phải cùng cửa hàng
- * với người đồng bộ (đơn của cửa hàng khác không bao giờ vào cửa hàng này), còn hoạt động và còn
- * quyền bán. Không đạt thì từ chối đơn, không ghi đơn cho người đồng bộ.
+ * với người đồng bộ (đơn của cửa hàng khác không bao giờ vào cửa hàng này). Người đồng bộ khác
+ * người bán thì gắn vào actor.syncedBy, chính sách giá lấy giao quyền của hai người (không ai mượn
+ * được quyền của người kia). Người bán đã bị khóa vẫn nhận đơn (tiền đã thu), đơn chờ chủ duyệt.
  */
 async function resolveSeller(
   db: Db,
   auth: { userId: string; storeId: string; role: string },
   sellerId: string,
-): Promise<OrdersActor> {
+): Promise<ResolvedSeller> {
   if (sellerId === auth.userId) {
-    return { userId: auth.userId, storeId: auth.storeId, role: auth.role as UserRole }
+    return {
+      actor: { userId: auth.userId, storeId: auth.storeId, role: auth.role as UserRole },
+      inactiveName: null,
+    }
   }
   const [seller] = await db
     .select({
@@ -91,14 +101,15 @@ async function resolveSeller(
       { reason: 'seller_not_in_store' },
     )
   }
-  if (!seller.isActive || !hasPermission(seller.role, 'pos.sell')) {
-    throw new ApiError(
-      'BUSINESS_RULE_VIOLATION',
-      `Tài khoản người bán "${seller.name}" đã bị khóa hoặc không còn quyền bán hàng. Chủ cửa hàng mở lại tài khoản rồi đồng bộ lại đơn này`,
-      { reason: 'seller_inactive' },
-    )
+  return {
+    actor: {
+      userId: seller.id,
+      storeId: seller.storeId,
+      role: seller.role,
+      syncedBy: { userId: auth.userId, role: auth.role as UserRole },
+    },
+    inactiveName: !seller.isActive || !hasPermission(seller.role, 'pos.sell') ? seller.name : null,
   }
-  return { userId: seller.id, storeId: seller.storeId, role: seller.role }
 }
 
 async function findSyncedOrder(db: Db, storeId: string, clientId: string) {
@@ -272,7 +283,7 @@ export function createSyncRoutes({ db }: { db: Db }) {
     const storeId = auth.storeId
     const meta = getRequestMeta(c)
     const results: SyncPushResult[] = []
-    const sellers = new Map<string, Promise<OrdersActor>>()
+    const sellers = new Map<string, Promise<ResolvedSeller>>()
 
     // OFF-10: mỗi đơn có kết quả riêng, một đơn sai không chặn các đơn còn lại trong lô
     for (const raw of input.orders) {
@@ -298,17 +309,17 @@ export function createSyncRoutes({ db }: { db: Db }) {
           seller = resolveSeller(db, auth, sellerId)
           sellers.set(sellerId, seller)
         }
-        const actor = await seller.catch(async (err: unknown) => {
+        const resolved = await seller.catch(async (err: unknown) => {
           // Đơn đã có trên máy chủ (lần đồng bộ trước mất phản hồi) thì vẫn báo trùng
           const existing = await findSyncedOrder(db, storeId, offlineOrder.clientId)
           if (existing) return { duplicate: existing }
           throw err
         })
-        if ('duplicate' in actor) {
+        if ('duplicate' in resolved) {
           results.push({
             clientId: offlineOrder.clientId,
-            serverId: actor.duplicate.id,
-            orderNumber: actor.duplicate.orderNumber,
+            serverId: resolved.duplicate.id,
+            orderNumber: resolved.duplicate.orderNumber,
             status: 'duplicate',
           })
           continue
@@ -316,13 +327,21 @@ export function createSyncRoutes({ db }: { db: Db }) {
 
         const order = await createOrder({
           db,
-          actor,
+          actor: resolved.actor,
           input: offlineOrder.orderData,
           meta,
           source: 'offline_sync',
           clientId: offlineOrder.clientId,
           offlineCreatedAt: offlineOrder.createdAt,
-          syncedByUserId: actor.userId === auth.userId ? null : auth.userId,
+          offlineViolations: resolved.inactiveName
+            ? [
+                {
+                  code: 'seller_inactive',
+                  message: `Tài khoản người bán "${resolved.inactiveName}" đã bị khóa hoặc không còn quyền bán hàng khi đơn được đồng bộ`,
+                  requiredPermissions: ['pos.editPrice'],
+                },
+              ]
+            : [],
         })
 
         results.push({

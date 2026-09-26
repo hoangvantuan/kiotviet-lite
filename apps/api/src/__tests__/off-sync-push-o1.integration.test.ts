@@ -1,7 +1,14 @@
 import { and, eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { listOrdersQuerySchema, orders, SYNC_PUSH_MAX_BATCH, users } from '@kiotviet-lite/shared'
+import {
+  auditLogs,
+  listOrdersQuerySchema,
+  orders,
+  stores,
+  SYNC_PUSH_MAX_BATCH,
+  users,
+} from '@kiotviet-lite/shared'
 
 import { createSyncRoutes } from '../routes/sync.routes.js'
 import { listOrders } from '../services/orders.service.js'
@@ -67,6 +74,29 @@ describe('o1-sync: /sync/push', () => {
     }
   }
 
+  /** Giảm 50% một dòng: thành tiền 2.000 dưới giá vốn 50.000, cần pos.editPriceBelowCost */
+  function belowCostOrder(sellerUserId: string) {
+    const order = offlineOrder({ sellerUserId })
+    const data = order.orderData
+    data.items[0] = {
+      ...data.items[0]!,
+      discountType: 'percent',
+      discountValue: 50,
+      discountAmount: 2_000,
+      lineTotal: 2_000,
+    } as (typeof data.items)[number]
+    Object.assign(data, { subtotal: 2_000, total: 2_000, cashAmount: 2_000 })
+    return order
+  }
+
+  async function auditChanges(orderId: string, action: string) {
+    const [row] = await env.db
+      .select()
+      .from(auditLogs)
+      .where(and(eq(auditLogs.targetId, orderId), eq(auditLogs.action, action)))
+    return row?.changes as Record<string, unknown> | undefined
+  }
+
   async function push(authHeader: { Authorization: string }, payload: unknown[]) {
     const res = await app.request('/push', {
       method: 'POST',
@@ -110,7 +140,7 @@ describe('o1-sync: /sync/push', () => {
       expect(await orderByClientId(order.clientId)).toBeUndefined()
     })
 
-    it('người bán đã bị khóa: từ chối kèm hướng dẫn, đơn đã đồng bộ trước đó vẫn báo trùng', async () => {
+    it('người bán bị khóa sau khi bán ngoại tuyến: đơn vẫn vào sổ nhưng chờ chủ duyệt', async () => {
       const seller = await createUser(env, { role: 'staff' })
       const first = offlineOrder({ sellerUserId: seller.id })
       expect((await push(env.owner.authHeader, [first])).results[0]!.status).toBe('synced')
@@ -120,12 +150,51 @@ describe('o1-sync: /sync/push', () => {
       const second = offlineOrder({ sellerUserId: seller.id })
       const { results } = await push(env.owner.authHeader, [first, second])
       expect(results[0]!.status).toBe('duplicate')
-      expect(results[1]!.status).toBe('error')
-      expect(results[1]!.error).toMatchObject({
-        code: 'BUSINESS_RULE_VIOLATION',
-        reason: 'seller_inactive',
+      expect(results[1]!.status).toBe('synced')
+      expect(results[1]!.reviewStatus).toBe('pending_review')
+      const row = await orderByClientId(second.clientId)
+      expect(row!.userId).toBe(seller.id)
+      expect(row!.policyViolations?.map((v) => v.code)).toEqual(['seller_inactive'])
+    })
+
+    it('nhân viên khai chủ là người bán để né duyệt đơn dưới giá vốn: vẫn chờ duyệt', async () => {
+      const order = belowCostOrder(env.owner.id)
+      const { results } = await push(env.staff.authHeader, [order])
+
+      expect(results[0]!.status).toBe('synced')
+      expect(results[0]!.reviewStatus).toBe('pending_review')
+      const row = await orderByClientId(order.clientId)
+      expect(row!.policyViolations?.map((v) => v.code)).toEqual(['below_cost_unapproved'])
+      // Nhật ký ghi cả người bán khai báo lẫn người thật sự đẩy đơn
+      const changes = await auditChanges(row!.id, 'order.policy_violation_offline')
+      expect(changes).toMatchObject({
+        sellerId: env.owner.id,
+        syncedById: env.staff.id,
+        syncedByRole: 'staff',
       })
-      expect(results[1]!.error!.message).toContain('mở lại tài khoản')
+    })
+
+    it('chủ đồng bộ đơn dưới giá vốn của nhân viên: vẫn chờ duyệt theo quyền nhân viên', async () => {
+      const order = belowCostOrder(env.staff.id)
+      const { results } = await push(env.owner.authHeader, [order])
+
+      expect(results[0]!.reviewStatus).toBe('pending_review')
+      const row = await orderByClientId(order.clientId)
+      expect(row!.userId).toBe(env.staff.id)
+      expect(row!.policyViolations?.map((v) => v.code)).toEqual(['below_cost_unapproved'])
+    })
+
+    it('chủ tự bán và tự đồng bộ đơn dưới giá vốn: tự duyệt như bán trực tuyến', async () => {
+      const order = belowCostOrder(env.owner.id)
+      const { results } = await push(env.owner.authHeader, [order])
+
+      expect(results[0]!.status).toBe('synced')
+      expect(results[0]!.reviewStatus).toBeUndefined()
+      const row = await orderByClientId(order.clientId)
+      expect(await auditChanges(row!.id, 'order.created')).toMatchObject({
+        syncedByUserId: env.owner.id,
+        syncedByRole: 'owner',
+      })
     })
 
     it('máy khách cũ không gửi người bán: người đồng bộ là người bán', async () => {
@@ -166,6 +235,16 @@ describe('o1-sync: /sync/push', () => {
   })
 
   describe('OFF-11: giờ bán', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000
+
+    beforeEach(async () => {
+      // Cửa hàng mở từ tháng trước, để giờ bán hôm qua nằm sau lúc tạo cửa hàng
+      await env.db
+        .update(stores)
+        .set({ createdAt: new Date(Date.now() - 30 * DAY_MS) })
+        .where(eq(stores.id, env.storeId))
+    })
+
     it('đơn bán 21:30 tối hôm trước, sáng nay mới đồng bộ: ghi và báo cáo theo ngày bán', async () => {
       const now = new Date()
       // 21:30 giờ Việt Nam của hôm qua = 14:30 UTC
@@ -203,15 +282,35 @@ describe('o1-sync: /sync/push', () => {
       expect(row!.policyViolations?.map((v) => v.code)).toContain('sold_at_suspect')
     })
 
-    it('đơn cũ hơn giới hạn ngày: giữ giờ bán nhưng gắn cờ chờ duyệt', async () => {
-      const old = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000)
+    it('giờ bán cũ hơn giới hạn ngày: dùng giờ nhận đơn, gắn cờ, giữ giờ gốc trong nhật ký', async () => {
+      const old = new Date(Date.now() - 10 * DAY_MS)
       const order = offlineOrder({ createdAt: old.toISOString() })
+      const before = Date.now()
       const { results } = await push(env.staff.authHeader, [order])
       expect(results[0]!.reviewStatus).toBe('pending_review')
 
       const row = await orderByClientId(order.clientId)
-      expect(row!.createdAt.toISOString()).toBe(old.toISOString())
+      expect(row!.createdAt.getTime()).toBeGreaterThanOrEqual(before - 1000)
       expect(row!.policyViolations?.map((v) => v.code)).toContain('sold_at_suspect')
+      expect(await auditChanges(row!.id, 'order.created')).toMatchObject({
+        claimedSoldAt: old.toISOString(),
+      })
+    })
+
+    it('giờ bán trước lúc tạo cửa hàng (trong 7 ngày): dùng giờ nhận đơn và gắn cờ', async () => {
+      await env.db
+        .update(stores)
+        .set({ createdAt: new Date(Date.now() - DAY_MS) })
+        .where(eq(stores.id, env.storeId))
+      const beforeStore = new Date(Date.now() - 3 * DAY_MS)
+      const order = offlineOrder({ createdAt: beforeStore.toISOString() })
+      const before = Date.now()
+      const { results } = await push(env.staff.authHeader, [order])
+      expect(results[0]!.reviewStatus).toBe('pending_review')
+
+      const row = await orderByClientId(order.clientId)
+      expect(row!.createdAt.getTime()).toBeGreaterThanOrEqual(before - 1000)
+      expect(row!.policyViolations?.[0]?.message).toContain('trước lúc tạo cửa hàng')
     })
   })
 
@@ -230,6 +329,19 @@ describe('o1-sync: /sync/push', () => {
 
       expect(found.data.map((o) => o.id)).toEqual([(await orderByClientId(order.clientId))!.id])
       expect(found.data[0]!.orderNumber).toMatch(/^HD-\d{6}-\d+$/)
+    })
+
+    it('hóa đơn in bằng bản trước mang tiền tố OFFLINE-: vẫn tìm ra đơn', async () => {
+      const order = offlineOrder()
+      await push(env.owner.authHeader, [order, offlineOrder()])
+      const found = await listOrders({
+        db: env.db,
+        storeId: env.storeId,
+        query: listOrdersQuerySchema.parse({
+          search: `OFFLINE-${order.clientId.slice(0, 8).toUpperCase()}`,
+        }),
+      })
+      expect(found.data.map((o) => o.id)).toEqual([(await orderByClientId(order.clientId))!.id])
     })
   })
 })

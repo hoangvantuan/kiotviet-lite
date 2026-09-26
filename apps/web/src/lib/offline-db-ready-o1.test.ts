@@ -1,7 +1,14 @@
 import type { PGliteInterface } from '@electric-sql/pglite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { closePGlite, OFFLINE_DB_NOT_READY_MESSAGE, whenOfflineDBReady } from './pglite'
+import {
+  closePGlite,
+  OFFLINE_DB_NOT_READY_MESSAGE,
+  OFFLINE_DB_SCHEMA_VERSION,
+  whenOfflineDBReady,
+} from './pglite'
+
+const versionRows = { rows: [{ version: OFFLINE_DB_SCHEMA_VERSION }] }
 
 /** PGlite giả: truy vấn chỉ trả lời khi bài kiểm cho phép, như worker chủ chưa mở xong */
 function stalledPGlite() {
@@ -9,7 +16,7 @@ function stalledPGlite() {
   const answered = new Promise<void>((resolve) => {
     release = resolve
   })
-  const query = vi.fn(() => answered.then(() => ({ rows: [{ '?column?': 1 }] })))
+  const query = vi.fn(() => answered.then(() => versionRows))
   return { pglite: { query } as unknown as PGliteInterface, query, release: () => release() }
 }
 
@@ -36,7 +43,7 @@ describe('whenOfflineDBReady (OFF-04: worker chủ chưa mở được cơ sở 
     const query = vi
       .fn()
       .mockRejectedValueOnce(new Error('chưa mở'))
-      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce(versionRows)
     const pglite = { query } as unknown as PGliteInterface
 
     await expect(whenOfflineDBReady(pglite, 1000)).rejects.toThrow('chưa mở')

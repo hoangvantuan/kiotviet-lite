@@ -267,9 +267,18 @@ function gatewayUnknownOutcome(
   )
 }
 
-let refreshPromise: Promise<boolean> | null = null
+/**
+ * Kết quả làm mới phiên: `unavailable` là chưa tới được máy chủ (mất mạng, máy chủ lỗi), khác hẳn
+ * `expired` là phiên hết hạn thật.
+ */
+type RefreshOutcome = 'refreshed' | 'expired' | 'unavailable'
 
-async function tryRefresh(): Promise<boolean> {
+export const REFRESH_UNAVAILABLE_MESSAGE =
+  'Chưa kết nối được máy chủ để làm mới phiên đăng nhập. Kiểm tra mạng rồi thử lại.'
+
+let refreshPromise: Promise<RefreshOutcome> | null = null
+
+async function tryRefresh(): Promise<RefreshOutcome> {
   if (!refreshPromise) {
     refreshPromise = (async () => {
       try {
@@ -296,18 +305,18 @@ async function tryRefresh(): Promise<boolean> {
           // đồng bộ khi người của cửa hàng đó đăng nhập lại (OFF-03)
           useAuthStore.getState().clearAuth()
           window.location.href = '/login'
-          return false
+          return 'expired'
         }
         // Máy chủ lỗi hay cổng trung gian hết giờ: không phải hết phiên, giữ nguyên để thử lại
-        if (!res.ok) return false
+        if (!res.ok) return 'unavailable'
         const json = (await res.json()) as { data: { accessToken: string; expiresIn: number } }
         useAuthStore.getState().setAccessToken(json.data.accessToken)
         flushBrowserDiagnostics()
-        return true
+        return 'refreshed'
       } catch {
         // OFF-03: mất mạng khi làm mới phiên không phải hết phiên. Không xóa phiên, không chuyển
         // trang: đang bán ngoại tuyến thì bán tiếp, có mạng lại sẽ làm mới
-        return false
+        return 'unavailable'
       } finally {
         refreshPromise = null
       }
@@ -380,8 +389,16 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   if (res.status === 401 && auth && !skipRefresh && !(await isPinInvalid(res))) {
     const refreshed = await tryRefresh()
-    if (refreshed) {
+    if (refreshed === 'refreshed') {
       return apiFetch<T>(path, { ...options, skipRefresh: true })
+    }
+    // Không làm mới được vì mạng: báo mất kết nối (lỗi tạm thời), không báo phiên hết hạn
+    if (refreshed === 'unavailable') {
+      throw new ApiClientError(
+        0,
+        { code: 'NETWORK_ERROR', message: REFRESH_UNAVAILABLE_MESSAGE },
+        receivedRequestId,
+      )
     }
   }
 

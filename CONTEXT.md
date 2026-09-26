@@ -142,7 +142,7 @@ _Tránh dùng_: người phê duyệt, người ký
 _Tránh dùng_: đơn offline, đơn chờ đồng bộ
 
 **Giờ bán**:
-Thời điểm đơn được lập tại quầy. Đơn ngoại tuyến lấy giờ trên máy bán, máy chủ giới hạn (không quá 5 phút sau giờ nhận; cũ hơn 7 ngày thì gắn cờ chờ duyệt). Báo cáo theo ngày tính theo giờ bán, không theo lúc đồng bộ. Quy tắc ở ADR-0012.
+Thời điểm đơn được lập tại quầy. Đơn ngoại tuyến lấy giờ trên máy bán, máy chủ giới hạn (quá 5 phút sau giờ nhận, cũ hơn 7 ngày, hoặc trước lúc tạo cửa hàng thì ghi theo giờ nhận và gắn cờ chờ duyệt). Báo cáo theo ngày tính theo giờ bán, không theo lúc đồng bộ. Quy tắc ở ADR-0012.
 _Tránh dùng_: giờ đồng bộ, giờ tạo (khi nói về đơn ngoại tuyến)
 
 **Mã tạm**:

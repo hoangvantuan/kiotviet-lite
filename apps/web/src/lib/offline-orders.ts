@@ -73,6 +73,9 @@ export function stripOfflineSecrets(orderData: CreateOrderInput): CreateOrderInp
  * trong lần bán trực tuyến trước đó (nếu có): lần gửi đó có thể đã được máy chủ lưu mà mất phản
  * hồi, khi đồng bộ máy chủ nhận ra cùng clientId và không tạo đơn thứ hai (R4, OFF-07).
  * Gọi lại với cùng clientId không thêm dòng mới.
+ *
+ * OFF-04: tab chủ đóng đúng lúc đang ghi thì PGliteWorker báo lỗi "Leader changed" và không rõ
+ * lệnh đã ghi hay chưa. Vì gọi lại an toàn theo clientId, ở đây tự thử lại qua tab chủ mới.
  */
 export async function saveOfflineOrder(
   pglite: PGliteInterface,
@@ -82,11 +85,40 @@ export async function saveOfflineOrder(
 ): Promise<string> {
   const safeData = stripOfflineSecrets(createOrderSchema.parse(orderData))
 
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await insertOutboxRow(pglite, owner, safeData, clientId)
+      break
+    } catch (error) {
+      if (!isLeaderChanged(error) || attempt >= MAX_LEADER_CHANGE_RETRIES) throw error
+    }
+  }
+
+  // Đơn đã lưu; đếm lại hỏng vì đổi tab chủ thì lượt đồng bộ sau đếm lại, không báo lỗi bán hàng
+  await notifyOutboxChanged(pglite).catch((error: unknown) => {
+    if (!isLeaderChanged(error)) throw error
+  })
+  return clientId
+}
+
+const MAX_LEADER_CHANGE_RETRIES = 3
+
+/** Lỗi PGliteWorker (LeaderChangedError) khi tab chủ đổi giữa chừng một lệnh */
+export function isLeaderChanged(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith('Leader changed')
+}
+
+async function insertOutboxRow(
+  pglite: PGliteInterface,
+  owner: OfflineOrderOwner,
+  safeData: CreateOrderInput,
+  clientId: string,
+): Promise<void> {
   const existing = await pglite.query<{ client_id: string }>(
     `SELECT client_id FROM offline_orders WHERE client_id = $1 LIMIT 1`,
     [clientId],
   )
-  if (existing.rows.length > 0) return clientId
+  if (existing.rows.length > 0) return
 
   await pglite.query(
     `INSERT INTO offline_orders (id, store_id, user_id, client_id, sync_status, order_data, created_at)
@@ -100,9 +132,6 @@ export async function saveOfflineOrder(
       new Date().toISOString(),
     ],
   )
-
-  await notifyOutboxChanged(pglite)
-  return clientId
 }
 
 interface OfflineOrderRow {

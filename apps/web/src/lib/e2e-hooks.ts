@@ -11,10 +11,12 @@ import type { CreateOrderInput } from '@kiotviet-lite/shared'
 import { useAuthStore } from '@/stores/use-auth-store'
 
 import { saveOfflineOrder } from './offline-orders'
-import { getOfflineDB } from './pglite'
+import { getOfflineDB, getPGliteClient } from './pglite'
 
 export interface KvlE2EHooks {
   seedOfflineOrders: (count: number, orderData: CreateOrderInput) => Promise<string[]>
+  /** OFF-04: tab này có phải tab chủ đang mở PGlite không (null nếu chưa mở) */
+  offlineDBIsLeader: () => boolean | null
 }
 
 export function installE2EHooks(): void {
@@ -35,6 +37,10 @@ export function installE2EHooks(): void {
         ids.push(clientId)
       }
       return ids
+    },
+    offlineDBIsLeader() {
+      const client = getPGliteClient() as { isLeader?: boolean } | null
+      return client ? (client.isLeader ?? null) : null
     },
   }
   ;(window as unknown as { __kvlE2E: KvlE2EHooks }).__kvlE2E = hooks

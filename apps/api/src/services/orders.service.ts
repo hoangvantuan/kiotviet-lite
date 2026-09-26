@@ -8,7 +8,6 @@ import {
   customers,
   debts,
   formatCurrencyVnd as formatVnd,
-  hasPermission,
   inventoryTransactions,
   type ListOrdersQuery,
   OFFLINE_ORDER_NUMBER_PATTERN,
@@ -40,6 +39,7 @@ import { addCustomerDebt, lockCustomerForDebt } from './customer-debt-ledger.ser
 import { nextDocumentCode } from './document-codes.service.js'
 import { emitEvent } from './notification-emitter.js'
 import {
+  actorHasPermission,
   assertDiscountAmounts,
   debtLimitViolation,
   derivePayment,
@@ -68,6 +68,8 @@ export interface OrdersActor {
   userId: string
   storeId: string
   role: UserRole
+  /** OFF-05: người đồng bộ đơn ngoại tuyến khi khác người bán (actor là người bán), xem PolicyActor */
+  syncedBy?: { userId: string; role: UserRole } | null
 }
 
 export interface OrderDetailItem {
@@ -162,8 +164,8 @@ export interface CreateOrderDeps {
   source?: 'pos' | 'offline_sync'
   clientId?: string | null
   offlineCreatedAt?: string
-  /** OFF-05: người đồng bộ đơn ngoại tuyến khi khác người bán (actor là người bán) */
-  syncedByUserId?: string | null
+  /** Vi phạm phát hiện ở lớp đồng bộ (OFF-05: người bán đã bị khóa), đơn vẫn nhận nhưng chờ duyệt */
+  offlineViolations?: OrderPolicyViolation[]
   skipDebtLimitCheck?: boolean
 }
 
@@ -176,10 +178,11 @@ export async function createOrder({
   source = 'pos',
   clientId: explicitClientId,
   offlineCreatedAt,
-  syncedByUserId = null,
+  offlineViolations = [],
   skipDebtLimitCheck = false,
 }: CreateOrderDeps): Promise<OrderDetail> {
   const db = serviceDb(rootDb, transaction)
+  const syncedByUserId = actor.syncedBy?.userId ?? null
   let input = requestedInput
   if (input.items.length === 0) {
     throw new ApiError('VALIDATION_ERROR', 'Đơn hàng phải có ít nhất 1 sản phẩm')
@@ -300,15 +303,23 @@ export async function createOrder({
   // POS-04: vượt hạn mức cần PIN của người giữ pos.overrideDebtLimit, không phải PIN người bán
   const debtLimitApprover = await resolveDebtLimitApproval({ db, actor, input, source, meta })
   // ADR-0009: đơn ngoại tuyến vi phạm chính sách vẫn nhận (hàng đã giao) nhưng chờ chủ duyệt
-  const policyViolations: OrderPolicyViolation[] = []
+  const policyViolations: OrderPolicyViolation[] =
+    source === 'offline_sync' ? [...offlineViolations] : []
   // OFF-11 (ADR-0012): đơn ngoại tuyến ghi theo giờ bán trên máy bán, đã kiểm giới hạn
   const receivedAt = new Date()
-  const offlineSale =
-    source === 'offline_sync' ? resolveOfflineSoldAt(offlineCreatedAt, receivedAt) : null
+  let offlineSale: ReturnType<typeof resolveOfflineSoldAt> | null = null
+  if (source === 'offline_sync') {
+    const [store] = await db
+      .select({ createdAt: stores.createdAt })
+      .from(stores)
+      .where(eq(stores.id, actor.storeId))
+      .limit(1)
+    offlineSale = resolveOfflineSoldAt(offlineCreatedAt, receivedAt, store?.createdAt ?? null)
+  }
   if (offlineSale?.violation) policyViolations.push(offlineSale.violation)
   const priceIssue = priceViolation(priceApproval)
   if (priceIssue) policyViolations.push(priceIssue)
-  const canViewCost = hasPermission(actor.role, 'products.viewCost')
+  const canViewCost = actorHasPermission(actor, 'products.viewCost')
 
   // Validate manual price list if selected
   let snapshotPriceListName: string | null = null
@@ -1311,6 +1322,8 @@ export async function createOrder({
             violations: policyViolations,
             sellerId: actor.userId,
             sellerRole: actor.role,
+            syncedById: actor.syncedBy?.userId ?? actor.userId,
+            syncedByRole: actor.syncedBy?.role ?? actor.role,
             clientId,
             offlineCreatedAt: offlineAt,
             device: { ipAddress: meta?.ipAddress ?? null, userAgent: meta?.userAgent ?? null },
@@ -1361,7 +1374,9 @@ export async function createOrder({
           ...(offlineSale
             ? {
                 soldAt: offlineSale.soldAt.toISOString(),
+                ...(offlineSale.claimedAt ? { claimedSoldAt: offlineSale.claimedAt } : {}),
                 syncedByUserId: syncedByUserId ?? actor.userId,
+                syncedByRole: actor.syncedBy?.role ?? actor.role,
               }
             : {}),
         },

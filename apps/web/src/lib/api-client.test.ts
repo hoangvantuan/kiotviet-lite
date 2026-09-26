@@ -7,6 +7,7 @@ import {
   apiFetch,
   clearBrowserDiagnostics,
   queueBrowserDiagnostic,
+  REFRESH_UNAVAILABLE_MESSAGE,
 } from './api-client'
 
 const SERVER_ID = 'c85c283b-6907-4195-a75b-f7d2a54c35f9'
@@ -223,6 +224,43 @@ describe('apiFetch 401 do PIN sai (POS-10)', () => {
     await apiFetch('/api/v1/products').catch(() => undefined)
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2)
     expect(String(fetchMock.mock.calls[1]![0])).toContain('/refresh')
+  })
+})
+
+describe('OFF-03: làm mới phiên không tới được máy chủ', () => {
+  const expired = () =>
+    new Response(
+      JSON.stringify({
+        error: { code: 'UNAUTHORIZED', message: 'Phiên đăng nhập đã hết hạn' },
+      }),
+      { status: 401 },
+    )
+
+  it('mất mạng lúc làm mới: báo mất kết nối, không báo phiên hết hạn, giữ phiên', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(expired())
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const error = await apiFetch('/api/v1/sync/push', { method: 'POST', body: {} }).catch(
+      (e: unknown) => e,
+    )
+
+    expect(error).toMatchObject({ status: 0, code: 'NETWORK_ERROR' })
+    expect((error as ApiClientError).message).toContain(REFRESH_UNAVAILABLE_MESSAGE)
+    expect((error as ApiClientError).message).not.toContain('hết hạn')
+    expect(useAuthStore.getState().accessToken).toBe('test-token')
+  })
+
+  it('máy chủ lỗi 502 lúc làm mới: cũng là lỗi tạm thời', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(expired())
+      .mockResolvedValueOnce(new Response('<html>502</html>', { status: 502 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(apiFetch('/api/v1/products')).rejects.toMatchObject({ code: 'NETWORK_ERROR' })
   })
 })
 

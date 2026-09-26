@@ -26,6 +26,9 @@ export const orderPolicyViolationCodeSchema = z.enum([
   'no_credit',
   // OFF-11: giờ bán máy khách gửi lệch quá giới hạn (ở tương lai, hoặc cũ hơn số ngày cho phép)
   'sold_at_suspect',
+  // OFF-05: người bán đã bị khóa hoặc mất quyền bán trước khi đơn ngoại tuyến kịp đồng bộ. Tiền đã
+  // thu nên đơn vẫn vào sổ, chủ duyệt lại
+  'seller_inactive',
 ])
 
 export interface OrderPolicyViolation {

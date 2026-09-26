@@ -23,7 +23,8 @@ export const PGLITE_SCHEMA_VERSION = 3
  * clientId. Máy chủ cấp mã thật khi đồng bộ; tìm đơn bằng mã tạm vẫn ra đúng đơn đó.
  */
 export const OFFLINE_ORDER_NUMBER_PREFIX = 'TAM-'
-export const OFFLINE_ORDER_NUMBER_PATTERN = /^TAM-([0-9a-f]{8})$/i
+/** Nhận cả tiền tố `OFFLINE-` của bản trước, vì hóa đơn đã in bằng bản đó vẫn còn trong tay khách */
+export const OFFLINE_ORDER_NUMBER_PATTERN = /^(?:TAM|OFFLINE)-([0-9a-f]{8})$/i
 
 import { createOrderItemSchema, createOrderSchema } from './order-management.js'
 
@@ -40,7 +41,8 @@ export const SYNC_PUSH_MAX_BATCH = 100
 /**
  * OFF-11: đơn ngoại tuyến mang giờ bán tính trên máy bán. Máy chủ chấp nhận lệch tới
  * SYNC_SOLD_AT_MAX_FUTURE_MS về tương lai (đồng hồ máy lệch nhẹ); xa hơn thì dùng giờ nhận đơn và
- * gắn cờ. Đơn cũ hơn SYNC_SOLD_AT_MAX_AGE_DAYS vẫn giữ giờ bán nhưng gắn cờ để chủ đối chiếu.
+ * gắn cờ. Cũ hơn SYNC_SOLD_AT_MAX_AGE_DAYS, hoặc trước lúc tạo cửa hàng, cũng dùng giờ nhận đơn và
+ * gắn cờ (ADR-0012).
  */
 export const SYNC_SOLD_AT_MAX_FUTURE_MS = 5 * 60 * 1000
 export const SYNC_SOLD_AT_MAX_AGE_DAYS = 7
