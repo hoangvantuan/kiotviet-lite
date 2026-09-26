@@ -421,13 +421,6 @@
       "when": 1790397673531,
       "tag": "0059_sync_tombstones_triggers",
       "breakpoints": true
-    },
-    {
-      "idx": 60,
-      "version": "7",
-      "when": 1790407867318,
-      "tag": "0060_pos18_inventory_reference",
-      "breakpoints": true
     }
   ]
 }

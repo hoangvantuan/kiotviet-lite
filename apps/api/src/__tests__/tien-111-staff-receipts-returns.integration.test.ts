@@ -9,7 +9,7 @@ import { createOrdersRoutes } from '../routes/orders.routes.js'
 import { createReceiptsRoutes } from '../routes/receipts.routes.js'
 import { createShiftsRoutes } from '../routes/shifts.routes.js'
 import { expectDebtLedgerConsistent } from './helpers/debt-ledger.js'
-import { createCustomer } from './helpers/factories.js'
+import { createCustomer, createStore, createUser } from './helpers/factories.js'
 import { expectInvariantsClean } from './helpers/invariants.js'
 import { sell, stockedProduct } from './helpers/sell.js'
 import { createTestEnv, type SeededUser, type TestEnv } from './helpers/test-env.js'
@@ -196,17 +196,38 @@ describe('TIEN-111: nhân viên lập phiếu trả hàng', () => {
     // R1: PIN sai là 401 (được đếm chống dò), người duyệt thiếu quyền là 403
     expect(wrongPin.status).toBe(401)
 
+    // PIN của một staff khác (không phải người gửi): staff không có orders.returnOverride
+    const otherStaff = await createUser(env, { role: 'staff', pin: '444444' })
     const staffPin = await call(
       'POST',
       `/orders/${order.id}/returns`,
       env.staff,
       returnBody(itemId, {
         refundMethod: 'cash',
-        approverId: env.staff.id,
-        approverPin: env.staff.pin,
+        approverId: otherStaff.id,
+        approverPin: '444444',
       }),
     )
     expect(staffPin.status).toBe(403)
+
+    // Quản lý của cửa hàng khác: không tìm thấy người duyệt trong cửa hàng này
+    const otherStore = await createStore(env)
+    const outsider = await createUser(env, {
+      storeId: otherStore.id,
+      role: 'manager',
+      pin: '555555',
+    })
+    const outsiderPin = await call(
+      'POST',
+      `/orders/${order.id}/returns`,
+      env.staff,
+      returnBody(itemId, {
+        refundMethod: 'cash',
+        approverId: outsider.id,
+        approverPin: '555555',
+      }),
+    )
+    expect(outsiderPin.status).toBe(404)
     expect(await env.db.select().from(orderReturns)).toHaveLength(0)
   })
 
@@ -239,6 +260,35 @@ describe('TIEN-111: nhân viên lập phiếu trả hàng', () => {
       .from(orderReturns)
       .where(eq(orderReturns.id, r.body.data.id))
     expect(row!.shiftId).toBe(staffShift.id)
+  })
+})
+
+/** Mọi khóa có chữ "cost" ở bất kỳ tầng nào của phản hồi */
+function costKeys(value: unknown, path = ''): string[] {
+  if (Array.isArray(value)) return value.flatMap((v, i) => costKeys(v, `${path}[${i}]`))
+  if (value === null || typeof value !== 'object') return []
+  return Object.entries(value).flatMap(([k, v]) => [
+    ...(/cost/i.test(k) ? [`${path}.${k}`] : []),
+    ...costKeys(v, `${path}.${k}`),
+  ])
+}
+
+describe('TIEN-111: staff trả hàng không thấy giá vốn (quyết định 3)', () => {
+  it('returnable-items, POST và GET phiếu trả của staff không có trường giá vốn', async () => {
+    const { order, itemId } = await transferSale()
+
+    const items = await call('GET', `/orders/${order.id}/returnable-items`, env.staff)
+    expect(items.status).toBe(200)
+    expect(costKeys(items.body)).toEqual([])
+
+    const created = await call('POST', `/orders/${order.id}/returns`, env.staff, returnBody(itemId))
+    expect(created.status, JSON.stringify(created.body)).toBe(201)
+    expect(costKeys(created.body)).toEqual([])
+
+    const list = await call('GET', `/orders/${order.id}/returns`, env.staff)
+    expect(list.status).toBe(200)
+    expect(list.body.data.length).toBeGreaterThan(0)
+    expect(costKeys(list.body)).toEqual([])
   })
 })
 
