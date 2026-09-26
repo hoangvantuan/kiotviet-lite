@@ -23,6 +23,7 @@ import {
   authorizeReturnOverride,
   createReturn,
   getOrderPrepaymentApplied,
+  getOrderRefundableByChannel,
   getOrderReturns,
   getReturnableItems,
 } from '../services/returns.service.js'
@@ -77,7 +78,12 @@ export function createOrdersRoutes({ db }: OrdersRoutesDeps) {
       storeId: auth.storeId,
       orderId: id,
     })
-    return c.json({ data, meta: { prepaymentApplied } })
+    // TIEN-111: số còn hoàn được theo kênh, để hộp trả hàng biết khi nào cần PIN người duyệt
+    const refundableByChannel = await getOrderRefundableByChannel(db, {
+      storeId: auth.storeId,
+      orderId: id,
+    })
+    return c.json({ data, meta: { prepaymentApplied, refundableByChannel } })
   })
 
   // GET /:id/returns - Return history for an order

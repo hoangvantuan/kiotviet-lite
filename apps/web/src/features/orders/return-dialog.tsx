@@ -5,8 +5,8 @@ import {
   hasPermission,
   type MoneyMethod,
   moneyMethodLabel,
-  paidRefundMethods,
   REFUND_METHODS,
+  refundExceedsChannel,
   RETURN_REASON_LABELS,
 } from '@kiotviet-lite/shared'
 
@@ -102,6 +102,7 @@ export function ReturnDialog({
 
   const items: ReturnableItem[] = itemsQuery.data?.items ?? []
   const prepaymentApplied = itemsQuery.data?.prepaymentApplied ?? 0
+  const refundableByChannel = itemsQuery.data?.refundableByChannel ?? null
 
   function updateLine(orderItemId: string, field: 'quantity' | 'reason', value: number | string) {
     setLines((prev) => {
@@ -125,11 +126,11 @@ export function ReturnDialog({
   )
 
   const hasSelection = Array.from(lines.values()).some((l) => l.quantity > 0)
-  // TIEN-111: hoàn qua kênh khách không dùng để trả đơn là vượt quyền, cần PIN người duyệt (R1).
-  // Cùng quy tắc với máy chủ (paidRefundMethods), máy chủ vẫn là nơi kiểm cuối cùng.
+  // TIEN-111: hoàn qua một kênh nhiều hơn số khách đã trả qua kênh đó là vượt quyền, cần PIN người
+  // duyệt (R1). Cùng hàm với máy chủ (refundExceedsChannel), máy chủ vẫn là nơi kiểm cuối cùng.
   const refundMethodOverridden =
-    preview.refundAmount > 0 &&
-    !(paidRefundMethods(orderPayment) as ReadonlySet<MoneyMethod>).has(refundMethod)
+    refundableByChannel !== null &&
+    refundExceedsChannel(refundableByChannel, refundMethod, preview.refundAmount)
   const needsApproval =
     refundMethodOverridden && !!role && !hasPermission(role, 'orders.returnOverride')
 
@@ -385,8 +386,8 @@ export function ReturnDialog({
               />
               {needsApproval && (
                 <p className="text-xs text-muted-foreground">
-                  Khách không trả đơn qua kênh này. Cần chủ cửa hàng hoặc quản lý nhập mã PIN để
-                  duyệt.
+                  Số hoàn vượt số khách đã trả qua kênh này. Cần chủ cửa hàng hoặc quản lý nhập mã
+                  PIN để duyệt.
                 </p>
               )}
             </div>
@@ -429,7 +430,7 @@ export function ReturnDialog({
         <PinDialog
           open={pinOpen}
           onOpenChange={setPinOpen}
-          title="Duyệt hoàn tiền khác kênh"
+          title="Duyệt hoàn tiền vượt kênh khách đã trả"
           description="Chủ cửa hàng hoặc quản lý nhập mã PIN của mình để duyệt."
           approvalPermissions={['orders.returnOverride']}
           onVerified={(pin, approverId) => {

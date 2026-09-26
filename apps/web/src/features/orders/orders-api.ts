@@ -4,6 +4,7 @@ import type {
   OrderPolicyViolation,
   OrderReviewStatus,
   PriceSource,
+  RefundChannelAmounts,
   ReviewOrderInput,
 } from '@kiotviet-lite/shared'
 
@@ -228,9 +229,12 @@ export interface OrderReturnDetail extends OrderReturnListItem {
 
 export function getReturnableItemsApi(orderId: string) {
   // meta.prepaymentApplied: tiền trả trước đã cấn vào đơn, trả hàng hoàn về trả trước (ADR-0011)
-  return apiClient.get<Envelope<ReturnableItem[]> & { meta?: { prepaymentApplied: number } }>(
-    `/api/v1/orders/${orderId}/returnable-items`,
-  )
+  // meta.refundableByChannel: số còn hoàn được theo kênh mà không cần người duyệt (TIEN-111)
+  return apiClient.get<
+    Envelope<ReturnableItem[]> & {
+      meta?: { prepaymentApplied: number; refundableByChannel?: RefundChannelAmounts }
+    }
+  >(`/api/v1/orders/${orderId}/returnable-items`)
 }
 
 export function getOrderReturnsApi(orderId: string) {

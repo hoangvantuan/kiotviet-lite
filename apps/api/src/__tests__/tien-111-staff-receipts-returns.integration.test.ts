@@ -244,3 +244,105 @@ describe('TIEN-111: nhân viên lập phiếu trả hàng', () => {
     expect(row!.shiftId).toBe(staffShift.id)
   })
 })
+
+describe('TIEN-111: hoàn vượt số khách đã trả qua từng kênh', () => {
+  // Đơn 1.000.000: 200.000 tiền mặt, 800.000 chuyển khoản
+  async function mixedSale() {
+    const product = await stockedProduct(env)
+    const order = await sell(env, [{ product, quantity: 10 }], { combinedCash: 200_000 })
+    return { order, itemId: order.items[0]!.id }
+  }
+
+  const returnQty = (itemId: string, quantity: number, extra: Record<string, unknown> = {}) => ({
+    items: [{ orderItemId: itemId, quantity, reason: 'defective' }],
+    ...extra,
+  })
+
+  it('trả hết đơn hỗn hợp, hoàn cả 1.000.000 tiền mặt không PIN bị 403', async () => {
+    const { order, itemId } = await mixedSale()
+    const r = await call(
+      'POST',
+      `/orders/${order.id}/returns`,
+      env.staff,
+      returnQty(itemId, 10, { refundMethod: 'cash' }),
+    )
+    expect(r.status).toBe(403)
+    expect(r.body.error.details).toMatchObject({ reason: 'refund_method_override' })
+    expect(await env.db.select().from(orderReturns)).toHaveLength(0)
+  })
+
+  it('có PIN quản lý thì staff hoàn cả đơn hỗn hợp bằng tiền mặt được', async () => {
+    const { order, itemId } = await mixedSale()
+    const r = await call(
+      'POST',
+      `/orders/${order.id}/returns`,
+      env.staff,
+      returnQty(itemId, 10, {
+        refundMethod: 'cash',
+        approverId: env.manager.id,
+        approverPin: env.manager.pin,
+      }),
+    )
+    expect(r.status, JSON.stringify(r.body)).toBe(201)
+    expect(r.body.data.refundAmount).toBe(1_000_000)
+  })
+
+  it('hoàn trong phần tiền mặt khách đã trả không cần PIN; phần đã hoàn trước được trừ', async () => {
+    const { order, itemId } = await mixedSale()
+    const withinCash = await call(
+      'POST',
+      `/orders/${order.id}/returns`,
+      env.staff,
+      returnQty(itemId, 2, { refundMethod: 'cash' }),
+    )
+    expect(withinCash.status, JSON.stringify(withinCash.body)).toBe(201)
+
+    // Tiền mặt khách trả đã hoàn hết: thêm 100.000 tiền mặt là vượt quyền
+    const overCash = await call(
+      'POST',
+      `/orders/${order.id}/returns`,
+      env.staff,
+      returnQty(itemId, 1, { refundMethod: 'cash' }),
+    )
+    expect(overCash.status).toBe(403)
+
+    // Cùng số đó qua chuyển khoản vẫn nằm trong 800.000 khách đã chuyển
+    const viaTransfer = await call(
+      'POST',
+      `/orders/${order.id}/returns`,
+      env.staff,
+      returnQty(itemId, 1, { refundMethod: 'transfer' }),
+    )
+    expect(viaTransfer.status, JSON.stringify(viaTransfer.body)).toBe(201)
+
+    const items = await call('GET', `/orders/${order.id}/returnable-items`, env.staff)
+    expect(items.body.meta.refundableByChannel).toEqual({ cash: 0, transfer: 700_000 })
+  })
+
+  it('phiếu thu nợ của đơn tính vào số khách đã trả qua kênh của phiếu thu', async () => {
+    const { customer, order, debt } = await debtSale()
+    const receipt = await call('POST', '/receipts', env.owner, {
+      ...receiptBody(customer.id, debt.id),
+      amount: 200_000,
+      paymentMethod: 'transfer',
+      allocations: [{ debtId: debt.id, amount: 200_000 }],
+    })
+    expect(receipt.status, JSON.stringify(receipt.body)).toBe(201)
+
+    const cash = await call(
+      'POST',
+      `/orders/${order.id}/returns`,
+      env.staff,
+      returnQty(order.items[0]!.id, 1, { refundMethod: 'cash' }),
+    )
+    expect(cash.status).toBe(403)
+    const transfer = await call(
+      'POST',
+      `/orders/${order.id}/returns`,
+      env.staff,
+      returnQty(order.items[0]!.id, 1, { refundMethod: 'transfer' }),
+    )
+    expect(transfer.status, JSON.stringify(transfer.body)).toBe(201)
+    expect(transfer.body.data.refundAmount).toBe(100_000)
+  })
+})

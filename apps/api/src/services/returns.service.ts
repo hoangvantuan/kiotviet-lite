@@ -9,15 +9,21 @@ import {
   inventoryTransactions,
   type MoneyMethod,
   orderItems,
+  orderPaidByChannel,
   type OrderReturnDetail,
   type OrderReturnItemDetail,
   orderReturnItems,
   type OrderReturnListItem,
   orderReturns,
   orders,
-  paidRefundMethods,
   products,
   productVariants,
+  receiptAllocations,
+  receipts,
+  refundableByChannel,
+  type RefundChannelAmounts,
+  refundChannelOf,
+  refundExceedsChannel,
   type ReturnableItem,
   splitReturnRefund,
   type UserRole,
@@ -133,6 +139,68 @@ export async function getOrderPrepaymentApplied({
     .where(and(eq(debts.orderId, orderId), eq(debts.storeId, storeId)))
     .limit(1)
   return row ? Number(row.prepaymentApplied) : 0
+}
+
+/**
+ * TIEN-111: số còn hoàn được qua từng kênh mà không cần người duyệt. Khách đã trả qua một kênh gồm
+ * phần trả lúc bán và các phiếu thu nợ còn hiệu lực phân bổ vào khoản nợ của đơn; trừ phần các
+ * phiếu trả trước đã hoàn qua kênh đó. Gọi trong transaction đã khóa đơn thì số không đổi.
+ */
+export async function getOrderRefundableByChannel(
+  db: Db,
+  { storeId, orderId }: { storeId: string; orderId: string },
+): Promise<RefundChannelAmounts> {
+  const [order] = await db
+    .select({
+      paymentMethod: orders.paymentMethod,
+      total: orders.total,
+      cashAmount: orders.cashAmount,
+      transferAmount: orders.transferAmount,
+      change: orders.change,
+    })
+    .from(orders)
+    .where(and(eq(orders.id, orderId), eq(orders.storeId, storeId)))
+    .limit(1)
+  if (!order) throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng')
+  const paid = orderPaidByChannel({
+    paymentMethod: order.paymentMethod,
+    total: Number(order.total),
+    cashAmount: order.cashAmount === null ? null : Number(order.cashAmount),
+    transferAmount: order.transferAmount === null ? null : Number(order.transferAmount),
+    change: Number(order.change),
+  })
+
+  const receiptRows = await db
+    .select({
+      method: receipts.paymentMethod,
+      sum: sql<string>`COALESCE(SUM(${receiptAllocations.amount}), 0)`,
+    })
+    .from(receiptAllocations)
+    .innerJoin(receipts, eq(receipts.id, receiptAllocations.receiptId))
+    .innerJoin(debts, eq(debts.id, receiptAllocations.debtId))
+    .where(
+      and(eq(debts.orderId, orderId), eq(debts.storeId, storeId), eq(receipts.status, 'active')),
+    )
+    .groupBy(receipts.paymentMethod)
+  for (const row of receiptRows) {
+    const method = toMoneyMethod(row.method)
+    if (method) paid[refundChannelOf(method)] += Number(row.sum)
+  }
+
+  const refunded: RefundChannelAmounts = { cash: 0, transfer: 0 }
+  const refundRows = await db
+    .select({
+      method: orderReturns.refundMethod,
+      sum: sql<string>`COALESCE(SUM(${orderReturns.refundAmount}), 0)`,
+    })
+    .from(orderReturns)
+    .where(and(eq(orderReturns.orderId, orderId), eq(orderReturns.storeId, storeId)))
+    .groupBy(orderReturns.refundMethod)
+  for (const row of refundRows) {
+    const method = toMoneyMethod(row.method)
+    if (method) refunded[refundChannelOf(method)] += Number(row.sum)
+  }
+  return refundableByChannel(paid, refunded)
 }
 
 // ---------------------------------------------------------------------------
@@ -382,11 +450,14 @@ export async function createReturn({
     }
     const refundMethod: MoneyMethod | null =
       refundAmount > 0 ? (input.refundMethod ?? defaultRefundMethod(orderPayment)) : null
-    // TIEN-111: hoàn qua kênh khách không dùng để trả đơn (ví dụ đơn chuyển khoản mà chi tiền mặt
-    // từ két) là vượt quyền: người không có `orders.returnOverride` cần PIN của người có quyền
-    const refundMethodOverridden =
-      refundMethod !== null &&
-      !(paidRefundMethods(orderPayment) as ReadonlySet<MoneyMethod>).has(refundMethod)
+    // TIEN-111: hoàn qua một kênh nhiều hơn số khách đã trả qua kênh đó (trừ phần đã hoàn trước)
+    // là vượt quyền, ví dụ đơn chuyển khoản mà chi tiền mặt từ két: người không có
+    // `orders.returnOverride` cần PIN của người có quyền
+    const refundMethodOverridden = refundExceedsChannel(
+      await getOrderRefundableByChannel(txDb, { storeId: actor.storeId, orderId }),
+      refundMethod,
+      refundAmount,
+    )
     if (
       refundMethodOverridden &&
       !hasPermission(actor.role, 'orders.returnOverride') &&
@@ -394,7 +465,7 @@ export async function createReturn({
     ) {
       throw new ApiError(
         'FORBIDDEN',
-        'Hoàn tiền qua kênh khác kênh khách đã trả cần mã PIN của chủ cửa hàng hoặc quản lý',
+        'Hoàn tiền vượt số khách đã trả qua kênh này cần mã PIN của chủ cửa hàng hoặc quản lý',
         { requiredPermissions: ['orders.returnOverride'], reason: 'refund_method_override' },
       )
     }

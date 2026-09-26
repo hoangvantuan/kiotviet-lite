@@ -18,6 +18,8 @@ export interface SellOptions {
   /** Chiết khấu đơn theo số tiền, phân bổ về dòng theo tỷ lệ ở máy chủ */
   orderDiscount?: number
   paymentMethod?: 'cash' | 'transfer' | 'debt'
+  /** Trả kết hợp: phần tiền mặt, phần còn lại chuyển khoản */
+  combinedCash?: number
 }
 
 /**
@@ -52,7 +54,10 @@ export async function sell(env: TestEnv, lines: SellLine[], opts: SellOptions = 
   const subtotal = items.reduce((sum, it) => sum + it.lineTotal, 0)
   const orderDiscount = opts.orderDiscount ?? 0
   const total = subtotal - orderDiscount
-  const method = opts.paymentMethod ?? (customerId ? 'debt' : 'cash')
+  const method =
+    opts.combinedCash !== undefined
+      ? 'combined'
+      : (opts.paymentMethod ?? (customerId ? 'debt' : 'cash'))
   return createOrder({
     db: env.db,
     actor: opts.actor ?? { userId: env.owner.id, storeId: env.storeId, role: env.owner.role },
@@ -65,11 +70,13 @@ export async function sell(env: TestEnv, lines: SellLine[], opts: SellOptions = 
       total,
       paymentMethod: method,
       paymentStatus: method === 'debt' ? 'unpaid' : 'paid',
-      ...(method === 'debt'
-        ? { debtAmount: total }
-        : method === 'transfer'
-          ? { transferAmount: total }
-          : { cashAmount: total }),
+      ...(method === 'combined'
+        ? { cashAmount: opts.combinedCash, transferAmount: total - opts.combinedCash! }
+        : method === 'debt'
+          ? { debtAmount: total }
+          : method === 'transfer'
+            ? { transferAmount: total }
+            : { cashAmount: total }),
       debtLimitOverridden: false,
       note: null,
       items,
