@@ -435,6 +435,13 @@
       "when": 1790415479416,
       "tag": "0061_pos08_pos13_price_variants_stock_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1790418651067,
+      "tag": "0062_d4_decimal_quantity",
+      "breakpoints": true
     }
   ]
 }

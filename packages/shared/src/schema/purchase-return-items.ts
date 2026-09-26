@@ -5,6 +5,7 @@ import { productVariants } from './product-variants.js'
 import { products } from './products.js'
 import { purchaseOrderItems } from './purchase-order-items.js'
 import { purchaseReturns } from './purchase-returns.js'
+import { quantity } from './quantity-column.js'
 
 export const purchaseReturnItems = pgTable(
   'purchase_return_items',
@@ -23,13 +24,13 @@ export const purchaseReturnItems = pgTable(
       .references(() => products.id, { onDelete: 'restrict' }),
     variantId: uuid().references(() => productVariants.id, { onDelete: 'restrict' }),
     // Số lượng theo đơn vị ghi trên phiếu nhập gốc; baseQuantity = quantity × conversionFactor
-    quantity: integer().notNull(),
+    quantity: quantity().notNull(),
     conversionFactor: integer().notNull().default(1),
-    baseQuantity: integer().notNull(),
+    baseQuantity: quantity().notNull(),
     // Giá trị hàng trả theo giá nhập thực của dòng gốc (sau chiết khấu dòng và chiết khấu phiếu)
     lineTotal: bigint({ mode: 'number' }).notNull(),
     costAfter: bigint({ mode: 'number' }),
-    stockAfter: integer(),
+    stockAfter: quantity(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

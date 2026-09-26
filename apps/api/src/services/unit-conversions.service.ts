@@ -27,6 +27,7 @@ interface UnitConversionRow {
   conversionFactor: number
   sellingPrice: number
   sortOrder: number
+  allowDecimalQuantity: boolean
   createdAt: Date
   updatedAt: Date
 }
@@ -39,6 +40,7 @@ export function toUnitConversionItem(row: UnitConversionRow): UnitConversionItem
     conversionFactor: row.conversionFactor,
     sellingPrice: Number(row.sellingPrice),
     sortOrder: row.sortOrder,
+    allowDecimalQuantity: row.allowDecimalQuantity,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
@@ -198,6 +200,7 @@ export async function createUnitConversion({
         conversionFactor: input.conversionFactor,
         sellingPrice: input.sellingPrice,
         sortOrder: input.sortOrder ?? 0,
+        allowDecimalQuantity: input.allowDecimalQuantity ?? false,
       })
       .returning()
     if (!row) throw new ApiError('INTERNAL_ERROR', 'Không tạo được đơn vị quy đổi')
@@ -223,6 +226,7 @@ export async function createUnitConversion({
       unit: inserted.unit,
       conversionFactor: inserted.conversionFactor,
       sellingPrice: Number(inserted.sellingPrice),
+      allowDecimalQuantity: inserted.allowDecimalQuantity,
     },
     ipAddress: meta?.ipAddress,
     userAgent: meta?.userAgent,
@@ -275,6 +279,12 @@ export async function updateUnitConversion({
   if (input.sortOrder !== undefined && input.sortOrder !== existing.sortOrder) {
     updates.sortOrder = input.sortOrder
   }
+  if (
+    input.allowDecimalQuantity !== undefined &&
+    input.allowDecimalQuantity !== existing.allowDecimalQuantity
+  ) {
+    updates.allowDecimalQuantity = input.allowDecimalQuantity
+  }
 
   if (Object.keys(updates).length === 0) {
     return toUnitConversionItem(existing)
@@ -302,12 +312,14 @@ export async function updateUnitConversion({
     conversionFactor: existing.conversionFactor,
     sellingPrice: Number(existing.sellingPrice),
     sortOrder: existing.sortOrder,
+    allowDecimalQuantity: existing.allowDecimalQuantity,
   }
   const after = {
     unit: updated.unit,
     conversionFactor: updated.conversionFactor,
     sellingPrice: Number(updated.sellingPrice),
     sortOrder: updated.sortOrder,
+    allowDecimalQuantity: updated.allowDecimalQuantity,
   }
   const changes = diffObjects(before as Record<string, unknown>, after as Record<string, unknown>)
 

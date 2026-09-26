@@ -1,4 +1,5 @@
 import type { DiscountType } from '../schema/purchase-order-management.js'
+import { lineAmount } from './quantity.js'
 
 export type { DiscountType }
 
@@ -24,7 +25,7 @@ export interface LineCalculationResult {
 export function calculateLineDiscount(input: LineDiscountInput): number {
   const unitPrice = Math.max(0, input.unitPrice || 0)
   const quantity = Math.max(0, input.quantity || 0)
-  const gross = unitPrice * quantity
+  const gross = lineAmount(unitPrice, quantity)
   if (gross <= 0 || !input.discountType || !input.discountValue || input.discountValue <= 0) {
     return 0
   }
@@ -38,12 +39,13 @@ export function calculateLineDiscount(input: LineDiscountInput): number {
 }
 
 /**
- * Tính toán thành tiền của một dòng sản phẩm.
+ * Tính toán thành tiền của một dòng sản phẩm. gross = round_half_up(đơn giá × số lượng) về đồng,
+ * quy tắc duy nhất cho số lượng lẻ (ADR-0015), dùng chung máy chủ, POS và PGlite.
  */
 export function calculateLineTotal(input: LineDiscountInput): LineCalculationResult {
   const unitPrice = Math.max(0, input.unitPrice || 0)
   const quantity = Math.max(0, input.quantity || 0)
-  const gross = unitPrice * quantity
+  const gross = lineAmount(unitPrice, quantity)
   const discountAmount = calculateLineDiscount(input)
   const lineTotal = Math.max(0, gross - discountAmount)
   return { gross, discountAmount, lineTotal }

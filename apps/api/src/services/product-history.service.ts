@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 
 import {
+  mulQty,
   type ProductHistoryQuery,
   type ProductPurchaseHistoryItem,
   products,
@@ -119,7 +120,7 @@ export async function listProductPurchaseHistory({
     variantId: r.variantId,
     variantLabelSnapshot: r.variantLabelSnapshot,
     // Lịch sử theo đơn vị tính để khớp với tồn sau nhập (KHO-10: dòng nhập theo đơn vị quy đổi)
-    quantity: r.quantity * r.conversionFactor,
+    quantity: mulQty(r.quantity, r.conversionFactor),
     unitPrice: Math.round(Number(r.unitPrice) / r.conversionFactor),
     discountAmount: Number(r.discountAmount),
     lineTotal: Number(r.lineTotal),

@@ -1,7 +1,7 @@
 import { ShoppingBag } from 'lucide-react'
 
 import type { TopProduct } from '@kiotviet-lite/shared'
-import { formatVndWithSuffix } from '@kiotviet-lite/shared'
+import { formatQuantity, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -80,7 +80,9 @@ export function DashboardTopProducts({ data, isLoading, isError }: DashboardTopP
                     <tr key={p.productId} className="border-b last:border-0">
                       <td className="py-2 pr-2 text-muted-foreground">{i + 1}</td>
                       <td className="py-2 pr-2 truncate max-w-[140px]">{p.name}</td>
-                      <td className="py-2 pr-2 text-right font-mono">{p.quantity}</td>
+                      <td className="py-2 pr-2 text-right font-mono">
+                        {formatQuantity(p.quantity)}
+                      </td>
                       <td className="py-2 pr-2 text-right font-mono">
                         {formatVndWithSuffix(p.revenue)}
                       </td>
@@ -108,7 +110,9 @@ export function DashboardTopProducts({ data, isLoading, isError }: DashboardTopP
                     <p className="text-sm font-mono font-medium">
                       {formatVndWithSuffix(p.revenue)}
                     </p>
-                    <p className="text-xs text-muted-foreground">{p.quantity} sản phẩm</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatQuantity(p.quantity)} sản phẩm
+                    </p>
                   </div>
                 </div>
               ))}

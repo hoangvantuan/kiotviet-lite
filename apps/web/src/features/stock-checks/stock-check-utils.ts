@@ -1,4 +1,5 @@
 import type { NegativeStockDetail, StaleStockCheckItem } from '@kiotviet-lite/shared'
+import { addQty, formatQuantity, subQty } from '@kiotviet-lite/shared'
 
 import { ApiClientError } from '@/lib/api-client'
 
@@ -16,9 +17,9 @@ export function computeStockCheckTotals(
   let neg = 0
   let unchanged = 0
   for (const it of items) {
-    const diff = it.actualQty - it.systemQty
-    if (diff > 0) pos += diff
-    else if (diff < 0) neg += -diff
+    const diff = subQty(it.actualQty, it.systemQty)
+    if (diff > 0) pos = addQty(pos, diff)
+    else if (diff < 0) neg = subQty(neg, diff)
     else unchanged++
   }
   return {
@@ -36,10 +37,10 @@ export interface DiffDisplay {
 
 export function formatDiff(diff: number): DiffDisplay {
   if (diff > 0) {
-    return { text: `+${diff}`, className: 'text-green-600 font-medium' }
+    return { text: `+${formatQuantity(diff)}`, className: 'text-green-600 font-medium' }
   }
   if (diff < 0) {
-    return { text: String(diff), className: 'text-red-600 font-medium' }
+    return { text: formatQuantity(diff), className: 'text-red-600 font-medium' }
   }
   return { text: '0', className: 'text-gray-500' }
 }
@@ -67,13 +68,15 @@ export function formatConfirmStockCheckError(err: unknown): string {
       const list = items
         .map((d) => {
           const name = d.variantLabel ? `${d.productName} - ${d.variantLabel}` : d.productName
-          return `• ${name} (lúc đếm ${d.systemQty}, hiện ${d.currentStock})`
+          return `• ${name} (lúc đếm ${formatQuantity(d.systemQty)}, hiện ${formatQuantity(d.currentStock)})`
         })
         .join('\n')
       return `Tồn kho đã thay đổi sau lúc đếm. Vui lòng đếm lại các dòng sau, sửa phiếu và lưu trước khi xác nhận:\n${list}`
     }
     if (details?.code === 'NEGATIVE_STOCK' && items) {
-      const list = items.map((d) => `• ${d.productName} (sẽ còn ${d.wouldBe})`).join('\n')
+      const list = items
+        .map((d) => `• ${d.productName} (sẽ còn ${formatQuantity(d.wouldBe)})`)
+        .join('\n')
       return `Tồn sẽ âm sau khi xác nhận:\n${list}`
     }
   }

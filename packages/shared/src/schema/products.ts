@@ -16,6 +16,7 @@ import { uuidv7 } from 'uuidv7'
 import { PRODUCT_SEARCH_SOURCE, searchTextSql } from '../utils/search-text.js'
 import { brands } from './brands.js'
 import { categories } from './categories.js'
+import { quantity } from './quantity-column.js'
 import { stores } from './stores.js'
 
 export const products = pgTable(
@@ -45,8 +46,10 @@ export const products = pgTable(
     status: varchar({ length: 16 }).notNull().default('active'),
     hasVariants: boolean().notNull().default(false),
     trackInventory: boolean().notNull().default(false),
-    currentStock: integer().notNull().default(0),
-    minStock: integer().notNull().default(0),
+    // ADR-0015: cho phép số lượng lẻ (hàng cân ký). Mặc định false: hàng đếm cái chỉ nhận số nguyên.
+    allowDecimalQuantity: boolean().notNull().default(false),
+    currentStock: quantity().notNull().default(0),
+    minStock: quantity().notNull().default(0),
     deletedAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })

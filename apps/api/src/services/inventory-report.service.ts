@@ -7,7 +7,10 @@ import {
   type InventorySlowResponse,
   orderItems,
   orders,
+  parseQuantity,
   products,
+  subQty,
+  unitAmountOf,
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
@@ -74,7 +77,7 @@ export async function getInventoryCurrent(
     db
       .select({
         totalProducts: sql<number>`count(*)::int`,
-        totalQuantity: sql<number>`coalesce(sum(${stockExpr}), 0)::bigint`,
+        totalQuantity: sql<number>`coalesce(sum(${stockExpr}), 0)`.mapWith(parseQuantity),
         totalStockValue: sql<number>`coalesce(sum(${stockValueExpr}), 0)::bigint`,
       })
       .from(products)
@@ -93,7 +96,7 @@ export async function getInventoryCurrent(
     // Có biến thể: giá vốn hiển thị là bình quân theo giá trị tồn để tồn × giá vốn khớp giá trị tồn
     costPrice:
       r.hasVariants && Number(r.currentStock) > 0
-        ? Math.round(Number(r.stockValue) / Number(r.currentStock))
+        ? unitAmountOf(Number(r.stockValue), Number(r.currentStock))
         : Number(r.costPrice),
     stockValue: Number(r.stockValue),
   }))
@@ -153,7 +156,7 @@ export async function getInventoryReorder(
     sku: r.sku,
     currentStock: Number(r.currentStock),
     minStock: r.minStock,
-    reorderQuantity: r.minStock - Number(r.currentStock),
+    reorderQuantity: subQty(r.minStock, Number(r.currentStock)),
   }))
 
   return {

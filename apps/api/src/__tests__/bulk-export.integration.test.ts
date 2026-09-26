@@ -181,6 +181,7 @@ describe('bulk XLSX downloads over authenticated HTTP', () => {
         'Có',
         0,
         17,
+        'Không',
       ],
     ])
     const noCategory = await sheet(

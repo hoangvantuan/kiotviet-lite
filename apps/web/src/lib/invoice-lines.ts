@@ -1,3 +1,4 @@
+import { formatQuantity } from '@kiotviet-lite/shared'
 /**
  * Nội dung dùng chung cho mọi bản in hóa đơn (A4, A5, nhiệt qua trình duyệt, ESC/POS).
  * Mỗi mẫu chỉ lo bố cục; nhãn và cách tính nằm ở đây để các khổ in không lệch nhau.
@@ -67,10 +68,11 @@ export function invoiceItemName(item: InvoiceItemNameSource, showSku: boolean): 
   return showSku && item.sku ? `[${item.sku}] ${name}` : name
 }
 
-/** BC-09: số lượng kèm đơn vị tính, ví dụ "2 thùng" */
+/** BC-09: số lượng kèm đơn vị tính, ví dụ "2 thùng", "1,255 kg" (ADR-0015) */
 export function formatQuantityWithUnit(quantity: number, unit?: string | null): string {
   const u = unit?.trim()
-  return u ? `${quantity} ${u}` : String(quantity)
+  const q = formatQuantity(quantity)
+  return u ? `${q} ${u}` : q
 }
 
 /**

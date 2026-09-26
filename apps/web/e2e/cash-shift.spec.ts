@@ -174,7 +174,10 @@ test('Mở ca, bán tiền mặt và chuyển khoản, trả hàng, đóng ca kh
   await page.goto(`/orders/${found.data[0]!.id}`)
   await page.getByRole('button', { name: /Trả hàng/i }).click()
   const returnDialog = page.getByRole('dialog')
-  await returnDialog.locator('input[type="number"]').first().fill('1')
+  await returnDialog
+    .getByRole('textbox', { name: /Số lượng trả/ })
+    .first()
+    .fill('1')
   const refundMethod = returnDialog.getByRole('radiogroup', { name: 'Phương thức hoàn tiền' })
   await expect(refundMethod.getByRole('radio', { name: 'Tiền mặt' })).toHaveAttribute(
     'aria-checked',

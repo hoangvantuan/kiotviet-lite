@@ -8,7 +8,7 @@ import type {
   InventoryReportTab,
   InventorySlowRow,
 } from '@kiotviet-lite/shared'
-import { formatVndWithSuffix } from '@kiotviet-lite/shared'
+import { formatQuantity, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Pagination } from '@/components/shared/pagination'
 import { Card, CardContent } from '@/components/ui/card'
@@ -129,7 +129,9 @@ export function InventoryReport() {
                   <TableRow key={r.productId}>
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.sku}</TableCell>
-                    <TableCell className="text-right font-mono">{r.currentStock}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatQuantity(r.currentStock)}
+                    </TableCell>
                     <TableCell className="text-right font-mono">
                       {formatVndWithSuffix(r.costPrice)}
                     </TableCell>
@@ -171,10 +173,14 @@ export function InventoryReport() {
                   <TableRow key={r.productId}>
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.sku}</TableCell>
-                    <TableCell className="text-right font-mono">{r.currentStock}</TableCell>
-                    <TableCell className="text-right font-mono">{r.minStock}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatQuantity(r.currentStock)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatQuantity(r.minStock)}
+                    </TableCell>
                     <TableCell className="text-right font-mono font-bold text-orange-600">
-                      {r.reorderQuantity}
+                      {formatQuantity(r.reorderQuantity)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -196,7 +202,9 @@ export function InventoryReport() {
                   <TableRow key={r.productId}>
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.sku}</TableCell>
-                    <TableCell className="text-right font-mono">{r.currentStock}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatQuantity(r.currentStock)}
+                    </TableCell>
                     <TableCell>{r.lastSoldDate ?? 'Chưa bán'}</TableCell>
                     <TableCell className="text-right font-mono">{r.daysSinceLastSold}</TableCell>
                   </TableRow>

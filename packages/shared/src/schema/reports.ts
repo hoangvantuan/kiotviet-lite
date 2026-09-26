@@ -77,7 +77,7 @@ export const revenueByProductRowSchema = z.object({
   productId: z.string().uuid(),
   productName: z.string(),
   sku: z.string(),
-  quantity: z.number().int(),
+  quantity: z.number(),
   revenue: z.number().int(),
   percentage: z.number(),
 })
@@ -150,7 +150,7 @@ export const profitRowSchema = z.object({
   productId: z.string().uuid(),
   productName: z.string(),
   sku: z.string(),
-  quantity: z.number().int(),
+  quantity: z.number(),
   revenue: z.number().int(),
   cogs: z.number().int(),
   profit: z.number().int(),
@@ -174,7 +174,7 @@ export const inventoryCurrentRowSchema = z.object({
   productId: z.string().uuid(),
   productName: z.string(),
   sku: z.string(),
-  currentStock: z.number().int(),
+  currentStock: z.number(),
   costPrice: z.number().int(),
   stockValue: z.number().int(),
 })
@@ -184,9 +184,9 @@ export const inventoryReorderRowSchema = z.object({
   productId: z.string().uuid(),
   productName: z.string(),
   sku: z.string(),
-  currentStock: z.number().int(),
-  minStock: z.number().int(),
-  reorderQuantity: z.number().int(),
+  currentStock: z.number(),
+  minStock: z.number(),
+  reorderQuantity: z.number(),
 })
 export type InventoryReorderRow = z.infer<typeof inventoryReorderRowSchema>
 
@@ -194,7 +194,7 @@ export const inventorySlowRowSchema = z.object({
   productId: z.string().uuid(),
   productName: z.string(),
   sku: z.string(),
-  currentStock: z.number().int(),
+  currentStock: z.number(),
   lastSoldDate: z.string().nullable(),
   daysSinceLastSold: z.number().int(),
 })

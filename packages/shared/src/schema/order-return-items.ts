@@ -5,6 +5,7 @@ import { orderItems } from './order-items.js'
 import { orderReturns } from './order-returns.js'
 import { productVariants } from './product-variants.js'
 import { products } from './products.js'
+import { quantity } from './quantity-column.js'
 
 export const orderReturnItems = pgTable(
   'order_return_items',
@@ -26,7 +27,7 @@ export const orderReturnItems = pgTable(
     variantName: varchar({ length: 255 }),
     unit: varchar({ length: 50 }),
     unitPrice: bigint({ mode: 'number' }).notNull(),
-    quantity: bigint({ mode: 'number' }).notNull(),
+    quantity: quantity().notNull(),
     lineTotal: bigint({ mode: 'number' }).notNull(),
     reason: varchar({ length: 32 }).notNull(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

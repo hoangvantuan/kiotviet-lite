@@ -1,6 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm'
 
 import {
+  addQty,
   type CancelDocumentInput,
   debts,
   defaultRefundMethod,
@@ -8,6 +9,7 @@ import {
   type MoneyMethod,
   orderReturns,
   orders,
+  parseQuantity,
   products,
   productVariants,
   type UserRole,
@@ -16,6 +18,7 @@ import {
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
+import { assertStockStaysWhole } from '../lib/quantity-policy.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import {
   lockCustomerForDebt,
@@ -205,7 +208,7 @@ export async function cancelOrder({
       )
       .groupBy(inventoryTransactions.productId, inventoryTransactions.variantId)
     const restores = sold
-      .map((row) => ({ ...row, quantity: Number(row.quantity) }))
+      .map((row) => ({ ...row, quantity: parseQuantity(row.quantity) }))
       .filter((row) => row.quantity > 0)
       .sort((a, b) =>
         a.productId === b.productId
@@ -238,7 +241,7 @@ export async function cancelOrder({
           productId: row.productId,
           variantId: row.variantId,
         })
-        newStock = variant.stockQuantity + restoreQty
+        newStock = addQty(variant.stockQuantity, restoreQty)
         await tx
           .update(productVariants)
           .set({ stockQuantity: newStock })
@@ -254,8 +257,13 @@ export async function cancelOrder({
           .set({ currentStock: sql`${products.currentStock} + ${restoreQty}` })
           .where(eq(products.id, row.productId))
           .returning({ currentStock: products.currentStock })
-        newStock = updated?.currentStock ?? product.currentStock + restoreQty
+        newStock = updated?.currentStock ?? addQty(product.currentStock, restoreQty)
       }
+      assertStockStaysWhole({
+        stock: newStock,
+        productName: product.name,
+        productAllowsDecimal: product.allowDecimalQuantity,
+      })
       await tx.insert(inventoryTransactions).values({
         storeId: actor.storeId,
         productId: row.productId,

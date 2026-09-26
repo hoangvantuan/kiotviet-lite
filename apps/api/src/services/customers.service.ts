@@ -32,6 +32,7 @@ import {
   type OpeningDebt,
   orderItems,
   orders,
+  parseQuantity,
   type QuickCreateCustomerInput,
   resolveEffectiveDebtLimit,
   type UpdateCustomerInput,
@@ -1039,7 +1040,7 @@ export async function getCustomerStats({
     .select({
       productId: orderItems.productId,
       productName: sql<string>`max(${orderItems.productName})`,
-      quantity: sql<number>`sum(${orderItems.quantity})::int`,
+      quantity: sql<number>`sum(${orderItems.quantity})`.mapWith(parseQuantity),
       lineTotal: sql<number>`sum(${orderItems.lineTotal})::bigint`,
     })
     .from(orderItems)

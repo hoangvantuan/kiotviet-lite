@@ -1,3 +1,5 @@
+import { addQty, amountByQtyRatio } from './quantity.js'
+
 /**
  * Quy tắc tiền của chứng từ bán (ADR-0010): phân bổ chiết khấu cấp đơn xuống từng dòng lúc bán,
  * và tính tiền hoàn khi trả hàng. Máy chủ và hộp trả hàng ở web dùng chung các hàm này để số
@@ -53,7 +55,8 @@ export function netValueOfQuantity(line: RefundableLine, returnedQuantity: numbe
   const net = Math.max(0, line.lineTotal - line.orderDiscountAllocated)
   if (line.quantity <= 0 || returnedQuantity <= 0) return 0
   if (returnedQuantity >= line.quantity) return net
-  return Math.round((net * returnedQuantity) / line.quantity)
+  // ADR-0015: số lượng lẻ tính trên nghìn đơn vị, làm tròn nửa lên một lần
+  return amountByQtyRatio(net, returnedQuantity, line.quantity)
 }
 
 /**
@@ -67,7 +70,7 @@ export function computeReturnLineRefund(
   quantity: number,
 ): number {
   return (
-    netValueOfQuantity(line, alreadyReturnedQuantity + quantity) -
+    netValueOfQuantity(line, addQty(alreadyReturnedQuantity, quantity)) -
     netValueOfQuantity(line, alreadyReturnedQuantity)
   )
 }

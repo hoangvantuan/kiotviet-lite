@@ -1,9 +1,11 @@
 import { create } from 'zustand'
 
 import {
+  addQty,
   calculateLineTotal,
   calculateOrderDiscount,
   type DiscountType,
+  isQuantityAllowed,
   type PosUnitConversion,
   type PriceSource,
 } from '@kiotviet-lite/shared'
@@ -37,6 +39,8 @@ export interface CartItem {
   lineTotal: number
   trackInventory: boolean
   stockQuantity: number
+  /** Sản phẩm bán số lẻ (ADR-0015). Thiếu (giỏ lưu từ bản cũ) nghĩa là không */
+  allowDecimalQuantity?: boolean
   /**
    * Giá vốn để cảnh báo bán dưới vốn. null: sản phẩm chưa có giá vốn. undefined: chưa nạp,
    * vì giá vốn không được lưu xuống localStorage nên giỏ vừa khôi phục không có (quyết định
@@ -160,6 +164,33 @@ function buildCartItemId(
   return parts.join('-')
 }
 
+/** Đơn vị đang chọn của dòng giỏ, null khi là đơn vị gốc */
+function selectedUnitConversion(item: Pick<CartItem, 'unitConversionId' | 'unitConversions'>) {
+  if (!item.unitConversionId) return null
+  return item.unitConversions?.find((u) => u.id === item.unitConversionId) ?? null
+}
+
+/** Dòng giỏ có nhận số lẻ ở đơn vị đang chọn không (để ô số lượng cho gõ dấu phẩy) */
+export function cartItemAllowsDecimal(
+  item: Pick<CartItem, 'allowDecimalQuantity' | 'unitConversionId' | 'unitConversions'>,
+): boolean {
+  const unit = selectedUnitConversion(item)
+  return unit ? (unit.allowDecimalQuantity ?? false) : (item.allowDecimalQuantity ?? false)
+}
+
+/** Số lượng có hợp lệ với cờ bán số lẻ của dòng giỏ không, cùng quy tắc với máy chủ */
+export function isCartQuantityAllowed(
+  item: Pick<CartItem, 'allowDecimalQuantity' | 'unitConversionId' | 'unitConversions'>,
+  qty: number,
+): boolean {
+  if (!Number.isFinite(qty) || qty <= 0) return false
+  return isQuantityAllowed({
+    quantity: qty,
+    productAllowsDecimal: item.allowDecimalQuantity ?? false,
+    unitConversion: selectedUnitConversion(item),
+  })
+}
+
 function readModeFromStorage(): 'quick' | 'normal' {
   try {
     const stored = localStorage.getItem('pos-mode')
@@ -263,7 +294,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   addItem: (input, qty = 1) => {
-    if (!Number.isInteger(qty) || qty <= 0) return
+    if (!isCartQuantityAllowed(input, qty)) return
     const id = buildCartItemId(input.productId, input.variantId, input.unitConversionId)
     set((state) =>
       updateActiveTab(state, (tab) => {
@@ -271,7 +302,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         let nextItems: CartItem[]
         if (existing) {
           nextItems = tab.items.map((i) =>
-            i.id === id ? recomputeLine({ ...i, quantity: i.quantity + qty }) : i,
+            i.id === id ? recomputeLine({ ...i, quantity: addQty(i.quantity, qty) }) : i,
           )
         } else {
           const baseItem: CartItem = {
@@ -337,6 +368,10 @@ export const useCartStore = create<CartState>((set, get) => ({
           newStockQuantity = computed.stockQuantity
         }
 
+        // Số lẻ ở đơn vị cũ mà đơn vị mới chỉ nhận số nguyên (1,5 kg sang thùng): về 1
+        const quantity = isCartQuantityAllowed({ ...item, unitConversionId }, item.quantity)
+          ? item.quantity
+          : 1
         const newId = buildCartItemId(item.productId, item.variantId, unitConversionId)
         const existing = tab.items.find((i) => i.id === newId && i.id !== id)
         let nextItems: CartItem[]
@@ -345,7 +380,7 @@ export const useCartStore = create<CartState>((set, get) => ({
           nextItems = tab.items
             .filter((i) => i.id !== id)
             .map((i) =>
-              i.id === newId ? recomputeLine({ ...i, quantity: i.quantity + item.quantity }) : i,
+              i.id === newId ? recomputeLine({ ...i, quantity: addQty(i.quantity, quantity) }) : i,
             )
         } else {
           nextItems = tab.items.map((i) => {
@@ -353,6 +388,7 @@ export const useCartStore = create<CartState>((set, get) => ({
             return recomputeLine({
               ...i,
               id: newId,
+              quantity,
               unitName: newUnitName,
               unitConversionId,
               unitPrice: newUnitPrice,
@@ -373,11 +409,13 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   updateQuantity: (id, qty) => {
-    if (!Number.isInteger(qty)) return
+    if (!Number.isFinite(qty)) return
     if (qty <= 0) {
       get().removeItem(id)
       return
     }
+    const target = get().tabs[get().activeTab]?.items.find((i) => i.id === id)
+    if (target && !isCartQuantityAllowed(target, qty)) return
     set((state) =>
       updateActiveTab(state, (tab) => {
         const nextItems = tab.items.map((i) =>

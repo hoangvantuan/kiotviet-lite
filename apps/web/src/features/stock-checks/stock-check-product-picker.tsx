@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 
-import { MAX_PAGE_SIZE, type ProductListItem } from '@kiotviet-lite/shared'
+import { formatQuantity, MAX_PAGE_SIZE, type ProductListItem } from '@kiotviet-lite/shared'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -147,7 +147,9 @@ export function StockCheckProductPicker({
                   <span className="ml-2 text-xs text-muted-foreground">(có biến thể)</span>
                 )}
               </span>
-              <span className="text-xs text-muted-foreground font-mono">Tồn: {p.currentStock}</span>
+              <span className="text-xs text-muted-foreground font-mono">
+                Tồn: {formatQuantity(p.currentStock)}
+              </span>
             </label>
           )
         })}

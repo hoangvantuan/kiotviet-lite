@@ -1,13 +1,17 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 
 import {
+  addQty,
   computeReturnLineRefund,
   type CreateOrderReturnInput,
   debts,
   defaultRefundMethod,
+  formatQuantity,
   hasPermission,
   inventoryTransactions,
+  isWholeQuantity,
   type MoneyMethod,
+  mulQty,
   orderItems,
   orderPaidByChannel,
   type OrderReturnDetail,
@@ -16,6 +20,7 @@ import {
   type OrderReturnListItem,
   orderReturns,
   orders,
+  parseQuantity,
   products,
   productVariants,
   receiptAllocations,
@@ -26,6 +31,7 @@ import {
   refundExceedsChannel,
   type ReturnableItem,
   splitReturnRefund,
+  subQty,
   type UserRole,
   users,
 } from '@kiotviet-lite/shared'
@@ -34,6 +40,7 @@ import type { Db } from '../db/index.js'
 import { toMoneyMethod } from '../lib/cash-flow.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
+import { assertStockStaysWhole, assertStoredQuantityAllowed } from '../lib/quantity-policy.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import {
   lockCustomerForDebt,
@@ -95,10 +102,14 @@ export async function getReturnableItems({
       orderDiscountAllocated: orderItems.orderDiscountAllocated,
       conversionFactor: orderItems.conversionFactor,
       purchasedQuantity: orderItems.quantity,
-      returnedQuantity: sql<number>`COALESCE(SUM(${orderReturnItems.quantity}), 0)::int`,
+      returnedQuantity: sql<number>`COALESCE(SUM(${orderReturnItems.quantity}), 0)`.mapWith(
+        parseQuantity,
+      ),
+      productAllowsDecimal: sql<boolean>`COALESCE(BOOL_OR(${products.allowDecimalQuantity}), false)`,
     })
     .from(orderItems)
     .leftJoin(orderReturnItems, eq(orderReturnItems.orderItemId, orderItems.id))
+    .leftJoin(products, eq(products.id, orderItems.productId))
     .where(eq(orderItems.orderId, orderId))
     .groupBy(orderItems.id)
     .orderBy(asc(orderItems.createdAt))
@@ -111,12 +122,15 @@ export async function getReturnableItems({
     variantName: it.variantName ?? null,
     unit: it.unit ?? null,
     unitPrice: Number(it.unitPrice),
-    purchasedQuantity: Number(it.purchasedQuantity),
-    returnedQuantity: Number(it.returnedQuantity),
-    remainingQuantity: Number(it.purchasedQuantity) - Number(it.returnedQuantity),
+    purchasedQuantity: it.purchasedQuantity,
+    returnedQuantity: it.returnedQuantity,
+    remainingQuantity: subQty(it.purchasedQuantity, it.returnedQuantity),
     lineTotal: Number(it.lineTotal),
     orderDiscountAllocated: Number(it.orderDiscountAllocated),
     conversionFactor: Number(it.conversionFactor),
+    // Cùng quy tắc với lúc tạo phiếu trả (ADR-0015 mục 2): dòng gốc lẻ, hoặc mặt hàng bán số lẻ
+    allowDecimalQuantity:
+      !isWholeQuantity(it.purchasedQuantity) || Boolean(it.productAllowsDecimal),
   }))
 }
 
@@ -317,7 +331,9 @@ export async function createReturn({
         orderDiscountAllocated: orderItems.orderDiscountAllocated,
         conversionFactor: orderItems.conversionFactor,
         purchasedQuantity: orderItems.quantity,
-        returnedQuantity: sql<number>`COALESCE(SUM(${orderReturnItems.quantity}), 0)::int`,
+        returnedQuantity: sql<number>`COALESCE(SUM(${orderReturnItems.quantity}), 0)`.mapWith(
+          parseQuantity,
+        ),
       })
       .from(orderItems)
       .leftJoin(orderReturnItems, eq(orderReturnItems.orderItemId, orderItems.id))
@@ -353,26 +369,38 @@ export async function createReturn({
       }
 
       const alreadyConsumed = consumedInThisReturn.get(returnItem.orderItemId) ?? 0
-      const remaining =
-        Number(existing.purchasedQuantity) - Number(existing.returnedQuantity) - alreadyConsumed
+      const remaining = subQty(
+        subQty(existing.purchasedQuantity, existing.returnedQuantity),
+        alreadyConsumed,
+      )
       if (returnItem.quantity > remaining) {
         throw new ApiError(
           'VALIDATION_ERROR',
-          `${existing.productName}: số lượng trả (${returnItem.quantity}) vượt quá còn lại (${remaining})`,
+          `${existing.productName}: số lượng trả (${formatQuantity(returnItem.quantity)}) vượt quá còn lại (${formatQuantity(remaining)})`,
         )
       }
-      consumedInThisReturn.set(returnItem.orderItemId, alreadyConsumed + returnItem.quantity)
+      // GL-07: số lẻ theo cờ mặt hàng; dòng bán gốc đã lẻ thì cho trả lẻ (ADR-0015 mục 2)
+      await assertStoredQuantityAllowed({
+        db: txDb,
+        storeId: actor.storeId,
+        productId: existing.productId,
+        conversionFactor: Number(existing.conversionFactor),
+        quantity: returnItem.quantity,
+        productName: existing.productName,
+        originalQuantity: existing.purchasedQuantity,
+      })
+      consumedInThisReturn.set(returnItem.orderItemId, addQty(alreadyConsumed, returnItem.quantity))
 
       // TIEN-101: tiền hoàn tính trên giá trị ròng của dòng (sau chiết khấu dòng và phần chiết khấu
       // đơn đã phân bổ lúc bán), lấy chênh lệch lũy kế theo số lượng. Tỷ lệ chiết khấu áp đúng một
       // lần nên trả N lần cộng lại bằng trả một lần, trả hết dòng hoàn đúng giá trị ròng cả dòng.
       const lineTotal = computeReturnLineRefund(
         {
-          quantity: Number(existing.purchasedQuantity),
+          quantity: existing.purchasedQuantity,
           lineTotal: Number(existing.lineTotal),
           orderDiscountAllocated: Number(existing.orderDiscountAllocated),
         },
-        Number(existing.returnedQuantity) + alreadyConsumed,
+        addQty(existing.returnedQuantity, alreadyConsumed),
         returnItem.quantity,
       )
       totalAmount += lineTotal
@@ -557,7 +585,7 @@ export async function createReturn({
 
       if (product.trackInventory) {
         // POS-03: trả 1 thùng hoàn đủ số đơn vị gốc trong thùng, theo hệ số chụp lúc bán
-        const restoreQty = item.quantity * item.conversionFactor
+        const restoreQty = mulQty(item.quantity, item.conversionFactor)
         let newStock: number
 
         if (item.variantId) {
@@ -566,7 +594,7 @@ export async function createReturn({
             productId: item.productId,
             variantId: item.variantId,
           })
-          newStock = variant.stockQuantity + restoreQty
+          newStock = addQty(variant.stockQuantity, restoreQty)
           await tx
             .update(productVariants)
             .set({ stockQuantity: newStock })
@@ -588,8 +616,13 @@ export async function createReturn({
             .from(products)
             .where(eq(products.id, item.productId))
             .limit(1)
-          newStock = updated?.currentStock ?? product.currentStock + restoreQty
+          newStock = updated?.currentStock ?? addQty(product.currentStock, restoreQty)
         }
+        assertStockStaysWhole({
+          stock: newStock,
+          productName: product.name,
+          productAllowsDecimal: product.allowDecimalQuantity,
+        })
 
         await tx.insert(inventoryTransactions).values({
           storeId: actor.storeId,
@@ -629,16 +662,16 @@ export async function createReturn({
     const afterItems = await tx
       .select({
         purchasedQuantity: orderItems.quantity,
-        returnedQuantity: sql<number>`COALESCE(SUM(${orderReturnItems.quantity}), 0)::int`,
+        returnedQuantity: sql<number>`COALESCE(SUM(${orderReturnItems.quantity}), 0)`.mapWith(
+          parseQuantity,
+        ),
       })
       .from(orderItems)
       .leftJoin(orderReturnItems, eq(orderReturnItems.orderItemId, orderItems.id))
       .where(eq(orderItems.orderId, orderId))
       .groupBy(orderItems.id, orderItems.quantity)
 
-    const allFullyReturned = afterItems.every(
-      (it) => Number(it.returnedQuantity) >= Number(it.purchasedQuantity),
-    )
+    const allFullyReturned = afterItems.every((it) => it.returnedQuantity >= it.purchasedQuantity)
 
     const newStatus = allFullyReturned ? 'full_return' : 'partial_return'
     await tx.update(orders).set({ status: newStatus }).where(eq(orders.id, orderId))
@@ -794,7 +827,7 @@ export async function getOrderReturns({
       variantName: it.variantName ?? null,
       unit: it.unit ?? null,
       unitPrice: Number(it.unitPrice),
-      quantity: Number(it.quantity),
+      quantity: it.quantity,
       lineTotal: Number(it.lineTotal),
       reason: it.reason,
     })),

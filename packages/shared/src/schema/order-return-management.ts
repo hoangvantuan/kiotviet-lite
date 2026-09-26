@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { documentShiftIdSchema, type MoneyMethod, moneyMethodSchema } from './cash-management.js'
+import { positiveQuantitySchema } from './quantity-input.js'
 import { pinSchema } from './user-management.js'
 
 export const orderReturnReasonSchema = z.enum([
@@ -19,11 +20,7 @@ export const RETURN_REASON_LABELS: Record<string, string> = {
 
 export const createOrderReturnItemSchema = z.object({
   orderItemId: z.string().uuid('Order item không hợp lệ'),
-  quantity: z
-    .number()
-    .int('Số lượng trả phải là số nguyên')
-    .min(1, 'Số lượng trả phải >= 1')
-    .max(1_000_000, 'Số lượng trả vượt giới hạn'),
+  quantity: positiveQuantitySchema('Số lượng trả'),
   reason: orderReturnReasonSchema,
 })
 
@@ -78,6 +75,8 @@ export interface ReturnableItem {
   orderDiscountAllocated: number
   /** Số đơn vị gốc trong một đơn vị bán; trả 1 đơn vị bán hoàn chừng này vào kho */
   conversionFactor: number
+  /** Được trả số lượng lẻ (dòng gốc lẻ hoặc mặt hàng bán số lẻ, ADR-0015) */
+  allowDecimalQuantity: boolean
 }
 
 export interface OrderReturnItemDetail {

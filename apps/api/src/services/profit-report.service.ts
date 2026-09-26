@@ -1,6 +1,12 @@
 import { and, eq, gte, lte, sql } from 'drizzle-orm'
 
-import { orderItems, orders, products, type ProfitReportResponse } from '@kiotviet-lite/shared'
+import {
+  orderItems,
+  orders,
+  parseQuantity,
+  products,
+  type ProfitReportResponse,
+} from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import {
@@ -51,7 +57,7 @@ export async function getProfitReport(
       productId: r.productId,
       productName: r.productName,
       sku: r.sku,
-      quantity: Number(r.quantity),
+      quantity: parseQuantity(r.quantity),
       revenue,
       cogs,
       profit,

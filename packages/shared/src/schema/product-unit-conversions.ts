@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
   bigint,
+  boolean,
   index,
   integer,
   pgTable,
@@ -30,6 +31,9 @@ export const productUnitConversions = pgTable(
     conversionFactor: integer().notNull(),
     sellingPrice: bigint({ mode: 'number' }).notNull().default(0),
     sortOrder: integer().notNull().default(0),
+    // ADR-0015: cho phép bán số lẻ theo đơn vị này (vd 0,5 thùng); số quy ra đơn vị gốc vẫn theo
+    // cờ của sản phẩm.
+    allowDecimalQuantity: boolean().notNull().default(false),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })
       .notNull()

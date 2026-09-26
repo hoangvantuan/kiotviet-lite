@@ -3,6 +3,8 @@ import { useQueries } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { AlertTriangle, ChevronLeft } from 'lucide-react'
 
+import { formatQuantity } from '@kiotviet-lite/shared'
+
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -216,13 +218,17 @@ export function StockCheckDetailView({ stockCheckId }: StockCheckDetailViewProps
                       {isLowStock && (
                         <div className="text-xs text-amber-600 flex items-center gap-1 mt-1">
                           <AlertTriangle className="size-3" />
-                          Dưới tồn tối thiểu ({minStock})
+                          Dưới tồn tối thiểu ({formatQuantity(minStock)})
                         </div>
                       )}
                     </TableCell>
                     <TableCell className="font-mono text-xs">{it.productSkuSnapshot}</TableCell>
-                    <TableCell className="text-right font-mono">{it.systemQty}</TableCell>
-                    <TableCell className="text-right font-mono">{it.actualQty}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatQuantity(it.systemQty)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatQuantity(it.actualQty)}
+                    </TableCell>
                     <TableCell className={`text-right font-mono ${fmt.className}`}>
                       {fmt.text}
                     </TableCell>
@@ -254,17 +260,17 @@ export function StockCheckDetailView({ stockCheckId }: StockCheckDetailViewProps
                 {isLowStock && (
                   <div className="text-xs text-amber-600 flex items-center gap-1">
                     <AlertTriangle className="size-3" />
-                    Dưới tồn tối thiểu ({minStock})
+                    Dưới tồn tối thiểu ({formatQuantity(minStock)})
                   </div>
                 )}
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div>
                     <div className="text-xs text-muted-foreground">Tồn kho hệ thống</div>
-                    <div className="font-mono">{it.systemQty}</div>
+                    <div className="font-mono">{formatQuantity(it.systemQty)}</div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Thực tế</div>
-                    <div className="font-mono">{it.actualQty}</div>
+                    <div className="font-mono">{formatQuantity(it.actualQty)}</div>
                   </div>
                   <div className="text-right">
                     <div className="text-xs text-muted-foreground">Chênh lệch</div>

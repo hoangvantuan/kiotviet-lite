@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import { addQty, formatQuantity, isQuantityAllowed, subQty } from '@kiotviet-lite/shared'
+
+import { QuantityInput } from '@/components/shared/quantity-input'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -78,6 +81,10 @@ export function VariantSelectionDialog({
     if (product.hasVariants) return selectedVariant ? selectedVariant.stockQuantity : 0
     return product.stockQuantity
   }, [product, selectedVariant])
+
+  const allowDecimal = selectedUnit
+    ? (selectedUnit.allowDecimalQuantity ?? false)
+    : (product?.allowDecimalQuantity ?? false)
 
   // POS-13: cửa hàng cho bán âm thì không giới hạn số lượng theo tồn, bước thêm vào giỏ sẽ cảnh báo
   const maxStock = useMemo(() => {
@@ -274,7 +281,7 @@ export function VariantSelectionDialog({
                           : 'text-foreground',
                     )}
                   >
-                    {maxStock}
+                    {formatQuantity(maxStock)}
                     {selectedUnit && ` ${selectedUnit.unit}`}
                   </span>
                 </div>
@@ -287,28 +294,38 @@ export function VariantSelectionDialog({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                onClick={() => setQuantity((q) => Math.max(1, subQty(q, 1)))}
                 disabled={quantity <= 1}
                 className="flex h-10 w-10 items-center justify-center rounded-md border border-input text-foreground transition-colors hover:bg-accent disabled:opacity-50"
               >
                 -
               </button>
-              <input
-                type="number"
-                min={1}
-                max={maxStock === Infinity ? undefined : maxStock}
+              <QuantityInput
+                live
+                aria-label="Số lượng"
+                allowDecimal={allowDecimal}
                 value={quantity}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value, 10)
-                  if (Number.isNaN(val) || val <= 0) return
+                onCommit={(val) => {
+                  if (
+                    val <= 0 ||
+                    !isQuantityAllowed({
+                      quantity: val,
+                      productAllowsDecimal: product?.allowDecimalQuantity ?? false,
+                      unitConversion: selectedUnit,
+                    })
+                  ) {
+                    return
+                  }
                   setQuantity(maxStock === Infinity ? val : Math.min(val, maxStock))
                 }}
-                className="h-10 w-16 rounded-md border border-input bg-background text-center font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="h-10 w-20 text-center font-mono text-sm"
               />
               <button
                 type="button"
                 onClick={() =>
-                  setQuantity((q) => (maxStock === Infinity ? q + 1 : Math.min(q + 1, maxStock)))
+                  setQuantity((q) =>
+                    maxStock === Infinity ? addQty(q, 1) : Math.min(addQty(q, 1), maxStock),
+                  )
                 }
                 disabled={maxStock !== Infinity && quantity >= maxStock}
                 className="flex h-10 w-10 items-center justify-center rounded-md border border-input text-foreground transition-colors hover:bg-accent disabled:opacity-50"

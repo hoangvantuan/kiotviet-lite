@@ -7,6 +7,7 @@ import { CurrencyInput } from '@/components/shared/currency-input'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { ApiClientError } from '@/lib/api-client'
 import { showError, showSuccess } from '@/lib/toast'
 
@@ -160,6 +161,7 @@ function EditEditor({ productId, parentUnit, parentSellingPrice }: UnitConversio
             conversionFactor: item.conversionFactor,
             sellingPrice: item.sellingPrice,
             sortOrder: item.sortOrder,
+            allowDecimalQuantity: item.allowDecimalQuantity,
           }
         }
       }
@@ -216,6 +218,9 @@ function EditEditor({ productId, parentUnit, parentSellingPrice }: UnitConversio
     if (next.conversionFactor !== original.conversionFactor)
       patch.conversionFactor = next.conversionFactor
     if (next.sellingPrice !== original.sellingPrice) patch.sellingPrice = next.sellingPrice
+    if ((next.allowDecimalQuantity ?? false) !== original.allowDecimalQuantity) {
+      patch.allowDecimalQuantity = next.allowDecimalQuantity ?? false
+    }
     if (Object.keys(patch).length === 0) return
     try {
       await updateMut.mutateAsync({ conversionId: id, input: patch })
@@ -263,6 +268,7 @@ function EditEditor({ productId, parentUnit, parentSellingPrice }: UnitConversio
             conversionFactor: item.conversionFactor,
             sellingPrice: item.sellingPrice,
             sortOrder: item.sortOrder,
+            allowDecimalQuantity: item.allowDecimalQuantity,
           }
           const errs = validateRow(
             editRow,
@@ -299,6 +305,7 @@ function EditEditor({ productId, parentUnit, parentSellingPrice }: UnitConversio
                         conversionFactor: item.conversionFactor,
                         sellingPrice: item.sellingPrice,
                         sortOrder: item.sortOrder,
+                        allowDecimalQuantity: item.allowDecimalQuantity,
                       },
                     }))
                   }
@@ -315,7 +322,8 @@ function EditEditor({ productId, parentUnit, parentSellingPrice }: UnitConversio
                     Object.keys(errs).length > 0 ||
                     (editRow.unit === item.unit &&
                       editRow.conversionFactor === item.conversionFactor &&
-                      editRow.sellingPrice === item.sellingPrice)
+                      editRow.sellingPrice === item.sellingPrice &&
+                      (editRow.allowDecimalQuantity ?? false) === item.allowDecimalQuantity)
                   }
                 >
                   Lưu
@@ -433,6 +441,13 @@ function ConversionRow({
           <Trash2 className="size-4 text-red-600" />
         </Button>
       </div>
+      <label className="flex items-center gap-2 text-xs sm:col-span-12">
+        <Switch
+          checked={row.allowDecimalQuantity ?? false}
+          onCheckedChange={(v) => onChange({ allowDecimalQuantity: v })}
+        />
+        Bán số lẻ theo đơn vị này (VD: 0,5 {row.unit || 'thùng'})
+      </label>
       {helperText && (
         <div className="sm:col-span-12">
           <p className="text-xs text-muted-foreground">{helperText}</p>

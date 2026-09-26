@@ -16,6 +16,7 @@ import type { PriceSource } from '../constants/pricing.js'
 import { orders } from './orders.js'
 import { productVariants } from './product-variants.js'
 import { products } from './products.js'
+import { quantity } from './quantity-column.js'
 
 export const orderItems = pgTable(
   'order_items',
@@ -34,7 +35,7 @@ export const orderItems = pgTable(
     variantName: varchar({ length: 255 }),
     unit: varchar({ length: 50 }),
     unitPrice: bigint({ mode: 'number' }).notNull(),
-    quantity: bigint({ mode: 'number' }).notNull(),
+    quantity: quantity().notNull(),
     discountType: varchar({ length: 16 }),
     discountValue: bigint({ mode: 'number' }).notNull().default(0),
     discountAmount: bigint({ mode: 'number' }).notNull().default(0),

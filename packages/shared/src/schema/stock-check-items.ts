@@ -1,9 +1,10 @@
 import { desc } from 'drizzle-orm'
-import { index, integer, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { index, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
 import { productVariants } from './product-variants.js'
 import { products } from './products.js'
+import { quantity } from './quantity-column.js'
 import { stockChecks } from './stock-checks.js'
 
 export const stockCheckItems = pgTable(
@@ -22,9 +23,9 @@ export const stockCheckItems = pgTable(
     productNameSnapshot: varchar({ length: 255 }).notNull(),
     productSkuSnapshot: varchar({ length: 64 }).notNull(),
     variantLabelSnapshot: varchar({ length: 255 }),
-    systemQty: integer().notNull(),
-    actualQty: integer().notNull(),
-    diff: integer().notNull(),
+    systemQty: quantity().notNull(),
+    actualQty: quantity().notNull(),
+    diff: quantity().notNull(),
     note: varchar({ length: 255 }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },

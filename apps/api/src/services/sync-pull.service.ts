@@ -73,6 +73,7 @@ const ENTITY_SPECS: Record<Exclude<SyncPullEntity, 'tombstones'>, EntitySpec> = 
       hasVariants: products.hasVariants,
       trackInventory: products.trackInventory,
       currentStock: products.currentStock,
+      allowDecimalQuantity: products.allowDecimalQuantity,
       // Hàng ngừng bán vẫn gửi (có status) để giá của dòng đã có trong giỏ tính như máy chủ;
       // tìm hàng ngoại tuyến tự lọc status
       status: products.status,
@@ -115,6 +116,7 @@ const ENTITY_SPECS: Record<Exclude<SyncPullEntity, 'tombstones'>, EntitySpec> = 
       unit: productUnitConversions.unit,
       conversionFactor: productUnitConversions.conversionFactor,
       sellingPrice: productUnitConversions.sellingPrice,
+      allowDecimalQuantity: productUnitConversions.allowDecimalQuantity,
       sortOrder: productUnitConversions.sortOrder,
       createdAt: productUnitConversions.createdAt,
     },

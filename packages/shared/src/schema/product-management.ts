@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { paginationSchema } from './pagination.js'
+import { nonNegativeQuantitySchema } from './quantity-input.js'
 import { unitConversionInputSchema, unitConversionItemSchema } from './unit-conversions.js'
 
 const NAME_REGEX = /^[\p{L}\p{N}\p{Zs}\-_&()'./,+*:%=;#?–]+$/u
@@ -239,16 +240,10 @@ export const createProductSchema = z.object({
   imageUrl: z.string().url('URL ảnh không hợp lệ').nullable().optional(),
   status: productStatusSchema.default('active'),
   trackInventory: z.boolean().default(false),
-  minStock: z
-    .number()
-    .int('Định mức tối thiểu phải là số nguyên')
-    .min(0, 'Định mức ≥ 0')
-    .default(0),
-  initialStock: z
-    .number()
-    .int('Tồn kho ban đầu phải là số nguyên')
-    .min(0, 'Tồn kho ≥ 0')
-    .default(0),
+  // ADR-0015: bật thì số lượng bán, nhập, kiểm kê nhận tối đa 3 chữ số lẻ (hàng cân ký)
+  allowDecimalQuantity: z.boolean().default(false),
+  minStock: nonNegativeQuantitySchema('Định mức tối thiểu').default(0),
+  initialStock: nonNegativeQuantitySchema('Tồn kho ban đầu').default(0),
   variantsConfig: variantsConfigSchema.nullable().optional(),
   unitConversions: z.array(unitConversionInputSchema).max(3, 'Tối đa 3 đơn vị quy đổi').optional(),
 })
@@ -273,7 +268,8 @@ export const updateProductSchema = z
     imageUrl: z.string().url('URL ảnh không hợp lệ').nullable().optional(),
     status: productStatusSchema.optional(),
     trackInventory: z.boolean().optional(),
-    minStock: z.number().int().min(0).optional(),
+    allowDecimalQuantity: z.boolean().optional(),
+    minStock: nonNegativeQuantitySchema('Định mức tối thiểu').optional(),
     variantsConfig: variantsConfigUpdateSchema.nullable().optional(),
   })
   .refine((d) => Object.keys(d).length > 0, {
@@ -307,6 +303,7 @@ export const productListItemSchema = z.object({
   imageUrl: z.string().nullable(),
   status: productStatusSchema,
   trackInventory: z.boolean(),
+  allowDecimalQuantity: z.boolean(),
   currentStock: z.number(),
   minStock: z.number(),
   hasVariants: z.boolean(),

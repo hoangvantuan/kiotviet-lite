@@ -109,7 +109,7 @@ export async function getCashFlowReport({
   // phân bổ chiết khấu xuống dòng)
   const [lineAgg] = await db
     .select({
-      gross: sumInt(sql`${orderItems.unitPrice} * ${orderItems.quantity}`),
+      gross: sumInt(sql`round(${orderItems.unitPrice} * ${orderItems.quantity})`),
       lineDiscount: sumInt(sql`${orderItems.discountAmount}`),
     })
     .from(orderItems)

@@ -1,6 +1,8 @@
 import { z } from 'zod'
 
+import { hasValidQuantityScale } from '../utils/quantity.js'
 import { paginationSchema } from './pagination.js'
+import { positiveQuantitySchema } from './quantity-input.js'
 
 export const inventoryTransactionTypeSchema = z.enum([
   'initial_stock',
@@ -31,7 +33,7 @@ export const inventoryTransactionItemSchema = z.object({
 
 export const recordPurchaseInputSchema = z.object({
   variantId: z.string().uuid().nullable().optional(),
-  quantity: z.number().int().min(1, 'Số lượng phải > 0'),
+  quantity: positiveQuantitySchema(),
   unitCost: z.number().int().min(0, 'Giá nhập ≥ 0'),
   note: z.string().trim().max(500).optional(),
 })
@@ -40,7 +42,7 @@ export const recordManualAdjustInputSchema = z.object({
   variantId: z.string().uuid().nullable().optional(),
   delta: z
     .number()
-    .int('Delta phải là số nguyên')
+    .refine(hasValidQuantityScale, 'Delta tối đa 3 chữ số lẻ')
     .refine((v) => v !== 0, 'Delta phải khác 0'),
   reason: z.string().trim().min(1, 'Lý do bắt buộc').max(255, 'Lý do tối đa 255 ký tự'),
   note: z.string().trim().max(500).optional(),

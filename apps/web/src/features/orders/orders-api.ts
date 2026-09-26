@@ -187,6 +187,8 @@ export interface ReturnableItem {
   /** Phần chiết khấu đơn đã phân bổ cho dòng lúc bán (ADR-0010) */
   orderDiscountAllocated: number
   conversionFactor: number
+  /** Được trả số lượng lẻ (dòng gốc lẻ hoặc mặt hàng bán số lẻ, ADR-0015) */
+  allowDecimalQuantity: boolean
 }
 
 export interface OrderReturnItemDetail {

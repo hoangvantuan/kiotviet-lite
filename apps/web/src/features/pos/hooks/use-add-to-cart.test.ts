@@ -29,6 +29,7 @@ describe('useAddToCart (M14 & M18)', () => {
     imageUrl: null,
     trackInventory: true,
     stockQuantity: 15,
+    allowDecimalQuantity: false,
     hasVariants: false,
     categoryId: null,
     variants: [],

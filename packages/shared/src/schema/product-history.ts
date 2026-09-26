@@ -15,12 +15,12 @@ export const productPurchaseHistoryItemSchema = z.object({
   supplierName: z.string(),
   variantId: z.string().uuid().nullable(),
   variantLabelSnapshot: z.string().nullable(),
-  quantity: z.number().int(),
+  quantity: z.number(),
   unitPrice: z.number().int(),
   discountAmount: z.number().int(),
   lineTotal: z.number().int(),
   costAfter: z.number().int().nullable(),
-  stockAfter: z.number().int().nullable(),
+  stockAfter: z.number().nullable(),
 })
 
 export const productStockCheckHistoryItemSchema = z.object({
@@ -32,9 +32,9 @@ export const productStockCheckHistoryItemSchema = z.object({
   adjustedByName: z.string().nullable(),
   variantId: z.string().uuid().nullable(),
   variantLabelSnapshot: z.string().nullable(),
-  systemQty: z.number().int(),
-  actualQty: z.number().int(),
-  diff: z.number().int(),
+  systemQty: z.number(),
+  actualQty: z.number(),
+  diff: z.number(),
   note: z.string().nullable(),
 })
 

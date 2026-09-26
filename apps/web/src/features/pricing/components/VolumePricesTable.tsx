@@ -1,7 +1,7 @@
 import { Pencil, Trash2 } from 'lucide-react'
 
 import type { VolumePricesListItem } from '@kiotviet-lite/shared'
-import { formatVndWithSuffix } from '@kiotviet-lite/shared'
+import { formatQuantity, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -57,7 +57,7 @@ export function VolumePricesTable({ items, onEdit, onClear }: Props) {
                   <ul className="space-y-0.5 text-xs">
                     {p.topTiers.map((t) => (
                       <li key={t.id}>
-                        Từ {t.minQty.toLocaleString('vi-VN')}: {formatVndWithSuffix(t.price)}
+                        Từ {formatQuantity(t.minQty)}: {formatVndWithSuffix(t.price)}
                       </li>
                     ))}
                   </ul>

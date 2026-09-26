@@ -11,6 +11,7 @@ import {
   type ListCustomersQuery,
   type ListProductsQuery,
   type ListSuppliersQuery,
+  parseQuantity,
   products,
   productVariants,
   suppliers,
@@ -46,6 +47,8 @@ export const BULK_EXPORT_HEADERS = {
     'Theo dõi tồn kho',
     'Định mức tối thiểu',
     'Tồn kho (chỉ xem)',
+    // GL-07 (ADR-0015): cột cuối để tệp mẫu cũ thiếu cột này vẫn nhập được
+    'Bán số lẻ',
   ],
   customers: [
     'Mã khách hàng',
@@ -74,9 +77,10 @@ export const BULK_EXPORT_CATEGORY_SEPARATOR = ' > '
 export const BULK_EXPORT_FORMAT = {
   dataSheet: 'Dữ liệu',
   examplesSheet: 'Hướng dẫn',
-  // All numeric cells are integer XLSX numbers (no grouping characters); no date columns.
+  // Numeric cells are XLSX numbers (no grouping characters); no date columns. Money and weight
+  // are integers; quantities allow up to 3 decimal places (ADR-0015).
   integerColumns: {
-    products: ['Giá bán', 'Giá vốn', 'Trọng lượng', 'Định mức tối thiểu', 'Tồn kho (chỉ xem)'],
+    products: ['Giá bán', 'Giá vốn', 'Trọng lượng'],
     customers: ['Hạn mức nợ'],
     suppliers: [],
   },
@@ -93,6 +97,17 @@ export const BULK_EXPORT_FORMAT = {
       'Nhóm khách hàng',
     ],
     suppliers: ['Điện thoại', 'Email', 'Địa chỉ', 'Mã số thuế', 'Ghi chú'],
+  },
+  quantityColumns: {
+    products: ['Định mức tối thiểu', 'Tồn kho (chỉ xem)'],
+    customers: [],
+    suppliers: [],
+  },
+  // Columns an older template may lack; a missing optional column keeps the stored value.
+  optionalColumns: {
+    products: ['Bán số lẻ'],
+    customers: [],
+    suppliers: [],
   },
   statusValues: ['active', 'inactive'],
   inventoryTrackingValues: ['Có', 'Không'],
@@ -152,7 +167,7 @@ function productConditions(storeId: string, filters: BulkExportFilters['products
 const effectiveStock = sql<number>`(CASE WHEN ${products.hasVariants} THEN COALESCE(
   (SELECT SUM(${productVariants.stockQuantity}) FROM ${productVariants}
    WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL), 0)
-  ELSE ${products.currentStock} END)::int`
+  ELSE ${products.currentStock} END)::numeric(14, 3)`
 
 async function* productRows(
   db: Db,
@@ -181,6 +196,7 @@ async function* productRows(
         trackInventory: products.trackInventory,
         minStock: products.minStock,
         stock: effectiveStock,
+        allowDecimalQuantity: products.allowDecimalQuantity,
       })
       .from(products)
       .leftJoin(categories, eq(products.categoryId, categories.id))
@@ -209,7 +225,10 @@ async function* productRows(
           ? BULK_EXPORT_FORMAT.inventoryTrackingValues[0]
           : BULK_EXPORT_FORMAT.inventoryTrackingValues[1],
         row.minStock,
-        Number(row.stock),
+        parseQuantity(row.stock),
+        row.allowDecimalQuantity
+          ? BULK_EXPORT_FORMAT.inventoryTrackingValues[0]
+          : BULK_EXPORT_FORMAT.inventoryTrackingValues[1],
       ]
     }
     if (rows.length < BATCH_SIZE) break
@@ -336,6 +355,25 @@ const examples: Record<BulkExportKind, Cell[][]> = {
       BULK_EXPORT_FORMAT.inventoryTrackingValues[0],
       5,
       0,
+      BULK_EXPORT_FORMAT.inventoryTrackingValues[1],
+    ],
+    [
+      'SP-003',
+      'Thịt heo ba chỉ',
+      null,
+      'Thực phẩm tươi',
+      null,
+      145000,
+      120000,
+      'kg',
+      null,
+      null,
+      null,
+      BULK_EXPORT_FORMAT.statusValues[0],
+      BULK_EXPORT_FORMAT.inventoryTrackingValues[0],
+      2.5,
+      0,
+      BULK_EXPORT_FORMAT.inventoryTrackingValues[0],
     ],
     [
       'SP-002',
@@ -353,6 +391,7 @@ const examples: Record<BulkExportKind, Cell[][]> = {
       BULK_EXPORT_FORMAT.inventoryTrackingValues[1],
       0,
       0,
+      BULK_EXPORT_FORMAT.inventoryTrackingValues[1],
     ],
   ],
   customers: [
@@ -417,11 +456,13 @@ export function createBulkWorkbook(
           .addRow([`Danh mục sản phẩm hai cấp: Cha${BULK_EXPORT_CATEGORY_SEPARATOR}Con.`])
           .commit()
         guide
-          .addRow(['Số tiền, trọng lượng và tồn kho: số nguyên, không dấu phân cách hàng nghìn.'])
+          .addRow([
+            'Số tiền và trọng lượng: số nguyên. Định mức tối thiểu: tối đa 3 chữ số lẻ. Không dấu phân cách hàng nghìn.',
+          ])
           .commit()
         guide
           .addRow([
-            `Trạng thái: ${BULK_EXPORT_FORMAT.statusValues.join('/')}. Theo dõi tồn kho: ${BULK_EXPORT_FORMAT.inventoryTrackingValues.join('/')}.`,
+            `Trạng thái: ${BULK_EXPORT_FORMAT.statusValues.join('/')}. Theo dõi tồn kho, Bán số lẻ: ${BULK_EXPORT_FORMAT.inventoryTrackingValues.join('/')}.`,
           ])
           .commit()
         guide

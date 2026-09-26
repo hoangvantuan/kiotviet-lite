@@ -1,11 +1,14 @@
 import { and, asc, eq, sql } from 'drizzle-orm'
 
 import {
+  addQty,
   type CancelDocumentInput,
   computeReturnLineRefund,
   type CreatePurchaseReturnInput,
+  formatQuantity,
   inventoryTransactions,
   type MoneyMethod,
+  mulQty,
   productVariants,
   type PurchaseOrderDetail,
   purchaseOrderItems,
@@ -13,13 +16,16 @@ import {
   type PurchaseReturn,
   purchaseReturnItems,
   purchaseReturns,
+  subQty,
   suppliers,
+  unitAmountOf,
   type UserRole,
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
+import { assertStoredQuantityAllowed } from '../lib/quantity-policy.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import {
   alreadyCancelledError,
@@ -113,7 +119,7 @@ async function assertStockAvailable(
   for (const { item, baseQuantity } of lines) {
     const key = `${item.productId}::${item.variantId ?? ''}`
     const prev = required.get(key)
-    required.set(key, { item, baseQuantity: (prev?.baseQuantity ?? 0) + baseQuantity })
+    required.set(key, { item, baseQuantity: addQty(prev?.baseQuantity ?? 0, baseQuantity) })
   }
   const shortages: StockShortage[] = []
   for (const { item, baseQuantity } of required.values()) {
@@ -258,7 +264,7 @@ export async function cancelPurchaseOrder({
     const lines = items
       .map((item) => {
         const net = netValues.get(item.id) ?? Number(item.lineTotal)
-        const quantity = item.quantity - item.returnedQuantity
+        const quantity = subQty(item.quantity, item.returnedQuantity)
         const returnedValue = computeReturnLineRefund(
           { quantity: item.quantity, lineTotal: net, orderDiscountAllocated: 0 },
           0,
@@ -266,7 +272,7 @@ export async function cancelPurchaseOrder({
         )
         return {
           item,
-          baseQuantity: quantity * item.conversionFactor,
+          baseQuantity: mulQty(quantity, item.conversionFactor),
           lotCost: net - returnedValue,
         }
       })
@@ -288,7 +294,7 @@ export async function cancelPurchaseOrder({
         variantId: item.variantId,
         type: 'purchase_cancel',
         quantity: -baseQuantity,
-        unitCost: item.unitCost ?? Math.round(lotCost / baseQuantity),
+        unitCost: item.unitCost ?? unitAmountOf(lotCost, baseQuantity),
         costAfter: removed.costAfter,
         stockAfter: removed.stockAfter,
         note: `Hủy ${po.code}`,
@@ -444,14 +450,25 @@ export async function createPurchaseReturn({
       if (!item) {
         throw new ApiError('VALIDATION_ERROR', 'Dòng hàng không thuộc phiếu nhập này')
       }
-      const remaining = item.quantity - item.returnedQuantity
+      const remaining = subQty(item.quantity, item.returnedQuantity)
       if (requested.quantity > remaining) {
         throw new ApiError(
           'BUSINESS_RULE_VIOLATION',
-          `${item.productNameSnapshot}: số lượng trả (${requested.quantity}) vượt quá số còn được trả (${remaining})`,
+          `${item.productNameSnapshot}: số lượng trả (${formatQuantity(requested.quantity)}) vượt quá số còn được trả (${formatQuantity(remaining)})`,
           { reason: 'return_quantity_exceeded', purchaseOrderItemId: item.id, remaining },
         )
       }
+      // GL-07: số lẻ theo cờ mặt hàng; dòng nhập gốc đã lẻ thì cho trả lẻ (ADR-0015 mục 2)
+      await assertStoredQuantityAllowed({
+        db: txDb,
+        storeId: actor.storeId,
+        productId: item.productId,
+        unitConversionId: item.unitConversionId,
+        conversionFactor: item.conversionFactor,
+        quantity: requested.quantity,
+        productName: item.productNameSnapshot,
+        originalQuantity: item.quantity,
+      })
       const value = computeReturnLineRefund(
         {
           quantity: item.quantity,
@@ -464,7 +481,7 @@ export async function createPurchaseReturn({
       lines.push({
         item,
         quantity: requested.quantity,
-        baseQuantity: requested.quantity * item.conversionFactor,
+        baseQuantity: mulQty(requested.quantity, item.conversionFactor),
         value,
       })
     }
@@ -547,7 +564,7 @@ export async function createPurchaseReturn({
         variantId: line.item.variantId,
         type: 'purchase_return',
         quantity: -line.baseQuantity,
-        unitCost: Math.round(line.value / line.baseQuantity),
+        unitCost: unitAmountOf(line.value, line.baseQuantity),
         costAfter: removed.costAfter,
         stockAfter: removed.stockAfter,
         note: code,

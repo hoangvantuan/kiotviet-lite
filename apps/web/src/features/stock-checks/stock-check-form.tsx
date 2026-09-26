@@ -8,6 +8,7 @@ import type {
   StockCheckDetail,
   VariantItem,
 } from '@kiotviet-lite/shared'
+import { isQuantityAllowed, subQty } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Button } from '@/components/ui/button'
@@ -67,6 +68,7 @@ export function StockCheckForm({ mode, initial }: StockCheckFormProps) {
         variantLabel: it.variantLabelSnapshot,
         systemQty: it.systemQty,
         actualQty: it.actualQty,
+        allowDecimalQuantity: it.allowDecimalQuantity,
         note: it.note ?? '',
       }))
     }
@@ -120,6 +122,7 @@ export function StockCheckForm({ mode, initial }: StockCheckFormProps) {
             variantLabel: null,
             systemQty: detail.currentStock,
             actualQty: detail.currentStock,
+            allowDecimalQuantity: detail.allowDecimalQuantity,
             note: '',
           },
         ])
@@ -165,6 +168,7 @@ export function StockCheckForm({ mode, initial }: StockCheckFormProps) {
           variantLabel,
           systemQty: v.stockQuantity,
           actualQty: v.stockQuantity,
+          allowDecimalQuantity: product.allowDecimalQuantity,
           note: '',
         })
       }
@@ -186,7 +190,11 @@ export function StockCheckForm({ mode, initial }: StockCheckFormProps) {
   const isPending =
     createMutation.isPending || updateMutation.isPending || confirmMutation.isPending
 
-  const allValid = items.every((it) => Number.isInteger(it.actualQty) && it.actualQty >= 0)
+  const allValid = items.every(
+    (it) =>
+      it.actualQty >= 0 &&
+      isQuantityAllowed({ quantity: it.actualQty, productAllowsDecimal: it.allowDecimalQuantity }),
+  )
   const submitDisabled = items.length === 0 || !allValid || isPending
 
   const buildPayload = (): CreateStockCheckInput => ({
@@ -346,7 +354,7 @@ export function StockCheckForm({ mode, initial }: StockCheckFormProps) {
               </div>
             )}
             {changedItems.slice(0, 10).map((it) => {
-              const diff = it.actualQty - it.systemQty
+              const diff = subQty(it.actualQty, it.systemQty)
               const fmt = formatDiff(diff)
               return (
                 <div key={it.tempId} className="p-2 flex items-center justify-between gap-2">

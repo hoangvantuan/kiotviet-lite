@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import {
   defaultRefundMethod,
+  formatQuantity,
   hasPermission,
   type MoneyMethod,
   moneyMethodLabel,
@@ -11,6 +12,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import { MoneyMethodPicker } from '@/components/shared/money-method-picker'
+import { QuantityInput } from '@/components/shared/quantity-input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,7 +23,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -289,10 +290,10 @@ export function ReturnDialog({
                   </div>
 
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>Đã mua: {item.purchasedQuantity}</span>
+                    <span>Đã mua: {formatQuantity(item.purchasedQuantity)}</span>
                     {item.returnedQuantity > 0 && (
                       <Badge variant="outline" className="text-xs">
-                        Đã trả: {item.returnedQuantity}
+                        Đã trả: {formatQuantity(item.returnedQuantity)}
                       </Badge>
                     )}
                     {fullyReturned && (
@@ -308,22 +309,19 @@ export function ReturnDialog({
                         <label className="text-xs text-muted-foreground whitespace-nowrap">
                           Số lượng trả:
                         </label>
-                        <Input
-                          type="number"
+                        <QuantityInput
+                          live
+                          aria-label={`Số lượng trả ${item.productName}`}
                           className="w-20 h-8 text-sm"
-                          min={0}
-                          max={item.remainingQuantity}
+                          allowDecimal={item.allowDecimalQuantity}
                           value={qty}
-                          onChange={(e) => {
-                            const val = Math.min(
-                              Math.max(0, parseInt(e.target.value) || 0),
-                              item.remainingQuantity,
-                            )
+                          onCommit={(v) => {
+                            const val = Math.min(Math.max(0, v), item.remainingQuantity)
                             updateLine(item.orderItemId, 'quantity', val)
                           }}
                         />
                         <span className="text-xs text-muted-foreground">
-                          / {item.remainingQuantity}
+                          / {formatQuantity(item.remainingQuantity)}
                         </span>
                       </div>
 

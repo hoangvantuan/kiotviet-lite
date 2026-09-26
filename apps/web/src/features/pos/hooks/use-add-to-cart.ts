@@ -1,5 +1,7 @@
 import { useCallback } from 'react'
 
+import { mulQty } from '@kiotviet-lite/shared'
+
 import { useCartStore } from '@/stores/use-cart-store'
 
 import { guardAddToCart } from '../stock-guard'
@@ -25,7 +27,7 @@ export function addToCartAction({
   quantity = 1,
   notes = null,
 }: AddToCartOptions): boolean {
-  if (!Number.isInteger(quantity) || quantity <= 0) return false
+  if (!Number.isFinite(quantity) || quantity <= 0) return false
   const unitConversion =
     explicitUnitConversion ??
     (unitConversionId
@@ -52,7 +54,7 @@ export function addToCartAction({
       name: variant ? `${product.name} (${variant.name})` : product.name,
       baseUnit: product.unit ?? null,
     },
-    quantity * (unitConversion?.conversionFactor ?? 1),
+    mulQty(quantity, unitConversion?.conversionFactor ?? 1),
   )
   if (!allowed) return false
   useCartStore.getState().addItem(
@@ -70,6 +72,7 @@ export function addToCartAction({
       unitName: unitConversion?.unit ?? product.unit ?? null,
       unitConversionId: effectiveUnitConversionId,
       trackInventory: product.trackInventory,
+      allowDecimalQuantity: product.allowDecimalQuantity ?? false,
       stockQuantity,
       baseUnit: product.unit ?? null,
       baseUnitPrice: rawPrice,

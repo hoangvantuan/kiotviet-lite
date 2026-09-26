@@ -69,7 +69,7 @@ test.describe('Kiểm thử E2E: Trả hàng và Khớp Báo cáo Doanh thu, L�
     await expect(returnDialog.getByRole('heading', { name: /Tr[aả] h[aà]ng/i })).toBeVisible()
 
     // Nhập số lượng trả là 1
-    const qtyInput = returnDialog.locator('input[type="number"]').first()
+    const qtyInput = returnDialog.getByRole('textbox', { name: /Số lượng trả/ }).first()
     await qtyInput.fill('1')
 
     // Nhấn Xác nhận trả hàng
@@ -159,7 +159,7 @@ test.describe('Kiểm thử E2E: Trả hàng và Khớp Báo cáo Doanh thu, L�
     await returnBtn.click()
 
     const returnDialog = page.getByRole('dialog')
-    const qtyInput = returnDialog.locator('input[type="number"]').first()
+    const qtyInput = returnDialog.getByRole('textbox', { name: /Số lượng trả/ }).first()
     await qtyInput.fill('1')
 
     const confirmReturnBtn = returnDialog.getByRole('button', {

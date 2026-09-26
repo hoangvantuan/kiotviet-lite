@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { History } from 'lucide-react'
 
+import { formatQuantity } from '@kiotviet-lite/shared'
+
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
 import {
@@ -80,7 +82,9 @@ export function ProductPurchaseHistory({ productId }: { productId: string }) {
                 </TableCell>
                 <TableCell>{it.supplierName}</TableCell>
                 <TableCell className="text-xs">{it.variantLabelSnapshot ?? '—'}</TableCell>
-                <TableCell className="text-right font-mono">{it.quantity}</TableCell>
+                <TableCell className="text-right font-mono">
+                  {formatQuantity(it.quantity)}
+                </TableCell>
                 <TableCell className="text-right">{formatVnd(it.unitPrice)}</TableCell>
                 <TableCell className="text-right">
                   {it.discountAmount > 0 ? `-${formatVnd(it.discountAmount)}` : '—'}
@@ -113,7 +117,7 @@ export function ProductPurchaseHistory({ productId }: { productId: string }) {
             <div className="text-sm text-muted-foreground mt-1">{it.supplierName}</div>
             <div className="flex justify-between text-sm mt-1">
               <span>
-                Số lượng: {it.quantity} × {formatVnd(it.unitPrice)}
+                Số lượng: {formatQuantity(it.quantity)} × {formatVnd(it.unitPrice)}
               </span>
               <span className="font-medium">{formatVndWithSuffix(it.lineTotal)}</span>
             </div>

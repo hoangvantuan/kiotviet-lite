@@ -31,6 +31,8 @@ export function getDenominations(total: number): number[] {
   return [...new Set(result)].sort((a, b) => a - b).slice(0, 5)
 }
 
+import { fromMilli, toMilli } from '@kiotviet-lite/shared'
+
 import type { PosUnitConversion } from './types'
 
 /**
@@ -48,6 +50,9 @@ export function computeUnitConversionPriceAndStock(
     unitConversion.sellingPrice && unitConversion.sellingPrice > 0
       ? unitConversion.sellingPrice
       : Math.round(basePrice * unitConversion.conversionFactor)
-  const stockQuantity = Math.floor(baseStock / unitConversion.conversionFactor)
+  // Tồn theo đơn vị lớn làm tròn xuống: về 0,001 khi đơn vị nhận số lẻ, về số nguyên khi không
+  const stockQuantity = unitConversion.allowDecimalQuantity
+    ? fromMilli(Math.floor(toMilli(baseStock) / unitConversion.conversionFactor))
+    : Math.floor(baseStock / unitConversion.conversionFactor)
   return { unitPrice, stockQuantity }
 }

@@ -1,4 +1,5 @@
 import type { DiscountType } from '@kiotviet-lite/shared'
+import { lineAmount } from '@kiotviet-lite/shared'
 
 export interface LineTotalResult {
   lineSubtotal: number
@@ -12,7 +13,7 @@ export function computeLineTotal(
   discountType: DiscountType,
   discountValue: number,
 ): LineTotalResult {
-  const lineSubtotal = Math.max(0, quantity * unitPrice)
+  const lineSubtotal = Math.max(0, lineAmount(unitPrice, quantity))
   let discountAmount = 0
   if (discountValue > 0) {
     if (discountType === 'percent') {

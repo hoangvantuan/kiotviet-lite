@@ -6,8 +6,12 @@ import {
   type DiscountType,
   type DocumentStatus,
   inventoryTransactions,
+  isWholeQuantity,
+  lineAmount,
   type ListPurchaseOrdersQuery,
+  mulQty,
   type PaymentStatus,
+  products,
   productUnitConversions,
   type PurchaseOrderDetail,
   type PurchaseOrderItemDetail,
@@ -27,6 +31,7 @@ import type { Db } from '../db/index.js'
 import { toMoneyMethod } from '../lib/cash-flow.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
+import { assertQuantityAllowed } from '../lib/quantity-policy.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { parseDateRangeBoundary } from '../lib/timezone.js'
 import { logAction, type RequestMeta } from './audit.service.js'
@@ -297,11 +302,13 @@ export async function createPurchaseOrder({
       const unitConversionId = item.unitConversionId ?? null
       let unitNameSnapshot: string | null = null
       let conversionFactor = 1
+      let unitAllowsDecimal: boolean | null = null
       if (unitConversionId) {
         const convRows = await tx
           .select({
             unit: productUnitConversions.unit,
             conversionFactor: productUnitConversions.conversionFactor,
+            allowDecimalQuantity: productUnitConversions.allowDecimalQuantity,
           })
           .from(productUnitConversions)
           .where(
@@ -321,8 +328,19 @@ export async function createPurchaseOrder({
         }
         unitNameSnapshot = conv.unit
         conversionFactor = Number(conv.conversionFactor)
+        unitAllowsDecimal = conv.allowDecimalQuantity
       }
-      const baseQuantity = item.quantity * conversionFactor
+      // GL-07: số lẻ theo cờ của mặt hàng và đơn vị (ADR-0015 mục 2)
+      assertQuantityAllowed({
+        quantity: item.quantity,
+        productName: product.name,
+        productAllowsDecimal: product.allowDecimalQuantity,
+        unitConversion:
+          unitAllowsDecimal === null
+            ? null
+            : { conversionFactor, allowDecimalQuantity: unitAllowsDecimal },
+      })
+      const baseQuantity = mulQty(item.quantity, conversionFactor)
       if (baseQuantity > MAX_BASE_QUANTITY) {
         throw new ApiError(
           'BUSINESS_RULE_VIOLATION',
@@ -330,7 +348,7 @@ export async function createPurchaseOrder({
         )
       }
 
-      const lineSubtotal = item.quantity * item.unitPrice
+      const lineSubtotal = lineAmount(item.unitPrice, item.quantity)
       const discountAmount = applyDiscount(lineSubtotal, item.discountType, item.discountValue)
       if (discountAmount > lineSubtotal) {
         throw new ApiError('BUSINESS_RULE_VIOLATION', 'Chiết khấu dòng vượt quá thành tiền')
@@ -618,6 +636,35 @@ export async function getPurchaseOrder({
     .where(eq(purchaseOrderItems.purchaseOrderId, orderId))
     .orderBy(asc(purchaseOrderItems.createdAt))
 
+  // Cờ bán số lẻ hiện tại để hộp trả hàng nhập cho gõ số lẻ (ADR-0015 mục 2)
+  const productIds = [...new Set(itemRows.map((it) => it.productId))]
+  const unitIds = [
+    ...new Set(itemRows.map((it) => it.unitConversionId).filter((id): id is string => !!id)),
+  ]
+  const productFlags = new Map(
+    productIds.length === 0
+      ? []
+      : (
+          await db
+            .select({ id: products.id, allow: products.allowDecimalQuantity })
+            .from(products)
+            .where(inArray(products.id, productIds))
+        ).map((r) => [r.id, r.allow] as const),
+  )
+  const unitFlags = new Map(
+    unitIds.length === 0
+      ? []
+      : (
+          await db
+            .select({
+              id: productUnitConversions.id,
+              allow: productUnitConversions.allowDecimalQuantity,
+            })
+            .from(productUnitConversions)
+            .where(inArray(productUnitConversions.id, unitIds))
+        ).map((r) => [r.id, r.allow] as const),
+  )
+
   const items: PurchaseOrderItemDetail[] = itemRows.map((it) => ({
     id: it.id,
     productId: it.productId,
@@ -628,7 +675,7 @@ export async function getPurchaseOrder({
     unitConversionId: it.unitConversionId,
     unitName: it.unitNameSnapshot,
     conversionFactor: it.conversionFactor,
-    baseQuantity: it.quantity * it.conversionFactor,
+    baseQuantity: mulQty(it.quantity, it.conversionFactor),
     quantity: it.quantity,
     unitPrice: Number(it.unitPrice),
     discountAmount: Number(it.discountAmount),
@@ -641,6 +688,11 @@ export async function getPurchaseOrder({
     costAfter: it.costAfter === null ? null : Number(it.costAfter),
     stockAfter: it.stockAfter,
     returnedQuantity: it.returnedQuantity,
+    allowDecimalQuantity:
+      !isWholeQuantity(it.quantity) ||
+      ((it.unitConversionId ? unitFlags.get(it.unitConversionId) : undefined) ??
+        productFlags.get(it.productId) ??
+        false),
   }))
 
   const returns = await listPurchaseReturns({ db, purchaseOrderId: orderId, items: itemRows })

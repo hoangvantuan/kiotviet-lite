@@ -6,6 +6,7 @@ import type { ReplaceVolumePricesInput } from '@kiotviet-lite/shared'
 import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
+import { QuantityInput } from '@/components/shared/quantity-input'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -15,7 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useProductQuery } from '@/features/products/use-products'
 import { handleApiError } from '@/lib/api-error'
@@ -203,22 +203,16 @@ export function VolumePricesDialog({
                     return (
                       <div key={field.id} className="space-y-1">
                         <div className="grid grid-cols-[1fr_1fr_auto] items-start gap-2">
-                          <Input
-                            type="number"
-                            min={1}
-                            step={1}
-                            inputMode="numeric"
+                          <QuantityInput
+                            allowDecimal
                             placeholder="VD: 10"
-                            value={tierValue?.minQty ?? ''}
-                            onChange={(e) => {
-                              const v = e.target.value
-                              const parsed = v === '' ? null : Number.parseInt(v, 10)
-                              form.setValue(
-                                `tiers.${index}.minQty`,
-                                Number.isNaN(parsed as number) ? null : parsed,
-                                { shouldValidate: true, shouldDirty: true },
-                              )
-                            }}
+                            value={tierValue?.minQty ?? null}
+                            onChange={(v) =>
+                              form.setValue(`tiers.${index}.minQty`, v, {
+                                shouldValidate: true,
+                                shouldDirty: true,
+                              })
+                            }
                           />
                           <CurrencyInput
                             value={tierValue?.price ?? null}

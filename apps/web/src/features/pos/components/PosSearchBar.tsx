@@ -1,6 +1,8 @@
 import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, ScanBarcode, Search } from 'lucide-react'
 
+import { formatQuantity } from '@kiotviet-lite/shared'
+
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { showWarning } from '@/lib/toast'
@@ -262,7 +264,7 @@ export function PosSearchBar({ searchRef, onOpenScanner, onSelectProduct }: PosS
                               : 'text-muted-foreground'
                         }`}
                       >
-                        Tồn: {product.stockQuantity}
+                        Tồn: {formatQuantity(product.stockQuantity)}
                       </p>
                     )}
                   </div>

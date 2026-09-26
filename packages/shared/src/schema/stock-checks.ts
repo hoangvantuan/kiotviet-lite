@@ -11,6 +11,7 @@ import {
 } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
+import { quantity } from './quantity-column.js'
 import { stores } from './stores.js'
 import { users } from './users.js'
 
@@ -27,8 +28,8 @@ export const stockChecks = pgTable(
     status: varchar({ length: 16 }).notNull().default('draft'),
     note: text(),
     totalItems: integer().notNull().default(0),
-    totalDiffPositive: integer().notNull().default(0),
-    totalDiffNegative: integer().notNull().default(0),
+    totalDiffPositive: quantity().notNull().default(0),
+    totalDiffNegative: quantity().notNull().default(0),
     createdBy: uuid()
       .notNull()
       .references(() => users.id),

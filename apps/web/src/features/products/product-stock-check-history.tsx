@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { ClipboardCheck } from 'lucide-react'
 
+import { formatQuantity } from '@kiotviet-lite/shared'
+
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
 import {
@@ -80,8 +82,12 @@ export function ProductStockCheckHistory({ productId }: { productId: string }) {
                   </TableCell>
                   <TableCell>{it.adjustedByName ?? '—'}</TableCell>
                   <TableCell className="text-xs">{it.variantLabelSnapshot ?? '—'}</TableCell>
-                  <TableCell className="text-right font-mono">{it.systemQty}</TableCell>
-                  <TableCell className="text-right font-mono">{it.actualQty}</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {formatQuantity(it.systemQty)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono">
+                    {formatQuantity(it.actualQty)}
+                  </TableCell>
                   <TableCell className={`text-right font-mono ${fmt.className}`}>
                     {fmt.text}
                   </TableCell>
@@ -111,7 +117,7 @@ export function ProductStockCheckHistory({ productId }: { productId: string }) {
               </div>
               <div className="flex justify-between text-sm mt-1">
                 <span>
-                  HT {it.systemQty} → TT {it.actualQty}
+                  HT {formatQuantity(it.systemQty)} → TT {formatQuantity(it.actualQty)}
                 </span>
                 <span className={`font-mono ${fmt.className}`}>{fmt.text}</span>
               </div>

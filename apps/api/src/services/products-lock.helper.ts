@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 
-import { products, productVariants } from '@kiotviet-lite/shared'
+import { parseQuantity, products, productVariants } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
@@ -90,9 +90,9 @@ export async function aggregateVariantStock({
 }): Promise<number> {
   const rows = await tx
     .select({
-      total: sql<number>`COALESCE(SUM(${productVariants.stockQuantity}), 0)::int`,
+      total: sql<number>`COALESCE(SUM(${productVariants.stockQuantity}), 0)`.mapWith(parseQuantity),
     })
     .from(productVariants)
     .where(and(eq(productVariants.productId, productId), isNull(productVariants.deletedAt)))
-  return Number(rows[0]?.total ?? 0)
+  return rows[0]?.total ?? 0
 }

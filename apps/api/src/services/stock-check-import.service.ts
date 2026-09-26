@@ -1,7 +1,14 @@
 import { and, eq, isNull } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
 
-import { products, productVariants } from '@kiotviet-lite/shared'
+import {
+  hasValidQuantityScale,
+  isWholeQuantity,
+  products,
+  productVariants,
+  roundQty,
+  subQty,
+} from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
@@ -58,6 +65,7 @@ interface Target {
   variantLabel: string | null
   hasVariants: boolean
   trackInventory: boolean
+  allowDecimalQuantity: boolean
   systemQty: number
   costPrice: number | null
 }
@@ -70,6 +78,7 @@ async function loadTargets(db: Db, storeId: string): Promise<Map<string, Target>
       sku: products.sku,
       hasVariants: products.hasVariants,
       trackInventory: products.trackInventory,
+      allowDecimalQuantity: products.allowDecimalQuantity,
       currentStock: products.currentStock,
       costPrice: products.costPrice,
     })
@@ -99,6 +108,7 @@ async function loadTargets(db: Db, storeId: string): Promise<Map<string, Target>
       variantLabel: null,
       hasVariants: row.hasVariants,
       trackInventory: row.trackInventory,
+      allowDecimalQuantity: row.allowDecimalQuantity,
       systemQty: row.currentStock,
       costPrice: row.costPrice,
     })
@@ -116,6 +126,7 @@ async function loadTargets(db: Db, storeId: string): Promise<Map<string, Target>
         : row.attribute1Value,
       hasVariants: false,
       trackInventory: parent.trackInventory,
+      allowDecimalQuantity: parent.allowDecimalQuantity,
       systemQty: row.stockQuantity,
       costPrice: row.costPrice ?? parent.costPrice,
     })
@@ -243,9 +254,18 @@ export async function previewStockCheckImport({
       report.add('qty_negative', 'Tồn âm được đưa về 0 (phiếu kiểm chỉ nhận số không âm)', row)
       qty = 0
     }
-    if (!Number.isInteger(qty)) {
-      report.add('qty_rounded', 'Tồn có phần lẻ được làm tròn về số nguyên gần nhất', row)
-      qty = Math.round(qty)
+    // GL-07: tồn lẻ nhận ở mặt hàng bật số lẻ (tối đa 3 chữ số lẻ), mặt hàng khác báo lỗi dòng
+    if (!hasValidQuantityScale(qty)) {
+      report.add('qty_rounded', 'Tồn có hơn 3 chữ số lẻ được làm tròn về 3 chữ số lẻ', row)
+    }
+    qty = roundQty(qty)
+    if (!isWholeQuantity(qty) && !target.allowDecimalQuantity) {
+      errors.push({
+        row,
+        column: qtyName,
+        message: `Mã hàng ${sku} chỉ nhận số lượng nguyên (mặt hàng chưa bật bán số lẻ)`,
+      })
+      continue
     }
     if (qty > MAX_QTY) {
       errors.push({ row, column: qtyName, message: 'Số lượng vượt giới hạn' })
@@ -277,7 +297,7 @@ export async function previewStockCheckImport({
       variantLabelSnapshot: target.variantLabel,
       systemQty: target.systemQty,
       actualQty: qty,
-      diff: qty - target.systemQty,
+      diff: subQty(qty, target.systemQty),
       note: null,
     })
   }

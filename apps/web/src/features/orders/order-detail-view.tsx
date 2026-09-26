@@ -2,7 +2,12 @@ import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { ChevronLeft, RotateCcw } from 'lucide-react'
 
-import { hasPermission, moneyMethodLabel, RETURN_REASON_LABELS } from '@kiotviet-lite/shared'
+import {
+  formatQuantity,
+  hasPermission,
+  moneyMethodLabel,
+  RETURN_REASON_LABELS,
+} from '@kiotviet-lite/shared'
 
 import { QueryErrorState } from '@/components/shared/query-error-state'
 import { Badge } from '@/components/ui/badge'
@@ -224,7 +229,7 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
                     )}
                   </TableCell>
                   <TableCell>{it.unit ?? ''}</TableCell>
-                  <TableCell className="text-right">{it.quantity}</TableCell>
+                  <TableCell className="text-right">{formatQuantity(it.quantity)}</TableCell>
                   <TableCell className="text-right">{formatVnd(it.unitPrice)}</TableCell>
                   <TableCell className="text-right">
                     {it.discountAmount > 0 ? `-${formatVnd(it.discountAmount)}` : ''}
@@ -262,7 +267,7 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Số lượng x Đơn giá</span>
                 <span>
-                  {it.quantity} x {formatVnd(it.unitPrice)}
+                  {formatQuantity(it.quantity)} x {formatVnd(it.unitPrice)}
                 </span>
               </div>
               {it.discountAmount > 0 && (
@@ -370,7 +375,7 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
                         {item.productName}
                         {item.variantName ? ` (${item.variantName})` : ''}
                       </span>
-                      <span>x{item.quantity}</span>
+                      <span>x{formatQuantity(item.quantity)}</span>
                       <Badge variant="outline" className="text-xs">
                         {RETURN_REASON_LABELS[item.reason] ?? item.reason}
                       </Badge>

@@ -10,6 +10,7 @@ import {
   selectVariantScoped,
   storeIsoDate,
 } from '../utils/price-resolution.js'
+import { addQty, parseQuantity } from '../utils/quantity.js'
 import { normalizeSearchText, searchLikePattern } from '../utils/search-text.js'
 import type { OfflineSqlExecutor } from './catalog-store.js'
 
@@ -31,7 +32,9 @@ interface ProductRow {
   cost_price: unknown
   image_url: string | null
   track_inventory: boolean
-  current_stock: number
+  /** numeric: PGlite trả chuỗi */
+  current_stock: unknown
+  allow_decimal_quantity: boolean
   has_variants: boolean
   category_id: string | null
 }
@@ -47,12 +50,12 @@ interface VariantRow {
   attribute2_value: string | null
   selling_price: unknown
   cost_price: unknown
-  stock_quantity: number
+  stock_quantity: unknown
   status: string
 }
 
 const PRODUCT_COLUMNS = `p.id, p.name, p.sku, p.barcode, p.unit, p.selling_price, p.cost_price,
-  p.image_url, p.track_inventory, p.current_stock, p.has_variants, p.category_id`
+  p.image_url, p.track_inventory, p.current_stock, p.allow_decimal_quantity, p.has_variants, p.category_id`
 
 function mapVariant(v: VariantRow, includeCost: boolean): PosVariantItem {
   const attributes: Record<string, string> = {}
@@ -65,7 +68,7 @@ function mapVariant(v: VariantRow, includeCost: boolean): PosVariantItem {
     barcode: v.barcode,
     price: num(v.selling_price),
     ...(includeCost ? { costPrice: numOrNull(v.cost_price) } : {}),
-    stockQuantity: v.stock_quantity,
+    stockQuantity: parseQuantity(v.stock_quantity),
     attributes,
   }
 }
@@ -89,7 +92,10 @@ async function hydrateProducts(
   const variantStock = new Map<string, number>()
   for (const v of variantRows) {
     // Tồn kho hàng có biến thể cộng mọi biến thể chưa xóa, kể cả ngừng bán (như máy chủ)
-    variantStock.set(v.product_id, (variantStock.get(v.product_id) ?? 0) + v.stock_quantity)
+    variantStock.set(
+      v.product_id,
+      addQty(variantStock.get(v.product_id) ?? 0, parseQuantity(v.stock_quantity)),
+    )
     if (v.status !== 'active') continue
     const list = variants.get(v.product_id) ?? []
     list.push(mapVariant(v, includeCost))
@@ -103,8 +109,10 @@ async function hydrateProducts(
       unit: string
       conversion_factor: number
       selling_price: unknown
+      allow_decimal_quantity: boolean
     }>(
-      `SELECT id, product_id, unit, conversion_factor, selling_price FROM catalog_unit_conversions
+      `SELECT id, product_id, unit, conversion_factor, selling_price, allow_decimal_quantity
+       FROM catalog_unit_conversions
        WHERE store_id = $1 AND product_id = ANY($2::uuid[]) ORDER BY sort_order, created_at, id`,
       [storeId, ids],
     )
@@ -118,6 +126,7 @@ async function hydrateProducts(
       unit: uc.unit,
       conversionFactor: uc.conversion_factor,
       sellingPrice: price !== null && price > 0 ? price : null,
+      allowDecimalQuantity: uc.allow_decimal_quantity,
     })
     units.set(uc.product_id, list)
   }
@@ -132,7 +141,10 @@ async function hydrateProducts(
     ...(includeCost ? { costPrice: numOrNull(row.cost_price) } : {}),
     imageUrl: row.image_url,
     trackInventory: row.track_inventory,
-    stockQuantity: row.has_variants ? (variantStock.get(row.id) ?? 0) : row.current_stock,
+    stockQuantity: row.has_variants
+      ? (variantStock.get(row.id) ?? 0)
+      : parseQuantity(row.current_stock),
+    allowDecimalQuantity: row.allow_decimal_quantity,
     hasVariants: row.has_variants,
     categoryId: row.category_id,
     variants: variants.get(row.id) ?? [],
@@ -490,12 +502,12 @@ export async function resolvePricesOffline(
       }
 
       const tiers = (
-        await scoped<{ min_qty: number; price: unknown; variant_id: string | null }>(
+        await scoped<{ min_qty: unknown; price: unknown; variant_id: string | null }>(
           'SELECT min_qty, price, variant_id FROM catalog_volume_prices WHERE store_id = $1 AND product_id = $2',
           [storeId, item.productId],
           variantId,
         )
-      ).map((r) => ({ minQty: r.min_qty, price: num(r.price) }))
+      ).map((r) => ({ minQty: parseQuantity(r.min_qty), price: num(r.price) }))
       sources.volumeTiers = tiers
 
       if (manualList) {
@@ -521,7 +533,7 @@ export async function resolvePricesOffline(
                 customer_group_id: string | null
                 discount_type: 'percent' | 'amount'
                 discount_value: unknown
-                min_qty: number
+                min_qty: unknown
                 effective_from: string | null
                 effective_to: string | null
                 is_active: boolean
@@ -537,7 +549,7 @@ export async function resolvePricesOffline(
                 customerGroupId: r.customer_group_id,
                 discountType: r.discount_type,
                 discountValue: num(r.discount_value),
-                minQty: r.min_qty,
+                minQty: parseQuantity(r.min_qty),
                 effectiveFrom: r.effective_from,
                 effectiveTo: r.effective_to,
                 isActive: r.is_active,

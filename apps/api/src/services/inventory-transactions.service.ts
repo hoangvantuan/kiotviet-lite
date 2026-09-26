@@ -1,9 +1,12 @@
 import { and, desc, eq, sql } from 'drizzle-orm'
 
 import {
+  addQty,
   type InventoryTransactionItem,
   inventoryTransactions,
+  lineAmount,
   type ListInventoryTransactionsQuery,
+  parseQuantity,
   type ProductDetail,
   type ProductListItem,
   products,
@@ -16,6 +19,7 @@ import {
 import type { Db } from '../db/index.js'
 import { effectiveStockSql, lowStockConditionSql } from '../lib/effective-stock.js'
 import { ApiError } from '../lib/errors.js'
+import { assertQuantityAllowed, assertStoredQuantityAllowed } from '../lib/quantity-policy.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import { receiveStock } from './inventory-cost.helper.js'
 import { getProduct } from './products.service.js'
@@ -92,6 +96,13 @@ export async function recordPurchaseTransaction({
   }
 
   const txResult = await db.transaction(async (tx) => {
+    // GL-07: số lẻ theo cờ mặt hàng (ADR-0015 mục 2)
+    await assertStoredQuantityAllowed({
+      db: tx as unknown as Db,
+      storeId: actor.storeId,
+      productId,
+      quantity: input.quantity,
+    })
     const variantId = input.variantId ?? null
     // KHO-05: giá vốn bình quân theo biến thể và đồng bộ tồn cha dùng chung với phiếu nhập
     const received = await receiveStock({
@@ -100,7 +111,7 @@ export async function recordPurchaseTransaction({
       productId,
       variantId,
       quantity: input.quantity,
-      totalCost: input.quantity * input.unitCost,
+      totalCost: lineAmount(input.unitCost, input.quantity),
     })
     const { costBefore, costAfter, stockBefore, stockAfter } = received
 
@@ -202,6 +213,11 @@ export async function recordManualAdjustment({
     if (!product.hasVariants && variantId) {
       throw new ApiError('VALIDATION_ERROR', 'Sản phẩm không có biến thể')
     }
+    assertQuantityAllowed({
+      quantity: input.delta,
+      productName: product.name,
+      productAllowsDecimal: product.allowDecimalQuantity,
+    })
 
     let stockBefore: number
     let stockAfter: number
@@ -213,7 +229,7 @@ export async function recordManualAdjustment({
         variantId,
       })
       stockBefore = variant.stockQuantity
-      stockAfter = stockBefore + input.delta
+      stockAfter = addQty(stockBefore, input.delta)
       if (stockAfter < 0) {
         throw new ApiError('BUSINESS_RULE_VIOLATION', 'Điều chỉnh khiến tồn về âm')
       }
@@ -227,7 +243,7 @@ export async function recordManualAdjustment({
       await tx.update(products).set({ currentStock: aggStock }).where(eq(products.id, productId))
     } else {
       stockBefore = product.currentStock
-      stockAfter = stockBefore + input.delta
+      stockAfter = addQty(stockBefore, input.delta)
       if (stockAfter < 0) {
         throw new ApiError('BUSINESS_RULE_VIOLATION', 'Điều chỉnh khiến tồn về âm')
       }
@@ -395,6 +411,7 @@ export async function listLowStockProducts({
       status: products.status,
       hasVariants: products.hasVariants,
       trackInventory: products.trackInventory,
+      allowDecimalQuantity: products.allowDecimalQuantity,
       currentStock: products.currentStock,
       minStock: products.minStock,
       createdAt: products.createdAt,
@@ -430,7 +447,8 @@ export async function listLowStockProducts({
     imageUrl: r.imageUrl,
     status: (r.status as ProductListItem['status']) ?? 'active',
     trackInventory: r.trackInventory,
-    currentStock: Number(r.effectiveStock),
+    allowDecimalQuantity: r.allowDecimalQuantity,
+    currentStock: parseQuantity(r.effectiveStock),
     minStock: r.minStock,
     hasVariants: r.hasVariants,
     createdAt: r.createdAt.toISOString(),

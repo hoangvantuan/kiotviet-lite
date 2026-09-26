@@ -166,6 +166,19 @@ WHERE t.reference_id IS NOT NULL
     ELSE false
   END;
 
+-- I11. Hàng chưa bật bán số lẻ thì tồn là số nguyên (GL-07, ADR-0015 mục 2): mọi đường ghi tồn
+-- đều kiểm cờ, và chỉ tắt được cờ khi tồn đã nguyên. Biến thể đã xóa không tính (không bán được nữa).
+INSERT INTO invariant_violations
+SELECT 'I11_decimal_stock', p.store_id, 'product ' || p.sku, format('current_stock=%s', p.current_stock)
+FROM products p
+WHERE NOT p.allow_decimal_quantity AND p.current_stock <> trunc(p.current_stock)
+UNION ALL
+SELECT 'I11_decimal_stock', v.store_id, 'variant ' || v.sku, format('stock_quantity=%s', v.stock_quantity)
+FROM product_variants v
+JOIN products p ON p.id = v.product_id
+WHERE NOT p.allow_decimal_quantity AND v.deleted_at IS NULL
+  AND v.stock_quantity <> trunc(v.stock_quantity);
+
 \pset footer on
 SELECT check_name, count(*) AS violations
 FROM invariant_violations GROUP BY check_name ORDER BY check_name;
