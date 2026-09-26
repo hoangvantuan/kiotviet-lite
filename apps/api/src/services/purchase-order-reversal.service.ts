@@ -292,6 +292,8 @@ export async function cancelPurchaseOrder({
         costAfter: removed.costAfter,
         stockAfter: removed.stockAfter,
         note: `Hủy ${po.code}`,
+        referenceType: 'purchase_order',
+        referenceId: po.id,
         createdBy: actor.userId,
       })
     }
@@ -549,6 +551,8 @@ export async function createPurchaseReturn({
         costAfter: removed.costAfter,
         stockAfter: removed.stockAfter,
         note: code,
+        referenceType: 'purchase_return',
+        referenceId: created.id,
         createdBy: actor.userId,
       })
     }

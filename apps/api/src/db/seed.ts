@@ -1194,6 +1194,8 @@ export async function seed(db: Db) {
       costAfter: item.cost,
       stockAfter: opening,
       note: 'Tồn đầu kỳ (dữ liệu mẫu)',
+      referenceType: 'product',
+      referenceId: item.productId,
       createdBy: ownerId,
       createdAt: openingAt,
     })
@@ -1253,6 +1255,8 @@ export async function seed(db: Db) {
         costAfter: l.item.cost,
         stockAfter: l.stockAfter,
         note: po.code,
+        referenceType: 'purchase_order',
+        referenceId: poId,
         createdBy: ownerId,
         createdAt: purchaseAt,
       })

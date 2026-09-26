@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm'
+import { randomUUID } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
@@ -91,6 +92,8 @@ async function insertOldPurchaseOrder(code: string, lines: OldLineInput[], disco
       costAfter: l.costAfter,
       stockAfter: l.stockAfter,
       note: code,
+      referenceType: 'purchase_order',
+      referenceId: po!.id,
       createdBy: env.owner.id,
       createdAt: at,
     })
@@ -105,6 +108,8 @@ async function insertSale(productId: string, quantity: number, stockAfter: numbe
     quantity: -quantity,
     stockAfter,
     note: 'HD-TEST',
+    referenceType: 'order',
+    referenceId: randomUUID(),
     createdBy: env.owner.id,
     createdAt: tick(),
   })

@@ -289,6 +289,7 @@ describe('KHO-06: đổi đơn vị tính cơ bản của sản phẩm đã có 
       type: 'purchase',
       quantity: 10,
       stockAfter: 10,
+      referenceType: 'manual',
       createdBy: env.owner.id,
     })
     const r = await call<ErrorBody>(prodApp, 'PATCH', `/${p.id}`, { unit: 'Thùng' })

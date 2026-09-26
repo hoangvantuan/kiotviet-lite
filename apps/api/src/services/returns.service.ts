@@ -529,6 +529,8 @@ export async function createReturn({
           quantity: restoreQty,
           stockAfter: newStock,
           note: returnNumber,
+          referenceType: 'order_return',
+          referenceId: createdReturnId,
           createdBy: actor.userId,
         })
       }

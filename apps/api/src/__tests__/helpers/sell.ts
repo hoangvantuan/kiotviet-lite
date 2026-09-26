@@ -92,6 +92,8 @@ export async function stockedProduct(env: TestEnv, stock = 100, name = 'Sữa En
     quantity: stock,
     stockAfter: stock,
     note: 'Tồn đầu kỳ',
+    referenceType: 'product',
+    referenceId: product.id,
     createdBy: env.owner.id,
   })
   return product

@@ -32,7 +32,7 @@ export async function invariantViolations(db: Db) {
       check_name text NOT NULL, store_id uuid, entity text NOT NULL, detail text NOT NULL
     )`)
   await db.execute(sql`DELETE FROM invariant_violations`)
-  expect(INVARIANT_INSERTS.length).toBeGreaterThanOrEqual(9)
+  expect(INVARIANT_INSERTS.length).toBeGreaterThanOrEqual(10)
   for (const stmt of INVARIANT_INSERTS) await db.execute(sql.raw(stmt))
   return rows<{ check_name: string; entity: string; detail: string }>(
     db,

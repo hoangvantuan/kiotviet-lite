@@ -846,6 +846,8 @@ export async function createOrder({
             quantity: -deductQty,
             stockAfter: newStock,
             note: inventoryNote,
+            referenceType: 'order',
+            referenceId: createdId,
             createdBy: actor.userId,
           })
 
