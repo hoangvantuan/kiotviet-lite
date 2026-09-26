@@ -4,7 +4,9 @@ import {
   computeReturnLineRefund,
   type CreateOrderReturnInput,
   debts,
+  defaultRefundMethod,
   inventoryTransactions,
+  type MoneyMethod,
   orderItems,
   type OrderReturnDetail,
   type OrderReturnItemDetail,
@@ -21,6 +23,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { toMoneyMethod } from '../lib/cash-flow.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { logAction, type RequestMeta } from './audit.service.js'
@@ -37,6 +40,7 @@ import {
   lockProductsInIdOrder,
 } from './products-lock.helper.js'
 import { serviceDb, type ServiceTransaction } from './service-transaction.js'
+import { lockOpenShiftId } from './shifts.service.js'
 
 export interface ReturnsActor {
   userId: string
@@ -156,6 +160,10 @@ export async function createReturn({
   const result = await db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
 
+    // POS-06: phiếu trả lập trong ca gắn vào ca đang mở của người lập (không bắt buộc). Khóa ca
+    // trước đơn, cùng thứ tự với lúc bán
+    const shiftId = await lockOpenShiftId(txDb, actor.storeId, actor.userId)
+
     // 1. Validate order
     const orderRows = await tx
       .select({
@@ -164,6 +172,8 @@ export async function createReturn({
         orderNumber: orders.orderNumber,
         customerId: orders.customerId,
         paymentStatus: orders.paymentStatus,
+        paymentMethod: orders.paymentMethod,
+        cashAmount: orders.cashAmount,
         status: orders.status,
         total: orders.total,
       })
@@ -318,6 +328,16 @@ export async function createReturn({
       debt ? Number(debt.remaining) : 0,
       debt ? Number(debt.prepaymentApplied) : 0,
     )
+    // TIEN-02: kênh chi phần hoàn tiền; mặc định theo cách khách trả đơn gốc. Không hoàn tiền
+    // (chỉ cấn nợ, hoàn vào tiền trả trước) thì để trống
+    const refundMethod: MoneyMethod | null =
+      refundAmount > 0
+        ? (input.refundMethod ??
+          defaultRefundMethod({
+            paymentMethod: order.paymentMethod,
+            cashAmount: order.cashAmount === null ? null : Number(order.cashAmount),
+          }))
+        : null
 
     // Đơn đã được cấn bằng tiền trả trước: phần đó quay về tiền trả trước (ADR-0011). Gọi trước
     // khi khóa sản phẩm vì hàm khóa các khoản trả trước của khách.
@@ -352,8 +372,10 @@ export async function createReturn({
         returnNumber,
         totalAmount,
         refundAmount,
+        refundMethod,
         debtReductionAmount,
         prepaymentRefundAmount,
+        shiftId,
         note: input.note ?? null,
         createdBy: actor.userId,
       })
@@ -504,6 +526,7 @@ export async function createReturn({
         orderNumber: order.orderNumber,
         totalAmount,
         refundAmount,
+        refundMethod,
         debtReductionAmount,
         prepaymentRefundAmount,
         itemCount: validatedItems.length,
@@ -534,6 +557,7 @@ export async function createReturn({
       orderId,
       totalAmount,
       refundAmount,
+      refundMethod,
       debtReductionAmount,
       prepaymentRefundAmount,
       note: input.note ?? null,
@@ -578,6 +602,7 @@ export async function getOrderReturns({
       returnNumber: orderReturns.returnNumber,
       totalAmount: orderReturns.totalAmount,
       refundAmount: orderReturns.refundAmount,
+      refundMethod: orderReturns.refundMethod,
       debtReductionAmount: orderReturns.debtReductionAmount,
       prepaymentRefundAmount: orderReturns.prepaymentRefundAmount,
       createdByName: users.name,
@@ -621,6 +646,7 @@ export async function getOrderReturns({
     returnNumber: ret.returnNumber,
     totalAmount: Number(ret.totalAmount),
     refundAmount: Number(ret.refundAmount),
+    refundMethod: toMoneyMethod(ret.refundMethod),
     debtReductionAmount: Number(ret.debtReductionAmount),
     prepaymentRefundAmount: Number(ret.prepaymentRefundAmount),
     createdByName: ret.createdByName ?? null,

@@ -13,6 +13,7 @@ import {
 } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
+import { cashShifts } from './cash-shifts.js'
 import { customers } from './customers.js'
 import type { OrderPolicyViolation } from './order-management.js'
 import { priceLists } from './price-lists.js'
@@ -66,6 +67,9 @@ export const orders = pgTable(
     cancelledAt: timestamp({ withTimezone: true }),
     cancelledBy: uuid().references(() => users.id),
     cancelReason: varchar({ length: 500 }),
+    // POS-06: ca bán hàng. Đơn ngoại tuyến gắn theo giờ bán và người bán khi đồng bộ; NULL khi
+    // không có ca phù hợp (hiện trong đối soát)
+    shiftId: uuid().references(() => cashShifts.id, { onDelete: 'restrict' }),
     priceListId: uuid().references(() => priceLists.id, { onDelete: 'set null' }),
     priceListName: varchar({ length: 100 }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -94,6 +98,7 @@ export const orders = pgTable(
     index('idx_orders_store_status').on(table.storeId, table.status),
     index('idx_orders_store_customer').on(table.storeId, table.customerId),
     index('idx_orders_store_payment_status').on(table.storeId, table.paymentStatus),
+    index('idx_orders_shift').on(table.shiftId),
     index('idx_orders_store_review_status').on(table.storeId, table.reviewStatus),
     index('idx_orders_store_status_created').on(table.storeId, table.status, table.createdAt),
     index('idx_orders_store_cust_status_date').on(

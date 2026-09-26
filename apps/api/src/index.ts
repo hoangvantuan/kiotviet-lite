@@ -25,6 +25,7 @@ import { createBrandsRoutes } from './routes/brands.routes.js'
 import { createBulkExportRoutes } from './routes/bulk-export.routes.js'
 import { createBulkImportJobsRoutes } from './routes/bulk-import-jobs.routes.js'
 import { createBulkImportPreviewRoutes } from './routes/bulk-import-preview.routes.js'
+import { createCashReportsRoutes } from './routes/cash-reports.routes.js'
 import { createCategoriesRoutes } from './routes/categories.routes.js'
 import { createCategoryDiscountsRoutes } from './routes/category-discounts.routes.js'
 import { createCustomerGroupsRoutes } from './routes/customer-groups.routes.js'
@@ -42,6 +43,7 @@ import { createProductsRoutes } from './routes/products.routes.js'
 import { createPurchaseOrdersRoutes } from './routes/purchase-orders.routes.js'
 import { createReceiptsRoutes } from './routes/receipts.routes.js'
 import { createReportsRoutes } from './routes/reports.routes.js'
+import { createShiftsRoutes } from './routes/shifts.routes.js'
 import { createStockChecksRoutes } from './routes/stock-checks.routes.js'
 import { createStoreRoutes } from './routes/store.routes.js'
 import { createSupplierDebtAdjustmentsRoutes } from './routes/supplier-debt-adjustments.routes.js'
@@ -159,7 +161,9 @@ app.route('/api/v1/supplier-debt-adjustments', createSupplierDebtAdjustmentsRout
 app.route('/api/v1/purchase-orders', createPurchaseOrdersRoutes({ db }))
 app.route('/api/v1/receipts', createReceiptsRoutes({ db }))
 app.route('/api/v1/reports', createReportsRoutes({ db }))
+app.route('/api/v1/cash-reports', createCashReportsRoutes({ db }))
 app.route('/api/v1/supplier-payments', createSupplierPaymentsRoutes({ db }))
+app.route('/api/v1/shifts', createShiftsRoutes({ db }))
 app.route('/api/v1/stock-checks', createStockChecksRoutes({ db }))
 app.route('/api/v1/price-lists', createPriceListsRoutes({ db }))
 app.route('/api/v1/customer-prices', createCustomerPricesRoutes({ db }))

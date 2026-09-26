@@ -241,6 +241,7 @@ describe('POST /receipts (createReceipt)', () => {
         customerId: env.customerWithDebtId,
         amount: 250_000,
         note: 'Thu nợ tháng 4',
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [
           { debtId: env.debtA.id, amount: 100_000 },
@@ -278,6 +279,7 @@ describe('POST /receipts (createReceipt)', () => {
       {
         customerId: env.customerWithDebtId,
         amount: 100_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [{ debtId: env.debtA.id, amount: 100_000 }],
       },
@@ -294,6 +296,7 @@ describe('POST /receipts (createReceipt)', () => {
       {
         customerId: env.customerWithDebtId,
         amount: 100_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [{ debtId: env.debtA.id, amount: 100_000 }],
       },
@@ -317,6 +320,7 @@ describe('POST /receipts (createReceipt)', () => {
       {
         customerId: env.customerWithDebtId,
         amount: 100_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [{ debtId: env.debtA.id, amount: 100_000 }],
       },
@@ -335,6 +339,7 @@ describe('POST /receipts (createReceipt)', () => {
       {
         customerId: env.customerNoDebtId,
         amount: 100_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [{ debtId: env.debtA.id, amount: 100_000 }],
       },
@@ -352,6 +357,7 @@ describe('POST /receipts (createReceipt)', () => {
       {
         customerId: env.customerWithDebtId,
         amount: 200_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [
           { debtId: env.debtA.id, amount: 100_000 },
@@ -409,6 +415,7 @@ describe('POST /receipts (createReceipt)', () => {
       {
         customerId: env.customerWithDebtId,
         amount: 100_000,
+        paymentMethod: 'cash',
         allocationMode: 'manual',
         allocations: [{ debtId: otherDebt[0]!.id, amount: 100_000 }],
       },
@@ -437,6 +444,7 @@ describe('POST /receipts (createReceipt)', () => {
       {
         customerId: otherCustomer!.id,
         amount: 100_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [{ debtId: env.debtA.id, amount: 100_000 }],
       },
@@ -459,6 +467,7 @@ describe('POST /receipts (createReceipt)', () => {
       {
         customerId: env.customerWithDebtId,
         amount: 100_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [{ debtId: env.debtA.id, amount: 100_000 }],
       },
@@ -475,6 +484,7 @@ describe('POST /receipts (createReceipt)', () => {
       {
         customerId: env.customerWithDebtId,
         amount: 200_000,
+        paymentMethod: 'cash',
         allocationMode: 'manual',
         allocations: [{ debtId: env.debtA.id, amount: 200_000 }],
       },
@@ -491,6 +501,7 @@ describe('POST /receipts (createReceipt)', () => {
       '/',
       {
         amount: 100_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [{ debtId: env.debtA.id, amount: 100_000 }],
       },
@@ -508,6 +519,7 @@ describe('POST /receipts (createReceipt)', () => {
         customerId: env.customerWithDebtId,
         amount: 100_000,
         note: 'audit test',
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [{ debtId: env.debtA.id, amount: 100_000 }],
       },
@@ -537,6 +549,7 @@ describe('POST /receipts (createReceipt)', () => {
       {
         customerId: env.customerWithDebtId,
         amount: 400_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [
           { debtId: env.debtA.id, amount: 100_000 },
@@ -556,6 +569,7 @@ describe('POST /receipts (createReceipt)', () => {
       {
         customerId: env.customerWithDebtId,
         amount: 100_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [{ debtId: env.debtC.id, amount: 100_000 }],
       },
@@ -580,6 +594,7 @@ describe('POST /receipts (createReceipt)', () => {
       {
         customerId: env.customerWithDebtId,
         amount: 100_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [{ debtId: env.debtA.id, amount: 100_000 }],
       },
@@ -603,6 +618,7 @@ describe('GET /receipts (listReceipts)', () => {
         customerId: env.customerWithDebtId,
         amount: 100_000,
         note: 'phiếu 1',
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [{ debtId: env.debtA.id, amount: 100_000 }],
       },
@@ -616,6 +632,7 @@ describe('GET /receipts (listReceipts)', () => {
         customerId: env.customerWithDebtId,
         amount: 50_000,
         note: 'phiếu 2',
+        paymentMethod: 'cash',
         allocationMode: 'manual',
         allocations: [{ debtId: env.debtB.id, amount: 50_000 }],
       },
@@ -696,6 +713,7 @@ describe('GET /receipts/:id (getReceipt)', () => {
       {
         customerId: env.customerWithDebtId,
         amount: 250_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [
           { debtId: env.debtA.id, amount: 100_000 },
@@ -761,6 +779,7 @@ describe('GET /receipts/:id (getReceipt)', () => {
       {
         customerId: env.customerWithDebtId,
         amount: 60_000,
+        paymentMethod: 'cash',
         allocationMode: 'manual',
         allocations: [
           { debtId: opening!.id, amount: 30_000 },
@@ -915,6 +934,7 @@ describe('GET /receipts/customer-debts/:customerId (listCustomerOpenDebts)', () 
       {
         customerId: env.customerWithDebtId,
         amount: 100_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [{ debtId: env.debtA.id, amount: 100_000 }],
       },
@@ -945,6 +965,7 @@ describe('Method not allowed (immutable)', () => {
       {
         customerId: env.customerWithDebtId,
         amount: 100_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [{ debtId: env.debtA.id, amount: 100_000 }],
       },

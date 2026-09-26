@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { type MoneyMethod, moneyMethodSchema } from './cash-management.js'
+
 export const orderReturnReasonSchema = z.enum([
   'defective',
   'wrong_product',
@@ -28,6 +30,9 @@ export const createOrderReturnSchema = z
   .object({
     items: z.array(createOrderReturnItemSchema).min(1, 'Phải có ít nhất 1 sản phẩm trả'),
     note: z.string().trim().max(1000, 'Ghi chú tối đa 1000 ký tự').nullable().default(null),
+    // TIEN-02: kênh hoàn phần tiền trả lại khách. Bỏ trống thì máy chủ lấy theo cách trả của đơn
+    // gốc (defaultRefundMethod). Phần cấn nợ và hoàn vào tiền trả trước không dùng trường này.
+    refundMethod: moneyMethodSchema.optional(),
   })
   // CRIT C3: chặn trùng orderItemId trong cùng phiếu. Nếu cho trùng, mỗi dòng đều
   // thấy "remaining" từ snapshot ban đầu → trả vượt số đã mua, hoàn tiền gấp N lần.
@@ -86,6 +91,8 @@ export interface OrderReturnDetail {
   debtReductionAmount: number
   /** Phần hoàn vào tiền trả trước của khách (ADR-0011) */
   prepaymentRefundAmount: number
+  /** Kênh chi phần refundAmount; null khi không hoàn tiền hoặc phiếu cũ */
+  refundMethod: MoneyMethod | null
   note: string | null
   createdBy: string
   createdByName: string | null
@@ -100,6 +107,7 @@ export interface OrderReturnListItem {
   refundAmount: number
   debtReductionAmount: number
   prepaymentRefundAmount: number
+  refundMethod: MoneyMethod | null
   createdByName: string | null
   createdAt: string
   items: OrderReturnItemDetail[]

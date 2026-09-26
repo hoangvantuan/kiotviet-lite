@@ -102,6 +102,7 @@ describe('bảo vệ dữ liệu thật khi khởi tạo dữ liệu mẫu', () 
       .returning()
     await env.db.insert(receipts).values({
       storeId: env.storeId,
+      code: 'PT-TEST-0001',
       customerId: customer!.id,
       createdBy: env.owner.id,
       amount: 500,

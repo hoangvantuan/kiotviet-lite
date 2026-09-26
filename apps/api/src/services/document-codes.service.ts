@@ -6,6 +6,7 @@ import {
   orders,
   purchaseOrders,
   purchaseReturns,
+  receipts,
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
@@ -26,7 +27,7 @@ export function formatDateForCode(date: Date): string {
   return DATE_FORMATTER.format(date).replace(/-/g, '')
 }
 
-type DocumentKind = 'order' | 'return' | 'purchase_order' | 'purchase_return'
+type DocumentKind = 'order' | 'return' | 'purchase_order' | 'purchase_return' | 'receipt'
 
 const DOCUMENTS = {
   order: {
@@ -57,6 +58,14 @@ const DOCUMENTS = {
     storeColumn: purchaseReturns.storeId,
     prefix: (date: Date) => `THN-${formatDateForCode(date)}-`,
     label: 'phiếu trả hàng nhập',
+  },
+  // TIEN-109: phiếu thu có mã để tra và in như đơn, phiếu trả
+  receipt: {
+    table: receipts,
+    column: receipts.code,
+    storeColumn: receipts.storeId,
+    prefix: (date: Date) => `PT-${formatDateForCode(date).slice(2)}-`,
+    label: 'phiếu thu',
   },
 } as const
 

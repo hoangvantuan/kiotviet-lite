@@ -35,6 +35,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { toMoneyMethod } from '../lib/cash-flow.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { escapeLikePattern } from '../lib/strings.js'
@@ -50,7 +51,9 @@ import {
   type PreauthorizedCancel,
   resolveCancelApprover,
 } from './document-cancel.helper.js'
+import { nextDocumentCode } from './document-codes.service.js'
 import { serviceDb, type ServiceTransaction } from './service-transaction.js'
+import { lockOpenShiftId } from './shifts.service.js'
 
 export interface ReceiptsActor {
   userId: string
@@ -62,6 +65,8 @@ export { formatVnd }
 
 interface ReceiptRow {
   id: string
+  code: string
+  paymentMethod: string | null
   customerId: string
   customerName: string | null
   customerCode: string | null
@@ -82,6 +87,8 @@ interface ReceiptRow {
 export function toReceiptListItem(row: ReceiptRow): ReceiptListItem {
   return {
     id: row.id,
+    code: row.code,
+    paymentMethod: toMoneyMethod(row.paymentMethod),
     customerId: row.customerId,
     customerName: row.customerName,
     customerCode: row.customerCode,
@@ -132,6 +139,8 @@ const cancellers = alias(users, 'receipt_cancellers')
 
 const receiptSelectColumns = {
   id: receipts.id,
+  code: receipts.code,
+  paymentMethod: receipts.paymentMethod,
   customerId: receipts.customerId,
   customerName: customers.name,
   customerCode: customers.code,
@@ -185,6 +194,7 @@ export async function listReceipts({
     const escaped = escapeLikePattern(trimmedSearch)
     const pattern = `%${escaped}%`
     const searchClause = or(
+      ilike(receipts.code, pattern),
       ilike(customers.name, pattern),
       ilike(customers.phone, pattern),
       ilike(receipts.note, pattern),
@@ -378,6 +388,9 @@ export async function createReceipt({
   return db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
 
+    // POS-06: gắn ca đang mở của người lập (không bắt buộc). Khóa ca trước khách, cùng thứ tự đơn hàng
+    const shiftId = await lockOpenShiftId(txDb, actor.storeId, actor.userId)
+
     // 1. Lock customer FIRST
     const customerRows = await tx
       .select()
@@ -454,13 +467,19 @@ export async function createReceipt({
 
     const noteNormalized = input.note?.trim() || null
 
+    // TIEN-109: mã phiếu thu cấp từ bộ đếm theo cửa hàng (R4), không trùng khi lập song song
+    const code = await nextDocumentCode({ db: txDb, storeId: actor.storeId, kind: 'receipt' })
+
     // 5. Insert receipt
     const [receiptRow] = await tx
       .insert(receipts)
       .values({
         storeId: actor.storeId,
+        code,
         customerId: input.customerId,
         amount: input.amount,
+        paymentMethod: input.paymentMethod,
+        shiftId,
         note: noteNormalized,
         createdBy: actor.userId,
       })
@@ -503,9 +522,11 @@ export async function createReceipt({
       targetType: 'receipt',
       targetId: receiptRow.id,
       changes: {
+        code,
         customerId: input.customerId,
         customerName: customer.name,
         amount: input.amount,
+        paymentMethod: input.paymentMethod,
         note: noteNormalized,
         allocationMode: input.allocationMode,
         allocationCount: input.allocations.length,
@@ -547,6 +568,8 @@ export async function createReceipt({
 
     return {
       id: receiptRow.id,
+      code,
+      paymentMethod: input.paymentMethod,
       customerId: customer.id,
       customerName: customer.name,
       customerCode: customer.code,

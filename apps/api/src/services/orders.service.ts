@@ -55,6 +55,7 @@ import {
   lockProductsInIdOrder,
 } from './products-lock.helper.js'
 import { serviceDb, type ServiceTransaction } from './service-transaction.js'
+import { requireShiftForSale, resolveShiftAt } from './shifts.service.js'
 import { assertStoreOwned } from './store-scope.js'
 
 // ---------------------------------------------------------------------------
@@ -160,6 +161,15 @@ export interface CreateOrderDeps {
   clientId?: string | null
   offlineCreatedAt?: string
   skipDebtLimitCheck?: boolean
+}
+
+/** Giờ bán của đơn ngoại tuyến; thiếu, sai hay ở tương lai (đồng hồ máy lệch) thì lấy giờ máy chủ. */
+function offlineSoldAt(offlineCreatedAt: string | undefined): Date {
+  const now = new Date()
+  if (!offlineCreatedAt) return now
+  const soldAt = new Date(offlineCreatedAt)
+  if (Number.isNaN(soldAt.getTime()) || soldAt > now) return now
+  return soldAt
 }
 
 export async function createOrder({
@@ -377,6 +387,14 @@ export async function createOrder({
     const result = await db.transaction(async (tx) => {
       const txDb = tx as unknown as Db
 
+      // POS-06: gắn ca trước mọi khóa khác (thứ tự khóa: ca, customers, debts, products). Đơn POS
+      // bị chặn khi cửa hàng dùng ca mà người bán chưa mở ca; đơn ngoại tuyến gắn theo giờ bán,
+      // không khớp ca nào thì để trống và hiện ở đối soát.
+      const shiftId =
+        source === 'offline_sync'
+          ? await resolveShiftAt(txDb, actor.storeId, actor.userId, offlineSoldAt(offlineCreatedAt))
+          : await requireShiftForSale(txDb, actor.storeId, actor.userId)
+
       // TIEN-103: thứ tự khóa chung customers, debts, products (customer-debt-ledger.service.ts).
       // Đơn ghi nợ khóa khách trước khi đụng tới kho, thay vì chỉ khóa lúc ghi nợ ở cuối.
       if (debtAmount > 0 && input.customerId) {
@@ -409,6 +427,7 @@ export async function createOrder({
           transferAmount: input.transferAmount ?? null,
           change,
           clientId,
+          shiftId,
           note: input.note ?? null,
           status: 'completed',
           // BC-08: số khách đã trả lúc bán, để in lại hóa đơn không đổi theo phát sinh sau
