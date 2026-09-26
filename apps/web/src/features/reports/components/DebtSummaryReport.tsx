@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, Download, FileSpreadsheet, Wallet } from 'lucide-react'
 
-import { formatVndWithSuffix } from '@kiotviet-lite/shared'
+import { calendarDateKey, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Button } from '@/components/ui/button'
@@ -40,7 +40,7 @@ export function DebtSummaryReport({ query }: DebtSummaryReportProps) {
   async function handleExportCsv() {
     setDownloading(true)
     try {
-      const today = new Date().toISOString().slice(0, 10)
+      const today = calendarDateKey(new Date())
       await downloadCsv(
         '/api/v1/reports/debt-summary/csv',
         query,

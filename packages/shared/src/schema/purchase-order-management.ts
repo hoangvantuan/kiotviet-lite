@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { paginationSchema } from './pagination.js'
+import { dateFilterSchema, paginationSchema } from './pagination.js'
 
 export const discountTypeSchema = z.enum(['amount', 'percent'])
 export const paymentStatusSchema = z.enum(['unpaid', 'partial', 'paid'])
@@ -50,8 +50,8 @@ export const listPurchaseOrdersQuerySchema = paginationSchema.extend({
   search: z.string().trim().optional(),
   supplierId: z.string().uuid().optional(),
   paymentStatus: paymentStatusSchema.optional(),
-  fromDate: z.string().datetime().optional(),
-  toDate: z.string().datetime().optional(),
+  fromDate: dateFilterSchema.optional(),
+  toDate: dateFilterSchema.optional(),
 })
 
 export const purchaseOrderItemDetailSchema = z.object({

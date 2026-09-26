@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 import { NAME_REGEX, PHONE_REGEX, TAX_ID_REGEX } from '../constants/regex.js'
-import { paginationSchema } from './pagination.js'
+import { dateFilterSchema, paginationSchema } from './pagination.js'
 
 const GROUP_NAME_REGEX = /^[\p{L}\p{N}\s\-_&()'./]+$/u
 
@@ -212,8 +212,8 @@ export const customerStatsSchema = z.object({
 
 export const listCustomerOrdersQuerySchema = paginationSchema.extend({
   status: customerOrderStatusSchema.optional(),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
+  dateFrom: dateFilterSchema.optional(),
+  dateTo: dateFilterSchema.optional(),
 })
 
 export type CreateCustomerGroupInput = z.infer<typeof createCustomerGroupSchema>

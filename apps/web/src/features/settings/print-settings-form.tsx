@@ -3,7 +3,11 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ImagePlus, X } from 'lucide-react'
 
-import { type UpdatePrintSettingsInput, updatePrintSettingsSchema } from '@kiotviet-lite/shared'
+import {
+  paperSizeSchema,
+  type UpdatePrintSettingsInput,
+  updatePrintSettingsSchema,
+} from '@kiotviet-lite/shared'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,8 +22,10 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { formatVnd } from '@/lib/currency'
+import { formatQuantityWithUnit, INVOICE_DEBT_LABELS, invoiceDebtLines } from '@/lib/invoice-lines'
 import { showError, showSuccess } from '@/lib/toast'
 
+import { useInvoiceStoreInfo } from '../orders/use-invoice-store-info'
 import { usePrintSettingsQuery, useUpdatePrintSettingsMutation } from './use-print-settings'
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024
@@ -42,17 +48,30 @@ const TOGGLE_FIELDS: ToggleField[] = [
   { name: 'showCustomerPhone', label: 'Số điện thoại khách hàng' },
   { name: 'showDiscount', label: 'Chiết khấu' },
   { name: 'showSku', label: 'Mã hàng' },
-  { name: 'showOldDebt', label: 'Nợ trước đơn' },
-  { name: 'showNewDebt', label: 'Nợ mới' },
+  { name: 'showOldDebt', label: INVOICE_DEBT_LABELS.before },
+  { name: 'showNewDebt', label: INVOICE_DEBT_LABELS.after },
   { name: 'showCostPrice', label: 'Giá vốn' },
   { name: 'showNotes', label: 'Ghi chú cuối hóa đơn' },
 ]
 
+// Thành tiền đã trừ chiết khấu dòng; chiết khấu hóa đơn tính riêng trên tạm tính
 const SAMPLE_ITEMS = [
-  { name: 'Sữa tươi Vinamilk 1L', qty: 2, price: 35000, discount: 0, total: 70000 },
-  { name: 'Mì Hảo Hảo (thùng 30)', qty: 1, price: 95000, discount: 5000, total: 90000 },
-  { name: 'Coca-Cola 330ml', qty: 3, price: 10000, discount: 0, total: 30000 },
+  { name: 'Sữa tươi Vinamilk 1L', unit: 'Hộp', qty: 2, price: 35000, discount: 0, total: 70000 },
+  { name: 'Mì Hảo Hảo', unit: 'Thùng', qty: 1, price: 95000, discount: 5000, total: 90000 },
+  { name: 'Coca-Cola 330ml', unit: 'Lon', qty: 3, price: 10000, discount: 0, total: 30000 },
 ]
+const SAMPLE_SUBTOTAL = 190000
+const SAMPLE_ORDER_DISCOUNT = 10000
+const SAMPLE_TOTAL = SAMPLE_SUBTOTAL - SAMPLE_ORDER_DISCOUNT
+const SAMPLE_PAID = 100000
+// Mẫu có ghi nợ để xem trước đủ ba dòng công nợ
+const SAMPLE_DEBT = { oldDebt: 500000, debtAmount: SAMPLE_TOTAL - SAMPLE_PAID }
+
+/** BC-07: Radix Select có thể gọi onValueChange('') khi form.reset đổi giá trị; chỉ nhận khổ hợp lệ */
+function parsePaperSize(value: string): UpdatePrintSettingsInput['defaultPaperSize'] | null {
+  const parsed = paperSizeSchema.safeParse(value)
+  return parsed.success ? parsed.data : null
+}
 
 export function PrintSettingsForm() {
   const settingsQuery = usePrintSettingsQuery()
@@ -130,14 +149,18 @@ export function PrintSettingsForm() {
     setLogoError(null)
   }
 
-  const submit = form.handleSubmit(async (values) => {
-    try {
-      await updateMutation.mutateAsync(values)
-      showSuccess('Đã lưu cài đặt mẫu in')
-    } catch {
-      showError('Không lưu được cài đặt mẫu in')
-    }
-  })
+  const submit = form.handleSubmit(
+    async (values) => {
+      try {
+        await updateMutation.mutateAsync(values)
+        showSuccess('Đã lưu cài đặt mẫu in')
+      } catch {
+        showError('Không lưu được cài đặt mẫu in')
+      }
+    },
+    // BC-07: không để lưu thất bại trong im lặng
+    () => showError('Chưa lưu được, vui lòng kiểm tra các trường được đánh dấu'),
+  )
 
   if (settingsQuery.isLoading) {
     return <p className="text-sm text-muted-foreground">Đang tải cài đặt mẫu in…</p>
@@ -212,13 +235,13 @@ export function PrintSettingsForm() {
           <Label>Khổ giấy mặc định</Label>
           <Select
             value={watched.defaultPaperSize ?? '58mm'}
-            onValueChange={(v) =>
-              form.setValue('defaultPaperSize', v as UpdatePrintSettingsInput['defaultPaperSize'], {
-                shouldDirty: true,
-              })
-            }
+            onValueChange={(v) => {
+              const size = parsePaperSize(v)
+              if (!size) return
+              form.setValue('defaultPaperSize', size, { shouldDirty: true, shouldValidate: true })
+            }}
           >
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-48" aria-label="Khổ giấy mặc định">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -229,6 +252,9 @@ export function PrintSettingsForm() {
               ))}
             </SelectContent>
           </Select>
+          {form.formState.errors.defaultPaperSize && (
+            <p className="text-sm text-destructive">Vui lòng chọn khổ giấy</p>
+          )}
         </div>
 
         <Separator />
@@ -284,8 +310,13 @@ export function PrintSettingsForm() {
 }
 
 function InvoicePreview({ settings }: { settings: UpdatePrintSettingsInput }) {
+  const store = useInvoiceStoreInfo()
   const paperSize = settings.defaultPaperSize ?? '58mm'
   const isThermal = paperSize === '58mm' || paperSize === '80mm'
+  const debtLines = invoiceDebtLines(SAMPLE_DEBT, {
+    showOldDebt: !!settings.showOldDebt,
+    showNewDebt: !!settings.showNewDebt,
+  })
   const maxW = isThermal ? (paperSize === '58mm' ? 'max-w-[220px]' : 'max-w-[300px]') : 'max-w-md'
 
   return (
@@ -299,10 +330,10 @@ function InvoicePreview({ settings }: { settings: UpdatePrintSettingsInput }) {
             className="mx-auto mb-1 h-10 w-10 object-contain"
           />
         )}
-        <p className="font-bold text-sm">Cửa hàng ABC</p>
+        <p className="font-bold text-sm">{store.name || 'Tên cửa hàng'}</p>
         {settings.slogan && <p className="text-[10px] text-gray-500">{settings.slogan}</p>}
-        <p className="text-[10px] text-gray-500">123 Nguyễn Huệ, Q.1, TP.HCM</p>
-        <p className="text-[10px] text-gray-500">SĐT: 0901 234 567</p>
+        {store.address && <p className="text-[10px] text-gray-500">{store.address}</p>}
+        {store.phone && <p className="text-[10px] text-gray-500">SĐT: {store.phone}</p>}
       </div>
 
       <DashedLine />
@@ -321,13 +352,13 @@ function InvoicePreview({ settings }: { settings: UpdatePrintSettingsInput }) {
       <div className="space-y-1">
         {SAMPLE_ITEMS.map((item) => (
           <div key={item.name}>
-            <p className="truncate">
+            <p className="break-words">
               {settings.showSku && <span className="text-gray-400 mr-1">SKU001</span>}
               {item.name}
             </p>
             <div className="flex justify-between pl-2">
               <span>
-                {item.qty} x {formatVnd(item.price)}
+                {formatQuantityWithUnit(item.qty, item.unit)} x {formatVnd(item.price)}
               </span>
               <span>{formatVnd(item.total)}</span>
             </div>
@@ -345,19 +376,26 @@ function InvoicePreview({ settings }: { settings: UpdatePrintSettingsInput }) {
 
       {/* Totals */}
       <div className="space-y-0.5">
-        <PreviewRow label="Tạm tính" value={formatVnd(190000)} />
-        {settings.showDiscount && <PreviewRow label="Chiết khấu" value={`-${formatVnd(5000)}`} />}
-        <PreviewRow label="TỔNG" value={formatVnd(185000)} bold />
-        <PreviewRow label="Tiền mặt" value={formatVnd(200000)} />
-        <PreviewRow label="Tiền thừa" value={formatVnd(15000)} />
+        <PreviewRow label="Tạm tính" value={formatVnd(SAMPLE_SUBTOTAL)} />
+        {settings.showDiscount && (
+          <PreviewRow label="Chiết khấu" value={`-${formatVnd(SAMPLE_ORDER_DISCOUNT)}`} />
+        )}
+        <PreviewRow label="TỔNG" value={formatVnd(SAMPLE_TOTAL)} bold />
+        <PreviewRow label="Tiền mặt" value={formatVnd(SAMPLE_PAID)} />
       </div>
 
-      {(settings.showOldDebt || settings.showNewDebt) && (
+      {debtLines.length > 0 && (
         <>
           <DashedLine />
           <div className="space-y-0.5">
-            {settings.showOldDebt && <PreviewRow label="Nợ trước đơn" value={formatVnd(500000)} />}
-            {settings.showNewDebt && <PreviewRow label="Nợ mới" value={formatVnd(0)} />}
+            {debtLines.map((line) => (
+              <PreviewRow
+                key={line.key}
+                label={line.label}
+                value={formatVnd(line.value)}
+                bold={line.emphasis}
+              />
+            ))}
           </div>
         </>
       )}

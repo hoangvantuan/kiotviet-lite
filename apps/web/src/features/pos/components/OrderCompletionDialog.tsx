@@ -12,7 +12,6 @@ import {
 import { usePrintSettingsQuery } from '@/features/settings/use-print-settings'
 import { PAYMENT_METHOD_LABELS } from '@/lib/constants'
 import { formatVndWithSuffix } from '@/lib/currency'
-import { useAuthStore } from '@/stores/use-auth-store'
 
 import {
   OrderInvoiceA4,
@@ -21,6 +20,7 @@ import {
 } from '../../orders/order-invoice-template'
 import type { OrderDetailResponse } from '../../orders/orders-api'
 import { PrintButton } from '../../orders/print-button'
+import { useInvoiceStoreInfo } from '../../orders/use-invoice-store-info'
 import { type PrintFormat, toThermalOrder, usePrintOrder } from '../../orders/use-print-order'
 import type { OrderDetail } from '../types'
 
@@ -73,8 +73,8 @@ export function OrderCompletionDialog({
   const userInteracted = useRef(false)
 
   const { printOrder } = usePrintOrder()
-  const user = useAuthStore((s) => s.user)
   const printSettingsQuery = usePrintSettingsQuery()
+  const storeInfo = useInvoiceStoreInfo()
 
   // Ref to always hold the latest onNewOrder callback (avoids stale closure)
   const onNewOrderRef = useRef(onNewOrder)
@@ -134,8 +134,6 @@ export function OrderCompletionDialog({
   function handlePrint(format: PrintFormat) {
     handleInteraction()
     if (!order) return
-    // H5: Đọc store name từ auth user nếu có, fallback "Cửa hàng"
-    const storeInfo = { name: user?.name ?? 'Cửa hàng' }
     printOrder({
       order: toThermalOrder({
         ...order,
@@ -253,9 +251,21 @@ export function OrderCompletionDialog({
       {/* Print templates (hidden, only visible during window.print) */}
       {order && (
         <>
-          <OrderInvoiceThermal order={orderForTemplate} printSettings={printSettingsQuery.data} />
-          <OrderInvoiceA4 order={orderForTemplate} printSettings={printSettingsQuery.data} />
-          <OrderInvoiceA5 order={orderForTemplate} printSettings={printSettingsQuery.data} />
+          <OrderInvoiceThermal
+            order={orderForTemplate}
+            store={storeInfo}
+            printSettings={printSettingsQuery.data}
+          />
+          <OrderInvoiceA4
+            order={orderForTemplate}
+            store={storeInfo}
+            printSettings={printSettingsQuery.data}
+          />
+          <OrderInvoiceA5
+            order={orderForTemplate}
+            store={storeInfo}
+            printSettings={printSettingsQuery.data}
+          />
         </>
       )}
     </>

@@ -1,6 +1,12 @@
 import { PAYMENT_METHOD_LABELS } from './constants'
 import { formatVnd } from './currency'
 import { formatDateTimeForReceipt } from './date'
+import {
+  formatQuantityWithUnit,
+  invoiceDebtLines,
+  invoiceItemName,
+  wrapText,
+} from './invoice-lines'
 
 /**
  * ESC/POS command constants for thermal printers.
@@ -260,12 +266,11 @@ export function buildOrderReceipt(
     buf.pushLine(twoColumns('Tiền thừa:', formatVnd(order.change), w))
   }
 
-  // Debt
-  if (options.showOldDebt && order.oldDebt != null && order.oldDebt > 0) {
-    buf.pushLine(twoColumns('Nợ trước đơn:', formatVnd(order.oldDebt), w))
-  }
-  if ((options.showNewDebt ?? true) && order.debtAmount > 0) {
-    buf.pushLine(twoColumns('Còn nợ:', formatVnd(order.debtAmount), w))
+  // Công nợ (UX-09): nhãn dùng chung với mẫu in trình duyệt
+  for (const line of invoiceDebtLines(order, options)) {
+    if (line.emphasis) buf.pushBytes([...CMD.BOLD_ON])
+    buf.pushLine(twoColumns(`${line.label}:`, formatVnd(line.value), w))
+    if (line.emphasis) buf.pushBytes([...CMD.BOLD_OFF])
   }
 
   // Cost price
@@ -312,14 +317,9 @@ function buildItems58mm(
   showSku: boolean,
 ): void {
   for (const item of items) {
-    let name = item.variantName ? `${item.productName} (${item.variantName})` : item.productName
-    if (showSku && item.sku) {
-      name = `[${item.sku}] ${name}`
-    }
-    // Line 1: product name (truncate if needed)
-    buf.pushLine(name.length > w ? name.slice(0, w) : name)
-    // Line 2: qty x price = total
-    const detail = `${item.quantity} x ${formatVnd(item.unitPrice)}`
+    // BC-09: tên hàng ngắt dòng, không cắt cụt; số lượng kèm đơn vị tính
+    for (const line of wrapText(invoiceItemName(item, showSku), w)) buf.pushLine(line)
+    const detail = `${formatQuantityWithUnit(item.quantity, item.unit)} x ${formatVnd(item.unitPrice)}`
     const total = formatVnd(item.lineTotal)
     buf.pushLine(twoColumns(` ${detail}`, total, w))
   }
@@ -333,26 +333,23 @@ function buildItems80mm(
   showSku: boolean,
 ): void {
   for (const item of items) {
-    let name = item.variantName ? `${item.productName} (${item.variantName})` : item.productName
-    if (showSku && item.sku) {
-      name = `[${item.sku}] ${name}`
-    }
+    // BC-09: tên hàng ngắt dòng, không cắt cụt; số lượng kèm đơn vị tính
+    const name = invoiceItemName(item, showSku)
+    const qty = formatQuantityWithUnit(item.quantity, item.unit)
+    const total = formatVnd(item.lineTotal)
 
     if (showDiscount && item.discountAmount > 0) {
-      // Name might be long, put on its own line if needed
-      buf.pushLine(name.length > w ? name.slice(0, w) : name)
-      const detail = ` ${item.quantity} x ${formatVnd(item.unitPrice)} CK -${formatVnd(item.discountAmount)}`
-      const total = formatVnd(item.lineTotal)
+      for (const line of wrapText(name, w)) buf.pushLine(line)
+      const detail = ` ${qty} x ${formatVnd(item.unitPrice)} CK -${formatVnd(item.discountAmount)}`
       buf.pushLine(twoColumns(detail, total, w))
     } else {
-      // Try to fit in one line: name + qty x price = total
-      const qtyPrice = `${item.quantity}x${formatVnd(item.unitPrice)}`
-      const total = formatVnd(item.lineTotal)
+      // Vừa một dòng thì in: tên, SL x giá, thành tiền
+      const qtyPrice = `${qty} x ${formatVnd(item.unitPrice)}`
       const rightPart = `${qtyPrice} ${total}`
       if (name.length + rightPart.length + 1 <= w) {
         buf.pushLine(twoColumns(name, rightPart, w))
       } else {
-        buf.pushLine(name.length > w ? name.slice(0, w) : name)
+        for (const line of wrapText(name, w)) buf.pushLine(line)
         buf.pushLine(twoColumns(` ${qtyPrice}`, total, w))
       }
     }

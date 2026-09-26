@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { paginationSchema } from './pagination.js'
+import { dateFilterSchema, paginationSchema } from './pagination.js'
 
 export const stockCheckStatusSchema = z.enum(['draft', 'confirmed'])
 
@@ -35,8 +35,8 @@ export const updateStockCheckBodySchema = z.object({
 export const listStockChecksQuerySchema = paginationSchema.extend({
   status: stockCheckStatusSchema.optional(),
   search: z.string().trim().optional(),
-  fromDate: z.string().datetime().optional(),
-  toDate: z.string().datetime().optional(),
+  fromDate: dateFilterSchema.optional(),
+  toDate: dateFilterSchema.optional(),
 })
 
 export const stockCheckItemDetailSchema = z.object({

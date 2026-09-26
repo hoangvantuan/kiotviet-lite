@@ -13,6 +13,7 @@ import { setupGracefulShutdown } from './lib/graceful-shutdown.js'
 import { parseJson } from './lib/http.js'
 import { initLogger, logger } from './lib/logger.js'
 import { opsAlerter, serverErrorSpikeAlert, watchReadiness } from './lib/ops-monitor.js'
+import { assertStoreTimezoneConfig } from './lib/timezone.js'
 import { requireAuth } from './middleware/auth.middleware.js'
 import { csrfProtection } from './middleware/csrf.middleware.js'
 import { errorHandler } from './middleware/error-handler.js'
@@ -52,6 +53,9 @@ import { createVolumePricesRoutes } from './routes/volume-prices.routes.js'
 import { importStorageRoot, verifyImportStorageRoot } from './services/bulk-import-jobs.service.js'
 import { drainBulkImportRunner } from './services/bulk-import-runner.service.js'
 import { startIdempotencyKeyCleanup } from './services/idempotency-cleanup.service.js'
+
+// R7: múi giờ cửa hàng sai thì mọi mốc ngày đều lệch, dừng ngay lúc khởi động
+assertStoreTimezoneConfig()
 
 // Refuse to serve any endpoint when production import storage is absent or unsafe.
 if (process.env.NODE_ENV === 'production') await verifyImportStorageRoot(importStorageRoot())

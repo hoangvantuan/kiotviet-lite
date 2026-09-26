@@ -28,7 +28,14 @@ const PRESET_LABELS: Record<DatePreset, string> = {
   all: 'Tất cả',
 }
 
+type DebtReportTab = 'aging' | 'summary'
+
+// BC-04: tuổi nợ là ảnh chụp dư nợ hiện tại nên không lọc theo ngày phát sinh (lọc sẽ giấu
+// đúng các khoản nợ lâu nhất). Khoảng thời gian chỉ áp cho tab Tổng hợp (thu, chi trong kỳ).
+const AGING_QUERY = {}
+
 export function ReportsPage() {
+  const [tab, setTab] = useState<DebtReportTab>('aging')
   const [preset, setPreset] = useState<DatePreset>('90days')
   const dateQuery = getDateRange(preset)
 
@@ -37,32 +44,36 @@ export function ReportsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-foreground">Báo cáo công nợ</h1>
-          <p className="text-sm text-muted-foreground">Theo dõi tình hình công nợ khách hàng và nhà cung cấp.</p>
+          <p className="text-sm text-muted-foreground">
+            Theo dõi tình hình công nợ khách hàng và nhà cung cấp.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Khoảng thời gian:</span>
-          <Select value={preset} onValueChange={(v) => setPreset(v as DatePreset)}>
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(PRESET_LABELS).map(([key, label]) => (
-                <SelectItem key={key} value={key}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {tab === 'summary' && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Khoảng thời gian:</span>
+            <Select value={preset} onValueChange={(v) => setPreset(v as DatePreset)}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(PRESET_LABELS).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
-      <Tabs defaultValue="aging">
+      <Tabs value={tab} onValueChange={(v) => setTab(v === 'summary' ? 'summary' : 'aging')}>
         <TabsList>
           <TabsTrigger value="aging">Tuổi nợ</TabsTrigger>
           <TabsTrigger value="summary">Tổng hợp</TabsTrigger>
         </TabsList>
         <TabsContent value="aging" className="mt-4">
-          <DebtAgingReport query={dateQuery} />
+          <DebtAgingReport query={AGING_QUERY} />
         </TabsContent>
         <TabsContent value="summary" className="mt-4">
           <DebtSummaryReport query={dateQuery} />

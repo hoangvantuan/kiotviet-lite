@@ -143,8 +143,8 @@ describe('OrderInvoiceThermal template', () => {
     expect(html).toContain('SĐT: 0987654321')
     expect(html).toContain('[SUA-001]')
     expect(html).toContain('Chiết khấu')
-    expect(html).toContain('Nợ trước đơn')
-    expect(html).toContain('Còn nợ')
+    expect(html).toContain('Công nợ trước đơn')
+    expect(html).toContain('Nợ của đơn này')
     expect(html).toContain('Giá vốn')
     expect(html).toContain('Ghi chú: Giao hàng buổi sáng')
     expect(html).toContain('Cảm ơn và hẹn gặp lại!')
@@ -177,8 +177,8 @@ describe('OrderInvoiceThermal template', () => {
     expect(html).not.toContain('SĐT: 0987654321')
     expect(html).not.toContain('[SUA-001]')
     expect(html).not.toContain('Chiết khấu')
-    expect(html).not.toContain('Nợ trước đơn')
-    expect(html).not.toContain('Còn nợ')
+    expect(html).not.toContain('Công nợ trước đơn')
+    expect(html).not.toContain('Nợ của đơn này')
     expect(html).not.toContain('Giá vốn')
     expect(html).not.toContain('Ghi chú: Giao hàng buổi sáng')
     expect(html).toContain('Tạm biệt!')
@@ -204,8 +204,8 @@ describe('OrderInvoiceA4 template', () => {
     expect(html).toContain('[SUA-001]')
     expect(html).toContain('[BM-002]')
     expect(html).toContain('Chiết khấu')
-    expect(html).toContain('Nợ trước đơn')
-    expect(html).toContain('Còn nợ')
+    expect(html).toContain('Công nợ trước đơn')
+    expect(html).toContain('Nợ của đơn này')
     expect(html).toContain('Tổng giá vốn')
     expect(html).toContain('Ghi chú: Giao hàng buổi sáng')
     expect(html).toContain('Cảm ơn và hẹn gặp lại!')
@@ -220,8 +220,8 @@ describe('OrderInvoiceA4 template', () => {
     expect(html).not.toContain('Mã KH: KH000063')
     expect(html).not.toContain('SĐT: 0987654321')
     expect(html).not.toContain('[SUA-001]')
-    expect(html).not.toContain('Nợ trước đơn')
-    expect(html).not.toContain('Còn nợ')
+    expect(html).not.toContain('Công nợ trước đơn')
+    expect(html).not.toContain('Nợ của đơn này')
     expect(html).not.toContain('Tổng giá vốn')
     expect(html).not.toContain('Ghi chú: Giao hàng buổi sáng')
     expect(html).toContain('Tạm biệt!')
@@ -243,8 +243,8 @@ describe('OrderInvoiceA5 template', () => {
     expect(html).toContain('Mã KH: KH000063')
     expect(html).toContain('0987654321')
     expect(html).toContain('[SUA-001]')
-    expect(html).toContain('Nợ trước đơn')
-    expect(html).toContain('Còn nợ')
+    expect(html).toContain('Công nợ trước đơn')
+    expect(html).toContain('Nợ của đơn này')
     expect(html).toContain('Giá vốn')
     expect(html).toContain('Ghi chú: Giao hàng buổi sáng')
     expect(html).toContain('Cảm ơn và hẹn gặp lại!')
@@ -258,8 +258,8 @@ describe('OrderInvoiceA5 template', () => {
     expect(html).not.toContain('KH:')
     expect(html).not.toContain('SĐT: 0987654321')
     expect(html).not.toContain('[SUA-001]')
-    expect(html).not.toContain('Nợ trước đơn')
-    expect(html).not.toContain('Còn nợ')
+    expect(html).not.toContain('Công nợ trước đơn')
+    expect(html).not.toContain('Nợ của đơn này')
     expect(html).not.toContain('Giá vốn')
     expect(html).not.toContain('Ghi chú: Giao hàng buổi sáng')
     expect(html).toContain('Tạm biệt!')
@@ -280,7 +280,7 @@ describe('BC-08: in lại dùng số liệu chụp lúc bán', () => {
     usePrintStore.setState({ activePrintFormat: 'a4' })
     const html = renderToStaticMarkup(<OrderInvoiceA4 order={order} isReprint />)
     expect(html).toContain('Đã trả: 65.000')
-    expect(html).toContain('Còn nợ: 20.000')
+    expect(html).toContain('Nợ của đơn này: 20.000')
   })
 
   it('đơn cũ không có ảnh chụp: giữ số hiện tại', async () => {
@@ -289,4 +289,53 @@ describe('BC-08: in lại dùng số liệu chụp lúc bán', () => {
     expect(order.paidAmount).toBe(65000)
     expect(order.debtAmount).toBe(20000)
   })
+})
+
+describe('BC-03, BC-09, UX-09: thông tin cửa hàng, đơn vị tính, nhãn công nợ trên mọi khổ in', () => {
+  const formats = [
+    ['thermal-58', OrderInvoiceThermal],
+    ['a4', OrderInvoiceA4],
+    ['a5', OrderInvoiceA5],
+  ] as const
+
+  for (const [format, Template] of formats) {
+    it(`${format}: in tên, địa chỉ, SĐT cửa hàng từ cài đặt`, () => {
+      usePrintStore.setState({ activePrintFormat: format })
+      const html = renderToStaticMarkup(
+        <Template order={mockOrder} store={mockStore} printSettings={fullPrintSettings} />,
+      )
+      expect(html).toContain('Cửa hàng Tạp Hóa Xanh')
+      expect(html).toContain('123 Đường ABC, Hà Nội')
+      expect(html).toContain('SĐT: 0901234567')
+      // Tên người tạo đơn không được in vào chỗ tên cửa hàng
+      expect(html).not.toContain('Thu ngân 1')
+    })
+
+    it(`${format}: in đơn vị tính của từng dòng hàng`, () => {
+      usePrintStore.setState({ activePrintFormat: format })
+      const html = renderToStaticMarkup(
+        <Template order={mockOrder} store={mockStore} printSettings={fullPrintSettings} />,
+      )
+      if (format === 'thermal-58') {
+        expect(html).toContain('2 Hộp x 35.000')
+        expect(html).toContain('1 Gói x 20.000')
+      } else {
+        expect(html).toContain('ĐVT')
+        expect(html).toContain('>Hộp<')
+        expect(html).toContain('>Gói<')
+      }
+    })
+
+    it(`${format}: ba dòng công nợ trước đơn, của đơn, tổng sau đơn`, () => {
+      usePrintStore.setState({ activePrintFormat: format })
+      const html = renderToStaticMarkup(
+        <Template order={mockOrder} store={mockStore} printSettings={fullPrintSettings} />,
+      )
+      const text = html.replace(/<[^>]+>/g, '')
+      expect(text).toMatch(/Công nợ trước đơn:?\s*50\.000/)
+      expect(text).toMatch(/Nợ của đơn này:?\s*20\.000/)
+      expect(text).toMatch(/Tổng công nợ sau đơn:?\s*70\.000/)
+      expect(text).not.toContain('Còn nợ')
+    })
+  }
 })

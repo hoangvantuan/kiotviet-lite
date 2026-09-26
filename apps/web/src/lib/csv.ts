@@ -1,19 +1,23 @@
-import { slugify as sharedSlugify } from '@kiotviet-lite/shared'
+import {
+  type CsvFieldOptions,
+  escapeCsvField,
+  slugify as sharedSlugify,
+  toCsvLine,
+} from '@kiotviet-lite/shared'
 
-export function escapeCsvField(value: unknown): string {
-  if (value === null || value === undefined) return ''
-  const s = String(value)
-  if (/[,"\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`
-  return s
-}
+// Mã hóa ô dùng chung với API (BC-12): giữ số 0 đầu SĐT, chặn chèn công thức
+export { escapeCsvField }
 
-export function buildCsv(headers: string[], rows: (string | number | null)[][]): string {
-  const lines: string[] = []
-  lines.push(headers.map(escapeCsvField).join(','))
-  for (const row of rows) {
-    lines.push(row.map(escapeCsvField).join(','))
-  }
-  return lines.join('\r\n')
+/**
+ * `options.excelLeadingZero = false` cho tệp dành cho máy đọc (ví dụ CSV so sánh bảng giá):
+ * mã "007" ghi nguyên, không bọc ="007".
+ */
+export function buildCsv(
+  headers: string[],
+  rows: (string | number | null)[][],
+  options?: CsvFieldOptions,
+): string {
+  return [headers, ...rows].map((row) => toCsvLine(row, options)).join('\r\n')
 }
 
 export function downloadCsv(filename: string, csvText: string): void {

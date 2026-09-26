@@ -209,7 +209,7 @@ export interface InventoryReportPaginationMeta {
 
 export interface InventoryCurrentResponse {
   rows: InventoryCurrentRow[]
-  summary: { totalProducts: number; totalStockValue: number }
+  summary: { totalProducts: number; totalQuantity: number; totalStockValue: number }
   pagination: InventoryReportPaginationMeta
 }
 

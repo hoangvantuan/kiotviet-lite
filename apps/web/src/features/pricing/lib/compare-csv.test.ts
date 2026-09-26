@@ -43,6 +43,20 @@ describe('buildCompareCsv', () => {
     expect(lines[1]).toBe('SP1,Sản phẩm 1,50000,80000,37.50,90000,44.44,10000,12.50,0,0')
   })
 
+  it('Biên âm và chênh lệch âm ghi là số, không thêm dấu nháy (review #55)', () => {
+    const csv = buildCompareCsv([
+      makeRow({ priceA: 40000, marginA: -12.5, diffAmount: -5000, diffPercent: -12.5 }),
+    ])
+    expect(csv.split('\r\n')[1]).toBe(
+      'SP1,Sản phẩm 1,50000,40000,-12.50,90000,44.44,-5000,-12.50,0,0',
+    )
+  })
+
+  it('CSV cho máy đọc: mã có số 0 đầu ghi nguyên, không bọc ="..."', () => {
+    const csv = buildCompareCsv([makeRow({ productSku: '007' })])
+    expect(csv.split('\r\n')[1]?.startsWith('007,')).toBe(true)
+  })
+
   it('Row missing A: priceA + marginA + diffAmount + diffPercent rỗng', () => {
     const csv = buildCompareCsv([
       makeRow({

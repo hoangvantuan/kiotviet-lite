@@ -18,6 +18,10 @@ const TEST_ENV = {
   REFRESH_TOKEN_TTL_SECONDS: '604800',
   BCRYPT_ROUNDS: '4',
   COOKIE_SECURE: 'false',
+  // R7: tiến trình chạy UTC như máy chủ production (Docker) và CI. Trên máy dev giờ +07 thì
+  // startOfDay, getHours, toISOString().slice(0, 10) trùng giờ Việt Nam nên lỗi múi giờ bị che;
+  // ép UTC để test nào cắt ngày theo giờ tiến trình đều đỏ ngay trên máy dev.
+  TZ: 'UTC',
 }
 
 /**

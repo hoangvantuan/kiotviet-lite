@@ -86,11 +86,14 @@ describe('thermal-printer buildOrderReceipt', () => {
     expect(text).toContain('Mã KH: KH000063')
     expect(text).toContain('SĐT: 0987654321')
     expect(text).toContain('Chiết khấu:')
-    expect(text).toContain('Còn nợ:')
+    expect(text).toContain('Nợ của đơn này:')
+    // UX-09: tổng sau đơn = công nợ trước đơn 50.000 + nợ của đơn 20.000
+    expect(text).toMatch(/Tổng công nợ sau đơn: *70\.000/)
     expect(text).toContain('Ghi chú: Giao hàng buổi sáng')
     expect(text).toContain('Cảm ơn và hẹn gặp lại!')
     expect(text).not.toContain('SUA-001')
-    expect(text).not.toContain('Nợ trước đơn:')
+    expect(text).not.toContain('Công nợ trước đơn:')
+    expect(text).not.toContain('Còn nợ')
     expect(text).not.toContain('Giá vốn:')
   })
 
@@ -115,13 +118,14 @@ describe('thermal-printer buildOrderReceipt', () => {
     expect(text).not.toContain('Mã KH: KH000063')
     expect(text).not.toContain('SĐT: 0987654321')
     expect(text).not.toContain('Chiết khấu:')
-    expect(text).not.toContain('Còn nợ:')
-    expect(text).not.toContain('Nợ trước đơn:')
+    expect(text).not.toContain('Nợ của đơn này:')
+    expect(text).not.toContain('Công nợ trước đơn:')
+    expect(text).not.toContain('Tổng công nợ sau đơn:')
     expect(text).not.toContain('Ghi chú:')
     expect(text).toContain('Tạm biệt!')
   })
 
-  it('in SKU, Nợ trước đơn, Giá vốn khi các toggle tương ứng được bật', () => {
+  it('in SKU, Công nợ trước đơn, Giá vốn khi các toggle tương ứng được bật', () => {
     const options: PrintOptions = {
       paperWidth: '80mm',
       showCustomerName: true,
@@ -139,9 +143,36 @@ describe('thermal-printer buildOrderReceipt', () => {
 
     expect(text).toContain('[SUA-001]')
     expect(text).toContain('[BM-002]')
-    expect(text).toContain('Nợ trước đơn:')
-    expect(text).toContain('Còn nợ:')
+    expect(text).toMatch(/Công nợ trước đơn: *50\.000/)
+    expect(text).toMatch(/Nợ của đơn này: *20\.000/)
+    expect(text).toMatch(/Tổng công nợ sau đơn: *70\.000/)
     expect(text).toContain('Giá vốn:')
+  })
+
+  it('không in tổng sau đơn khi đơn cũ không có công nợ trước đơn', () => {
+    const text = decodeBuffer(
+      buildOrderReceipt({ ...mockOrder, oldDebt: null }, mockStore, {
+        paperWidth: '58mm',
+        showOldDebt: true,
+        showNewDebt: true,
+      }),
+    )
+    expect(text).toContain('Nợ của đơn này:')
+    expect(text).not.toContain('Tổng công nợ sau đơn:')
+  })
+
+  it('BC-09: in đơn vị tính cạnh số lượng và ngắt dòng tên dài thay vì cắt cụt', () => {
+    const longName = 'Nước giặt Omo Matic cửa trên túi siêu tiết kiệm'
+    const order: ThermalOrder = {
+      ...mockOrder,
+      items: [{ ...mockOrder.items[1]!, productName: longName, unit: 'Túi', quantity: 3 }],
+    }
+    for (const paperWidth of ['58mm', '80mm'] as const) {
+      const text = decodeBuffer(buildOrderReceipt(order, mockStore, { paperWidth }))
+      expect(text).toContain('3 Túi x 20.000')
+      // Mọi từ của tên đều có mặt (ngắt dòng, không mất chữ)
+      expect(text.replace(/\s+/g, ' ')).toContain(longName)
+    }
   })
 
   it('in đúng nhãn BẢN IN LẠI khi isReprint=true', () => {

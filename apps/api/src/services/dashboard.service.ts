@@ -1,14 +1,4 @@
-import {
-  startOfDay,
-  startOfMonth,
-  startOfWeek,
-  startOfYear,
-  subDays,
-  subMonths,
-  subWeeks,
-  subYears,
-} from 'date-fns'
-import { and, eq, gt, gte, isNull, lte, sql } from 'drizzle-orm'
+import { and, eq, gt, gte, lte, sql } from 'drizzle-orm'
 
 import {
   customers,
@@ -22,6 +12,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { effectiveStockSql, lowStockConditionSql } from '../lib/effective-stock.js'
 import {
   orderItemCogsExpr,
   orderItemNetQuantityExpr,
@@ -29,45 +20,28 @@ import {
   orderNetRevenueExpr,
   revenueStatusFilter,
 } from '../lib/order-status.js'
-import { dateTruncLocal, lastLocalDays } from '../lib/timezone.js'
+import {
+  dateTruncLocal,
+  lastLocalDays,
+  localDaysSinceSql,
+  sameMomentPreviousPeriod,
+  startOfLocalPeriod,
+} from '../lib/timezone.js'
 
 interface PeriodRange {
   start: Date
   end: Date
 }
 
+// BC-02: đầu kỳ theo lịch cửa hàng. Không dùng startOfDay của date-fns, vì hàm đó theo giờ tiến trình
+// (UTC trong Docker) nên đơn từ 00:00 đến 07:00 giờ Việt Nam rơi sang ngày khác.
 function getPeriodRange(period: DashboardPeriod, now: Date): PeriodRange {
-  switch (period) {
-    case 'today':
-      return { start: startOfDay(now), end: now }
-    case 'week':
-      return { start: startOfWeek(now, { weekStartsOn: 1 }), end: now }
-    case 'month':
-      return { start: startOfMonth(now), end: now }
-    case 'year':
-      return { start: startOfYear(now), end: now }
-  }
+  return { start: startOfLocalPeriod(period, now), end: now }
 }
 
 function getPreviousPeriodRange(period: DashboardPeriod, now: Date): PeriodRange {
-  switch (period) {
-    case 'today': {
-      const d = subDays(now, 1)
-      return { start: startOfDay(d), end: d }
-    }
-    case 'week': {
-      const d = subWeeks(now, 1)
-      return { start: startOfWeek(d, { weekStartsOn: 1 }), end: d }
-    }
-    case 'month': {
-      const d = subMonths(now, 1)
-      return { start: startOfMonth(d), end: d }
-    }
-    case 'year': {
-      const d = subYears(now, 1)
-      return { start: startOfYear(d), end: d }
-    }
-  }
+  const d = sameMomentPreviousPeriod(period, now)
+  return { start: startOfLocalPeriod(period, d), end: d }
 }
 
 function computeTrend(value: number, previousValue: number): number | null {
@@ -365,7 +339,8 @@ export async function getTopProducts(
       ),
     )
     .groupBy(orderItems.productId, orderItems.productName)
-    .orderBy(sql`sum(${orderItemNetQuantityExpr()}) DESC`)
+    // BC-17: xếp theo doanh thu, số lượng lẫn đơn vị (1 thùng với 5 gói) không so được với nhau
+    .orderBy(sql`sum(${orderItemNetRevenueExpr()}) DESC`)
     .limit(5)
 
   return result.map((r) => ({
@@ -381,32 +356,30 @@ export async function getLowStockAlerts(
   db: Db,
   storeId: string,
 ): Promise<DashboardResponse['lowStockAlerts']> {
+  // BC-11: tồn hiệu lực và điều kiện sắp hết hàng dùng chung với chuông thông báo và báo cáo tồn
+  const stock = effectiveStockSql()
   const result = await db
     .select({
       productId: products.id,
       name: products.name,
-      currentStock: products.currentStock,
+      currentStock: sql<number>`${stock}`.as('current_stock'),
       minStock: products.minStock,
     })
     .from(products)
-    .where(
-      and(
-        eq(products.storeId, storeId),
-        isNull(products.deletedAt),
-        gt(products.minStock, 0),
-        sql`${products.currentStock} <= ${products.minStock}`,
-      ),
-    )
-    .orderBy(products.currentStock)
+    .where(and(eq(products.storeId, storeId), lowStockConditionSql()))
+    .orderBy(sql`current_stock ASC`)
     .limit(5)
 
-  return result.map((r) => ({
-    productId: r.productId,
-    name: r.name,
-    currentStock: r.currentStock,
-    minStock: r.minStock,
-    status: r.currentStock === 0 ? ('out' as const) : ('low' as const),
-  }))
+  return result.map((r) => {
+    const currentStock = Number(r.currentStock)
+    return {
+      productId: r.productId,
+      name: r.name,
+      currentStock,
+      minStock: r.minStock,
+      status: currentStock <= 0 ? ('out' as const) : ('low' as const),
+    }
+  })
 }
 
 function parseOverdueDays(raw: string): number[] {
@@ -426,25 +399,20 @@ export async function getOverdueDebts(
   const overdueDays = parseOverdueDays(store?.debtOverdueDays ?? '30,60,90')
   const minOverdueDays = overdueDays[0] ?? 30
 
-  // Find customers with overdue debts
+  // Tuổi nợ tính theo ngày lịch của cửa hàng (TIEN-112), không theo 24 giờ trôi qua
+  const age = localDaysSinceSql(debts.createdAt)
   const result = await db
     .select({
       customerId: debts.customerId,
       name: customers.name,
       totalDebt: sql<number>`sum(${debts.remaining})`,
-      maxOverdueDays: sql<number>`max(extract(day from now() - ${debts.createdAt})::integer)`,
+      maxOverdueDays: sql<number>`max(${age})`,
     })
     .from(debts)
     .innerJoin(customers, eq(debts.customerId, customers.id))
-    .where(
-      and(
-        eq(debts.storeId, storeId),
-        gt(debts.remaining, 0),
-        sql`extract(day from now() - ${debts.createdAt})::integer > ${minOverdueDays}`,
-      ),
-    )
+    .where(and(eq(debts.storeId, storeId), gt(debts.remaining, 0), sql`${age} > ${minOverdueDays}`))
     .groupBy(debts.customerId, customers.name)
-    .orderBy(sql`max(extract(day from now() - ${debts.createdAt})::integer) DESC`)
+    .orderBy(sql`max(${age}) DESC`)
     .limit(5)
 
   return result.map((r) => ({

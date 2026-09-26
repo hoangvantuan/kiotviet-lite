@@ -817,8 +817,11 @@ export async function listCustomerOrders({
     }
   }
 
-  if (dateFrom) conditions.push(gte(orders.createdAt, new Date(dateFrom)))
-  if (dateTo) conditions.push(lte(orders.createdAt, new Date(dateTo)))
+  // R7: ngày YYYY-MM-DD hiểu theo lịch cửa hàng; trước đây dateTo là 00:00 UTC nên mất cả ngày cuối
+  const from = parseDateRangeBoundary(dateFrom, 'start')
+  const to = parseDateRangeBoundary(dateTo, 'end')
+  if (from) conditions.push(gte(orders.createdAt, from))
+  if (to) conditions.push(lte(orders.createdAt, to))
 
   const whereClause = and(...conditions)
 

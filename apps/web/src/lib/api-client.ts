@@ -1,3 +1,5 @@
+import { PIN_INVALID_REASON } from '@kiotviet-lite/shared'
+
 import { useAuthStore } from '@/stores/use-auth-store'
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000'
@@ -275,6 +277,19 @@ async function tryRefresh(): Promise<boolean> {
   return refreshPromise
 }
 
+/**
+ * POS-10: 401 do nhập sai PIN không phải phiên hết hạn. Làm mới phiên rồi gửi lại sẽ khiến máy chủ
+ * kiểm PIN hai lần cho một lần nhập, khóa PIN sau 3 lần thay vì 5.
+ */
+async function isPinInvalid(res: Response): Promise<boolean> {
+  try {
+    const body = (await res.clone().json()) as { error?: { details?: { reason?: unknown } } }
+    return body?.error?.details?.reason === PIN_INVALID_REASON
+  } catch {
+    return false
+  }
+}
+
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const {
     body,
@@ -324,7 +339,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   }
   const receivedRequestId = safeRequestId(res.headers.get('X-Request-Id')) ?? requestId
 
-  if (res.status === 401 && auth && !skipRefresh) {
+  if (res.status === 401 && auth && !skipRefresh && !(await isPinInvalid(res))) {
     const refreshed = await tryRefresh()
     if (refreshed) {
       return apiFetch<T>(path, { ...options, skipRefresh: true })

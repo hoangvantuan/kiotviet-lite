@@ -1,10 +1,11 @@
 import { and, eq } from 'drizzle-orm'
 
-import { users } from '@kiotviet-lite/shared'
+import { PIN_INVALID_REASON, users } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { verifyPassword } from '../lib/password.js'
+import { formatLocalTime } from '../lib/timezone.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import { emitEvent } from './notification-emitter.js'
 
@@ -13,10 +14,9 @@ export const PIN_LOCK_DURATION_MS = 15 * 60 * 1000
 
 const DUMMY_HASH = '$2a$12$000000000000000000000uGByljMxEOUaVBPH0m37.LMTsGVEqXSq'
 
+// Giờ mở khóa theo múi giờ cửa hàng: máy chủ chạy TZ=UTC nên getHours() lệch 7 giờ (POS-10)
 function formatLockTime(d: Date): string {
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${hh}:${mm}`
+  return formatLocalTime(d)
 }
 
 export interface VerifyPinDeps {
@@ -41,7 +41,13 @@ type PinOutcome =
   | { error: 'NOT_FOUND'; message: string }
   | { error: 'FORBIDDEN'; message: string }
   | { error: 'LOCKED'; message: string; details: { lockedUntil: string } }
-  | { error: 'UNAUTHORIZED'; message: string; details: { remaining: number } }
+  // POS-10: PIN sai vẫn là 401 (outbox ngoại tuyến và các đường gọi cũ dựa vào mã này), kèm `reason`
+  // riêng để máy khách không coi là phiên hết hạn
+  | {
+      error: 'UNAUTHORIZED'
+      message: string
+      details: { remaining: number; reason: typeof PIN_INVALID_REASON }
+    }
 
 export async function verifyPin({
   db,
@@ -88,7 +94,7 @@ export async function verifyPin({
       return {
         error: 'UNAUTHORIZED',
         message: 'Mã PIN không đúng',
-        details: { remaining: MAX_PIN_ATTEMPTS - baseAttempts },
+        details: { remaining: MAX_PIN_ATTEMPTS - baseAttempts, reason: PIN_INVALID_REASON },
       }
     }
 
@@ -148,7 +154,7 @@ export async function verifyPin({
       return {
         error: 'UNAUTHORIZED',
         message: 'Mã PIN không đúng',
-        details: { remaining: MAX_PIN_ATTEMPTS - next },
+        details: { remaining: MAX_PIN_ATTEMPTS - next, reason: PIN_INVALID_REASON },
       }
     }
 

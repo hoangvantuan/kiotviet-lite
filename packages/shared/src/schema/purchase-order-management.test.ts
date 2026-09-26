@@ -175,8 +175,9 @@ describe('listPurchaseOrdersQuerySchema', () => {
     ).toBe(true)
   })
 
-  it('từ chối fromDate không phải ISO', () => {
-    expect(listPurchaseOrdersQuerySchema.safeParse({ fromDate: '2026-04-01' }).success).toBe(false)
+  it('R7: nhận fromDate YYYY-MM-DD (máy chủ cắt theo lịch cửa hàng), từ chối chuỗi ngày sai dạng', () => {
+    expect(listPurchaseOrdersQuerySchema.safeParse({ fromDate: '2026-04-01' }).success).toBe(true)
+    expect(listPurchaseOrdersQuerySchema.safeParse({ fromDate: '01/04/2026' }).success).toBe(false)
   })
 
   it('chấp nhận paymentStatus enum', () => {

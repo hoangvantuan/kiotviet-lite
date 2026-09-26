@@ -41,7 +41,7 @@ async function setup(): Promise<Env> {
   app.onError(errorHandler)
   app.route('/api/v1/reports', reportsApp)
 
-  // Create products with costPrice and minStock
+  // Create products with costPrice and minStock (BC-11: cảnh báo tồn chỉ tính sản phẩm theo dõi tồn)
   const [product1] = await base.db
     .insert(products)
     .values({
@@ -52,6 +52,7 @@ async function setup(): Promise<Env> {
       costPrice: 120_000,
       currentStock: 50,
       minStock: 10,
+      trackInventory: true,
     })
     .returning()
 
@@ -65,6 +66,7 @@ async function setup(): Promise<Env> {
       costPrice: 60_000,
       currentStock: 2,
       minStock: 10,
+      trackInventory: true,
     })
     .returning()
 
@@ -78,6 +80,7 @@ async function setup(): Promise<Env> {
       costPrice: 180_000,
       currentStock: 0,
       minStock: 5,
+      trackInventory: true,
     })
     .returning()
 
@@ -285,11 +288,11 @@ describe('GET /api/v1/reports/dashboard', () => {
     const body = (await res.json()) as { data: DashboardResponse }
     expect(body.data.topProducts).toHaveLength(2)
 
-    // Sorted by quantity: SP B (4) first, SP A (3) second
-    expect(body.data.topProducts[0]!.name).toBe('Sản phẩm B')
-    expect(body.data.topProducts[0]!.quantity).toBe(4)
-    expect(body.data.topProducts[1]!.name).toBe('Sản phẩm A')
-    expect(body.data.topProducts[1]!.quantity).toBe(3)
+    // BC-17: xếp theo doanh thu, SP A (600k, 3 cái) trước SP B (400k, 4 cái)
+    expect(body.data.topProducts[0]!.name).toBe('Sản phẩm A')
+    expect(body.data.topProducts[0]!.quantity).toBe(3)
+    expect(body.data.topProducts[1]!.name).toBe('Sản phẩm B')
+    expect(body.data.topProducts[1]!.quantity).toBe(4)
 
     // Percentage
     expect(body.data.topProducts[0]!.percentage).toBeGreaterThan(0)

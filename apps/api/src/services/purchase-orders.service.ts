@@ -21,6 +21,7 @@ import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { escapeLikePattern } from '../lib/strings.js'
+import { parseDateRangeBoundary } from '../lib/timezone.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import { nextDocumentCode } from './document-codes.service.js'
 import { allocateProportionally, receiveStock } from './inventory-cost.helper.js'
@@ -555,12 +556,11 @@ export async function listPurchaseOrders({
   if (paymentStatus) {
     conditions.push(eq(purchaseOrders.paymentStatus, paymentStatus))
   }
-  if (fromDate) {
-    conditions.push(gte(purchaseOrders.purchaseDate, new Date(fromDate)))
-  }
-  if (toDate) {
-    conditions.push(lte(purchaseOrders.purchaseDate, new Date(toDate)))
-  }
+  // R7: ngày YYYY-MM-DD hiểu theo lịch cửa hàng, không theo UTC
+  const from = parseDateRangeBoundary(fromDate, 'start')
+  const to = parseDateRangeBoundary(toDate, 'end')
+  if (from) conditions.push(gte(purchaseOrders.purchaseDate, from))
+  if (to) conditions.push(lte(purchaseOrders.purchaseDate, to))
 
   const whereClause = and(...conditions)
   const offset = (page - 1) * pageSize
