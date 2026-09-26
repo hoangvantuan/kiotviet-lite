@@ -141,14 +141,15 @@ function isAffected(line: OldLine): boolean {
 /**
  * Đi lại sổ nhập của một sản phẩm không biến thể, trả δ (giá vốn bị thổi trên một đơn vị) hiện tại
  * và giá vốn sau lần nhập cuối để đối chiếu.
- * `missedByCode`: theo mã phiếu, số chiết khấu bị bỏ của từng dòng phiếu cũ của sản phẩm, đúng thứ
- * tự ghi. Mã cũ ghi một giao dịch sổ cho mỗi dòng phiếu, cùng ghi chú mã phiếu và cùng thứ tự, nên
- * giao dịch thứ k của một mã ghép với dòng thứ k (một phiếu có thể có hai dòng cùng sản phẩm).
+ * `missedByPo`: theo id phiếu nhập, số chiết khấu bị bỏ của từng dòng phiếu cũ của sản phẩm, đúng
+ * thứ tự ghi. Mã cũ ghi một giao dịch sổ cho mỗi dòng phiếu, cùng thứ tự, và giao dịch trỏ về phiếu
+ * qua reference_id (POS-18), nên giao dịch thứ k của một phiếu ghép với dòng thứ k (một phiếu có thể
+ * có hai dòng cùng sản phẩm). Nhập tay không có reference_id, không ghép dòng phiếu nào.
  */
 async function replayInflation(
   db: Db,
   productId: string,
-  missedByCode: Map<string, number[]>,
+  missedByPo: Map<string, number[]>,
 ): Promise<{ delta: number; lastCostAfter: number | null; broken: string | null }> {
   const ledger = await db
     .select({
@@ -156,7 +157,8 @@ async function replayInflation(
       unitCost: inventoryTransactions.unitCost,
       stockAfter: inventoryTransactions.stockAfter,
       costAfter: inventoryTransactions.costAfter,
-      note: inventoryTransactions.note,
+      referenceType: inventoryTransactions.referenceType,
+      referenceId: inventoryTransactions.referenceId,
       createdAt: inventoryTransactions.createdAt,
     })
     .from(inventoryTransactions)
@@ -212,7 +214,7 @@ async function replayInflation(
     ),
   ].sort((a, b) => a.at.getTime() - b.at.getTime())
 
-  const pending = new Map([...missedByCode].map(([code, list]) => [code, [...list]]))
+  const pending = new Map([...missedByPo].map(([poId, list]) => [poId, [...list]]))
   let delta = 0
   let lastCostAfter: number | null = null
   // Giá vốn trước mỗi lần nhập theo sổ; undefined là chưa biết (trước lần nhập đầu tiên trong sổ)
@@ -231,7 +233,10 @@ async function replayInflation(
     const qty = row.quantity
     const stockAfter = row.stockAfter
     const stockBefore = stockAfter - qty
-    const missed = (row.note ? pending.get(row.note)?.shift() : undefined) ?? 0
+    const missed =
+      (row.referenceType === 'purchase_order' && row.referenceId
+        ? pending.get(row.referenceId)?.shift()
+        : undefined) ?? 0
     const costAfter = row.costAfter === null ? null : Number(row.costAfter)
     // Lần nhập đầu tiên trong sổ không biết giá vốn trước: mã cũ đặt lại theo đơn giá lô khi chưa có
     // giá vốn, nên giá vốn sau đúng bằng đơn giá ghi sổ là dấu hiệu đặt lại. (Giá vốn trước tình cờ
@@ -336,14 +341,14 @@ export async function recalcInflatedPurchaseCosts({
       continue
     }
 
-    const missedByCode = new Map<string, number[]>()
+    const missedByPo = new Map<string, number[]>()
     for (const l of allOldLines) {
       if (l.productId !== p.id || l.variantId !== null) continue
-      const list = missedByCode.get(l.code) ?? []
+      const list = missedByPo.get(l.purchaseOrderId) ?? []
       list.push(l.missed)
-      missedByCode.set(l.code, list)
+      missedByPo.set(l.purchaseOrderId, list)
     }
-    const { delta, lastCostAfter, broken } = await replayInflation(db, p.id, missedByCode)
+    const { delta, lastCostAfter, broken } = await replayInflation(db, p.id, missedByPo)
 
     let reason: string | null = broken
     if (!reason && currentCost === null) reason = 'Sản phẩm chưa có giá vốn'
