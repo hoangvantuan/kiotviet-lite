@@ -10,6 +10,7 @@ import {
 } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
+import { cashShifts } from './cash-shifts.js'
 import { purchaseOrders } from './purchase-orders.js'
 import { stores } from './stores.js'
 import { suppliers } from './suppliers.js'
@@ -38,6 +39,9 @@ export const purchaseReturns = pgTable(
     totalAmount: bigint({ mode: 'number' }).notNull(),
     debtReductionAmount: bigint({ mode: 'number' }).notNull().default(0),
     supplierRefundAmount: bigint({ mode: 'number' }).notNull().default(0),
+    // BC-06: kênh NCC hoàn tiền và ca nhận tiền; NULL khi không có tiền hoàn
+    refundMethod: varchar({ length: 16 }),
+    shiftId: uuid().references(() => cashShifts.id, { onDelete: 'restrict' }),
     note: text(),
     createdBy: uuid()
       .notNull()
@@ -48,5 +52,6 @@ export const purchaseReturns = pgTable(
     uniqueIndex('uniq_purchase_returns_store_code').on(table.storeId, table.code),
     index('idx_purchase_returns_po').on(table.purchaseOrderId),
     index('idx_purchase_returns_store_created').on(table.storeId, table.createdAt.desc()),
+    index('idx_purchase_returns_shift').on(table.shiftId),
   ],
 )

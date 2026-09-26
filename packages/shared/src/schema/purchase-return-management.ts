@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { documentShiftIdSchema, moneyMethodSchema, refundMethodSchema } from './cash-management.js'
+
 export const purchaseReturnItemInputSchema = z
   .object({
     purchaseOrderItemId: z.string().uuid('Dòng phiếu nhập không hợp lệ'),
@@ -19,6 +21,9 @@ export const createPurchaseReturnSchema = z
       .min(1, 'Cần ít nhất một dòng hàng trả')
       .max(200, 'Tối đa 200 dòng trong một phiếu trả'),
     note: z.string().trim().max(500, 'Ghi chú tối đa 500 ký tự').optional(),
+    // BC-06: kênh NCC hoàn phần tiền (khi trả vượt số còn nợ) và ca nhận tiền; mặc định tiền mặt
+    refundMethod: refundMethodSchema.optional(),
+    shiftId: documentShiftIdSchema,
   })
   .strict()
   .refine((d) => new Set(d.items.map((i) => i.purchaseOrderItemId)).size === d.items.length, {
@@ -48,6 +53,8 @@ export const purchaseReturnSchema = z.object({
   totalAmount: z.number(),
   debtReductionAmount: z.number(),
   supplierRefundAmount: z.number(),
+  /** BC-06: kênh NCC hoàn tiền; null khi không có tiền hoàn hoặc phiếu lập trước thay đổi này */
+  refundMethod: moneyMethodSchema.nullable(),
   note: z.string().nullable(),
   createdBy: z.string().uuid(),
   createdByName: z.string().nullable(),

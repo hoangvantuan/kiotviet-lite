@@ -1,8 +1,8 @@
 import { bigint, index, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
-import { purchaseOrders } from './purchase-orders.js'
 import { cashShifts } from './cash-shifts.js'
+import { purchaseOrders } from './purchase-orders.js'
 import { stores } from './stores.js'
 import { suppliers } from './suppliers.js'
 import { users } from './users.js'

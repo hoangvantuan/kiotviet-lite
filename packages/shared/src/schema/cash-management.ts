@@ -32,6 +32,13 @@ export function moneyMethodLabel(method: MoneyMethod | null): string {
   return method ? MONEY_METHOD_LABELS[method] : UNKNOWN_MONEY_METHOD_LABEL
 }
 
+/** Kênh được chọn khi hoàn tiền (TIEN-02): không có QR. */
+export const REFUND_METHODS = ['cash', 'transfer'] as const satisfies readonly MoneyMethod[]
+export const refundMethodSchema = z.enum(REFUND_METHODS, {
+  errorMap: () => ({ message: 'Phương thức hoàn tiền không hợp lệ' }),
+})
+export type RefundMethod = z.infer<typeof refundMethodSchema>
+
 /**
  * TIEN-02: phương thức hoàn tiền mặc định theo cách khách đã trả đơn gốc. Đơn kết hợp, đơn ghi nợ
  * có trả trước hoàn theo kênh chiếm phần lớn số tiền đã trả (bằng nhau thì tiền mặt); không trả gì
@@ -42,7 +49,7 @@ export function defaultRefundMethod(order: {
   paymentMethod: string
   cashAmount: number | null
   transferAmount: number | null
-}): MoneyMethod {
+}): RefundMethod {
   switch (order.paymentMethod) {
     case 'transfer':
     case 'qr':
@@ -54,9 +61,6 @@ export function defaultRefundMethod(order: {
       return 'cash'
   }
 }
-
-/** Kênh được chọn khi hoàn tiền (TIEN-02): không có QR. */
-export const REFUND_METHODS = ['cash', 'transfer'] as const satisfies readonly MoneyMethod[]
 
 // ---------------------------------------------------------------------------
 // Ca bán hàng (POS-06)
@@ -115,8 +119,11 @@ export const shiftSummarySchema = z.object({
   openingCash: z.number().int(),
   cashSales: z.number().int(),
   cashReceipts: z.number().int(),
+  /** Tiền mặt trả khách: phiếu trả và hủy đơn chi trong ca */
   cashRefunds: z.number().int(),
   cashSupplierPayments: z.number().int(),
+  /** Tiền mặt NCC hoàn trong ca; bản chụp đóng ca cũ không có trường này */
+  cashSupplierRefunds: z.number().int().default(0),
   expectedCash: z.number().int(),
   transferIn: z.number().int(),
   qrIn: z.number().int(),
@@ -195,7 +202,12 @@ export const cashFlowMethodRowSchema = z.object({
   salesIn: z.number().int(),
   /** Tiền thu nợ qua phiếu thu */
   receiptsIn: z.number().int(),
-  /** Tiền hoàn cho khách qua phiếu trả (không gồm phần cấn nợ, phần hoàn vào tiền trả trước) */
+  /** Tiền nhà cung cấp hoàn: phiếu trả hàng nhập (ngày lập), phiếu nhập bị hủy (ngày hủy) */
+  supplierRefundsIn: z.number().int(),
+  /**
+   * Tiền trả lại khách: phần hoàn của phiếu trả (không gồm phần cấn nợ, phần hoàn vào tiền trả
+   * trước) và khoản trả lại khi hủy đơn (ngày hủy)
+   */
   refundsOut: z.number().int(),
   /** Tiền trả nhà cung cấp qua phiếu chi */
   supplierPaymentsOut: z.number().int(),

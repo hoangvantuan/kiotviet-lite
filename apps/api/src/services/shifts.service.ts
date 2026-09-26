@@ -21,10 +21,13 @@ import {
   type OpenShiftInput,
   orderReturns,
   orders,
+  purchaseOrders,
+  purchaseReturns,
   receipts,
   type Shift,
   type ShiftDetail,
   type ShiftSummary,
+  shiftSummarySchema,
   stores,
   supplierPayments,
   type UserRole,
@@ -37,6 +40,7 @@ import {
   cashFlowReceiptFilter,
   cashFlowReturnFilter,
   cashFlowSupplierPaymentFilter,
+  orderCancelRefundExpr,
   orderCashInExpr,
   orderDebtExpr,
   orderQrInExpr,
@@ -283,9 +287,46 @@ export async function computeShiftSummary(db: Db, shift: ShiftRow): Promise<Shif
     .from(supplierPayments)
     .where(and(eq(supplierPayments.shiftId, shift.id), cashFlowSupplierPaymentFilter()))
 
+  // Hủy đơn chi trả lại khách trong ca này (ca hủy, có thể khác ca bán): tiền bán của đơn vẫn
+  // thuộc ca bán, không rút ngược số của ca đã đóng (BC-06)
+  const [cancelAgg] = await db
+    .select({
+      cash: sumInt(orderCancelRefundExpr('cash')),
+      bank: sumInt(sql`${orderCancelRefundExpr('transfer')} + ${orderCancelRefundExpr('qr')}`),
+    })
+    .from(orders)
+    .where(eq(orders.cancelShiftId, shift.id))
+
+  // Tiền NCC hoàn nhận trong ca: phiếu trả hàng nhập và phiếu nhập bị hủy
+  const [purchaseReturnAgg] = await db
+    .select({
+      cash: sumInt(
+        sql`CASE WHEN ${purchaseReturns.refundMethod} = 'cash' THEN ${purchaseReturns.supplierRefundAmount} END`,
+      ),
+      bank: sumInt(
+        sql`CASE WHEN ${purchaseReturns.refundMethod} IN ('transfer', 'qr') THEN ${purchaseReturns.supplierRefundAmount} END`,
+      ),
+    })
+    .from(purchaseReturns)
+    .where(eq(purchaseReturns.shiftId, shift.id))
+
+  const [purchaseCancelAgg] = await db
+    .select({
+      cash: sumInt(
+        sql`CASE WHEN ${purchaseOrders.cancelRefundMethod} = 'cash' THEN ${purchaseOrders.cancelSupplierRefund} END`,
+      ),
+      bank: sumInt(
+        sql`CASE WHEN ${purchaseOrders.cancelRefundMethod} IN ('transfer', 'qr') THEN ${purchaseOrders.cancelSupplierRefund} END`,
+      ),
+    })
+    .from(purchaseOrders)
+    .where(and(eq(purchaseOrders.cancelShiftId, shift.id), eq(purchaseOrders.status, 'cancelled')))
+
   const cashSales = Number(orderAgg?.cash ?? 0)
   const cashReceipts = Number(receiptAgg?.cash ?? 0)
-  const cashRefunds = Number(returnAgg?.cash ?? 0)
+  const cashRefunds = Number(returnAgg?.cash ?? 0) + Number(cancelAgg?.cash ?? 0)
+  const cashSupplierRefunds =
+    Number(purchaseReturnAgg?.cash ?? 0) + Number(purchaseCancelAgg?.cash ?? 0)
   const cashSupplierPayments = Number(supplierAgg?.cash ?? 0)
   const openingCash = Number(shift.openingCash)
 
@@ -295,10 +336,23 @@ export async function computeShiftSummary(db: Db, shift: ShiftRow): Promise<Shif
     cashReceipts,
     cashRefunds,
     cashSupplierPayments,
-    expectedCash: openingCash + cashSales + cashReceipts - cashRefunds - cashSupplierPayments,
-    transferIn: Number(orderAgg?.transfer ?? 0) + Number(receiptAgg?.transfer ?? 0),
+    cashSupplierRefunds,
+    expectedCash:
+      openingCash +
+      cashSales +
+      cashReceipts +
+      cashSupplierRefunds -
+      cashRefunds -
+      cashSupplierPayments,
+    // Tiền NCC hoàn qua ngân hàng gộp vào chuyển khoản vào (NCC không trả qua mã QR của cửa hàng)
+    transferIn:
+      Number(orderAgg?.transfer ?? 0) +
+      Number(receiptAgg?.transfer ?? 0) +
+      Number(purchaseReturnAgg?.bank ?? 0) +
+      Number(purchaseCancelAgg?.bank ?? 0),
     qrIn: Number(orderAgg?.qr ?? 0) + Number(receiptAgg?.qr ?? 0),
-    transferOut: Number(returnAgg?.bank ?? 0) + Number(supplierAgg?.bank ?? 0),
+    transferOut:
+      Number(returnAgg?.bank ?? 0) + Number(supplierAgg?.bank ?? 0) + Number(cancelAgg?.bank ?? 0),
     debtSales: Number(orderAgg?.debt ?? 0),
     orderCount: orderAgg?.count ?? 0,
     receiptCount: receiptAgg?.count ?? 0,
@@ -352,7 +406,8 @@ async function toShiftDetail(db: Db, row: ShiftSelectRow): Promise<ShiftDetail> 
   return {
     ...toShift(row),
     summary: await computeShiftSummary(db, row.shift),
-    closeSummary: row.shift.closeSummary ?? null,
+    // Bản chụp đóng ca cũ thiếu trường mới: parse để điền mặc định (cashSupplierRefunds = 0)
+    closeSummary: row.shift.closeSummary ? shiftSummarySchema.parse(row.shift.closeSummary) : null,
   }
 }
 

@@ -12,9 +12,11 @@
  *   `cash_amount - change` (có thể âm khi khách chuyển dư rồi nhận lại tiền mặt).
  * - `debt`: phần trả ngay là `cash_amount` (và `transfer_amount` nếu có), phần còn lại ghi nợ.
  */
-import { ne, type SQL, sql } from 'drizzle-orm'
+import { type SQL, sql } from 'drizzle-orm'
 
 import { type MoneyMethod, moneyMethodSchema, orders } from '@kiotviet-lite/shared'
+
+import { activeReceiptFilter, activeSupplierPaymentFilter } from './document-status.js'
 
 /** Chứng từ lập trước TIEN-05, TIEN-02 có phương thức NULL: giữ là "chưa rõ", không đoán tiền mặt. */
 export function toMoneyMethod(value: string | null): MoneyMethod | null {
@@ -53,30 +55,37 @@ export function orderDebtExpr(): SQL<number> {
 }
 
 // ---------------------------------------------------------------------------
-// Chứng từ được tính vào dòng tiền. Luồng hủy chứng từ (d3-void) thêm điều kiện trạng thái hủy
-// của phiếu thu, phiếu trả, phiếu chi TẠI ĐÂY, không rải ở từng truy vấn báo cáo.
+// Chứng từ được tính vào dòng tiền. Điều kiện trạng thái hủy của từng loại chứng từ nằm TẠI ĐÂY,
+// không rải ở từng truy vấn báo cáo, đóng ca.
 // ---------------------------------------------------------------------------
 
 /**
- * Đơn bị hủy không tính (tiền nhận rồi trả lại). Đơn đã trả hết hàng vẫn tính: tiền đã vào quỹ
- * lúc bán, phần trả ra nằm ở phiếu trả.
+ * Tiền bán của đơn luôn thuộc ngày bán, ca bán, kể cả khi đơn bị hủy sau đó: không rút ngược số của
+ * ngày cũ hay ca đã đóng (BC-06). Khoản trả lại khi hủy là tiền ra riêng, ghi theo ngày hủy
+ * (`cancelled_at`), kênh `cancel_refund_method`, ca `cancel_shift_id`. Trả về `undefined` để
+ * `and(...)` bỏ qua. Phần doanh thu (không phải tiền) vẫn loại đơn hủy qua `revenueStatusFilter`.
  */
-export function cashFlowOrderFilter(): SQL {
-  return ne(orders.status, 'cancelled')
-}
-
-/**
- * Phiếu thu, phiếu trả, phiếu chi hiện chưa có trạng thái hủy nên luôn được tính. Trả về
- * `undefined` để `and(...)` bỏ qua; khi d3-void thêm cột trạng thái chỉ cần sửa ba hàm này.
- */
-export function cashFlowReceiptFilter(): SQL | undefined {
+export function cashFlowOrderFilter(): SQL | undefined {
   return undefined
 }
 
+/** Tiền trả lại khách khi hủy đơn, lọc theo phương thức hoàn đã ghi trên đơn. */
+export function orderCancelRefundExpr(method: MoneyMethod): SQL<number> {
+  return sql<number>`(CASE WHEN ${orders.status} = 'cancelled' AND ${orders.cancelRefundMethod} = ${method}
+    THEN ${orders.cancelRefundAmount} ELSE 0 END)`
+}
+
+/** Phiếu thu đã hủy không tính (TIEN-107). */
+export function cashFlowReceiptFilter(): SQL {
+  return activeReceiptFilter()
+}
+
+/** Phiếu trả hàng chưa có luồng hủy nên luôn được tính. */
 export function cashFlowReturnFilter(): SQL | undefined {
   return undefined
 }
 
-export function cashFlowSupplierPaymentFilter(): SQL | undefined {
-  return undefined
+/** Phiếu chi NCC đã hủy không tính (TIEN-107). */
+export function cashFlowSupplierPaymentFilter(): SQL {
+  return activeSupplierPaymentFilter()
 }

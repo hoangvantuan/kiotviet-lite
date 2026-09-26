@@ -67,6 +67,11 @@ export const orders = pgTable(
     cancelledAt: timestamp({ withTimezone: true }),
     cancelledBy: uuid().references(() => users.id),
     cancelReason: varchar({ length: 500 }),
+    // BC-06: tiền trả lại khách khi hủy (phần khách đã trả lúc bán), kênh trả và ca chi tiền. Tiền
+    // bán vẫn thuộc ngày bán và ca bán; khoản hoàn là tiền ra của ngày hủy, ca hủy
+    cancelRefundAmount: bigint({ mode: 'number' }).notNull().default(0),
+    cancelRefundMethod: varchar({ length: 16 }),
+    cancelShiftId: uuid().references(() => cashShifts.id, { onDelete: 'restrict' }),
     // POS-06: ca bán hàng. Đơn ngoại tuyến gắn theo giờ bán và người bán khi đồng bộ; NULL khi
     // không có ca phù hợp (hiện trong đối soát)
     shiftId: uuid().references(() => cashShifts.id, { onDelete: 'restrict' }),
@@ -103,6 +108,8 @@ export const orders = pgTable(
     index('idx_orders_store_customer').on(table.storeId, table.customerId),
     index('idx_orders_store_payment_status').on(table.storeId, table.paymentStatus),
     index('idx_orders_shift').on(table.shiftId),
+    index('idx_orders_cancel_shift').on(table.cancelShiftId),
+    index('idx_orders_store_cancelled_at').on(table.storeId, table.cancelledAt),
     index('idx_orders_store_review_status').on(table.storeId, table.reviewStatus),
     index('idx_orders_store_status_created').on(table.storeId, table.status, table.createdAt),
     index('idx_orders_store_cust_status_date').on(
