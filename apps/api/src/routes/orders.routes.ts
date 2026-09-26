@@ -20,6 +20,7 @@ import { cancelOrder } from '../services/order-cancel.service.js'
 import { countPendingReview, reviewOrder } from '../services/order-review.service.js'
 import { getOrderDetail, listOrders } from '../services/orders.service.js'
 import {
+  authorizeReturnOverride,
   createReturn,
   getOrderPrepaymentApplied,
   getOrderReturns,
@@ -103,24 +104,31 @@ export function createOrdersRoutes({ db }: OrdersRoutesDeps) {
   })
 
   // POST /:id/returns - Create a return
-  app.post(
-    '/:id/returns',
-    requirePermission('orders.return'),
-    idempotent(db, async (c, transaction) => {
-      const auth = c.get('auth')
-      const id = uuidParam.parse(c.req.param('id'))
-      const input = await parseJson(c, createOrderReturnSchema)
+  // TIEN-111: PIN người duyệt vượt quyền (nếu gửi) kiểm trên kết nối gốc, trước transaction của
+  // idempotent(), để lần nhập sai được đếm dù phiếu trả không tạo được
+  app.post('/:id/returns', requirePermission('orders.return'), async (c) => {
+    const input = await parseJson(c, createOrderReturnSchema)
+    const approver = await authorizeReturnOverride({
+      db,
+      actor: c.get('auth'),
+      input,
+      meta: getRequestMeta(c),
+    })
+    return idempotent(db, async (ctx, transaction) => {
+      const auth = ctx.get('auth')
+      const id = uuidParam.parse(ctx.req.param('id'))
       const data = await createReturn({
         db,
         transaction,
         actor: auth,
         orderId: id,
         input,
-        meta: getRequestMeta(c),
+        meta: getRequestMeta(ctx),
+        preauthorized: { approver },
       })
-      return c.json({ data }, 201)
-    }),
-  )
+      return ctx.json({ data }, 201)
+    })(c)
+  })
 
   // TIEN-107: hủy đơn bán. Nhân viên được gọi nhưng phải kèm PIN của người có quyền hủy
   app.post(

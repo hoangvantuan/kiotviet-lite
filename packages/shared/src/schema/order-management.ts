@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import { paginationSchema } from './pagination.js'
 import { priceSourceSchema } from './pricing-resolve.js'
+import type { ApprovalPermissionInput } from './user-management.js'
 
 export const orderDiscountTypeSchema = z.enum(['percent', 'amount'])
 
@@ -35,9 +36,7 @@ export interface OrderPolicyViolation {
   code: z.infer<typeof orderPolicyViolationCodeSchema>
   message: string
   /** Quyền người duyệt đơn phải giữ để duyệt vi phạm này */
-  requiredPermissions: Array<
-    'pos.editPrice' | 'pos.editPriceBelowCost' | 'pos.overrideDebtLimit' | 'documents.cancel'
-  >
+  requiredPermissions: ApprovalPermissionInput[]
 }
 
 export const reviewOrderSchema = z

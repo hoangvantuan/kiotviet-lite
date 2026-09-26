@@ -288,7 +288,8 @@ describe('POST /receipts (createReceipt)', () => {
     expect(r.status).toBe(201)
   })
 
-  it('Staff tạo → 403 (middleware permission)', async () => {
+  // TIEN-111: nhân viên được lập phiếu thu (quyền receipts.create)
+  it('Staff tạo → 201', async () => {
     const r = await jsonReq<ErrResp>(
       env,
       'POST',
@@ -302,7 +303,7 @@ describe('POST /receipts (createReceipt)', () => {
       },
       env.base.staff.authHeader,
     )
-    expect(r.status).toBe(403)
+    expect(r.status).toBe(201)
   })
 
   it('amount > customer.currentDebt → 422 BUSINESS_RULE_VIOLATION', async () => {
@@ -655,9 +656,10 @@ describe('GET /receipts (listReceipts)', () => {
     expect(r.status).toBe(200)
   })
 
-  it('Staff list → 403', async () => {
-    const r = await jsonReq<ErrResp>(env, 'GET', '/', undefined, env.base.staff.authHeader)
-    expect(r.status).toBe(403)
+  // TIEN-111: nhân viên lập phiếu thu nên xem được danh sách phiếu thu
+  it('Staff list → 200', async () => {
+    const r = await jsonReq<ListResp>(env, 'GET', '/', undefined, env.base.staff.authHeader)
+    expect(r.status).toBe(200)
   })
 
   it('filter customerId → chỉ phiếu của KH đó', async () => {

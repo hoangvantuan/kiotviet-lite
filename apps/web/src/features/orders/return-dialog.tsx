@@ -2,8 +2,10 @@ import { useState } from 'react'
 
 import {
   defaultRefundMethod,
+  hasPermission,
   type MoneyMethod,
   moneyMethodLabel,
+  paidRefundMethods,
   REFUND_METHODS,
   RETURN_REASON_LABELS,
 } from '@kiotviet-lite/shared'
@@ -29,12 +31,14 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
+import { PinDialog } from '@/features/auth/pin-dialog'
 import { DocumentShiftSelect } from '@/features/shifts/document-shift-select'
 import { useDocumentShiftChoice } from '@/features/shifts/use-document-shift-choice'
 import { useGuardedOpenChange } from '@/hooks/use-document-mutation'
 import { ApiClientError } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { showError, showSuccess } from '@/lib/toast'
+import { useAuthStore } from '@/stores/use-auth-store'
 
 import type { ReturnableItem } from './orders-api'
 import { previewReturn } from './return-preview'
@@ -78,11 +82,14 @@ export function ReturnDialog({
   const mutation = useCreateReturnMutation()
   const [lines, setLines] = useState<Map<string, ReturnLine>>(new Map())
   const [note, setNote] = useState('')
-  const initialRefundMethod = defaultRefundMethod({
+  const orderPayment = {
     paymentMethod: orderPaymentMethod,
     cashAmount: orderCashAmount,
     transferAmount: orderTransferAmount,
-  })
+  }
+  const initialRefundMethod = defaultRefundMethod(orderPayment)
+  const role = useAuthStore((s) => s.user?.role)
+  const [pinOpen, setPinOpen] = useState(false)
   const shiftChoice = useDocumentShiftChoice()
   const [refundMethod, setRefundMethod] = useState<MoneyMethod>(initialRefundMethod)
   const [showResult, setShowResult] = useState<{
@@ -118,13 +125,24 @@ export function ReturnDialog({
   )
 
   const hasSelection = Array.from(lines.values()).some((l) => l.quantity > 0)
+  // TIEN-111: hoàn qua kênh khách không dùng để trả đơn là vượt quyền, cần PIN người duyệt (R1).
+  // Cùng quy tắc với máy chủ (paidRefundMethods), máy chủ vẫn là nơi kiểm cuối cùng.
+  const refundMethodOverridden =
+    preview.refundAmount > 0 &&
+    !(paidRefundMethods(orderPayment) as ReadonlySet<MoneyMethod>).has(refundMethod)
+  const needsApproval =
+    refundMethodOverridden && !!role && !hasPermission(role, 'orders.returnOverride')
 
-  async function handleSubmit() {
+  async function handleSubmit(approval?: { approverId: string; approverPin: string }) {
     const returnItems = Array.from(lines.values())
       .filter((l) => l.quantity > 0)
       .map((l) => ({ orderItemId: l.orderItemId, quantity: l.quantity, reason: l.reason }))
 
     if (returnItems.length === 0) return
+    if (needsApproval && !approval) {
+      setPinOpen(true)
+      return
+    }
 
     try {
       const result = await mutation.mutateAsync({
@@ -134,6 +152,7 @@ export function ReturnDialog({
           refundMethod,
           note: note.trim() || null,
           ...(shiftChoice.shiftId ? { shiftId: shiftChoice.shiftId } : {}),
+          ...approval,
         },
       })
       const data = result.data
@@ -159,6 +178,7 @@ export function ReturnDialog({
     setLines(new Map())
     setNote('')
     setRefundMethod(initialRefundMethod)
+    setPinOpen(false)
     shiftChoice.reset()
     setShowResult(null)
     onOpenChange(false)
@@ -176,28 +196,44 @@ export function ReturnDialog({
             <DialogDescription>Mã phiếu trả: {showResult.returnNumber}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            {showResult.refundAmount > 0 && (
-              <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
+            {/* TIEN-113: tách phần đã xử lý xong (không đụng tiền) với khoản tiền còn phải đưa khách */}
+            {(showResult.debtReductionAmount > 0 || showResult.prepaymentRefundAmount > 0) && (
+              <div
+                className="rounded-md border border-green-200 bg-green-50 p-3"
+                data-testid="return-result-settled"
+              >
+                <p className="text-sm font-medium text-green-800">Đã xử lý, không chi tiền</p>
+                <ul className="mt-1 space-y-0.5 text-sm text-green-800">
+                  {showResult.debtReductionAmount > 0 && (
+                    <li>
+                      Cấn vào nợ của đơn: {formatVndWithSuffix(showResult.debtReductionAmount)}
+                    </li>
+                  )}
+                  {showResult.prepaymentRefundAmount > 0 && (
+                    <li>
+                      Hoàn vào tiền trả trước của khách:{' '}
+                      {formatVndWithSuffix(showResult.prepaymentRefundAmount)}
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
+            {showResult.refundAmount > 0 ? (
+              <div
+                className="rounded-md border border-blue-200 bg-blue-50 p-3"
+                data-testid="return-result-refund"
+              >
                 <p className="text-sm font-medium text-blue-800">
-                  Cần hoàn {formatVndWithSuffix(showResult.refundAmount)} cho khách (
+                  Còn phải chi cho khách: {formatVndWithSuffix(showResult.refundAmount)} (
                   {moneyMethodLabel(showResult.refundMethod)})
                 </p>
-              </div>
-            )}
-            {showResult.debtReductionAmount > 0 && (
-              <div className="rounded-md border border-green-200 bg-green-50 p-3">
-                <p className="text-sm font-medium text-green-800">
-                  Đã giảm nợ {formatVndWithSuffix(showResult.debtReductionAmount)}
+                <p className="mt-1 text-xs text-blue-800">
+                  Khoản chi đã ghi vào sổ quỹ khi lưu phiếu. Hãy đưa tiền hoặc chuyển khoản cho
+                  khách ngay.
                 </p>
               </div>
-            )}
-            {showResult.prepaymentRefundAmount > 0 && (
-              <div className="rounded-md border border-green-200 bg-green-50 p-3">
-                <p className="text-sm font-medium text-green-800">
-                  Đã hoàn {formatVndWithSuffix(showResult.prepaymentRefundAmount)} vào tiền trả
-                  trước của khách
-                </p>
-              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Không phải chi thêm tiền cho khách.</p>
             )}
           </div>
           <DialogFooter>
@@ -347,6 +383,12 @@ export function ReturnDialog({
                 idPrefix="refund-method"
                 methods={REFUND_METHODS}
               />
+              {needsApproval && (
+                <p className="text-xs text-muted-foreground">
+                  Khách không trả đơn qua kênh này. Cần chủ cửa hàng hoặc quản lý nhập mã PIN để
+                  duyệt.
+                </p>
+              )}
             </div>
           )}
           {shiftChoice.choices && (
@@ -376,13 +418,25 @@ export function ReturnDialog({
             Hủy
           </Button>
           <Button
-            onClick={handleSubmit}
+            onClick={() => void handleSubmit()}
             disabled={!hasSelection || mutation.isPending || shiftChoice.pending}
           >
             {mutation.isPending ? 'Đang xử lý...' : 'Xác nhận trả hàng'}
           </Button>
         </DialogFooter>
       </DialogContent>
+      {needsApproval && open && (
+        <PinDialog
+          open={pinOpen}
+          onOpenChange={setPinOpen}
+          title="Duyệt hoàn tiền khác kênh"
+          description="Chủ cửa hàng hoặc quản lý nhập mã PIN của mình để duyệt."
+          approvalPermissions={['orders.returnOverride']}
+          onVerified={(pin, approverId) => {
+            if (pin && approverId) void handleSubmit({ approverId, approverPin: pin })
+          }}
+        />
+      )}
     </Dialog>
   )
 }

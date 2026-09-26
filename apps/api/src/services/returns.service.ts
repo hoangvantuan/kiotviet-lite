@@ -5,6 +5,7 @@ import {
   type CreateOrderReturnInput,
   debts,
   defaultRefundMethod,
+  hasPermission,
   inventoryTransactions,
   type MoneyMethod,
   orderItems,
@@ -14,6 +15,7 @@ import {
   type OrderReturnListItem,
   orderReturns,
   orders,
+  paidRefundMethods,
   products,
   productVariants,
   type ReturnableItem,
@@ -33,6 +35,7 @@ import {
   settleCustomerDebts,
 } from './customer-debt-ledger.service.js'
 import { nextDocumentCode } from './document-codes.service.js'
+import { type Approver, verifyApproval } from './order-policy.js'
 import {
   aggregateVariantStock,
   loadProductForUpdate,
@@ -146,6 +149,38 @@ export interface CreateReturnDeps {
   orderId: string
   input: CreateOrderReturnInput
   meta?: RequestMeta
+  /** Người duyệt route đã kiểm PIN ngoài transaction; bỏ trống thì service tự kiểm */
+  preauthorized?: { approver: Approver | null }
+}
+
+/**
+ * TIEN-111: kiểm PIN người duyệt vượt quyền trả hàng (nếu có gửi). Gọi ở route trên kết nối gốc,
+ * NGOÀI transaction của `idempotent()`: PIN sai phải được đếm (và khóa PIN) dù request rollback,
+ * giống hủy chứng từ (document-cancel.helper.ts). Có cần duyệt hay không do createReturn quyết định
+ * sau khi tính tiền hoàn.
+ */
+export async function authorizeReturnOverride({
+  db,
+  actor,
+  input,
+  meta,
+}: {
+  db: Db
+  actor: ReturnsActor
+  input: CreateOrderReturnInput
+  meta?: RequestMeta
+}): Promise<Approver | null> {
+  if (hasPermission(actor.role, 'orders.returnOverride')) return null
+  if (!input.approverId || !input.approverPin) return null
+  return verifyApproval({
+    db,
+    storeId: actor.storeId,
+    approverUserId: input.approverId,
+    pin: input.approverPin,
+    permissions: ['orders.returnOverride'],
+    requester: { userId: actor.userId, ipAddress: meta?.ipAddress ?? null },
+    meta,
+  })
 }
 
 export async function createReturn({
@@ -155,7 +190,11 @@ export async function createReturn({
   orderId,
   input,
   meta,
+  preauthorized,
 }: CreateReturnDeps): Promise<OrderReturnDetail> {
+  const approver = preauthorized
+    ? preauthorized.approver
+    : await authorizeReturnOverride({ db: rootDb, actor, input, meta })
   const db = serviceDb(rootDb, transaction)
   const result = await db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
@@ -166,6 +205,7 @@ export async function createReturn({
       storeId: actor.storeId,
       userId: actor.userId,
       requestedShiftId: input.shiftId,
+      ownShiftOnly: !hasPermission(actor.role, 'shifts.manage'),
     })
 
     // 1. Validate order
@@ -335,15 +375,29 @@ export async function createReturn({
     )
     // TIEN-02: kênh chi phần hoàn tiền; mặc định theo cách khách trả đơn gốc. Không hoàn tiền
     // (chỉ cấn nợ, hoàn vào tiền trả trước) thì để trống
+    const orderPayment = {
+      paymentMethod: order.paymentMethod,
+      cashAmount: order.cashAmount === null ? null : Number(order.cashAmount),
+      transferAmount: order.transferAmount === null ? null : Number(order.transferAmount),
+    }
     const refundMethod: MoneyMethod | null =
-      refundAmount > 0
-        ? (input.refundMethod ??
-          defaultRefundMethod({
-            paymentMethod: order.paymentMethod,
-            cashAmount: order.cashAmount === null ? null : Number(order.cashAmount),
-            transferAmount: order.transferAmount === null ? null : Number(order.transferAmount),
-          }))
-        : null
+      refundAmount > 0 ? (input.refundMethod ?? defaultRefundMethod(orderPayment)) : null
+    // TIEN-111: hoàn qua kênh khách không dùng để trả đơn (ví dụ đơn chuyển khoản mà chi tiền mặt
+    // từ két) là vượt quyền: người không có `orders.returnOverride` cần PIN của người có quyền
+    const refundMethodOverridden =
+      refundMethod !== null &&
+      !(paidRefundMethods(orderPayment) as ReadonlySet<MoneyMethod>).has(refundMethod)
+    if (
+      refundMethodOverridden &&
+      !hasPermission(actor.role, 'orders.returnOverride') &&
+      !approver
+    ) {
+      throw new ApiError(
+        'FORBIDDEN',
+        'Hoàn tiền qua kênh khác kênh khách đã trả cần mã PIN của chủ cửa hàng hoặc quản lý',
+        { requiredPermissions: ['orders.returnOverride'], reason: 'refund_method_override' },
+      )
+    }
     const shiftId = assertDocumentShift(shiftResolution, refundMethod === 'cash')
 
     // Đơn đã được cấn bằng tiền trả trước: phần đó quay về tiền trả trước (ADR-0011). Gọi trước
@@ -538,6 +592,9 @@ export async function createReturn({
         prepaymentRefundAmount,
         itemCount: validatedItems.length,
         newStatus,
+        ...(approver && refundMethodOverridden
+          ? { approvedBy: approver.userId, approvedByName: approver.name }
+          : {}),
       },
       ipAddress: meta?.ipAddress,
       userAgent: meta?.userAgent,

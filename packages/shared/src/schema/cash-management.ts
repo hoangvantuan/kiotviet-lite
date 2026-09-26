@@ -62,6 +62,28 @@ export function defaultRefundMethod(order: {
   }
 }
 
+/**
+ * TIEN-111: các kênh khách đã thực trả cho đơn. Hoàn tiền qua kênh ngoài tập này là vượt quyền,
+ * người không có `orders.returnOverride` cần người duyệt nhập PIN (R1). Đơn không ghi nhận kênh nào
+ * (ghi nợ toàn bộ) thì lấy kênh mặc định.
+ */
+export function paidRefundMethods(order: {
+  paymentMethod: string
+  cashAmount: number | null
+  transferAmount: number | null
+}): Set<RefundMethod> {
+  const methods = new Set<RefundMethod>()
+  if (order.paymentMethod === 'cash' || (order.cashAmount ?? 0) > 0) methods.add('cash')
+  if (
+    order.paymentMethod === 'transfer' ||
+    order.paymentMethod === 'qr' ||
+    (order.transferAmount ?? 0) > 0
+  )
+    methods.add('transfer')
+  if (methods.size === 0) methods.add(defaultRefundMethod(order))
+  return methods
+}
+
 // ---------------------------------------------------------------------------
 // Ca bán hàng (POS-06)
 // ---------------------------------------------------------------------------

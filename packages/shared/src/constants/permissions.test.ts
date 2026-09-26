@@ -18,6 +18,7 @@ const MATRIX: Record<Permission, Record<UserRole, boolean>> = {
   'orders.view': { owner: true, manager: true, staff: true },
   'customers.view': { owner: true, manager: true, staff: true },
   'customers.manage': { owner: true, manager: true, staff: false },
+  'receipts.create': { owner: true, manager: true, staff: true },
   'customers.setUnlimitedDebt': { owner: true, manager: false, staff: false },
   'pricing.view': { owner: true, manager: true, staff: true },
   'pricing.manage': { owner: true, manager: true, staff: false },
@@ -27,7 +28,8 @@ const MATRIX: Record<Permission, Record<UserRole, boolean>> = {
   'pos.overrideDebtLimit': { owner: true, manager: true, staff: false },
   'orders.reviewPolicy': { owner: true, manager: true, staff: false },
   'products.viewCost': { owner: true, manager: true, staff: false },
-  'orders.return': { owner: true, manager: true, staff: false },
+  'orders.return': { owner: true, manager: true, staff: true },
+  'orders.returnOverride': { owner: true, manager: true, staff: false },
   'documents.cancel': { owner: true, manager: true, staff: false },
   'shifts.manage': { owner: true, manager: true, staff: false },
 }
@@ -47,6 +49,7 @@ describe('PERMISSIONS map', () => {
         'inventory.manage',
         'notifications.manage',
         'orders.return',
+        'orders.returnOverride',
         'orders.reviewPolicy',
         'orders.view',
         'pos.editPrice',
@@ -57,6 +60,7 @@ describe('PERMISSIONS map', () => {
         'pricing.view',
         'products.manage',
         'products.viewCost',
+        'receipts.create',
         'reports.view',
         'shifts.manage',
         'store.manage',
@@ -109,7 +113,7 @@ describe('hasPermission - các kết hợp đặc trưng', () => {
     expect(hasPermission('manager', 'inventory.manage')).toBe(true)
   })
 
-  it('Staff: chỉ có audit.viewOwn, pos.sell, orders.view, customers.view, pricing.view', () => {
+  it('Staff: audit.viewOwn, pos.sell, orders.view, customers.view, pricing.view, lập phiếu thu và trả hàng (TIEN-111)', () => {
     expect(hasPermission('staff', 'users.manage')).toBe(false)
     expect(hasPermission('staff', 'store.manage')).toBe(false)
     expect(hasPermission('staff', 'audit.viewAll')).toBe(false)
@@ -123,5 +127,9 @@ describe('hasPermission - các kết hợp đặc trưng', () => {
     expect(hasPermission('staff', 'pricing.view')).toBe(true)
     expect(hasPermission('staff', 'pricing.manage')).toBe(false)
     expect(hasPermission('staff', 'inventory.manage')).toBe(false)
+    expect(hasPermission('staff', 'receipts.create')).toBe(true)
+    expect(hasPermission('staff', 'orders.return')).toBe(true)
+    expect(hasPermission('staff', 'orders.returnOverride')).toBe(false)
+    expect(hasPermission('staff', 'documents.cancel')).toBe(false)
   })
 })

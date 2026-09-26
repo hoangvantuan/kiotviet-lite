@@ -14,6 +14,9 @@ export const PERMISSIONS = {
   'orders.view': ['owner', 'manager', 'staff'],
   'customers.view': ['owner', 'manager', 'staff'],
   'customers.manage': ['owner', 'manager'],
+  // TIEN-111: ai đứng quầy cũng lập được phiếu thu nợ (xem danh sách, khoản nợ còn mở của khách).
+  // Hủy phiếu thu vẫn cần `documents.cancel` hoặc PIN của người giữ quyền đó.
+  'receipts.create': ['owner', 'manager', 'staff'],
   // Đặt cờ "không giới hạn nợ" cho khách (ADR-0009): chỉ chủ cửa hàng.
   'customers.setUnlimitedDebt': ['owner'],
   'pricing.view': ['owner', 'manager', 'staff'],
@@ -28,7 +31,11 @@ export const PERMISSIONS = {
   'orders.reviewPolicy': ['owner', 'manager'],
   // Xem giá vốn trên mọi DTO: tìm kiếm POS, /sync/*, tạo đơn, chi tiết đơn (BC-13).
   'products.viewCost': ['owner', 'manager'],
-  'orders.return': ['owner', 'manager'],
+  // TIEN-111: nhân viên được tạo phiếu trả. Tiền hoàn đã bị chặn không vượt số khách đã trả.
+  'orders.return': ['owner', 'manager', 'staff'],
+  // TIEN-111: vượt quyền khi trả hàng, hiện là hoàn tiền qua kênh khác kênh khách đã trả (ví dụ
+  // đơn chuyển khoản mà chi tiền mặt từ két). Người không có quyền này cần PIN người giữ quyền.
+  'orders.returnOverride': ['owner', 'manager'],
   // TIEN-107: hủy đơn bán, phiếu thu, phiếu nhập. Nhân viên cần PIN của người giữ quyền này.
   'documents.cancel': ['owner', 'manager'],
   // Xem mọi ca bán hàng và đóng ca thay người bán (POS-06); ai bán hàng cũng mở, đóng ca của mình
