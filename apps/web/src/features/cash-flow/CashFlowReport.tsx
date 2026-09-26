@@ -240,6 +240,22 @@ function ShiftsSection({
           </TableBody>
         </Table>
       </div>
+      <div className="space-y-1 text-sm">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Quỹ đầu ca của ca mở sớm nhất</span>
+          <span className="font-mono">{formatVndWithSuffix(report.cash.openingCash)}</span>
+        </div>
+        <div className="flex justify-between font-semibold">
+          <span>Tổng chênh lệch {report.cash.closedShiftCount} ca đã đóng</span>
+          <DifferenceText value={report.cash.shiftDifference} testId="cash-flow-shift-difference" />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Mỗi ca đối soát riêng (thực đếm trừ phải có), chênh lệch trong kỳ là tổng chênh lệch các
+          ca đã đóng. Ca vắt qua nửa đêm thuộc ngày mở ca.
+          {report.cash.openShiftCount > 0 &&
+            ` Còn ${report.cash.openShiftCount} ca đang mở, chưa tính chênh lệch.`}
+        </p>
+      </div>
       {(report.unassigned.orderCount > 0 ||
         report.unassigned.cashIn > 0 ||
         report.unassigned.cashOut > 0) && (

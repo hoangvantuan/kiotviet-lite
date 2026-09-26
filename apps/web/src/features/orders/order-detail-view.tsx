@@ -408,6 +408,7 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
         outstandingDebt={order.debtAmount}
         orderPaymentMethod={order.paymentMethod}
         orderCashAmount={order.cashAmount}
+        orderTransferAmount={order.transferAmount}
       />
 
       {/* Print templates (hidden, only visible during window.print) */}

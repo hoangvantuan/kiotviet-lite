@@ -17,6 +17,8 @@ interface MoneyMethodPickerProps {
   /** Nhãn cho trình đọc màn hình, ví dụ "Phương thức nhận tiền" */
   ariaLabel: string
   idPrefix?: string
+  /** Các kênh được chọn; mặc định đủ ba. Hoàn tiền không có QR */
+  methods?: readonly MoneyMethod[]
 }
 
 /**
@@ -29,10 +31,15 @@ export function MoneyMethodPicker({
   disabled,
   ariaLabel,
   idPrefix = 'money-method',
+  methods = MONEY_METHODS,
 }: MoneyMethodPickerProps) {
   return (
-    <div role="radiogroup" aria-label={ariaLabel} className="grid grid-cols-3 gap-2">
-      {MONEY_METHODS.map((method) => {
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      className={cn('grid gap-2', methods.length === 2 ? 'grid-cols-2' : 'grid-cols-3')}
+    >
+      {methods.map((method) => {
         const Icon = ICONS[method]
         const selected = value === method
         return (

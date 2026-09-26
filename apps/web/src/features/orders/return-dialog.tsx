@@ -4,6 +4,7 @@ import {
   defaultRefundMethod,
   type MoneyMethod,
   moneyMethodLabel,
+  REFUND_METHODS,
   RETURN_REASON_LABELS,
 } from '@kiotviet-lite/shared'
 
@@ -28,6 +29,8 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
+import { DocumentShiftSelect } from '@/features/shifts/document-shift-select'
+import { useDocumentShiftChoice } from '@/features/shifts/use-document-shift-choice'
 import { useGuardedOpenChange } from '@/hooks/use-document-mutation'
 import { ApiClientError } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
@@ -47,6 +50,7 @@ interface ReturnDialogProps {
   /** TIEN-02: cách khách đã trả đơn gốc, để chọn sẵn kênh hoàn tiền */
   orderPaymentMethod: string
   orderCashAmount: number | null
+  orderTransferAmount: number | null
 }
 
 const REASON_OPTIONS = Object.entries(RETURN_REASON_LABELS).map(([value, label]) => ({
@@ -68,6 +72,7 @@ export function ReturnDialog({
   outstandingDebt,
   orderPaymentMethod,
   orderCashAmount,
+  orderTransferAmount,
 }: ReturnDialogProps) {
   const itemsQuery = useReturnableItemsQuery(open ? orderId : undefined)
   const mutation = useCreateReturnMutation()
@@ -76,7 +81,9 @@ export function ReturnDialog({
   const initialRefundMethod = defaultRefundMethod({
     paymentMethod: orderPaymentMethod,
     cashAmount: orderCashAmount,
+    transferAmount: orderTransferAmount,
   })
+  const shiftChoice = useDocumentShiftChoice()
   const [refundMethod, setRefundMethod] = useState<MoneyMethod>(initialRefundMethod)
   const [showResult, setShowResult] = useState<{
     refundAmount: number
@@ -122,7 +129,12 @@ export function ReturnDialog({
     try {
       const result = await mutation.mutateAsync({
         orderId,
-        input: { items: returnItems, refundMethod, note: note.trim() || null },
+        input: {
+          items: returnItems,
+          refundMethod,
+          note: note.trim() || null,
+          ...(shiftChoice.shiftId ? { shiftId: shiftChoice.shiftId } : {}),
+        },
       })
       const data = result.data
       setShowResult({
@@ -134,6 +146,7 @@ export function ReturnDialog({
       })
       showSuccess(`Trả hàng thành công: ${data.returnNumber}`)
     } catch (err) {
+      if (shiftChoice.capture(err)) return
       if (err instanceof ApiClientError) {
         showError(err.message || 'Lỗi khi trả hàng')
       } else {
@@ -146,6 +159,7 @@ export function ReturnDialog({
     setLines(new Map())
     setNote('')
     setRefundMethod(initialRefundMethod)
+    shiftChoice.reset()
     setShowResult(null)
     onOpenChange(false)
   }
@@ -331,8 +345,18 @@ export function ReturnDialog({
                 disabled={mutation.isPending}
                 ariaLabel="Phương thức hoàn tiền"
                 idPrefix="refund-method"
+                methods={REFUND_METHODS}
               />
             </div>
+          )}
+          {shiftChoice.choices && (
+            <DocumentShiftSelect
+              choices={shiftChoice.choices}
+              value={shiftChoice.shiftId}
+              onChange={shiftChoice.setShiftId}
+              disabled={mutation.isPending}
+              idPrefix="return"
+            />
           )}
           <Textarea
             placeholder="Ghi chú (tùy chọn)"
@@ -351,7 +375,10 @@ export function ReturnDialog({
           >
             Hủy
           </Button>
-          <Button onClick={handleSubmit} disabled={!hasSelection || mutation.isPending}>
+          <Button
+            onClick={handleSubmit}
+            disabled={!hasSelection || mutation.isPending || shiftChoice.pending}
+          >
             {mutation.isPending ? 'Đang xử lý...' : 'Xác nhận trả hàng'}
           </Button>
         </DialogFooter>

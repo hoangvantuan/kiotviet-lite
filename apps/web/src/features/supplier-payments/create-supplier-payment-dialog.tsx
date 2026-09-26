@@ -18,6 +18,8 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { DocumentShiftSelect } from '@/features/shifts/document-shift-select'
+import { useDocumentShiftChoice } from '@/features/shifts/use-document-shift-choice'
 import { useSupplierQuery, useSuppliersQuery } from '@/features/suppliers/use-suppliers'
 import { useGuardedOpenChange } from '@/hooks/use-document-mutation'
 import { asFormSetError, handleApiError } from '@/lib/api-error'
@@ -69,13 +71,16 @@ export function CreateSupplierPaymentDialog({
     defaultValues: emptyValues(preset),
   })
 
+  const shiftChoice = useDocumentShiftChoice()
+  const resetShiftChoice = shiftChoice.reset
   useEffect(() => {
     if (open) {
       form.reset(emptyValues(preset))
+      resetShiftChoice()
     }
     // preset là object mới mỗi lần render ở nơi gọi, chỉ reset khi mở hộp thoại
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, form])
+  }, [open, form, resetShiftChoice])
 
   const supplierId = useWatch({ control: form.control, name: 'supplierId' })
   const checkDebtQuery = useSuppliersQuery({ pageSize: 1, hasDebt: 'yes' })
@@ -108,6 +113,7 @@ export function CreateSupplierPaymentDialog({
       paymentMethod: values.paymentMethod,
       note: values.note?.toString().trim() ? values.note.toString().trim() : null,
       ...(linkedPo ? { purchaseOrderId: linkedPo.purchaseOrderId } : {}),
+      ...(shiftChoice.shiftId ? { shiftId: shiftChoice.shiftId } : {}),
     }
     try {
       const result = await mutation.mutateAsync(payload)
@@ -121,13 +127,14 @@ export function CreateSupplierPaymentDialog({
       onOpenChange(false)
       onCreated?.()
     } catch (err) {
+      if (shiftChoice.capture(err)) return
       handleApiError(err, asFormSetError(form), KNOWN_FIELDS)
     }
   })
 
   const isPending = mutation.isPending
   const errors = form.formState.errors
-  const disabled = !form.formState.isValid || isPending
+  const disabled = !form.formState.isValid || isPending || shiftChoice.pending
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -214,6 +221,15 @@ export function CreateSupplierPaymentDialog({
               ariaLabel="Phương thức chi"
               idPrefix="supplier-payment-method"
             />
+            {shiftChoice.choices && (
+              <DocumentShiftSelect
+                choices={shiftChoice.choices}
+                value={shiftChoice.shiftId}
+                onChange={shiftChoice.setShiftId}
+                disabled={isPending}
+                idPrefix="supplier-payment"
+              />
+            )}
           </div>
 
           <div className="grid gap-2">
