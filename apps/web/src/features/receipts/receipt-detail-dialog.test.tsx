@@ -20,6 +20,11 @@ const receipt: ReceiptDetail = {
   createdByName: 'Chủ',
   createdAt: '2026-09-25T08:00:00.000Z',
   debtAfter: 190_000,
+  status: 'active',
+  cancelledAt: null,
+  cancelledBy: null,
+  cancelledByName: null,
+  cancelReason: null,
   allocations: [
     {
       id: '00000000-0000-4000-8000-000000000011',
@@ -53,6 +58,7 @@ const receipt: ReceiptDetail = {
 
 vi.mock('./use-receipts', () => ({
   useReceiptQuery: () => ({ data: receipt, isLoading: false }),
+  useCancelReceiptMutation: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }))
 
 /** Cột đầu của từng dòng phân bổ trong bảng. */

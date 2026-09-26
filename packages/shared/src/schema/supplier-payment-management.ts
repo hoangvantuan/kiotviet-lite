@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { documentStatusSchema } from './document-cancel.js'
 import { dateFilterSchema, paginationSchema } from './pagination.js'
 
 export const createSupplierPaymentSchema = z
@@ -11,6 +12,8 @@ export const createSupplierPaymentSchema = z
       .min(1, 'Số tiền phải lớn hơn 0')
       .max(99_999_999_999_999, 'Số tiền vượt giới hạn'),
     note: z.string().trim().max(500, 'Ghi chú tối đa 500 ký tự').nullable().optional(),
+    // TIEN-104: gắn phiếu chi với một phiếu nhập cụ thể (tùy chọn)
+    purchaseOrderId: z.string().uuid('Phiếu nhập không hợp lệ').nullable().optional(),
   })
   .strict()
 
@@ -41,6 +44,13 @@ export const supplierPaymentListItemSchema = z.object({
   supplierPhone: z.string().nullable(),
   amount: z.number(),
   note: z.string().nullable(),
+  purchaseOrderId: z.string().uuid().nullable(),
+  purchaseOrderCode: z.string().nullable(),
+  status: documentStatusSchema,
+  cancelledAt: z.string().nullable(),
+  cancelledBy: z.string().uuid().nullable(),
+  cancelledByName: z.string().nullable(),
+  cancelReason: z.string().nullable(),
   createdBy: z.string().uuid(),
   createdByName: z.string().nullable(),
   createdAt: z.string(),

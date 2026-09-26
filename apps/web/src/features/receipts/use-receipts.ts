@@ -1,10 +1,15 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import type { CreateReceiptInput, ListReceiptsQuery } from '@kiotviet-lite/shared'
+import type {
+  CancelDocumentInput,
+  CreateReceiptInput,
+  ListReceiptsQuery,
+} from '@kiotviet-lite/shared'
 
 import { useDocumentMutation } from '@/hooks/use-document-mutation'
 
 import {
+  cancelReceiptApi,
   createReceiptApi,
   getCustomerOpenDebtsApi,
   getReceiptApi,
@@ -49,6 +54,23 @@ export function useCreateReceiptMutation() {
       qc.invalidateQueries({ queryKey: ['customers'] })
       qc.invalidateQueries({ queryKey: [...CUSTOMER_OPEN_DEBTS_KEY, variables.customerId] })
       qc.invalidateQueries({ queryKey: ['customer-debt', variables.customerId] })
+    },
+  })
+}
+
+export function useCancelReceiptMutation() {
+  const qc = useQueryClient()
+  return useDocumentMutation({
+    intent: 'receipt.cancel',
+    instance: (v: { id: string; input: CancelDocumentInput }) => v.id,
+    fingerprint: (v) => v.id,
+    mutationFn: (v: { id: string; input: CancelDocumentInput }, idempotencyKey) =>
+      cancelReceiptApi(v.id, v.input, idempotencyKey),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: RECEIPTS_KEY })
+      qc.invalidateQueries({ queryKey: ['customers'] })
+      qc.invalidateQueries({ queryKey: CUSTOMER_OPEN_DEBTS_KEY })
+      qc.invalidateQueries({ queryKey: ['customer-debt', res.data.customerId] })
     },
   })
 }

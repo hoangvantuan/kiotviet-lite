@@ -1,4 +1,5 @@
 import type {
+  CancelDocumentInput,
   CreateReceiptInput,
   CustomerOpenDebtsResponse,
   ListReceiptsQuery,
@@ -39,6 +40,13 @@ export function getReceiptApi(id: string) {
 
 export function createReceiptApi(input: CreateReceiptInput, idempotencyKey?: string) {
   return apiClient.post<Envelope<ReceiptDetail>>('/api/v1/receipts', input, { idempotencyKey })
+}
+
+/** TIEN-107: hủy phiếu thu, đảo phần đã thu trong sổ công nợ */
+export function cancelReceiptApi(id: string, input: CancelDocumentInput, idempotencyKey?: string) {
+  return apiClient.post<Envelope<ReceiptDetail>>(`/api/v1/receipts/${id}/cancel`, input, {
+    idempotencyKey,
+  })
 }
 
 export function getCustomerOpenDebtsApi(customerId: string) {

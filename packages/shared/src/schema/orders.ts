@@ -62,6 +62,10 @@ export const orders = pgTable(
     paidAmountAtSale: bigint({ mode: 'number' }),
     // Công nợ của khách ngay trước đơn này; NULL với khách lẻ và đơn cũ trước bản chụp.
     customerDebtBefore: bigint({ mode: 'number' }),
+    // TIEN-107: đơn hủy giữ nguyên dòng, status = 'cancelled' kèm người hủy, lúc hủy, lý do
+    cancelledAt: timestamp({ withTimezone: true }),
+    cancelledBy: uuid().references(() => users.id),
+    cancelReason: varchar({ length: 500 }),
     priceListId: uuid().references(() => priceLists.id, { onDelete: 'set null' }),
     priceListName: varchar({ length: 100 }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

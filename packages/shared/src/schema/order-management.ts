@@ -30,7 +30,9 @@ export interface OrderPolicyViolation {
   code: z.infer<typeof orderPolicyViolationCodeSchema>
   message: string
   /** Quyền người duyệt đơn phải giữ để duyệt vi phạm này */
-  requiredPermissions: Array<'pos.editPrice' | 'pos.editPriceBelowCost' | 'pos.overrideDebtLimit'>
+  requiredPermissions: Array<
+    'pos.editPrice' | 'pos.editPriceBelowCost' | 'pos.overrideDebtLimit' | 'documents.cancel'
+  >
 }
 
 export const reviewOrderSchema = z

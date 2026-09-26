@@ -29,6 +29,8 @@ export const PERMISSIONS = {
   // Xem giá vốn trên mọi DTO: tìm kiếm POS, /sync/*, tạo đơn, chi tiết đơn (BC-13).
   'products.viewCost': ['owner', 'manager'],
   'orders.return': ['owner', 'manager'],
+  // TIEN-107: hủy đơn bán, phiếu thu, phiếu nhập. Nhân viên cần PIN của người giữ quyền này.
+  'documents.cancel': ['owner', 'manager'],
 } as const satisfies Record<string, ReadonlyArray<UserRole>>
 
 export type Permission = keyof typeof PERMISSIONS

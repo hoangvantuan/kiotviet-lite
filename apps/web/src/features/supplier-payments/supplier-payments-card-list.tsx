@@ -1,10 +1,14 @@
 import type { SupplierPaymentListItem } from '@kiotviet-lite/shared'
 
+import { CancelledBadge } from '@/components/shared/cancel-document-dialog'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { formatDateTime } from '@/lib/date'
 
+import { SupplierPaymentCancelButton } from './supplier-payment-cancel-button'
+
 interface SupplierPaymentsCardListProps {
   items: SupplierPaymentListItem[]
+  canCancel?: boolean
 }
 
 function truncate(text: string | null, max = 50): string {
@@ -12,7 +16,10 @@ function truncate(text: string | null, max = 50): string {
   return text.length <= max ? text : `${text.slice(0, max)}...`
 }
 
-export function SupplierPaymentsCardList({ items }: SupplierPaymentsCardListProps) {
+export function SupplierPaymentsCardList({
+  items,
+  canCancel = false,
+}: SupplierPaymentsCardListProps) {
   return (
     <div className="flex flex-col gap-3">
       {items.map((p) => (
@@ -24,7 +31,12 @@ export function SupplierPaymentsCardList({ items }: SupplierPaymentsCardListProp
               <p className="text-xs text-muted-foreground font-mono">{p.supplierPhone ?? '—'}</p>
             </div>
             <div className="text-right shrink-0">
-              <p className="font-semibold">{formatVndWithSuffix(p.amount)}</p>
+              <p
+                className={`font-semibold ${p.status === 'cancelled' ? 'line-through text-muted-foreground' : ''}`}
+              >
+                {formatVndWithSuffix(p.amount)}
+              </p>
+              {p.status === 'cancelled' && <CancelledBadge />}
               {p.note && (
                 <p className="text-xs text-muted-foreground max-w-[10rem] truncate">
                   {truncate(p.note)}
@@ -32,9 +44,19 @@ export function SupplierPaymentsCardList({ items }: SupplierPaymentsCardListProp
               )}
             </div>
           </div>
-          {p.createdByName && (
-            <p className="text-xs text-muted-foreground mt-1">Người tạo: {p.createdByName}</p>
+          {p.purchaseOrderCode && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Phiếu nhập: <span className="font-mono">{p.purchaseOrderCode}</span>
+            </p>
           )}
+          <div className="mt-1 flex items-center justify-between">
+            {p.createdByName ? (
+              <p className="text-xs text-muted-foreground">Người tạo: {p.createdByName}</p>
+            ) : (
+              <span />
+            )}
+            {canCancel && <SupplierPaymentCancelButton payment={p} />}
+          </div>
         </div>
       ))}
     </div>

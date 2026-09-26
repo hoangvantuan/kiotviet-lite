@@ -1,4 +1,4 @@
-import { and, count, eq } from 'drizzle-orm'
+import { and, count, eq, ne } from 'drizzle-orm'
 
 import {
   hasPermission,
@@ -62,6 +62,7 @@ export async function reviewOrder({
         id: orders.id,
         orderNumber: orders.orderNumber,
         userId: orders.userId,
+        status: orders.status,
         reviewStatus: orders.reviewStatus,
         policyViolations: orders.policyViolations,
       })
@@ -71,6 +72,12 @@ export async function reviewOrder({
       .limit(1)
     if (!order) {
       throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng')
+    }
+    // TIEN-107: đơn đã hủy đã đảo hết bút toán, không còn gì để duyệt
+    if (order.status === 'cancelled') {
+      throw new ApiError('CONFLICT', 'Đơn hàng đã hủy, không cần duyệt', {
+        reason: 'order_cancelled',
+      })
     }
     if (order.reviewStatus !== 'pending_review') {
       throw new ApiError('CONFLICT', 'Đơn hàng không ở trạng thái chờ duyệt', {
@@ -132,7 +139,7 @@ export async function reviewOrder({
   })
 }
 
-/** Số đơn đang chờ duyệt, cho thẻ cảnh báo trên tổng quan. */
+/** Số đơn đang chờ duyệt, cho thẻ cảnh báo trên tổng quan. Đơn đã hủy không tính. */
 export async function countPendingReview({
   db,
   storeId,
@@ -143,6 +150,12 @@ export async function countPendingReview({
   const [row] = await db
     .select({ value: count() })
     .from(orders)
-    .where(and(eq(orders.storeId, storeId), eq(orders.reviewStatus, 'pending_review')))
+    .where(
+      and(
+        eq(orders.storeId, storeId),
+        eq(orders.reviewStatus, 'pending_review'),
+        ne(orders.status, 'cancelled'),
+      ),
+    )
   return Number(row?.value ?? 0)
 }

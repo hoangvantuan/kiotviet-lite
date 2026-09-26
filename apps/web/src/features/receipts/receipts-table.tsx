@@ -2,6 +2,7 @@ import { Eye } from 'lucide-react'
 
 import type { ReceiptListItem } from '@kiotviet-lite/shared'
 
+import { CancelledBadge } from '@/components/shared/cancel-document-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -55,7 +56,12 @@ export function ReceiptsTable({ items, onView }: ReceiptsTableProps) {
                   </div>
                 </TableCell>
                 <TableCell className="text-right font-medium">
-                  {formatVndWithSuffix(p.amount)}
+                  <span
+                    className={p.status === 'cancelled' ? 'line-through text-muted-foreground' : ''}
+                  >
+                    {formatVndWithSuffix(p.amount)}
+                  </span>
+                  {p.status === 'cancelled' && <CancelledBadge className="ml-2" />}
                 </TableCell>
                 <TableCell className="text-center">
                   <Badge variant="secondary">{p.allocationCount}</Badge>

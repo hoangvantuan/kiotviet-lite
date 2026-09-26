@@ -6,11 +6,13 @@ import { createReceiptSchema, listReceiptsQuerySchema } from '@kiotviet-lite/sha
 import type { Db } from '../db/index.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
+import { cancelDocumentRoute } from '../middleware/document-cancel.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import {
+  cancelReceipt,
   createReceipt,
   getReceipt,
   listCustomerOpenDebts,
@@ -73,6 +75,25 @@ export function createReceiptsRoutes({ db }: ReceiptsRoutesDeps) {
         meta: getRequestMeta(c),
       })
       return c.json({ data }, 201)
+    }),
+  )
+
+  // TIEN-107: hủy phiếu thu, đảo bút toán thu trong sổ công nợ
+  app.post(
+    '/:id/cancel',
+    cancelDocumentRoute(db, async (c, { transaction, input, preauthorized }) => {
+      const auth = c.get('auth')
+      const receiptId = uuidParam.parse(c.req.param('id'))
+      const data = await cancelReceipt({
+        db,
+        transaction,
+        actor: auth,
+        receiptId,
+        input,
+        preauthorized,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data })
     }),
   )
 

@@ -4,6 +4,7 @@ import { ClipboardList, Plus, SearchX } from 'lucide-react'
 
 import type { PaymentStatus, PurchaseOrderListItem } from '@kiotviet-lite/shared'
 
+import { CancelledBadge } from '@/components/shared/cancel-document-dialog'
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
 import { Badge } from '@/components/ui/badge'
@@ -256,12 +257,18 @@ function PurchaseOrderTable({ items }: PurchaseOrderTableProps) {
                 <TableCell>{formatDate(it.purchaseDate)}</TableCell>
                 <TableCell>{it.supplierName}</TableCell>
                 <TableCell className="text-right">{it.itemCount}</TableCell>
-                <TableCell className="text-right font-medium">
+                <TableCell
+                  className={`text-right font-medium ${it.status === 'cancelled' ? 'line-through text-muted-foreground' : ''}`}
+                >
                   {formatVndWithSuffix(it.totalAmount)}
                 </TableCell>
                 <TableCell className="text-right">{formatVndWithSuffix(it.paidAmount)}</TableCell>
                 <TableCell>
-                  <PaymentStatusBadge status={it.paymentStatus} />
+                  {it.status === 'cancelled' ? (
+                    <CancelledBadge />
+                  ) : (
+                    <PaymentStatusBadge status={it.paymentStatus} />
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -279,7 +286,11 @@ function PurchaseOrderTable({ items }: PurchaseOrderTableProps) {
           >
             <div className="flex items-center justify-between">
               <span className="font-mono font-medium">{it.code}</span>
-              <PaymentStatusBadge status={it.paymentStatus} />
+              {it.status === 'cancelled' ? (
+                <CancelledBadge />
+              ) : (
+                <PaymentStatusBadge status={it.paymentStatus} />
+              )}
             </div>
             <div className="text-sm text-muted-foreground mt-1">{it.supplierName}</div>
             <div className="flex justify-between text-sm mt-2">

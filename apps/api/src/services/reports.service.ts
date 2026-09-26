@@ -15,6 +15,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { activeReceiptFilter, activeSupplierPaymentFilter } from '../lib/document-status.js'
 import { localDaysSinceSql, parseDateRangeBoundary } from '../lib/timezone.js'
 import { buildCsv, buildCsvFromLines } from './export.service.js'
 
@@ -199,6 +200,7 @@ export async function getDebtSummaryReport({
       .where(
         and(
           eq(receipts.storeId, storeId),
+          activeReceiptFilter(),
           gte(receipts.createdAt, fromDate),
           lte(receipts.createdAt, toDate),
         ),
@@ -213,6 +215,7 @@ export async function getDebtSummaryReport({
       .where(
         and(
           eq(supplierPayments.storeId, storeId),
+          activeSupplierPaymentFilter(),
           gte(supplierPayments.createdAt, fromDate),
           lte(supplierPayments.createdAt, toDate),
         ),

@@ -61,13 +61,18 @@ JOIN receipts r ON r.id = a.receipt_id
 JOIN debts d ON d.id = a.debt_id
 WHERE a.amount <= 0 OR d.store_id <> r.store_id OR d.customer_id <> r.customer_id;
 
--- I5. Số đã trả của khoản nợ = tổng phân bổ phiếu thu. Từ ADR 0008, paid chỉ tăng qua phiếu
--- thu; cấn trừ khi trả hàng và điều chỉnh giảm ghi vào reduced.
+-- I5. Số đã trả của khoản nợ = tổng phân bổ của phiếu thu còn hiệu lực. Từ ADR 0008, paid chỉ
+-- tăng qua phiếu thu; cấn trừ khi trả hàng và điều chỉnh giảm ghi vào reduced. Phiếu thu đã hủy
+-- (TIEN-107) giữ dòng phân bổ làm vết nhưng đã đảo paid, nên không tính.
 INSERT INTO invariant_violations
 SELECT 'I5_paid_allocated', d.store_id, 'debt ' || d.id,
        format('paid=%s, sum(allocations)=%s', d.paid, coalesce(sum(a.amount), 0))
 FROM debts d
-LEFT JOIN receipt_allocations a ON a.debt_id = d.id
+LEFT JOIN (
+  SELECT ra.debt_id, ra.amount
+  FROM receipt_allocations ra
+  JOIN receipts r ON r.id = ra.receipt_id AND r.status = 'active'
+) a ON a.debt_id = d.id
 GROUP BY d.id
 HAVING d.paid <> coalesce(sum(a.amount), 0);
 
@@ -91,18 +96,21 @@ FROM (
 ) s
 WHERE s.stock <> s.ledger;
 
--- I7. Công nợ NCC = tổng (phiếu nhập - đã trả) + tổng điều chỉnh (mới - cũ) - tổng phiếu chi
+-- I7. Công nợ NCC = tổng (phiếu nhập - đã trả) - phần nợ giảm khi hủy phiếu nhập - phần nợ giảm
+-- khi trả hàng nhập + tổng điều chỉnh (mới - cũ) - tổng phiếu chi còn hiệu lực (KHO-11, TIEN-107)
 INSERT INTO invariant_violations
 SELECT 'I7_supplier_debt', s.store_id, 'supplier ' || s.code,
        format('current_debt=%s, tính lại=%s, lệch=%s', s.current_debt, x.expected, s.current_debt - x.expected)
 FROM suppliers s
 CROSS JOIN LATERAL (
-  SELECT coalesce((SELECT sum(p.total_amount - p.paid_amount) FROM purchase_orders p
-                   WHERE p.supplier_id = s.id), 0)
+  SELECT coalesce((SELECT sum(p.total_amount - p.paid_amount - p.cancel_debt_reduction)
+                   FROM purchase_orders p WHERE p.supplier_id = s.id), 0)
+       - coalesce((SELECT sum(pr.debt_reduction_amount) FROM purchase_returns pr
+                   WHERE pr.supplier_id = s.id), 0)
        + coalesce((SELECT sum(a.new_amount - a.old_amount) FROM supplier_debt_adjustments a
                    WHERE a.supplier_id = s.id), 0)
        - coalesce((SELECT sum(sp.amount) FROM supplier_payments sp
-                   WHERE sp.supplier_id = s.id), 0) AS expected
+                   WHERE sp.supplier_id = s.id AND sp.status = 'active'), 0) AS expected
 ) x
 WHERE s.current_debt <> x.expected;
 

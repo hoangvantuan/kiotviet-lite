@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { documentStatusSchema } from './document-cancel.js'
 import { dateFilterSchema, paginationSchema } from './pagination.js'
 
 export const allocationInputSchema = z
@@ -112,6 +113,11 @@ export const receiptListItemSchema = z.object({
   amount: z.number(),
   note: z.string().nullable(),
   allocationCount: z.number().int(),
+  status: documentStatusSchema,
+  cancelledAt: z.string().nullable(),
+  cancelledBy: z.string().uuid().nullable(),
+  cancelledByName: z.string().nullable(),
+  cancelReason: z.string().nullable(),
   createdBy: z.string().uuid(),
   createdByName: z.string().nullable(),
   createdAt: z.string(),

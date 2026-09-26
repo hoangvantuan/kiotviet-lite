@@ -1,5 +1,6 @@
 import type { SupplierPaymentListItem } from '@kiotviet-lite/shared'
 
+import { CancelledBadge } from '@/components/shared/cancel-document-dialog'
 import {
   Table,
   TableBody,
@@ -12,8 +13,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { formatVndWithSuffix } from '@/lib/currency'
 import { formatDateTime } from '@/lib/date'
 
+import { SupplierPaymentCancelButton } from './supplier-payment-cancel-button'
+
 interface SupplierPaymentsTableProps {
   items: SupplierPaymentListItem[]
+  canCancel?: boolean
 }
 
 function truncateNote(note: string | null): { display: string; full: string | null } {
@@ -22,7 +26,7 @@ function truncateNote(note: string | null): { display: string; full: string | nu
   return { display: `${note.slice(0, 50)}...`, full: note }
 }
 
-export function SupplierPaymentsTable({ items }: SupplierPaymentsTableProps) {
+export function SupplierPaymentsTable({ items, canCancel = false }: SupplierPaymentsTableProps) {
   return (
     <div className="rounded-md border">
       <Table>
@@ -31,8 +35,10 @@ export function SupplierPaymentsTable({ items }: SupplierPaymentsTableProps) {
             <TableHead>Ngày tạo</TableHead>
             <TableHead>Nhà cung cấp</TableHead>
             <TableHead className="text-right">Số tiền</TableHead>
+            <TableHead>Phiếu nhập</TableHead>
             <TableHead>Ghi chú</TableHead>
             <TableHead>Người tạo</TableHead>
+            {canCancel && <TableHead className="text-right">Thao tác</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -48,8 +54,14 @@ export function SupplierPaymentsTable({ items }: SupplierPaymentsTableProps) {
                   </div>
                 </TableCell>
                 <TableCell className="text-right font-medium">
-                  {formatVndWithSuffix(p.amount)}
+                  <span
+                    className={p.status === 'cancelled' ? 'line-through text-muted-foreground' : ''}
+                  >
+                    {formatVndWithSuffix(p.amount)}
+                  </span>
+                  {p.status === 'cancelled' && <CancelledBadge className="ml-2" />}
                 </TableCell>
+                <TableCell className="font-mono text-xs">{p.purchaseOrderCode ?? '—'}</TableCell>
                 <TableCell className="max-w-xs">
                   {note.full ? (
                     <TooltipProvider>
@@ -69,6 +81,11 @@ export function SupplierPaymentsTable({ items }: SupplierPaymentsTableProps) {
                   )}
                 </TableCell>
                 <TableCell className="text-sm">{p.createdByName ?? '—'}</TableCell>
+                {canCancel && (
+                  <TableCell className="text-right">
+                    <SupplierPaymentCancelButton payment={p} />
+                  </TableCell>
+                )}
               </TableRow>
             )
           })}

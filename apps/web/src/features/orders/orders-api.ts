@@ -1,4 +1,5 @@
 import type {
+  CancelDocumentInput,
   OrderPolicyViolation,
   OrderReviewStatus,
   PriceSource,
@@ -71,6 +72,10 @@ interface OrderDetailResponse {
   reviewedByName?: string | null
   reviewedAt?: string | null
   reviewNote?: string | null
+  /** TIEN-107: thông tin hủy đơn */
+  cancelledAt?: string | null
+  cancelledByName?: string | null
+  cancelReason?: string | null
   createdAt: string
   updatedAt: string
   items: OrderDetailItem[]
@@ -234,6 +239,28 @@ export function createReturnApi(
   idempotencyKey?: string,
 ) {
   return apiClient.post<Envelope<OrderReturnDetail>>(`/api/v1/orders/${orderId}/returns`, input, {
+    idempotencyKey,
+  })
+}
+
+export interface OrderCancelResult {
+  id: string
+  orderNumber: string
+  status: 'cancelled'
+  cashRefundAmount: number
+  debtReductionAmount: number
+  prepaymentRefundAmount: number
+  cancelledAt: string
+  cancelReason: string
+}
+
+/** TIEN-107: hủy đơn bán, hoàn kho và đảo công nợ, tiền trả trước của đơn */
+export function cancelOrderApi(
+  orderId: string,
+  input: CancelDocumentInput,
+  idempotencyKey?: string,
+) {
+  return apiClient.post<Envelope<OrderCancelResult>>(`/api/v1/orders/${orderId}/cancel`, input, {
     idempotencyKey,
   })
 }

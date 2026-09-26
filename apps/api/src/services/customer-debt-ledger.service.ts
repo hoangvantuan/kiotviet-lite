@@ -351,3 +351,110 @@ export async function settleCustomerDebtsFifo(
   await settleCustomerDebts(db, { ...input, allocations })
   return allocations
 }
+
+export interface ReverseCustomerPaymentsInput extends DebtLedgerTarget {
+  /** Các phân bổ của phiếu thu bị hủy */
+  allocations: DebtAllocation[]
+}
+
+/**
+ * Bút toán đảo phiếu thu (TIEN-107): trả lại đúng số đã thu vào từng khoản nợ phiếu từng phân bổ,
+ * `paid` giảm, `remaining` tăng, công nợ khách tăng theo. Dòng phân bổ của phiếu hủy được giữ
+ * làm vết, chỉ không còn tính vào `paid` (I5 chỉ cộng phiếu thu còn hiệu lực).
+ *
+ * Khách có tiền trả trước ghi sau phiếu thu (lúc đó không còn nợ) thì nợ vừa mở lại được cấn vào
+ * tiền trả trước như một khoản nợ mới (ADR-0011), để khách không vừa nợ vừa có tiền trả trước.
+ */
+export async function reverseCustomerPayments(db: Db, input: ReverseCustomerPaymentsInput) {
+  const allocations = input.allocations.filter((a) => a.amount > 0)
+  if (allocations.length === 0) return
+  await lockCustomerForDebt(db, input)
+
+  const debtIds = [...new Set(allocations.map((a) => a.debtId))].sort()
+  await db
+    .select({ id: debts.id })
+    .from(debts)
+    .where(inArray(debts.id, debtIds))
+    .orderBy(asc(debts.id))
+    .for('update')
+
+  let total = 0
+  for (const a of allocations) {
+    const updated = await db
+      .update(debts)
+      .set({
+        paid: sql`${debts.paid} - ${a.amount}`,
+        remaining: sql`${debts.remaining} + ${a.amount}`,
+      })
+      .where(
+        and(
+          eq(debts.id, a.debtId),
+          eq(debts.storeId, input.storeId),
+          eq(debts.customerId, input.customerId),
+          gte(debts.paid, a.amount),
+        ),
+      )
+      .returning({ id: debts.id })
+    if (updated.length !== 1) {
+      throw new ApiError(
+        'BUSINESS_RULE_VIOLATION',
+        'Khoản nợ của phiếu thu đã thay đổi, không đảo được phiếu thu',
+      )
+    }
+    total += a.amount
+  }
+
+  await db
+    .update(customers)
+    .set({ currentDebt: sql`${customers.currentDebt} + ${total}` })
+    .where(eq(customers.id, input.customerId))
+
+  // Cấn nợ vừa mở lại vào tiền trả trước còn lại, khoản trả trước cũ nhất trước
+  const credits = await db
+    .select({ id: debts.id, remaining: debts.remaining })
+    .from(debts)
+    .where(
+      and(
+        eq(debts.storeId, input.storeId),
+        eq(debts.customerId, input.customerId),
+        lt(debts.remaining, 0),
+      ),
+    )
+    .orderBy(asc(debts.createdAt), asc(debts.id))
+    .for('update')
+  if (credits.length > 0) {
+    const reopened = await db
+      .select({ id: debts.id, remaining: debts.remaining })
+      .from(debts)
+      .where(and(inArray(debts.id, debtIds), gt(debts.remaining, 0)))
+      .orderBy(asc(debts.createdAt), asc(debts.id))
+    const creditLeft = credits.map((c) => ({ id: c.id, left: -Number(c.remaining) }))
+    for (const debt of reopened) {
+      let need = Number(debt.remaining)
+      for (const credit of creditLeft) {
+        if (need <= 0) break
+        const take = Math.min(need, credit.left)
+        if (take <= 0) continue
+        await db
+          .update(debts)
+          .set({
+            reduced: sql`${debts.reduced} - ${take}`,
+            remaining: sql`${debts.remaining} + ${take}`,
+          })
+          .where(eq(debts.id, credit.id))
+        await db
+          .update(debts)
+          .set({
+            reduced: sql`${debts.reduced} + ${take}`,
+            prepaymentApplied: sql`${debts.prepaymentApplied} + ${take}`,
+            remaining: sql`${debts.remaining} - ${take}`,
+          })
+          .where(eq(debts.id, debt.id))
+        credit.left -= take
+        need -= take
+      }
+    }
+  }
+
+  await assertCustomerDebtBalanced(db, input)
+}

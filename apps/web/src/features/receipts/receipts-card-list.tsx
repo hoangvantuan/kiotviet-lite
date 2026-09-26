@@ -2,6 +2,7 @@ import { Eye } from 'lucide-react'
 
 import type { ReceiptListItem } from '@kiotviet-lite/shared'
 
+import { CancelledBadge } from '@/components/shared/cancel-document-dialog'
 import { Button } from '@/components/ui/button'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { formatDateTime } from '@/lib/date'
@@ -28,7 +29,12 @@ export function ReceiptsCardList({ items, onView }: ReceiptsCardListProps) {
               <p className="text-xs text-muted-foreground font-mono">{p.customerPhone ?? '—'}</p>
             </div>
             <div className="text-right shrink-0">
-              <p className="font-semibold">{formatVndWithSuffix(p.amount)}</p>
+              <p
+                className={`font-semibold ${p.status === 'cancelled' ? 'line-through text-muted-foreground' : ''}`}
+              >
+                {formatVndWithSuffix(p.amount)}
+              </p>
+              {p.status === 'cancelled' && <CancelledBadge />}
               <p className="text-xs text-muted-foreground">{p.allocationCount} khoản</p>
             </div>
           </div>

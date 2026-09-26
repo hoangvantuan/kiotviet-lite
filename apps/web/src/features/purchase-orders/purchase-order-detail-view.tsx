@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react'
 import type { PaymentStatus } from '@kiotviet-lite/shared'
 import { formatPhone } from '@kiotviet-lite/shared'
 
+import { CancelledBadge } from '@/components/shared/cancel-document-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -18,6 +19,12 @@ import {
 import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
 import { formatDateTime } from '@/lib/date'
 
+import {
+  PurchaseOrderActions,
+  PurchaseOrderCancelledNotice,
+  PurchaseReturnsSection,
+} from './purchase-order-actions'
+import { purchaseOrderOutstanding } from './purchase-order-outstanding'
 import { usePurchaseOrderQuery } from './use-purchase-orders'
 
 interface PurchaseOrderDetailViewProps {
@@ -79,7 +86,8 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
   }
 
   const order = query.data
-  const remaining = Math.max(0, order.totalAmount - order.paidAmount)
+  const cancelled = order.status === 'cancelled'
+  const remaining = cancelled ? 0 : purchaseOrderOutstanding(order)
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -95,14 +103,17 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold font-mono">{order.code}</h1>
-            <PaymentStatusBadge status={order.paymentStatus} />
+            {cancelled ? <CancelledBadge /> : <PaymentStatusBadge status={order.paymentStatus} />}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             Tạo lúc {formatDateTime(order.createdAt)}
             {order.createdByName ? ` bởi ${order.createdByName}` : ''}
           </p>
         </div>
+        <PurchaseOrderActions order={order} />
       </header>
+
+      <PurchaseOrderCancelledNotice order={order} />
 
       <section className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-md border p-3">
@@ -133,6 +144,7 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
                 <TableHead className="text-right">Thành tiền</TableHead>
                 <TableHead className="text-right">Giá vốn sau</TableHead>
                 <TableHead className="text-right">Tồn sau</TableHead>
+                <TableHead className="text-right">Đã trả NCC</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -166,6 +178,7 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
                   <TableCell className="text-right">
                     {it.stockAfter !== null ? it.stockAfter : '—'}
                   </TableCell>
+                  <TableCell className="text-right">{it.returnedQuantity || '—'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -230,10 +243,22 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
           <span>Tổng thanh toán</span>
           <span>{formatVndWithSuffix(order.totalAmount)}</span>
         </div>
+        {order.returnedAmount > 0 && (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Hàng đã trả NCC</span>
+            <span>-{formatVndWithSuffix(order.returnedAmount)}</span>
+          </div>
+        )}
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Đã trả</span>
           <span>{formatVndWithSuffix(order.paidAmount)}</span>
         </div>
+        {order.linkedPaymentAmount > 0 && (
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>Trong đó phiếu chi gắn phiếu</span>
+            <span>{formatVndWithSuffix(order.linkedPaymentAmount)}</span>
+          </div>
+        )}
         {remaining > 0 && (
           <div className="flex justify-between text-sm font-medium text-yellow-700">
             <span>Còn nợ</span>
@@ -241,6 +266,8 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
           </div>
         )}
       </section>
+
+      <PurchaseReturnsSection order={order} />
 
       {order.note && (
         <section className="rounded-md border p-3">

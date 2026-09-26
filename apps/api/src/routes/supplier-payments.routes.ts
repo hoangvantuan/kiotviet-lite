@@ -7,11 +7,13 @@ import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
+import { cancelDocumentRoute } from '../middleware/document-cancel.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import {
+  cancelSupplierPayment,
   createSupplierPayment,
   getSupplierPayment,
   listSupplierPayments,
@@ -68,6 +70,26 @@ export function createSupplierPaymentsRoutes({ db }: SupplierPaymentsRoutesDeps)
         meta: getRequestMeta(c),
       })
       return c.json({ data }, 201)
+    }),
+  )
+
+  // TIEN-107: hủy phiếu chi, chủ và quản lý (`documents.cancel`); nhân viên không vào được route
+  // phiếu chi (`inventory.manage`)
+  app.post(
+    '/:id/cancel',
+    cancelDocumentRoute(db, async (c, { transaction, input, preauthorized }) => {
+      const auth = c.get('auth')
+      const paymentId = uuidParam.parse(c.req.param('id'))
+      const data = await cancelSupplierPayment({
+        db,
+        transaction,
+        actor: auth,
+        paymentId,
+        input,
+        preauthorized,
+        meta: getRequestMeta(c),
+      })
+      return c.json({ data })
     }),
   )
 

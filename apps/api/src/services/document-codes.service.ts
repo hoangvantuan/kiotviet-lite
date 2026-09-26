@@ -1,6 +1,12 @@
 import { and, eq, sql } from 'drizzle-orm'
 
-import { documentCounters, orderReturns, orders, purchaseOrders } from '@kiotviet-lite/shared'
+import {
+  documentCounters,
+  orderReturns,
+  orders,
+  purchaseOrders,
+  purchaseReturns,
+} from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
@@ -20,7 +26,7 @@ export function formatDateForCode(date: Date): string {
   return DATE_FORMATTER.format(date).replace(/-/g, '')
 }
 
-type DocumentKind = 'order' | 'return' | 'purchase_order'
+type DocumentKind = 'order' | 'return' | 'purchase_order' | 'purchase_return'
 
 const DOCUMENTS = {
   order: {
@@ -43,6 +49,14 @@ const DOCUMENTS = {
     storeColumn: purchaseOrders.storeId,
     prefix: (date: Date) => `PN-${formatDateForCode(date)}-`,
     label: 'phiếu nhập',
+  },
+  // KHO-11: trả hàng nhập, cùng định dạng ngày với phiếu nhập
+  purchase_return: {
+    table: purchaseReturns,
+    column: purchaseReturns.code,
+    storeColumn: purchaseReturns.storeId,
+    prefix: (date: Date) => `THN-${formatDateForCode(date)}-`,
+    label: 'phiếu trả hàng nhập',
   },
 } as const
 

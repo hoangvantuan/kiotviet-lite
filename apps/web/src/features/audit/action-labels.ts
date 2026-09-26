@@ -90,6 +90,11 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'debt_ledger.backfilled': 'Điền ngược sổ công nợ R3',
   'order.returned': 'Trả hàng',
   'print_settings.updated': 'Cập nhật mẫu in',
+  'receipt.cancelled': 'Hủy phiếu thu',
+  'supplier_payment.cancelled': 'Hủy phiếu chi',
+  'order.cancelled': 'Hủy đơn bán',
+  'purchase_order.cancelled': 'Hủy phiếu nhập hàng',
+  'purchase_return.created': 'Trả hàng nhập',
 }
 
 export interface ActionGroup {
@@ -187,6 +192,9 @@ export const ACTION_GROUPS: ActionGroup[] = [
       'supplier_debt_adjustment.created',
       'supplier_debt.opening_created',
       'purchase_order.created',
+      'purchase_order.cancelled',
+      'purchase_return.created',
+      'supplier_payment.cancelled',
     ],
   },
   {
@@ -200,7 +208,7 @@ export const ACTION_GROUPS: ActionGroup[] = [
   },
   {
     label: 'Đơn hàng',
-    actions: ['order.created', 'order.returned'],
+    actions: ['order.created', 'order.returned', 'order.cancelled'],
   },
   {
     label: 'Chiết khấu danh mục',
@@ -227,7 +235,7 @@ export const ACTION_GROUPS: ActionGroup[] = [
   },
   {
     label: 'Phiếu thu',
-    actions: ['receipt.created', 'receipt.printed'],
+    actions: ['receipt.created', 'receipt.printed', 'receipt.cancelled'],
   },
 ]
 

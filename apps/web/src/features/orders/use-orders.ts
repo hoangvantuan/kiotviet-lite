@@ -1,10 +1,11 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import type { ReviewOrderInput } from '@kiotviet-lite/shared'
+import type { CancelDocumentInput, ReviewOrderInput } from '@kiotviet-lite/shared'
 
 import { useDocumentMutation } from '@/hooks/use-document-mutation'
 
 import {
+  cancelOrderApi,
   type CreateOrderReturnInput,
   createReturnApi,
   getOrderApi,
@@ -90,6 +91,22 @@ export function useReviewOrderMutation() {
       queryClient.invalidateQueries({ queryKey: [...ORDERS_KEY, 'detail', variables.orderId] })
       queryClient.invalidateQueries({ queryKey: [...ORDERS_KEY, 'list'] })
       queryClient.invalidateQueries({ queryKey: [...ORDERS_KEY, 'pending-review-count'] })
+    },
+  })
+}
+
+export function useCancelOrderMutation() {
+  const queryClient = useQueryClient()
+  return useDocumentMutation({
+    intent: 'order.cancel',
+    instance: (v: { orderId: string; input: CancelDocumentInput }) => v.orderId,
+    fingerprint: (v) => v.orderId,
+    mutationFn: ({ orderId, input }: { orderId: string; input: CancelDocumentInput }, key) =>
+      cancelOrderApi(orderId, input, key),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ORDERS_KEY })
+      queryClient.invalidateQueries({ queryKey: ['customers'] })
+      queryClient.invalidateQueries({ queryKey: ['products'] })
     },
   })
 }
