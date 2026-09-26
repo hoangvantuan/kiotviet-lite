@@ -1,20 +1,11 @@
 import { useEffect } from 'react'
 
-import { useOfflineStore } from '@/stores/use-offline-store'
+import { startOfflineSyncRuntime } from '@/lib/offline-sync-runtime'
 
+/**
+ * Theo dõi kết nối và chạy đồng bộ ngoại tuyến tự động cho cả ứng dụng (OFF-02). Runtime tự
+ * đợi có người đăng nhập mới mở PGlite và đẩy đơn.
+ */
 export function useNetworkStatus() {
-  const setStatus = useOfflineStore((s) => s.setStatus)
-
-  useEffect(() => {
-    const goOnline = () => setStatus('online')
-    const goOffline = () => setStatus('offline')
-
-    window.addEventListener('online', goOnline)
-    window.addEventListener('offline', goOffline)
-
-    return () => {
-      window.removeEventListener('online', goOnline)
-      window.removeEventListener('offline', goOffline)
-    }
-  }, [setStatus])
+  useEffect(() => startOfflineSyncRuntime(), [])
 }

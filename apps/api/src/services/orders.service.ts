@@ -11,6 +11,7 @@ import {
   hasPermission,
   inventoryTransactions,
   type ListOrdersQuery,
+  OFFLINE_ORDER_NUMBER_PATTERN,
   orderItems,
   type OrderPolicyViolation,
   type OrderReviewStatus,
@@ -1701,7 +1702,11 @@ export async function listOrders({
   if (clientId) conditions.push(eq(orders.clientId, clientId))
 
   const trimmedSearch = search?.trim()
-  if (trimmedSearch) {
+  const tempCode = trimmedSearch ? OFFLINE_ORDER_NUMBER_PATTERN.exec(trimmedSearch) : null
+  if (tempCode) {
+    // OFF-17: hóa đơn ngoại tuyến in mã tạm, mã tạm lấy từ đầu clientId
+    conditions.push(sql`${orders.clientId}::text LIKE ${`${tempCode[1]!.toLowerCase()}%`}`)
+  } else if (trimmedSearch) {
     const escaped = escapeLikePattern(trimmedSearch)
     const pattern = `%${escaped}%`
     conditions.push(ilike(orders.orderNumber, pattern))

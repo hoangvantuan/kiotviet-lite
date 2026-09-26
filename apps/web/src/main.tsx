@@ -3,12 +3,11 @@ import { createRoot } from 'react-dom/client'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
 
-import { meApi, refreshApi } from './features/auth/auth-api'
+import { bootAuth } from './features/auth/boot-auth'
 import { repriceTabAction } from './features/pos/hooks/use-auto-reprice'
 import { queryClient } from './lib/query-client'
 import { router } from './router'
 import { startCartPersistence } from './stores/cart-persistence'
-import { useAuthStore } from './stores/use-auth-store'
 
 import './globals.css'
 
@@ -17,21 +16,8 @@ startCartPersistence({
   onRestore: (tabIndexes) => tabIndexes.forEach((tab) => repriceTabAction(tab)),
 })
 
-async function bootAuth() {
-  const refreshResult = await refreshApi()
-  if (refreshResult.status !== 'ok') {
-    useAuthStore.getState().setNetworkError(refreshResult.status === 'network_error')
-    useAuthStore.getState().markBooted()
-    return
-  }
-  useAuthStore.getState().setAccessToken(refreshResult.accessToken)
-  try {
-    const { data: user } = await meApi()
-    useAuthStore.getState().setAuth({ user, accessToken: refreshResult.accessToken })
-  } catch {
-    useAuthStore.getState().clearAuth()
-    useAuthStore.getState().markBooted()
-  }
+if (import.meta.env.VITE_E2E_HOOKS === '1') {
+  void import('./lib/e2e-hooks').then((m) => m.installE2EHooks())
 }
 
 bootAuth().then(() => {

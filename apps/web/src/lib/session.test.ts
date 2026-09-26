@@ -8,6 +8,7 @@ import { queryClient } from './query-client'
 
 vi.mock('@/features/auth/auth-api', () => ({
   logoutApi: vi.fn(),
+  isNetworkError: () => false,
 }))
 
 const { logoutApi } = await import('@/features/auth/auth-api')

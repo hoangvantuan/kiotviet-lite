@@ -1,4 +1,4 @@
-import type { PGlite } from '@electric-sql/pglite'
+import type { PGliteInterface as PGlite } from '@electric-sql/pglite'
 
 import { apiFetch } from './api-client'
 

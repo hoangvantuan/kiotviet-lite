@@ -41,6 +41,10 @@ export async function refreshApi(): Promise<RefreshResult> {
     )
     return { status: 'ok', ...response.data }
   } catch (err) {
-    return isNetworkError(err) ? { status: 'network_error' } : { status: 'unauthenticated' }
+    // Chỉ 401, 403 mới là "chưa đăng nhập". Máy chủ lỗi 5xx hay cổng trung gian hết giờ là không
+    // gọi được máy chủ: không được coi như đã đăng xuất (OFF-03)
+    if (isNetworkError(err)) return { status: 'network_error' }
+    if (err instanceof ApiClientError && err.status >= 500) return { status: 'network_error' }
+    return { status: 'unauthenticated' }
   }
 }

@@ -1,9 +1,10 @@
 import { and, eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { orders, SYNC_PUSH_MAX_BATCH, users } from '@kiotviet-lite/shared'
+import { listOrdersQuerySchema, orders, SYNC_PUSH_MAX_BATCH, users } from '@kiotviet-lite/shared'
 
 import { createSyncRoutes } from '../routes/sync.routes.js'
+import { listOrders } from '../services/orders.service.js'
 import { getRevenueByTime } from '../services/revenue-report.service.js'
 import { createProduct, createStore, createUser, resetFactorySeq } from './helpers/factories.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
@@ -211,6 +212,24 @@ describe('o1-sync: /sync/push', () => {
       const row = await orderByClientId(order.clientId)
       expect(row!.createdAt.toISOString()).toBe(old.toISOString())
       expect(row!.policyViolations?.map((v) => v.code)).toContain('sold_at_suspect')
+    })
+  })
+
+  describe('OFF-17: mã tạm trên hóa đơn ngoại tuyến', () => {
+    it('tìm theo mã tạm TAM- ra đúng đơn đã đồng bộ, đơn mang mã máy chủ', async () => {
+      const order = offlineOrder()
+      const other = offlineOrder()
+      await push(env.owner.authHeader, [order, other])
+      const tempCode = `TAM-${order.clientId.slice(0, 8).toUpperCase()}`
+
+      const found = await listOrders({
+        db: env.db,
+        storeId: env.storeId,
+        query: listOrdersQuerySchema.parse({ search: tempCode }),
+      })
+
+      expect(found.data.map((o) => o.id)).toEqual([(await orderByClientId(order.clientId))!.id])
+      expect(found.data[0]!.orderNumber).toMatch(/^HD-\d{6}-\d+$/)
     })
   })
 })

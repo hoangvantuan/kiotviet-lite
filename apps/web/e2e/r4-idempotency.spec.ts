@@ -1,6 +1,7 @@
 import { type APIRequestContext, type Page, request as playwrightRequest } from '@playwright/test'
 
 import { expect, test } from './fixtures/auth.fixture'
+import { waitForOfflineDB } from './helpers/offline'
 import { SEED_USERS } from './helpers/test-data'
 
 /**
@@ -281,6 +282,7 @@ test('POS: mất phản hồi, mất mạng, lưu vào hàng chờ, có mạng l
 
   // Mất mạng hẳn, mở lại hộp chọn mệnh giá khác: lần lưu lại đi vào hàng chờ ngoại tuyến với
   // cùng clientId
+  await waitForOfflineDB(page)
   await page.context().setOffline(true)
   await closePaymentDialog(page)
   const reopened = await openPaymentAndPayCash(page, 'last')
@@ -289,14 +291,13 @@ test('POS: mất phản hồi, mất mạng, lưu vào hàng chờ, có mạng l
     timeout: 10000,
   })
 
-  // Có mạng lại: đồng bộ tay (tự đồng bộ ngoại tuyến chưa bật, để Đợt 2)
+  // Có mạng lại: hàng chờ tự đồng bộ (OFF-02), không cần bấm
   await page.keyboard.press('Escape')
-  await page.context().setOffline(false)
-  await page.locator('button:has(svg.lucide-refresh-cw)').first().click()
   const push = page.waitForResponse(
     (r) => r.url().endsWith('/api/v1/sync/push') && r.request().method() === 'POST',
+    { timeout: 30_000 },
   )
-  await page.getByRole('button', { name: 'Đồng bộ ngay' }).click()
+  await page.context().setOffline(false)
   const pushBody = (await (await push).json()) as {
     data: { results: Array<{ status: string }> }
   }
@@ -397,6 +398,7 @@ test('Phiếu chi: mất mạng, lưu, đóng form, nhập lại, có mạng, l�
 
   await page.goto('/inventory/supplier-payments')
   let dialog = await fillSupplierPayment(page, s.name, '5000')
+  await waitForOfflineDB(page)
   await page.context().setOffline(true)
   await dialog.getByRole('button', { name: 'Lưu phiếu chi' }).click()
   await expectUnknownOutcome(page)

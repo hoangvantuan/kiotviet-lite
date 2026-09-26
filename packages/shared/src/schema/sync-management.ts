@@ -16,7 +16,14 @@ export const schemaVersionResponseSchema = z.object({
 })
 export type SchemaVersionResponse = z.infer<typeof schemaVersionResponseSchema>
 
-export const PGLITE_SCHEMA_VERSION = 2
+export const PGLITE_SCHEMA_VERSION = 3
+
+/**
+ * OFF-17: mã tạm in trên hóa đơn của đơn ngoại tuyến là tiền tố này cộng 8 ký tự đầu của
+ * clientId. Máy chủ cấp mã thật khi đồng bộ; tìm đơn bằng mã tạm vẫn ra đúng đơn đó.
+ */
+export const OFFLINE_ORDER_NUMBER_PREFIX = 'TAM-'
+export const OFFLINE_ORDER_NUMBER_PATTERN = /^TAM-([0-9a-f]{8})$/i
 
 import { createOrderItemSchema, createOrderSchema } from './order-management.js'
 

@@ -6,8 +6,8 @@ import type { CreateOrderInput, DebtInfo, PriceSource } from '@kiotviet-lite/sha
 import { useDocumentMutation } from '@/hooks/use-document-mutation'
 import { apiClient, ApiClientError } from '@/lib/api-client'
 import { idempotencyKeyFor } from '@/lib/idempotency'
-import { saveOfflineOrder } from '@/lib/offline-orders'
-import { getPGliteRaw, initializeOfflineDB } from '@/lib/pglite'
+import { offlineOrderNumber, saveOfflineOrder } from '@/lib/offline-orders'
+import { getOfflineDB } from '@/lib/pglite'
 import { useAuthStore } from '@/stores/use-auth-store'
 import { useOfflineStore } from '@/stores/use-offline-store'
 
@@ -166,13 +166,18 @@ export function useCheckoutMutation() {
         (typeof navigator !== 'undefined' && !navigator.onLine)
 
       if (isOffline) {
-        await initializeOfflineDB()
-        const pglite = getPGliteRaw()
+        const pglite = await getOfflineDB()
 
-        const storeId = useAuthStore.getState().user?.storeId
-        if (!storeId) throw new Error('Chưa đăng nhập')
+        const seller = useAuthStore.getState().user
+        if (!seller) throw new Error('Chưa đăng nhập')
 
-        await saveOfflineOrder(pglite, storeId, payload as CreateOrderInput, clientId)
+        // OFF-05: đơn nhớ người bán và cửa hàng lúc bán. OFF-13: PIN duyệt bị bỏ trước khi ghi.
+        await saveOfflineOrder(
+          pglite,
+          { storeId: seller.storeId, userId: seller.id },
+          payload as CreateOrderInput,
+          clientId,
+        )
         toast.success('Đơn hàng đã lưu (ngoại tuyến, chờ đồng bộ)')
 
         const debtAmount = payload.debtAmount ?? 0
@@ -189,7 +194,8 @@ export function useCheckoutMutation() {
 
         const offlineOrder: OrderDetail = {
           id: clientId,
-          orderNumber: `OFFLINE-${clientId.slice(0, 8).toUpperCase()}`,
+          // OFF-17: mã tạm có tiền tố rõ ràng, máy chủ cấp mã thật khi đồng bộ
+          orderNumber: offlineOrderNumber(clientId),
           customerId: payload.customerId ?? null,
           priceListId: payload.priceListId ?? null,
           priceListName: payload.priceListName ?? null,
