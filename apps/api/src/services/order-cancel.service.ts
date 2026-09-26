@@ -4,7 +4,6 @@ import {
   type CancelDocumentInput,
   debts,
   defaultRefundMethod,
-  hasPermission,
   inventoryTransactions,
   type MoneyMethod,
   orderReturns,
@@ -94,7 +93,6 @@ export async function cancelOrder({
       storeId: actor.storeId,
       userId: actor.userId,
       requestedShiftId: input.shiftId,
-      ownShiftOnly: !hasPermission(actor.role, 'shifts.manage'),
     })
     const [order] = await tx
       .select({

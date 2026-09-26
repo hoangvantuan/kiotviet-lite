@@ -22,7 +22,6 @@ import {
   debts,
   type DocumentStatus,
   formatCurrencyVnd as formatVnd,
-  hasPermission,
   type ListReceiptsQuery,
   type OpenDebtItem,
   orders,
@@ -396,7 +395,6 @@ export async function createReceipt({
         storeId: actor.storeId,
         userId: actor.userId,
         requestedShiftId: input.shiftId,
-        ownShiftOnly: !hasPermission(actor.role, 'shifts.manage'),
       }),
       input.paymentMethod === 'cash',
     )

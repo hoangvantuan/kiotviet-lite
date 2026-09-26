@@ -94,11 +94,6 @@ export async function lockOpenShiftId(
 export interface DocumentShiftResolution {
   shiftId: string | null
   choices: OpenShiftChoice[] | null
-  /**
-   * TIEN-111: người lập chỉ được ghi vào ca của chính mình, chưa mở ca mà cửa hàng bật dùng ca.
-   * `assertDocumentShift` chặn khi chứng từ có tiền mặt.
-   */
-  ownShiftRequired?: boolean
 }
 
 /**
@@ -114,33 +109,9 @@ export interface DocumentShiftResolution {
  */
 export async function resolveDocumentShift(
   db: Db,
-  opts: {
-    storeId: string
-    userId: string
-    requestedShiftId?: string | null
-    /**
-     * TIEN-111: người không có quyền `shifts.manage` (nhân viên) chỉ ghi chứng từ vào ca của chính
-     * mình: không chọn được ca người khác, không rơi vào ca duy nhất đang mở của người khác.
-     */
-    ownShiftOnly?: boolean
-  },
+  opts: { storeId: string; userId: string; requestedShiftId?: string | null },
 ): Promise<DocumentShiftResolution> {
-  const { storeId, userId, requestedShiftId, ownShiftOnly } = opts
-  if (ownShiftOnly) {
-    const own = await lockOpenShiftId(db, storeId, userId)
-    if (requestedShiftId && requestedShiftId !== own) {
-      throw new ApiError('BUSINESS_RULE_VIOLATION', 'Chỉ được ghi chứng từ vào ca của chính bạn', {
-        reason: 'shift_not_own',
-      })
-    }
-    if (own) return { shiftId: own, choices: null }
-    const [store] = await db
-      .select({ shiftsEnabled: stores.shiftsEnabled })
-      .from(stores)
-      .where(eq(stores.id, storeId))
-      .limit(1)
-    return { shiftId: null, choices: null, ownShiftRequired: store?.shiftsEnabled === true }
-  }
+  const { storeId, userId, requestedShiftId } = opts
   if (requestedShiftId) {
     const [row] = await db
       .select({ id: cashShifts.id })
@@ -199,13 +170,6 @@ export function assertDocumentShift(
   resolution: DocumentShiftResolution,
   hasCash: boolean,
 ): string | null {
-  if (resolution.ownShiftRequired && hasCash) {
-    throw new ApiError(
-      'BUSINESS_RULE_VIOLATION',
-      'Chưa mở ca bán hàng. Vui lòng mở ca trước khi thu, chi tiền mặt',
-      { reason: 'shift_required' },
-    )
-  }
   if (!resolution.choices || !hasCash) return resolution.shiftId
   throw new ApiError(
     'BUSINESS_RULE_VIOLATION',

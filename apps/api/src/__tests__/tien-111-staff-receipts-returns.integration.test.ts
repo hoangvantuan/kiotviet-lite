@@ -15,7 +15,7 @@ import { createTestEnv, type SeededUser, type TestEnv } from './helpers/test-env
 
 // TIEN-111: nhân viên lập được phiếu thu và phiếu trả hàng. Hoàn tiền qua kênh khác kênh khách
 // đã trả là vượt quyền, cần người duyệt có `orders.returnOverride` nhập PIN (R1, ADR-0009).
-// Chứng từ tiền mặt nhân viên lập gắn vào ca của chính họ.
+// Chứng từ tiền mặt chọn ca theo ADR-0013 mục 4: ca đang mở của người lập được ưu tiên.
 
 beforeAll(() => {
   process.env.JWT_ACCESS_SECRET = 'test-access-secret-min-32-chars-please-change'
@@ -108,28 +108,14 @@ describe('TIEN-111: nhân viên lập phiếu thu', () => {
     expect(list.status).toBe(200)
   })
 
-  it('staff không được ghi phiếu thu vào ca của người khác', async () => {
+  it('staff chưa mở ca: phiếu thu tiền mặt vào ca duy nhất đang mở (ADR-0013 mục 4)', async () => {
     const { customer, debt } = await debtSale()
     const managerShift = await openShift(env.manager)
-    await openShift(env.staff)
-
-    const r = await call(
-      'POST',
-      '/receipts',
-      env.staff,
-      receiptBody(customer.id, debt.id, { shiftId: managerShift.id }),
-    )
-    expect(r.status).toBe(422)
-    expect(r.body.error.message).toContain('ca của chính bạn')
-  })
-
-  it('bật ca mà staff chưa mở ca thì không thu tiền mặt được', async () => {
-    const { customer, debt } = await debtSale()
-    await openShift(env.manager)
 
     const r = await call('POST', '/receipts', env.staff, receiptBody(customer.id, debt.id))
-    expect(r.status).toBe(422)
-    expect(r.body.error.message).toContain('Chưa mở ca')
+    expect(r.status, JSON.stringify(r.body)).toBe(201)
+    const [row] = await env.db.select().from(receipts).where(eq(receipts.id, r.body.data.id))
+    expect(row!.shiftId).toBe(managerShift.id)
   })
 
   it('staff vẫn không hủy được phiếu thu khi thiếu PIN', async () => {

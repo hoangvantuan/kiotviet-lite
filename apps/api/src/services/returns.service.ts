@@ -273,7 +273,6 @@ export async function createReturn({
       storeId: actor.storeId,
       userId: actor.userId,
       requestedShiftId: input.shiftId,
-      ownShiftOnly: !hasPermission(actor.role, 'shifts.manage'),
     })
 
     // 1. Validate order
