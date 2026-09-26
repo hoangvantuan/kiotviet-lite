@@ -28,16 +28,29 @@ khoản. Cũng chưa có ca để gắn tiền với người trực quầy (POS
    báo cáo dòng tiền cùng đọc các biểu thức này, không cộng `debts.paid`.
 3. **Ca là tùy chọn của cửa hàng, mặc định tắt.** Bật thì đơn POS trực tuyến bị máy chủ từ chối
    (`reason = shift_required`) khi người bán chưa mở ca. Mỗi người bán tối đa một ca mở (chỉ mục
-   unique một phần). Phiếu thu, phiếu chi, phiếu trả chỉ gắn ca nếu người lập đang có ca mở, không
-   chặn.
-4. **Đơn ngoại tuyến không bị chặn vì ca.** Khi đồng bộ, đơn gắn vào ca của người bán có giờ bán
+   unique một phần).
+4. **Chứng từ tiền mặt gắn vào ca nhận hay chi tiền, không phải ca của người lập.** Phiếu trả,
+   phiếu thu, phiếu chi thường do quản lý lập thay thu ngân. Máy chủ chọn ca theo thứ tự: ca được
+   gửi kèm (`shiftId`, phải đang mở và cùng cửa hàng), ca đang mở của người lập, ca duy nhất đang
+   mở của cửa hàng. Có nhiều ca mở mà khoản tiền là tiền mặt thì từ chối (`reason =
+shift_choice_required`, kèm danh sách ca) để giao diện hỏi chọn ca; khoản không phải tiền mặt
+   thì để trống ca. Ca được đọc với khóa FOR SHARE nên không đóng được khi chứng từ đang ghi.
+5. **Đơn ngoại tuyến không bị chặn vì ca.** Khi đồng bộ, đơn gắn vào ca của người bán có giờ bán
    nằm trong khoảng mở, đóng ca; không khớp thì để trống và hiện ở mục "chưa gắn ca" của báo cáo.
-5. **Chênh lệch ca = tiền đếm - (quỹ đầu ca + tiền mặt thu - tiền mặt chi và hoàn).** Số liệu
+   Giờ bán lưu ở `orders.sold_at` (đơn trực tuyến bằng giờ tạo, đơn ngoại tuyến bằng giờ bán trên
+   máy); báo cáo dòng tiền lọc đơn theo `sold_at`, nên đơn bán 21:00 đồng bộ sáng hôm sau vẫn
+   thuộc ngày bán, cùng ngày với ca đã gắn.
+6. **Chênh lệch ca = tiền đếm - (quỹ đầu ca + tiền mặt thu - tiền mặt chi và hoàn).** Số liệu
    lúc đóng được chụp vào `close_summary`; chứng từ gắn vào ca sau khi đóng (đơn ngoại tuyến đồng
    bộ muộn) làm số tính lại khác số đã chụp, và màn chi tiết ca cho thấy điều đó.
-6. **VietQR sinh trên máy khách** theo chuẩn EMVCo của NAPAS, nên dùng được khi mất mạng. Nội dung
-   chuyển khoản là `TT` cộng 8 ký tự đầu của khóa chống trùng của đơn (cũng là `clientId` của đơn
-   ngoại tuyến), có trước khi máy chủ cấp mã HD.
+7. **Đối soát trong kỳ đi theo từng ca.** Ca thuộc ngày mở ca (ca vắt qua nửa đêm tính cho ngày
+   mở). Chênh lệch của kỳ là tổng chênh lệch các ca đã đóng; tiền đầu kỳ là quỹ đầu ca của ca mở
+   sớm nhất, không cộng dồn quỹ đầu ca của các ca nối tiếp (tiền ca trước bàn giao cho ca sau).
+8. **VietQR sinh trên máy khách** theo chuẩn EMVCo của NAPAS, nên dùng được khi mất mạng. Nội dung
+   chuyển khoản là `TT` cộng 8 ký tự đầu của khóa chống trùng của đơn, có trước khi máy chủ cấp mã
+   HD. Khóa này được lưu vào `orders.client_id` (cả đơn trực tuyến lẫn ngoại tuyến), nhưng nội
+   dung chỉ mang 8 ký tự đầu và chưa có màn nào tìm đơn theo tiền tố đó; hiện người bán đối chiếu
+   sao kê theo số tiền và giờ bán.
 
 ## Hệ quả
 
@@ -45,3 +58,6 @@ khoản. Cũng chưa có ca để gắn tiền với người trực quầy (POS
   lưu lại.
 - Phiếu chi chưa có mã chứng từ riêng; phiếu thu có mã `PT-yymmdd-nnnn` từ bộ đếm chứng từ.
 - Báo cáo phương thức có thêm một dòng "Chưa rõ" cho tới khi hết kỳ có chứng từ cũ.
+- Báo cáo doanh thu cũ (màn Báo cáo) vẫn lọc đơn theo `created_at`; chỉ báo cáo dòng tiền đi theo
+  `sold_at`. Hai màn có thể lệch nhau ở đơn ngoại tuyến đồng bộ qua ngày.
+- Dấu chênh lệch thống nhất: thực đếm trừ phải có (âm là thiếu, dương là thừa).
