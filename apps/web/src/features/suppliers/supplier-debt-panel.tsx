@@ -50,9 +50,21 @@ export function SupplierDebtPanel({
     { supplierId: target?.id, status: 'active', pageSize: 50 },
     { enabled: !!target },
   )
-  const unpaidOrders = (openOrders.data?.data ?? [])
-    .map((po) => ({ po, outstanding: po.totalAmount - po.returnedAmount - po.paidAmount }))
-    .filter((x) => x.outstanding > 0)
+  // Số còn nợ theo phiếu chỉ trừ phần trả lúc nhập và phiếu chi gắn phiếu. Phiếu chi chung (và mọi
+  // phiếu chi trước TIEN-104) chỉ trừ vào tổng công nợ, nên số theo phiếu không vượt công nợ NCC và
+  // NCC hết nợ thì không liệt kê phiếu nào còn nợ.
+  const unpaidOrders =
+    currentDebt > 0
+      ? (openOrders.data?.data ?? [])
+          .map((po) => ({
+            po,
+            outstanding: Math.min(
+              currentDebt,
+              Math.max(0, po.totalAmount - po.returnedAmount - po.paidAmount),
+            ),
+          }))
+          .filter((x) => x.outstanding > 0)
+      : []
 
   return (
     <>
@@ -93,6 +105,10 @@ export function SupplierDebtPanel({
               {unpaidOrders.length > 0 && (
                 <div className="space-y-2">
                   <h3 className="font-medium">Phiếu nhập còn nợ</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Chỉ trừ tiền trả lúc nhập và phiếu chi gắn phiếu. Phiếu chi chung trừ vào tổng
+                    công nợ ở trên.
+                  </p>
                   <div className="rounded-md border divide-y">
                     {unpaidOrders.map(({ po, outstanding }) => (
                       <div

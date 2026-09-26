@@ -20,7 +20,12 @@ import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { logAction, type RequestMeta } from './audit.service.js'
-import { alreadyCancelledError, authorizeDocumentCancel } from './document-cancel.helper.js'
+import {
+  alreadyCancelledError,
+  assertProductsNotDeleted,
+  type PreauthorizedCancel,
+  resolveCancelApprover,
+} from './document-cancel.helper.js'
 import { nextDocumentCode } from './document-codes.service.js'
 import { allocateProportionally, removeReceivedStock } from './inventory-cost.helper.js'
 import { loadProductForUpdate, lockProductsInIdOrder } from './products-lock.helper.js'
@@ -78,15 +83,24 @@ interface StockShortage {
   available: number
 }
 
-/** Kiểm tồn đủ để rút lại từng dòng; thiếu thì báo đủ mọi sản phẩm thiếu trong một lỗi */
+/**
+ * Kiểm tồn đủ để rút lại. Gộp số cần rút theo (sản phẩm, biến thể) trước khi so với tồn, để hai
+ * dòng cùng một hàng không cùng lọt qua; thiếu thì báo đủ mọi sản phẩm thiếu trong một lỗi.
+ */
 async function assertStockAvailable(
   tx: Db,
   storeId: string,
   lines: Array<{ item: PurchaseItemRow; baseQuantity: number }>,
   action: string,
 ) {
-  const shortages: StockShortage[] = []
+  const required = new Map<string, { item: PurchaseItemRow; baseQuantity: number }>()
   for (const { item, baseQuantity } of lines) {
+    const key = `${item.productId}::${item.variantId ?? ''}`
+    const prev = required.get(key)
+    required.set(key, { item, baseQuantity: (prev?.baseQuantity ?? 0) + baseQuantity })
+  }
+  const shortages: StockShortage[] = []
+  for (const { item, baseQuantity } of required.values()) {
     const product = await loadProductForUpdate({ tx, storeId, productId: item.productId })
     let available = product.currentStock
     if (item.variantId) {
@@ -146,6 +160,8 @@ export interface CancelPurchaseOrderDeps {
   actor: PurchaseReversalActor
   purchaseOrderId: string
   input: CancelDocumentInput
+  /** Route đã kiểm quyền và PIN ngoài transaction (`cancelDocumentRoute`) */
+  preauthorized?: PreauthorizedCancel
   meta?: RequestMeta
 }
 
@@ -162,10 +178,11 @@ export async function cancelPurchaseOrder({
   actor,
   purchaseOrderId,
   input,
+  preauthorized,
   meta,
 }: CancelPurchaseOrderDeps): Promise<PurchaseOrderDetail> {
   const db = serviceDb(rootDb, transaction)
-  await authorizeDocumentCancel({ db, actor, input, meta })
+  const approver = await resolveCancelApprover({ db, actor, input, meta, preauthorized })
   await db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
     const po = await loadPurchaseOrderPayables(txDb, {
@@ -176,7 +193,13 @@ export async function cancelPurchaseOrder({
     if (po.status === 'cancelled') {
       throw alreadyCancelledError('Phiếu nhập')
     }
-    if (po.returnedAmount > 0) {
+    // Xét cả phiếu trả giá trị 0 (hàng tặng, làm tròn): chỉ nhìn returnedAmount thì lọt qua rồi rút
+    // tồn lần hai phần đã trả
+    const [returned] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(purchaseReturns)
+      .where(eq(purchaseReturns.purchaseOrderId, po.id))
+    if (po.returnedAmount > 0 || Number(returned?.count ?? 0) > 0) {
       throw new ApiError(
         'BUSINESS_RULE_VIOLATION',
         'Phiếu nhập đã có phiếu trả hàng nhập nên không hủy được. Hãy trả nốt phần hàng còn lại',
@@ -202,15 +225,33 @@ export async function cancelPurchaseOrder({
       storeId: actor.storeId,
       productIds: items.map((it) => it.productId),
     })
-    const lines = items.map((item) => ({
-      item,
-      baseQuantity: item.quantity * item.conversionFactor,
-    }))
+    await assertProductsNotDeleted(
+      txDb,
+      actor.storeId,
+      items.map((it) => it.productId),
+      'hủy phiếu nhập',
+    )
+    const netValues = lineNetValues(items, po.discountTotal)
+    // Phòng vệ: chỉ rút phần chưa trả NCC (đã chặn phiếu có trả hàng ở trên nên thường là cả dòng)
+    const lines = items
+      .map((item) => {
+        const net = netValues.get(item.id) ?? Number(item.lineTotal)
+        const quantity = item.quantity - item.returnedQuantity
+        const returnedValue = computeReturnLineRefund(
+          { quantity: item.quantity, lineTotal: net, orderDiscountAllocated: 0 },
+          0,
+          item.returnedQuantity,
+        )
+        return {
+          item,
+          baseQuantity: quantity * item.conversionFactor,
+          lotCost: net - returnedValue,
+        }
+      })
+      .filter((l) => l.baseQuantity > 0)
     await assertStockAvailable(txDb, actor.storeId, lines, 'hủy phiếu nhập')
 
-    const netValues = lineNetValues(items, po.discountTotal)
-    for (const { item, baseQuantity } of lines) {
-      const lotCost = netValues.get(item.id) ?? Number(item.lineTotal)
+    for (const { item, baseQuantity, lotCost } of lines) {
       const removed = await removeReceivedStock({
         tx: txDb,
         storeId: actor.storeId,
@@ -277,6 +318,8 @@ export async function cancelPurchaseOrder({
         cancelDebtReduction,
         cancelSupplierRefund,
         itemCount: items.length,
+        approvedBy: approver?.userId ?? null,
+        approvedByName: approver?.name ?? null,
       },
       ipAddress: meta?.ipAddress,
       userAgent: meta?.userAgent,
@@ -400,6 +443,12 @@ export async function createPurchaseReturn({
       storeId: actor.storeId,
       productIds: lines.map((l) => l.item.productId),
     })
+    await assertProductsNotDeleted(
+      txDb,
+      actor.storeId,
+      lines.map((l) => l.item.productId),
+      'trả hàng nhập',
+    )
     await assertStockAvailable(txDb, actor.storeId, lines, 'trả hàng nhập')
 
     const debtReductionAmount = Math.max(

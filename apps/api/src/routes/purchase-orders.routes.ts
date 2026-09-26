@@ -2,7 +2,6 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 
 import {
-  cancelDocumentSchema,
   createPurchaseOrderSchema,
   createPurchaseReturnSchema,
   listPurchaseOrdersQuerySchema,
@@ -11,6 +10,7 @@ import {
 import type { Db } from '../db/index.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
+import { cancelDocumentRoute } from '../middleware/document-cancel.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
@@ -78,16 +78,16 @@ export function createPurchaseOrdersRoutes({ db }: PurchaseOrdersRoutesDeps) {
   // KHO-11: hủy phiếu nhập, rút lại hàng và công nợ NCC của phiếu
   app.post(
     '/:id/cancel',
-    idempotent(db, async (c, transaction) => {
+    cancelDocumentRoute(db, async (c, { transaction, input, preauthorized }) => {
       const auth = c.get('auth')
       const purchaseOrderId = uuidParam.parse(c.req.param('id'))
-      const input = await parseJson(c, cancelDocumentSchema)
       const data = await cancelPurchaseOrder({
         db,
         transaction,
         actor: auth,
         purchaseOrderId,
         input,
+        preauthorized,
         meta: getRequestMeta(c),
       })
       return c.json({ data })

@@ -45,7 +45,11 @@ import {
   reverseCustomerPayments,
   settleCustomerDebts,
 } from './customer-debt-ledger.service.js'
-import { alreadyCancelledError, authorizeDocumentCancel } from './document-cancel.helper.js'
+import {
+  alreadyCancelledError,
+  type PreauthorizedCancel,
+  resolveCancelApprover,
+} from './document-cancel.helper.js'
 import { serviceDb, type ServiceTransaction } from './service-transaction.js'
 
 export interface ReceiptsActor {
@@ -570,6 +574,8 @@ export interface CancelReceiptDeps {
   actor: ReceiptsActor
   receiptId: string
   input: CancelDocumentInput
+  /** Route đã kiểm quyền và PIN ngoài transaction (`cancelDocumentRoute`) */
+  preauthorized?: PreauthorizedCancel
   meta?: RequestMeta
 }
 
@@ -585,10 +591,11 @@ export async function cancelReceipt({
   actor,
   receiptId,
   input,
+  preauthorized,
   meta,
 }: CancelReceiptDeps): Promise<ReceiptDetail> {
   const db = serviceDb(rootDb, transaction)
-  const approver = await authorizeDocumentCancel({ db, actor, input, meta })
+  const approver = await resolveCancelApprover({ db, actor, input, meta, preauthorized })
   await db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
     const [receipt] = await tx

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Plus, SearchX, Wallet } from 'lucide-react'
 
+import { hasPermission } from '@kiotviet-lite/shared'
+
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
 import { Button } from '@/components/ui/button'
@@ -18,6 +20,8 @@ const PAGE_SIZE = 20
 export function SupplierPaymentsManager() {
   const user = useAuthStore((s) => s.user)
   const isOwner = user?.role === 'owner'
+  // TIEN-107: chủ và quản lý hủy được phiếu chi (`documents.cancel`)
+  const canCancel = !!user && hasPermission(user.role, 'documents.cancel')
 
   const [searchInput, setSearchInput] = useState('')
   const debouncedSearch = useDebounced(searchInput, 300)
@@ -121,10 +125,10 @@ export function SupplierPaymentsManager() {
       {!isLoading && !isEmpty && (
         <>
           <div className="hidden md:block">
-            <SupplierPaymentsTable items={items} canCancel={isOwner} />
+            <SupplierPaymentsTable items={items} canCancel={canCancel} />
           </div>
           <div className="md:hidden">
-            <SupplierPaymentsCardList items={items} canCancel={isOwner} />
+            <SupplierPaymentsCardList items={items} canCancel={canCancel} />
           </div>
         </>
       )}

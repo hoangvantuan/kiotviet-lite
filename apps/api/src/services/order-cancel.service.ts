@@ -1,10 +1,9 @@
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 
 import {
   type CancelDocumentInput,
   debts,
   inventoryTransactions,
-  orderItems,
   orderReturns,
   orders,
   products,
@@ -21,7 +20,12 @@ import {
   restoreCustomerPrepayment,
   settleCustomerDebts,
 } from './customer-debt-ledger.service.js'
-import { alreadyCancelledError, authorizeDocumentCancel } from './document-cancel.helper.js'
+import {
+  alreadyCancelledError,
+  assertProductsNotDeleted,
+  type PreauthorizedCancel,
+  resolveCancelApprover,
+} from './document-cancel.helper.js'
 import {
   aggregateVariantStock,
   loadProductForUpdate,
@@ -36,6 +40,8 @@ export interface CancelOrderDeps {
   actor: { userId: string; storeId: string; role: UserRole }
   orderId: string
   input: CancelDocumentInput
+  /** Route đã kiểm quyền và PIN ngoài transaction (`cancelDocumentRoute`) */
+  preauthorized?: PreauthorizedCancel
   meta?: RequestMeta
 }
 
@@ -55,7 +61,7 @@ export interface CancelOrderResult {
 
 /**
  * TIEN-107: hủy đơn bán. Đơn không bị xóa, đổi sang 'cancelled' kèm người hủy, lúc hủy, lý do.
- * Đảo đúng các bút toán đơn đã ghi: hoàn tồn theo hệ số quy đổi chụp lúc bán và theo biến thể,
+ * Đảo đúng các bút toán đơn đã ghi: hoàn tồn đúng số các dòng bán của đơn đã trừ trong sổ kho,
  * xóa phần nợ còn lại của đơn (giảm trừ, không phải tiền thu), trả lại tiền trả trước đã cấn.
  * Tiền khách đã trả lúc bán là tiền mặt cửa hàng hoàn lại, ghi trong nhật ký.
  *
@@ -68,10 +74,11 @@ export async function cancelOrder({
   actor,
   orderId,
   input,
+  preauthorized,
   meta,
 }: CancelOrderDeps): Promise<CancelOrderResult> {
   const db = serviceDb(rootDb, transaction)
-  const approver = await authorizeDocumentCancel({ db, actor, input, meta })
+  const approver = await resolveCancelApprover({ db, actor, input, meta, preauthorized })
   return db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
     const [order] = await tx
@@ -150,59 +157,83 @@ export async function cancelOrder({
       })
     }
 
-    const items = await tx
+    // Hoàn tồn đúng như lúc bán đã trừ: đọc các dòng 'sale' của đơn trong sổ giao dịch kho (ghi chú
+    // là mã đơn), không dựa vào cờ theo dõi tồn hiện tại. Sản phẩm bật hay tắt theo dõi tồn sau khi
+    // bán thì vẫn hoàn đúng số đã trừ, hàng không trừ kho lúc bán thì không cộng vào.
+    const sold = await tx
       .select({
-        productId: orderItems.productId,
-        variantId: orderItems.variantId,
-        quantity: orderItems.quantity,
-        conversionFactor: orderItems.conversionFactor,
+        productId: inventoryTransactions.productId,
+        variantId: inventoryTransactions.variantId,
+        quantity: sql<string>`SUM(-${inventoryTransactions.quantity})`,
       })
-      .from(orderItems)
-      .where(eq(orderItems.orderId, order.id))
+      .from(inventoryTransactions)
+      .where(
+        and(
+          eq(inventoryTransactions.storeId, actor.storeId),
+          eq(inventoryTransactions.type, 'sale'),
+          inArray(inventoryTransactions.note, [
+            order.orderNumber,
+            `${order.orderNumber} (offline sync)`,
+          ]),
+        ),
+      )
+      .groupBy(inventoryTransactions.productId, inventoryTransactions.variantId)
+    const restores = sold
+      .map((row) => ({ ...row, quantity: Number(row.quantity) }))
+      .filter((row) => row.quantity > 0)
+      .sort((a, b) =>
+        a.productId === b.productId
+          ? (a.variantId ?? '').localeCompare(b.variantId ?? '')
+          : a.productId.localeCompare(b.productId),
+      )
     await lockProductsInIdOrder({
       tx: txDb,
       storeId: actor.storeId,
-      productIds: items.map((item) => item.productId),
+      productIds: restores.map((row) => row.productId),
     })
+    await assertProductsNotDeleted(
+      txDb,
+      actor.storeId,
+      restores.map((row) => row.productId),
+      'hủy đơn',
+    )
 
-    // Hoàn tồn đúng như lúc bán đã trừ: chỉ sản phẩm theo dõi tồn, số đơn vị gốc = SL × hệ số
-    for (const item of items) {
+    for (const row of restores) {
       const product = await loadProductForUpdate({
         tx: txDb,
         storeId: actor.storeId,
-        productId: item.productId,
+        productId: row.productId,
       })
-      if (!product.trackInventory) continue
-      const restoreQty = Number(item.quantity) * Number(item.conversionFactor)
+      const restoreQty = row.quantity
       let newStock: number
-      if (item.variantId) {
+      if (row.variantId) {
         const variant = await loadVariantForUpdate({
           tx: txDb,
-          productId: item.productId,
-          variantId: item.variantId,
+          productId: row.productId,
+          variantId: row.variantId,
         })
         newStock = variant.stockQuantity + restoreQty
         await tx
           .update(productVariants)
           .set({ stockQuantity: newStock })
-          .where(eq(productVariants.id, item.variantId))
-        const aggStock = await aggregateVariantStock({ tx: txDb, productId: item.productId })
+          .where(eq(productVariants.id, row.variantId))
+        const aggStock = await aggregateVariantStock({ tx: txDb, productId: row.productId })
         await tx
           .update(products)
           .set({ currentStock: aggStock })
-          .where(eq(products.id, item.productId))
+          .where(eq(products.id, row.productId))
       } else {
         const [updated] = await tx
           .update(products)
           .set({ currentStock: sql`${products.currentStock} + ${restoreQty}` })
-          .where(eq(products.id, item.productId))
+          .where(eq(products.id, row.productId))
           .returning({ currentStock: products.currentStock })
         newStock = updated?.currentStock ?? product.currentStock + restoreQty
       }
       await tx.insert(inventoryTransactions).values({
         storeId: actor.storeId,
-        productId: item.productId,
-        variantId: item.variantId,
+        productId: row.productId,
+        variantId: row.variantId,
         type: 'order_cancel',
         quantity: restoreQty,
         stockAfter: newStock,

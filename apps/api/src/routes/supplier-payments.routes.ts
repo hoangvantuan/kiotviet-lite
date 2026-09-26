@@ -1,16 +1,13 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 
-import {
-  cancelDocumentSchema,
-  createSupplierPaymentSchema,
-  listSupplierPaymentsQuerySchema,
-} from '@kiotviet-lite/shared'
+import { createSupplierPaymentSchema, listSupplierPaymentsQuerySchema } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
+import { cancelDocumentRoute } from '../middleware/document-cancel.js'
 import { errorHandler } from '../middleware/error-handler.js'
 import { idempotent } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
@@ -76,22 +73,20 @@ export function createSupplierPaymentsRoutes({ db }: SupplierPaymentsRoutesDeps)
     }),
   )
 
-  // TIEN-107: hủy phiếu chi, chỉ chủ cửa hàng (như lập phiếu chi)
+  // TIEN-107: hủy phiếu chi, chủ và quản lý (`documents.cancel`); nhân viên không vào được route
+  // phiếu chi (`inventory.manage`)
   app.post(
     '/:id/cancel',
-    idempotent(db, async (c, transaction) => {
+    cancelDocumentRoute(db, async (c, { transaction, input, preauthorized }) => {
       const auth = c.get('auth')
-      if (auth.role !== 'owner') {
-        throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được hủy phiếu chi')
-      }
       const paymentId = uuidParam.parse(c.req.param('id'))
-      const input = await parseJson(c, cancelDocumentSchema)
       const data = await cancelSupplierPayment({
         db,
         transaction,
         actor: auth,
         paymentId,
         input,
+        preauthorized,
         meta: getRequestMeta(c),
       })
       return c.json({ data })

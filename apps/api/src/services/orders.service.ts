@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, isNull, lte, type SQL, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, ilike, isNull, lte, ne, type SQL, sql } from 'drizzle-orm'
 
 import {
   allocateOrderDiscount,
@@ -1684,6 +1684,10 @@ export async function listOrders({
   }
   if (reviewStatus) {
     conditions.push(eq(orders.reviewStatus, reviewStatus))
+    // TIEN-107: đơn đã hủy không còn chờ duyệt, khớp số đếm trên tổng quan
+    if (reviewStatus === 'pending_review' && !status) {
+      conditions.push(ne(orders.status, 'cancelled'))
+    }
   }
   // R7: fromDate, toDate (YYYY-MM-DD) cắt theo lịch cửa hàng, không theo giờ tiến trình (UTC)
   const from = parseDateRangeBoundary(fromDate, 'start')

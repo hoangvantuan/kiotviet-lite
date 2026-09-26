@@ -66,6 +66,21 @@ export function derivePurchaseOrderPaymentStatus(payable: number, paid: number):
   return 'partial'
 }
 
+/**
+ * Đã trả ròng cho phiếu: trả lúc nhập + phiếu chi gắn phiếu còn hiệu lực, trừ phần NCC phải hoàn
+ * khi trả hàng. Phần hoàn chỉ trừ tối đa bằng số đã trả gắn phiếu: phiếu đã được trả bằng phiếu chi
+ * chung (không gắn phiếu, gồm mọi phiếu trước TIEN-104) thì khoản hoàn không thuộc số đã trả của
+ * phiếu, vẫn ghi riêng ở `returnRefundAmount`. Nhờ vậy số này không bao giờ âm.
+ */
+export function purchaseOrderPaidNet(p: {
+  initialPaidAmount: number
+  linkedPaymentAmount: number
+  returnRefundAmount: number
+}): number {
+  const paid = p.initialPaidAmount + p.linkedPaymentAmount
+  return paid - Math.min(p.returnRefundAmount, paid)
+}
+
 /** Tổng phiếu chi còn hiệu lực gắn với phiếu nhập (TIEN-104) */
 function linkedPaymentSubquery(): SQL<string> {
   return sql<string>`COALESCE((
@@ -88,7 +103,7 @@ export interface PurchaseOrderPayables {
   returnRefundAmount: number
   /** Tổng phiếu trừ hàng đã trả NCC */
   payable: number
-  /** Trả lúc nhập + phiếu chi gắn phiếu - NCC hoàn khi trả hàng */
+  /** Trả lúc nhập + phiếu chi gắn phiếu - NCC hoàn khi trả hàng (`purchaseOrderPaidNet`, ≥ 0) */
   paidNet: number
   /** Còn phải trả cho phiếu; có thể âm khi đã trả dư qua phiếu chi không gắn phiếu */
   outstanding: number
@@ -135,7 +150,11 @@ export async function loadPurchaseOrderPayables(
   const returnedAmount = Number(row.returnedAmount)
   const returnRefundAmount = Number(row.returnRefundAmount)
   const payable = totalAmount - returnedAmount
-  const paidNet = initialPaidAmount + linkedPaymentAmount - returnRefundAmount
+  const paidNet = purchaseOrderPaidNet({
+    initialPaidAmount,
+    linkedPaymentAmount,
+    returnRefundAmount,
+  })
   return {
     id: row.id,
     code: row.code,
@@ -637,7 +656,11 @@ export async function getPurchaseOrder({
     discountTotalType: row.discountTotalType as DiscountType,
     discountTotalValue: Number(row.discountTotalValue),
     totalAmount: Number(row.totalAmount),
-    paidAmount: initialPaidAmount + linkedPaymentAmount - returnRefundAmount,
+    paidAmount: purchaseOrderPaidNet({
+      initialPaidAmount,
+      linkedPaymentAmount,
+      returnRefundAmount,
+    }),
     returnedAmount: Number(row.returnedAmount),
     paymentStatus: row.paymentStatus as PaymentStatus,
     status: row.status as DocumentStatus,
@@ -780,6 +803,8 @@ export async function listPurchaseOrders({
   }
   if (paymentStatus) {
     conditions.push(eq(purchaseOrders.paymentStatus, paymentStatus))
+    // Phiếu đã hủy không còn nợ hay đã trả gì: lọc theo thanh toán chỉ xét phiếu còn hiệu lực
+    if (!status) conditions.push(eq(purchaseOrders.status, 'active'))
   }
   if (status) {
     conditions.push(eq(purchaseOrders.status, status))
@@ -837,7 +862,11 @@ export async function listPurchaseOrders({
     subtotal: Number(r.subtotal),
     discountTotal: Number(r.discountTotal),
     totalAmount: Number(r.totalAmount),
-    paidAmount: Number(r.paidAmount) + Number(r.linkedPaymentAmount) - Number(r.returnRefundAmount),
+    paidAmount: purchaseOrderPaidNet({
+      initialPaidAmount: Number(r.paidAmount),
+      linkedPaymentAmount: Number(r.linkedPaymentAmount),
+      returnRefundAmount: Number(r.returnRefundAmount),
+    }),
     returnedAmount: Number(r.returnedAmount),
     paymentStatus: r.paymentStatus as PaymentStatus,
     status: r.status as DocumentStatus,

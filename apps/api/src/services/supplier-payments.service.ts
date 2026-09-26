@@ -22,7 +22,11 @@ import { logger } from '../lib/logger.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { parseDateRangeBoundary } from '../lib/timezone.js'
 import { logAction, type RequestMeta } from './audit.service.js'
-import { alreadyCancelledError } from './document-cancel.helper.js'
+import {
+  alreadyCancelledError,
+  type PreauthorizedCancel,
+  resolveCancelApprover,
+} from './document-cancel.helper.js'
 import {
   loadPurchaseOrderPayables,
   refreshPurchaseOrderPaymentStatus,
@@ -396,11 +400,13 @@ export interface CancelSupplierPaymentDeps {
   actor: SupplierPaymentsActor
   paymentId: string
   input: CancelDocumentInput
+  /** Route đã kiểm quyền và PIN ngoài transaction (`cancelDocumentRoute`) */
+  preauthorized?: PreauthorizedCancel
   meta?: RequestMeta
 }
 
 /**
- * TIEN-107: hủy phiếu chi NCC. Chỉ chủ cửa hàng, cùng quyền với lập phiếu chi. Phiếu không bị xóa,
+ * TIEN-107: hủy phiếu chi NCC. Chủ và quản lý (`documents.cancel`) như các chứng từ khác. Phiếu không bị xóa,
  * đổi sang 'cancelled'; số đã chi cộng lại vào công nợ NCC, phiếu nhập được gắn (nếu có) tính lại
  * trạng thái thanh toán. Thứ tự khóa: phiếu chi, phiếu nhập, NCC. Hủy lần hai thì 409.
  */
@@ -410,12 +416,11 @@ export async function cancelSupplierPayment({
   actor,
   paymentId,
   input,
+  preauthorized,
   meta,
 }: CancelSupplierPaymentDeps): Promise<SupplierPaymentDetail> {
   const db = serviceDb(rootDb, transaction)
-  if (actor.role !== 'owner') {
-    throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới được hủy phiếu chi')
-  }
+  const approver = await resolveCancelApprover({ db, actor, input, meta, preauthorized })
   await db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
     const [payment] = await tx
@@ -431,11 +436,21 @@ export async function cancelSupplierPayment({
       throw alreadyCancelledError('Phiếu chi')
     }
     if (payment.purchaseOrderId) {
-      await loadPurchaseOrderPayables(txDb, {
+      const po = await loadPurchaseOrderPayables(txDb, {
         storeId: actor.storeId,
         purchaseOrderId: payment.purchaseOrderId,
         forUpdate: true,
       })
+      // Trả hàng nhập sau phiếu chi này đã ghi "NCC phải hoàn" dựa trên số đã trả. Hủy phiếu chi lúc
+      // này làm nợ NCC tăng đủ số chi trong khi khoản hoàn vẫn treo: lệch đúng bằng khoản hoàn. Như
+      // phía bán chặn hủy đơn đã có trả hàng, ở đây chặn hủy phiếu chi của phiếu nhập đã phát sinh hoàn.
+      if (po.returnRefundAmount > 0) {
+        throw new ApiError(
+          'BUSINESS_RULE_VIOLATION',
+          `Phiếu nhập ${po.code} đã trả hàng và phát sinh tiền NCC phải hoàn, nên không hủy được phiếu chi gắn phiếu này`,
+          { reason: 'purchase_order_has_supplier_refund', purchaseOrderId: po.id },
+        )
+      }
     }
     const [supplier] = await tx
       .select({ id: suppliers.id, currentDebt: suppliers.currentDebt })
@@ -484,6 +499,8 @@ export async function cancelSupplierPayment({
         purchaseOrderId: payment.purchaseOrderId,
         debtBefore,
         debtAfter,
+        approvedBy: approver?.userId ?? null,
+        approvedByName: approver?.name ?? null,
       },
       ipAddress: meta?.ipAddress,
       userAgent: meta?.userAgent,

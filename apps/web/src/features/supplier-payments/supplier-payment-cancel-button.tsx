@@ -11,7 +11,10 @@ import { showSuccess } from '@/lib/toast'
 
 import { useCancelSupplierPaymentMutation } from './use-supplier-payments'
 
-/** TIEN-107: hủy phiếu chi, chỉ chủ cửa hàng (như khi tạo), không có duyệt bằng PIN */
+/**
+ * TIEN-107: hủy phiếu chi, chủ và quản lý. Nhân viên không vào được màn phiếu chi nên không có
+ * duyệt bằng PIN.
+ */
 export function SupplierPaymentCancelButton({ payment }: { payment: SupplierPaymentListItem }) {
   const [open, setOpen] = useState(false)
   const mutation = useCancelSupplierPaymentMutation()

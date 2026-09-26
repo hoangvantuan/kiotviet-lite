@@ -11,9 +11,11 @@ import {
   customers,
   debts,
   inventoryTransactions,
+  orders,
   products,
   productVariants,
   suppliers,
+  users,
 } from '@kiotviet-lite/shared'
 
 import { createOrdersRoutes } from '../routes/orders.routes.js'
@@ -22,6 +24,7 @@ import { createReceiptsRoutes } from '../routes/receipts.routes.js'
 import { createSupplierPaymentsRoutes } from '../routes/supplier-payments.routes.js'
 import { createSuppliersRoutes } from '../routes/suppliers.routes.js'
 import { addCustomerDebt } from '../services/customer-debt-ledger.service.js'
+import { countPendingReview, reviewOrder } from '../services/order-review.service.js'
 import { createOrder } from '../services/orders.service.js'
 import { getDebtSummaryReport } from '../services/reports.service.js'
 import { createReturn } from '../services/returns.service.js'
@@ -752,22 +755,24 @@ describe('TIEN-104: phiếu chi gắn phiếu nhập, hủy phiếu chi', () => 
     )
     expect(cancelPo.status).toBe(422)
 
-    const managerTry = await call(
+    // Nhân viên không vào được route phiếu chi; quản lý giữ `documents.cancel` nên hủy được
+    const staffTry = await call(
+      'POST',
+      `/supplier-payments/${pay.body.data.id}/cancel`,
+      env.staff.authHeader,
+      cancelBody(),
+    )
+    expect(staffTry.status).toBe(403)
+
+    const cancel = await call(
       'POST',
       `/supplier-payments/${pay.body.data.id}/cancel`,
       env.manager.authHeader,
       cancelBody(),
     )
-    expect(managerTry.status).toBe(403)
-
-    const cancel = await call(
-      'POST',
-      `/supplier-payments/${pay.body.data.id}/cancel`,
-      env.owner.authHeader,
-      cancelBody(),
-    )
     expect(cancel.status).toBe(200)
     expect(cancel.body.data.status).toBe('cancelled')
+    expect(cancel.body.data.cancelledBy).toBe(env.manager.id)
     expect(await supplierDebt(supplier.id)).toBe(500_000)
     detail = await call('GET', `/purchase-orders/${po.id}`, env.owner.authHeader)
     expect(detail.body.data).toMatchObject({ paymentStatus: 'unpaid', paidAmount: 0 })
@@ -790,5 +795,208 @@ describe('TIEN-104: phiếu chi gắn phiếu nhập, hủy phiếu chi', () => 
     )
     expect(cancelPoNow.status).toBe(200)
     expect(await supplierDebt(supplier.id)).toBe(0)
+  })
+})
+
+describe('Review #57: các ca biên của hủy chứng từ', () => {
+  it('phiếu trả hàng nhập giá trị 0 (hàng tặng) vẫn chặn hủy phiếu nhập, tồn không bị rút hai lần', async () => {
+    const paid = await newProduct('Sữa Ensure')
+    const gift = await newProduct('Quà tặng bình nước')
+    const supplier = await newSupplier()
+    const po = await purchase(supplier.id, [
+      { productId: paid.id, quantity: 5, unitPrice: 50_000 },
+      { productId: gift.id, quantity: 3, unitPrice: 0 },
+    ])
+    const giftItem = po.items.find((it) => it.productId === gift.id)!
+    const ret = await call('POST', `/purchase-orders/${po.id}/returns`, env.owner.authHeader, {
+      items: [{ purchaseOrderItemId: giftItem.id, quantity: 2 }],
+    })
+    expect(ret.status).toBe(201)
+    expect(ret.body.data.totalAmount).toBe(0)
+    expect((await stockOf(gift.id)).stock).toBe(1)
+
+    const cancel = await call(
+      'POST',
+      `/purchase-orders/${po.id}/cancel`,
+      env.owner.authHeader,
+      cancelBody(),
+    )
+    expect(cancel.status).toBe(422)
+    expect(cancel.body.error.details.reason).toBe('purchase_order_has_returns')
+    expect((await stockOf(gift.id)).stock).toBe(1)
+    expect((await stockOf(paid.id)).stock).toBe(5)
+  })
+
+  it('phiếu nhập đã phát sinh NCC phải hoàn thì không hủy được phiếu chi gắn phiếu', async () => {
+    const product = await newProduct()
+    const supplier = await newSupplier()
+    const po = await purchase(supplier.id, [
+      { productId: product.id, quantity: 10, unitPrice: 100_000 },
+    ])
+    const pay = await call('POST', '/supplier-payments', env.owner.authHeader, {
+      supplierId: supplier.id,
+      amount: 1_000_000,
+      purchaseOrderId: po.id,
+    })
+    expect(pay.status).toBe(201)
+    const ret = await call('POST', `/purchase-orders/${po.id}/returns`, env.owner.authHeader, {
+      items: [{ purchaseOrderItemId: po.items[0]!.id, quantity: 4 }],
+    })
+    expect(ret.body.data).toMatchObject({ debtReductionAmount: 0, supplierRefundAmount: 400_000 })
+
+    const cancel = await call(
+      'POST',
+      `/supplier-payments/${pay.body.data.id}/cancel`,
+      env.owner.authHeader,
+      cancelBody(),
+    )
+    expect(cancel.status).toBe(422)
+    expect(cancel.body.error.details.reason).toBe('purchase_order_has_supplier_refund')
+    expect(await supplierDebt(supplier.id)).toBe(0)
+    const detail = await call('GET', `/purchase-orders/${po.id}`, env.owner.authHeader)
+    expect(detail.body.data).toMatchObject({ paidAmount: 600_000, paymentStatus: 'paid' })
+  })
+
+  it('phiếu nhập trả bằng phiếu chi chung rồi trả hàng: số đã trả của phiếu không âm', async () => {
+    const product = await newProduct()
+    const supplier = await newSupplier()
+    const po = await purchase(supplier.id, [
+      { productId: product.id, quantity: 10, unitPrice: 100_000 },
+    ])
+    // Phiếu chi không gắn phiếu (như mọi phiếu chi trước TIEN-104) trả hết nợ NCC
+    const pay = await call('POST', '/supplier-payments', env.owner.authHeader, {
+      supplierId: supplier.id,
+      amount: 1_000_000,
+    })
+    expect(pay.status).toBe(201)
+    const ret = await call('POST', `/purchase-orders/${po.id}/returns`, env.owner.authHeader, {
+      items: [{ purchaseOrderItemId: po.items[0]!.id, quantity: 4 }],
+    })
+    expect(ret.body.data).toMatchObject({ debtReductionAmount: 0, supplierRefundAmount: 400_000 })
+
+    const detail = await call('GET', `/purchase-orders/${po.id}`, env.owner.authHeader)
+    expect(detail.body.data).toMatchObject({ paidAmount: 0, returnRefundAmount: 400_000 })
+    const list = await call(
+      'GET',
+      `/purchase-orders?supplierId=${supplier.id}`,
+      env.owner.authHeader,
+    )
+    expect(list.body.data[0].paidAmount).toBe(0)
+    expect(await supplierDebt(supplier.id)).toBe(0)
+  })
+
+  it('PIN người duyệt sai vẫn ghi số lần sai dù request có Idempotency-Key bị rollback', async () => {
+    const product = await newProduct()
+    const supplier = await newSupplier()
+    await purchase(supplier.id, [{ productId: product.id, quantity: 5, unitPrice: 50_000 }])
+    const order = await sell(product, 1)
+
+    const wrong = await call(
+      'POST',
+      `/orders/${order.id}/cancel`,
+      env.staff.authHeader,
+      cancelBody({ approverId: env.manager.id, approverPin: '000000' }),
+      { 'Idempotency-Key': '0190aaaa-bbbb-7ccc-8ddd-000000000001' },
+    )
+    expect(wrong.status).toBe(401)
+    const [manager] = await env.db
+      .select({ failed: users.failedPinAttempts })
+      .from(users)
+      .where(eq(users.id, env.manager.id))
+    expect(manager!.failed).toBe(1)
+
+    const ok = await call(
+      'POST',
+      `/orders/${order.id}/cancel`,
+      env.staff.authHeader,
+      cancelBody({ approverId: env.manager.id, approverPin: env.manager.pin }),
+      { 'Idempotency-Key': '0190aaaa-bbbb-7ccc-8ddd-000000000002' },
+    )
+    expect(ok.status).toBe(200)
+    const logs = await env.db
+      .select({ changes: auditLogs.changes })
+      .from(auditLogs)
+      .where(and(eq(auditLogs.targetId, order.id), eq(auditLogs.action, 'order.cancelled')))
+    expect(logs[0]!.changes).toMatchObject({ approvedBy: env.manager.id })
+  })
+
+  it('đơn chờ duyệt bị hủy: không còn đếm chờ duyệt, không duyệt được', async () => {
+    const product = await newProduct()
+    const supplier = await newSupplier()
+    await purchase(supplier.id, [{ productId: product.id, quantity: 5, unitPrice: 50_000 }])
+    const order = await sell(product, 1)
+    await env.db
+      .update(orders)
+      .set({ reviewStatus: 'pending_review', policyViolations: [] })
+      .where(eq(orders.id, order.id))
+    expect(await countPendingReview({ db: env.db, storeId: env.storeId })).toBe(1)
+
+    const r = await call('POST', `/orders/${order.id}/cancel`, env.owner.authHeader, cancelBody())
+    expect(r.status).toBe(200)
+    expect(await countPendingReview({ db: env.db, storeId: env.storeId })).toBe(0)
+    const pending = await call('GET', '/orders?reviewStatus=pending_review', env.owner.authHeader)
+    expect(pending.body.data).toHaveLength(0)
+    await expect(
+      reviewOrder({
+        db: env.db,
+        actor: ownerActor(),
+        orderId: order.id,
+        input: { decision: 'approved', note: null },
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+  })
+
+  it('hủy đơn hoàn kho theo sổ bán của đơn, không theo cờ theo dõi tồn hiện tại', async () => {
+    const product = await newProduct()
+    const supplier = await newSupplier()
+    await purchase(supplier.id, [{ productId: product.id, quantity: 10, unitPrice: 50_000 }])
+    const order = await sell(product, 3)
+    expect((await stockOf(product.id)).stock).toBe(7)
+    // Tắt theo dõi tồn sau khi bán: số đã trừ lúc bán vẫn phải hoàn đủ
+    await env.db.update(products).set({ trackInventory: false }).where(eq(products.id, product.id))
+
+    const r = await call('POST', `/orders/${order.id}/cancel`, env.owner.authHeader, cancelBody())
+    expect(r.status).toBe(200)
+    expect((await stockOf(product.id)).stock).toBe(10)
+  })
+
+  it('sản phẩm đã xóa mềm: chặn hủy phiếu nhập với thông báo rõ', async () => {
+    const product = await newProduct('Bánh Cosy')
+    const supplier = await newSupplier()
+    const po = await purchase(supplier.id, [
+      { productId: product.id, quantity: 2, unitPrice: 50_000 },
+    ])
+    await env.db.update(products).set({ deletedAt: new Date() }).where(eq(products.id, product.id))
+    const r = await call(
+      'POST',
+      `/purchase-orders/${po.id}/cancel`,
+      env.owner.authHeader,
+      cancelBody(),
+    )
+    expect(r.status).toBe(422)
+    expect(r.body.error.details.reason).toBe('product_deleted')
+    expect(r.body.error.message).toContain('Bánh Cosy')
+  })
+
+  it('phiếu nhập đã hủy không hiện trong lọc "Chưa thanh toán", lưu người duyệt khi hủy', async () => {
+    const product = await newProduct()
+    const supplier = await newSupplier()
+    const po = await purchase(supplier.id, [
+      { productId: product.id, quantity: 2, unitPrice: 50_000 },
+    ])
+    const r = await call(
+      'POST',
+      `/purchase-orders/${po.id}/cancel`,
+      env.manager.authHeader,
+      cancelBody(),
+    )
+    expect(r.status).toBe(200)
+    const unpaid = await call('GET', '/purchase-orders?paymentStatus=unpaid', env.owner.authHeader)
+    expect(unpaid.body.data).toHaveLength(0)
+    const logs = await env.db
+      .select({ changes: auditLogs.changes })
+      .from(auditLogs)
+      .where(and(eq(auditLogs.targetId, po.id), eq(auditLogs.action, 'purchase_order.cancelled')))
+    expect(logs[0]!.changes).toMatchObject({ approvedBy: null })
   })
 })

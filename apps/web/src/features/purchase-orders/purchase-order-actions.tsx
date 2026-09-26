@@ -45,8 +45,12 @@ export function PurchaseOrderActions({ order }: { order: PurchaseOrderDetail }) 
   if (order.status !== 'active') return null
   const outstanding = purchaseOrderOutstanding(order)
   const returnable = order.items.some((it) => it.quantity - it.returnedQuantity > 0)
-  // Máy chủ chặn hủy khi đã trả hàng hoặc còn phiếu chi gắn phiếu: ẩn nút cho khỏi bấm vô ích
-  const cancellable = order.returnedAmount === 0 && order.linkedPaymentAmount === 0
+  // Máy chủ chặn hủy khi đã có phiếu trả hàng (kể cả giá trị 0) hoặc còn phiếu chi gắn phiếu: ẩn
+  // nút cho khỏi bấm vô ích
+  const cancellable =
+    order.returns.length === 0 &&
+    order.items.every((it) => it.returnedQuantity === 0) &&
+    order.linkedPaymentAmount === 0
 
   return (
     <div className="flex flex-wrap gap-2">
