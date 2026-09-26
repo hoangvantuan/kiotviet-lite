@@ -30,9 +30,9 @@ Xác thực quy trình bán hàng tại quầy thu ngân: vào màn hình bán h
 
 > Ứng dụng chưa có chức năng mở ca và khai báo tiền đầu ca. Khi có chức năng này, bổ sung kịch bản mở ca vào đây.
 
-| Bước | Thao tác thực hiện                                                          | Dữ liệu mẫu       | Kết quả mong đợi                                                                                  | Kết quả thực tế | Ghi chú |
-| :--- | :-------------------------------------------------------------------------- | :---------------- | :------------------------------------------------------------------------------------------------ | :-------------- | :------ |
-| 1    | Truy cập màn hình Bán hàng (POS) từ thanh điều hướng hoặc đường dẫn `/pos`. | Đường dẫn: `/pos` | Hiển thị giao diện bán hàng: ô "Tìm sản phẩm", nút chọn khách "Khách lẻ", giỏ hàng trống "Đơn 1". |                 |         |
+| Bước | Thao tác thực hiện                                                          | Dữ liệu mẫu       | Kết quả mong đợi                                                                                                            | Kết quả thực tế | Ghi chú |
+| :--- | :-------------------------------------------------------------------------- | :---------------- | :-------------------------------------------------------------------------------------------------------------------------- | :-------------- | :------ |
+| 1    | Truy cập màn hình Bán hàng (POS) từ thanh điều hướng hoặc đường dẫn `/pos`. | Đường dẫn: `/pos` | Hiển thị giao diện bán hàng: ô tìm "Tìm theo tên, mã hàng hoặc mã vạch", nút chọn khách "Khách lẻ", giỏ hàng trống "Đơn 1". |                 |         |
 
 ### Kịch bản 1.2: Bán hàng thanh toán bằng Tiền mặt (tính tiền thừa chuẩn xác)
 
@@ -47,7 +47,7 @@ Xác thực quy trình bán hàng tại quầy thu ngân: vào màn hình bán h
 
 ### Kịch bản 1.3: Bán hàng thanh toán Chuyển khoản
 
-> Ứng dụng chưa sinh mã VietQR. Phương thức "QR Code" trong hộp thanh toán hiện chỉ ghi nhận "Đã nhận thanh toán QR", giống "Chuyển khoản". Thu ngân đối chiếu tiền về trên ứng dụng ngân hàng rồi mới bấm "Hoàn thành".
+> Mã VietQR chỉ hiện khi cửa hàng đã khai tài khoản nhận chuyển khoản trong Cài đặt cửa hàng. Dữ liệu mẫu chưa khai tài khoản nên hộp thanh toán báo "Chưa có tài khoản nhận chuyển khoản" và phương thức "QR Code" chỉ ghi nhận đã nhận tiền, giống "Chuyển khoản". Thu ngân đối chiếu tiền về trên ứng dụng ngân hàng rồi mới bấm "Hoàn thành".
 
 | Bước | Thao tác thực hiện                                             | Dữ liệu mẫu                       | Kết quả mong đợi                                                                               | Kết quả thực tế | Ghi chú |
 | :--- | :------------------------------------------------------------- | :-------------------------------- | :--------------------------------------------------------------------------------------------- | :-------------- | :------ |
@@ -58,12 +58,12 @@ Xác thực quy trình bán hàng tại quầy thu ngân: vào màn hình bán h
 
 ### Kịch bản 1.4: Bán hàng Ghi nợ (Trong hạn mức cho phép)
 
-| Bước | Thao tác thực hiện                                          | Dữ liệu mẫu                                 | Kết quả mong đợi                                                                                       | Kết quả thực tế | Ghi chú |
-| :--- | :---------------------------------------------------------- | :------------------------------------------ | :----------------------------------------------------------------------------------------------------- | :-------------- | :------ |
-| 1    | Bấm nút "Khách lẻ", tìm và gán khách hàng vào đơn.          | Ô "Tìm tên, mã hoặc SĐT...": `Bùi Thanh Hà` | Khách "Bùi Thanh Hà" được gán vào đơn.                                                                 |                 |         |
-| 2    | Tìm "Bia Heineken", chọn biến thể `Lon 330ml`, số lượng 10. | 10 lon `BH001-LON` x 18.000 đ               | Tổng tiền thanh toán: `180.000 đ`.                                                                     |                 |         |
-| 3    | Mở hộp "Thanh toán", chọn phương thức "Ghi nợ".             | "Tiền mặt trả trước (tuỳ chọn)": để trống   | "Phần ghi nợ" hiển thị `180.000 đ`, không có cảnh báo vượt hạn mức, nút "Hoàn thành" bấm được.         |                 |         |
-| 4    | Bấm "Hoàn thành".                                           |                                             | Đơn hàng tạo thành công, công nợ của khách Bùi Thanh Hà tăng thêm `180.000 đ` (nợ hiện tại 180.000 đ). |                 |         |
+| Bước | Thao tác thực hiện                                          | Dữ liệu mẫu                                                | Kết quả mong đợi                                                                                       | Kết quả thực tế | Ghi chú |
+| :--- | :---------------------------------------------------------- | :--------------------------------------------------------- | :----------------------------------------------------------------------------------------------------- | :-------------- | :------ |
+| 1    | Bấm nút "Khách lẻ", tìm và gán khách hàng vào đơn.          | Ô "Tìm theo tên, mã hoặc số điện thoại...": `Bùi Thanh Hà` | Khách "Bùi Thanh Hà" được gán vào đơn.                                                                 |                 |         |
+| 2    | Tìm "Bia Heineken", chọn biến thể `Lon 330ml`, số lượng 10. | 10 lon `BH001-LON` x 18.000 đ                              | Tổng tiền thanh toán: `180.000 đ`.                                                                     |                 |         |
+| 3    | Mở hộp "Thanh toán", chọn phương thức "Ghi nợ".             | "Tiền mặt trả trước (tuỳ chọn)": để trống                  | "Phần ghi nợ" hiển thị `180.000 đ`, không có cảnh báo vượt hạn mức, nút "Hoàn thành" bấm được.         |                 |         |
+| 4    | Bấm "Hoàn thành".                                           |                                                            | Đơn hàng tạo thành công, công nợ của khách Bùi Thanh Hà tăng thêm `180.000 đ` (nợ hiện tại 180.000 đ). |                 |         |
 
 ### Kịch bản 1.5: Bán hàng Ghi nợ (Vượt quá hạn mức công nợ)
 
