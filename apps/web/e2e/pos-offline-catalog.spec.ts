@@ -69,6 +69,9 @@ test('mất mạng: tìm hàng và khách, giá theo bảng giá, ghi nợ thấ
   page,
   loginAs,
 }) => {
+  // PGlite chạy trong worker và ghi IndexedDB sau mỗi lệnh: trên CI lượt đồng bộ danh mục đầu tiên
+  // mất khoảng 20 giây dù máy chủ trả mỗi trang trong vài mili giây, vượt hạn giờ mặc định 30 giây
+  test.setTimeout(90_000)
   const api = await apiAs(apiCtx, origin)
   const customer = (
     await api.get<Listed<{ id: string }>>(`/api/v1/customers?search=${CUSTOMER_PHONE}`)
@@ -140,13 +143,13 @@ test('mất mạng: tìm hàng và khách, giá theo bảng giá, ghi nợ thấ
     .first()
   if (await newOrder.isVisible().catch(() => false)) await newOrder.click()
 
-  // Có mạng lại: đơn lên máy chủ (tự động, hoặc bấm đồng bộ nếu bản này chưa tự đẩy)
+  // Có mạng lại: đơn tự lên máy chủ (OFF-02); quá hạn thì bấm "Đồng bộ ngay" để kiểm luồng bấm tay
   await page.context().setOffline(false)
   const synced = async () =>
     (await api.get<Listed<ListedOrder>>(`/api/v1/orders?customerId=${customer.id}&pageSize=1`)).meta
       .total
   try {
-    await expect.poll(synced, { timeout: 8_000 }).toBe(ordersBefore + 1)
+    await expect.poll(synced, { timeout: 20_000 }).toBe(ordersBefore + 1)
   } catch {
     await page
       .locator('header button')
