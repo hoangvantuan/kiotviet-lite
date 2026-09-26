@@ -83,6 +83,7 @@ function baseDeps() {
     probe: vi.fn(async () => true),
     ensureSession: vi.fn(async () => true),
     push: vi.fn(async (): Promise<PushOutcome> => IDLE),
+    pullCatalog: vi.fn(async () => {}),
   }
 }
 
@@ -263,6 +264,32 @@ describe('OFF-02: lượt đồng bộ tự động', () => {
     const noSession = deps({ ensureSession: vi.fn(async () => false) })
     await runSyncCycle('online', noSession)
     expect(noSession.push).not.toHaveBeenCalled()
+  })
+
+  it('GL-03: bấm "Đồng bộ ngay" thì đẩy đơn rồi kéo danh mục; lượt tự động chỉ đẩy', async () => {
+    const order: string[] = []
+    const d = deps({
+      push: vi.fn(async (): Promise<PushOutcome> => {
+        order.push('push')
+        return IDLE
+      }),
+      pullCatalog: vi.fn(async () => {
+        order.push('catalog')
+      }),
+    })
+    await runSyncCycle('manual', d)
+    expect(order).toEqual(['push', 'catalog'])
+
+    const auto = deps()
+    await runSyncCycle('interval', auto)
+    await runSyncCycle('online', auto)
+    expect(auto.pullCatalog).not.toHaveBeenCalled()
+  })
+
+  it('GL-03: kéo danh mục lỗi không làm hỏng lượt đẩy đơn', async () => {
+    const d = deps({ pullCatalog: vi.fn(async () => Promise.reject(new Error('502'))) })
+    await expect(runSyncCycle('manual', d)).resolves.toBe('online')
+    expect(d.push).toHaveBeenCalled()
   })
 
   it('gọi chồng nhau trong một tab chỉ chạy một lượt', async () => {

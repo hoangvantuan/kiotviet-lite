@@ -1,6 +1,7 @@
 import { removePersistedCart } from '@/stores/cart-persistence'
 import { useAuthStore } from '@/stores/use-auth-store'
 import { createInitialTabs, useCartStore } from '@/stores/use-cart-store'
+import { useCatalogSyncStore } from '@/stores/use-catalog-sync-store'
 
 import { clearBrowserDiagnostics } from './api-client'
 import { clearOfflineStoreData } from './offline-store-data'
@@ -35,6 +36,7 @@ export async function endSession() {
   queryClient.clear()
   clearBrowserDiagnostics()
   forgetOfflineDataStore()
+  useCatalogSyncStore.getState().reset()
   await deleteLegacyApiCache()
   try {
     await clearOfflineStoreData()

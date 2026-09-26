@@ -3,7 +3,6 @@ import type { PGliteInterface as PGlite } from '@electric-sql/pglite'
 import { hasPermission, type SyncPullResponse } from '@kiotviet-lite/shared'
 import {
   type CatalogSyncResult,
-  clearCatalogStoreData,
   clearOtherStoresCatalog,
   getCatalogSyncMeta,
   type OfflineDb,
@@ -89,12 +88,6 @@ export async function loadCatalogSyncInfo(pglite?: PGlite): Promise<string | nul
   const syncedAt = meta?.syncedAt ?? null
   useCatalogSyncStore.getState().setSyncedAt(syncedAt)
   return syncedAt
-}
-
-/** Xóa bản sao danh mục của một cửa hàng (đăng xuất, đổi cửa hàng) */
-export async function clearCatalogData(pglite: PGlite, storeId: string): Promise<void> {
-  await clearCatalogStoreData(pglite as unknown as OfflineDb, storeId)
-  useCatalogSyncStore.getState().reset()
 }
 
 /**

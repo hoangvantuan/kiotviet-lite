@@ -15,12 +15,13 @@ import { meApi, refreshApi } from '@/features/auth/auth-api'
 import { useAuthStore } from '@/stores/use-auth-store'
 import { type Connectivity, useOfflineStore } from '@/stores/use-offline-store'
 
-import { API_BASE_URL } from './api-client'
+import { API_BASE_URL, reportBrowserFailure } from './api-client'
 import { onOfflineBroadcast } from './offline-channel'
 import { purgeSyncedOrders, refreshOutboxCounts } from './offline-orders'
 import { clearOfflineStoreData } from './offline-store-data'
 import { pushPendingOrders } from './order-sync'
 import { getOfflineDB } from './pglite'
+import { syncCatalogNow } from './sync-engine'
 
 export const SYNC_LEADER_LOCK = 'kvl-sync-leader'
 export const SYNC_CYCLE_LOCK = 'kvl-sync-cycle'
@@ -80,6 +81,8 @@ interface RuntimeDeps {
   probe: () => Promise<boolean>
   ensureSession: () => Promise<boolean>
   push: typeof pushPendingOrders
+  /** Kéo thay đổi danh mục về PGlite (GL-03) */
+  pullCatalog: () => Promise<unknown>
 }
 
 const defaultDeps: RuntimeDeps = {
@@ -87,6 +90,7 @@ const defaultDeps: RuntimeDeps = {
   probe: () => probeServer(),
   ensureSession: ensureOnlineSession,
   push: pushPendingOrders,
+  pullCatalog: () => syncCatalogNow(),
 }
 
 function locks(): LockManager | null {
@@ -120,8 +124,8 @@ export function forgetOfflineDataStore(): void {
 }
 
 /**
- * Một lượt đồng bộ: thăm dò máy chủ, làm mới phiên nếu cần, rồi đẩy hàng chờ. Trả về kết nối
- * đo được để nơi gọi cập nhật chỉ báo.
+ * Một lượt đồng bộ: thăm dò máy chủ, làm mới phiên nếu cần, rồi đẩy hàng chờ. Bấm tay thì kéo thêm
+ * danh mục. Trả về kết nối đo được để nơi gọi cập nhật chỉ báo.
  */
 export async function runSyncCycle(
   trigger: SyncTrigger,
@@ -143,6 +147,13 @@ export async function runSyncCycle(
   const pglite = await deps.getDB()
   // Có mạng lại, mở app, hay bấm tay: thử ngay cả đơn đang chờ tới lượt thử lại
   await deps.push(pglite, { ignoreBackoff: trigger !== 'interval' })
+  if (trigger === 'manual') {
+    // GL-03: bấm tay thì kéo luôn danh mục (nợ khách vừa đổi sau khi đẩy đơn). Lượt tự động để màn
+    // POS tự kéo theo chu kỳ riêng. Lỗi đã hiện trên thanh trạng thái danh mục, ở đây chỉ ghi chẩn đoán
+    await deps.pullCatalog().catch((error: unknown) => {
+      reportBrowserFailure('incremental_sync', error)
+    })
+  }
   return 'online'
 }
 

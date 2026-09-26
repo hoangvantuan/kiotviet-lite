@@ -5,8 +5,8 @@ import { useAuthStore } from '@/stores/use-auth-store'
 import {
   ApiClientError,
   apiFetch,
-  LONG_REQUEST_TIMEOUT_MS,
   clearBrowserDiagnostics,
+  LONG_REQUEST_TIMEOUT_MS,
   queueBrowserDiagnostic,
   REFRESH_UNAVAILABLE_MESSAGE,
   REQUEST_TIMEOUT_MS,

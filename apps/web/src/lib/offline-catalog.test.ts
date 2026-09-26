@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SyncPullEntity, SyncPullResponse } from '@kiotviet-lite/shared'
 import { pgliteMigrations } from '@kiotviet-lite/shared/migrations/pglite'
+import { CATALOG_STORE_TABLES } from '@kiotviet-lite/shared/offline'
 
 import { useAuthStore } from '@/stores/use-auth-store'
 import { useCatalogSyncStore } from '@/stores/use-catalog-sync-store'
@@ -14,6 +15,7 @@ import {
   searchCustomersOffline,
   searchProductsOffline,
 } from './offline-catalog'
+import { clearOfflineStoreData } from './offline-store-data'
 import { runPGliteMigrations } from './pglite-migrations'
 import { syncCatalogNow } from './sync-engine'
 
@@ -226,5 +228,29 @@ describe('OFF-09, OFF-15, GL-03: bán hàng trên bản sao danh mục trong PGl
       effectiveDebtLimit: 1_000_000,
       syncedAt: new Date(SERVER_TIME).toISOString(),
     })
+  })
+
+  it('đăng xuất hoặc đổi cửa hàng: dọn sạch bản sao danh mục, giữ đơn chờ', async () => {
+    vi.stubGlobal('fetch', pullFetch())
+    await syncCatalogNow(pglite)
+    await pglite.query(
+      `INSERT INTO offline_orders (id, store_id, client_id, sync_status, order_data, created_at)
+       VALUES (gen_random_uuid(), $1, gen_random_uuid(), 'pending', '{}', now())`,
+      [STORE],
+    )
+
+    await clearOfflineStoreData(pglite)
+
+    for (const table of CATALOG_STORE_TABLES) {
+      const { rows } = await pglite.query<{ n: number }>(`SELECT count(*)::int AS n FROM ${table}`)
+      expect({ table, n: rows[0]!.n }).toEqual({ table, n: 0 })
+    }
+    await expect(searchProductsOffline({ search: 'ca rot' }, pglite)).rejects.toBeInstanceOf(
+      CatalogUnavailableError,
+    )
+    const pending = await pglite.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM offline_orders WHERE sync_status = 'pending'`,
+    )
+    expect(pending.rows[0]!.n).toBe(1)
   })
 })

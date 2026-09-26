@@ -164,10 +164,12 @@ describe('runPGliteMigrations: máy mới và máy đang có đơn chờ', () =>
   })
 
   it('cách biệt lớn chỉ báo cần tải lại danh mục, KHÔNG bỏ qua migration', async () => {
-    const extra: PGliteMigration[] = [4, 5, 6, 7].map((version) => ({
-      version,
-      name: `t${version}`,
-      sql: `CREATE TABLE IF NOT EXISTS t_${version} (id int)`,
+    // Bốn bước giả nối sau bản thật mới nhất: máy ở v2 cách bản mới nhất hơn 3 bước
+    const latest = Math.max(...pgliteMigrations.map((m) => m.version))
+    const extra: PGliteMigration[] = [1, 2, 3, 4].map((step) => ({
+      version: latest + step,
+      name: `t${latest + step}`,
+      sql: `CREATE TABLE IF NOT EXISTS t_${latest + step} (id int)`,
     }))
     const old = new PGlite()
     await runPGliteMigrations(
@@ -179,7 +181,7 @@ describe('runPGliteMigrations: máy mới và máy đang có đơn chờ', () =>
     await old.close()
 
     expect(result).toEqual({ success: true, needsResync: true })
-    expect(max.rows[0]!.v).toBe(7)
+    expect(max.rows[0]!.v).toBe(latest + 4)
   })
 })
 
