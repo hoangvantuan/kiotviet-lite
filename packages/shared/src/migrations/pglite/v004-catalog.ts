@@ -151,6 +151,8 @@ export const v004Catalog = {
       entity TEXT NOT NULL,
       cursor_t TEXT,
       cursor_id UUID,
+      -- Thời điểm máy chủ của lần đọc hết loại dữ liệu này (nợ chờ so với mốc của customers)
+      pulled_at TIMESTAMPTZ,
       PRIMARY KEY (store_id, entity)
     );
 

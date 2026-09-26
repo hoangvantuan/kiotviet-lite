@@ -70,4 +70,21 @@ describe('computeEffectiveStatus', () => {
       ),
     ).toBe('expired')
   })
+
+  it('ngày hiệu lực tính theo múi giờ cửa hàng, cùng cách máy bán hàng tính (OFF-09)', () => {
+    // 18:00 UTC ngày 30/4 là 01:00 ngày 1/5 ở Việt Nam: chiết khấu bắt đầu 1/5 đã có hiệu lực
+    const earlyMorningVn = new Date('2026-04-30T18:00:00.000Z')
+    expect(
+      computeEffectiveStatus(
+        { isActive: true, effectiveFrom: '2026-05-01', effectiveTo: null },
+        earlyMorningVn,
+      ),
+    ).toBe('active')
+    expect(
+      computeEffectiveStatus(
+        { isActive: true, effectiveFrom: null, effectiveTo: '2026-04-30' },
+        earlyMorningVn,
+      ),
+    ).toBe('expired')
+  })
 })

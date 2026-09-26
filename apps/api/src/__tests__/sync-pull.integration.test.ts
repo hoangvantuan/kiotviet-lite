@@ -2,7 +2,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { and, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { randomUUID } from 'node:crypto'
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   categories,
@@ -26,12 +26,14 @@ import {
   getCatalogSyncMeta,
   pullPageQuery,
   type PullPageRequest,
+  purgeCatalogCostIfForbidden,
   resolvePricesOffline,
   searchCatalogCustomers,
   searchCatalogProducts,
   syncCatalog,
 } from '@kiotviet-lite/shared/offline'
 
+import { signAccessToken } from '../lib/jwt.js'
 import { createPosRoutes } from '../routes/pos.routes.js'
 import { createSyncRoutes } from '../routes/sync.routes.js'
 import {
@@ -292,6 +294,97 @@ describe('GL-03: đồng bộ gia tăng và dấu xóa', () => {
     expect(page.meta.resetRequired).toBe(true)
   })
 
+  it('đồng bộ đều đặn mà hơn 30 ngày không có xóa cứng: không bị bắt tải lại từ đầu', async () => {
+    const DAY = 24 * 60 * 60 * 1000
+    await createProduct(env, { name: 'Hàng bán đều' })
+    await sync(env.owner.authHeader, true)
+    const ownerAt = () => ({
+      Authorization: `Bearer ${signAccessToken({ userId: env.owner.id, storeId: env.storeId, role: 'owner' })}`,
+    })
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 20 * DAY })
+    try {
+      expect((await sync(ownerAt(), true)).full).toBe(false)
+      vi.setSystemTime(Date.now() + 20 * DAY)
+      // Con trỏ dấu xóa đã tiến theo lượt ngày 20, nên ngày 40 vẫn là lượt gia tăng
+      expect((await sync(ownerAt(), true)).full).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('phải tải lại từ đầu: bản sao cũ vẫn dùng được suốt lúc tải, xong mới dọn dòng không còn', async () => {
+    const kept = await createProduct(env, { name: 'Hàng còn bán' })
+    const customer = await createCustomer(env, { name: 'Khách giá riêng' })
+    const [cp] = await env.db
+      .insert(customerPrices)
+      .values({ storeId: env.storeId, customerId: customer.id, productId: kept.id, price: 5_000 })
+      .returning()
+    await sync(env.owner.authHeader, true)
+    const before = await getCatalogSyncMeta(client, env.storeId)
+
+    // Máy vắng mặt quá hạn: dấu xóa của giá riêng bị xóa cứng đã hết hạn, máy không bao giờ thấy
+    await env.db.delete(customerPrices).where(eq(customerPrices.id, cp!.id))
+    await env.db.delete(syncTombstones)
+    const old = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString()
+    await client.query(
+      `UPDATE catalog_sync_state SET cursor_t = $2 WHERE store_id = $1 AND entity = 'tombstones'`,
+      [env.storeId, old],
+    )
+
+    // Lượt tải lại bị ngắt giữa chừng: bản sao cũ còn nguyên, vẫn tìm được hàng
+    const base = fetcher(env.owner.authHeader)
+    const interrupted = syncCatalog({
+      db: client,
+      storeId: env.storeId,
+      canViewCost: true,
+      fetchPage: async (req) => {
+        if (req.entity === 'products') throw new Error('mất mạng')
+        return base(req)
+      },
+    })
+    await expect(interrupted).rejects.toThrow('mất mạng')
+    expect(await getCatalogSyncMeta(client, env.storeId)).toEqual(before)
+    const during = await searchCatalogProducts(client, {
+      storeId: env.storeId,
+      search: 'hang con ban',
+      includeCost: true,
+    })
+    expect(during.map((p) => p.id)).toEqual([kept.id])
+
+    const round = await sync(env.owner.authHeader, true)
+    expect(round.full).toBe(true)
+    expect(await localIds('catalog_customer_prices')).not.toContain(cp!.id)
+    expect(await localIds('catalog_products')).toContain(kept.id)
+    const after = await getCatalogSyncMeta(client, env.storeId)
+    expect(after?.syncedAt).not.toBe(before?.syncedAt)
+    // Lượt sau quay về gia tăng
+    expect((await sync(env.owner.authHeader, true)).full).toBe(false)
+  })
+
+  it('dòng giá bị xóa rồi tạo lại (id mới) về trước dấu xóa: bản sao không giữ hai giá cho một cặp', async () => {
+    const product = await createProduct(env, { name: 'Hàng đổi giá sỉ' })
+    const [pl] = await env.db
+      .insert(priceLists)
+      .values({ storeId: env.storeId, name: 'Giá sỉ', method: 'direct' })
+      .returning()
+    const [oldItem] = await env.db
+      .insert(priceListItems)
+      .values({ priceListId: pl!.id, productId: product.id, price: 7_000 })
+      .returning()
+    await sync(env.owner.authHeader, true)
+
+    await env.db.delete(priceListItems).where(eq(priceListItems.id, oldItem!.id))
+    const [newItem] = await env.db
+      .insert(priceListItems)
+      .values({ priceListId: pl!.id, productId: product.id, price: 6_500 })
+      .returning()
+    // Dấu xóa của dòng cũ chưa tới máy trong lượt này
+    await env.db.delete(syncTombstones)
+    await sync(env.owner.authHeader, true)
+
+    expect(await localIds('catalog_price_list_items')).toEqual([newItem!.id])
+  })
+
   it('dấu xóa chỉ trả cho đúng cửa hàng', async () => {
     const storeB = await createStore(env, { name: 'Cửa hàng B' })
     await env.db.insert(syncTombstones).values({
@@ -338,7 +431,19 @@ describe('Quyết định 3, BC-13: nhân viên không nhận giá vốn', () =>
     )
     expect(Number(ownerRow.rows[0]?.cost_price)).toBe(70_000)
 
-    // Và ngược lại: nhân viên đăng nhập sau chủ thì giá vốn bị xóa khỏi máy
+    // Nhân viên mở máy khi chưa tới được máy chủ: giá vốn bị xóa ngay, bản sao vẫn dùng được
+    const syncedAt = (await getCatalogSyncMeta(client, env.storeId))?.syncedAt
+    expect(await purgeCatalogCostIfForbidden(client, env.storeId, false)).toBe(true)
+    const offlinePurge = await client.query<{ n: number }>(
+      `SELECT (SELECT count(*) FROM catalog_products WHERE cost_price IS NOT NULL)
+            + (SELECT count(*) FROM catalog_variants WHERE cost_price IS NOT NULL) AS n`,
+    )
+    expect(Number(offlinePurge.rows[0]?.n)).toBe(0)
+    expect(await getCatalogSyncMeta(client, env.storeId)).toEqual({ withCost: false, syncedAt })
+
+    // Chủ đăng nhập lại: tải lại để có giá vốn (bản sao cũ giữ tới khi xong), rồi nhân viên
+    // đăng nhập và đồng bộ thì giá vốn lại bị xóa
+    expect((await sync(env.owner.authHeader, true)).full).toBe(true)
     await sync(env.staff.authHeader, false)
     const after = await client.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM catalog_products WHERE cost_price IS NOT NULL`,

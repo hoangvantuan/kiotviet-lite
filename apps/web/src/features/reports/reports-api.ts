@@ -14,12 +14,15 @@ import type {
   RevenueReportTab,
 } from '@kiotviet-lite/shared'
 
-import { apiClient } from '@/lib/api-client'
+import { apiClient, LONG_REQUEST_TIMEOUT_MS } from '@/lib/api-client'
 import { useAuthStore } from '@/stores/use-auth-store'
 
 interface ApiEnvelope<T> {
   data: T
 }
+
+/** Báo cáo nhiều ngày quét nhiều dữ liệu: chờ lâu hơn request thường (OFF-06) */
+const REPORT_REQUEST = { timeoutMs: LONG_REQUEST_TIMEOUT_MS }
 
 export interface ReportDateQuery {
   from?: string
@@ -39,16 +42,21 @@ export async function getDashboardApi(period: DashboardPeriod) {
   params.set('period', period)
   return apiClient.get<ApiEnvelope<DashboardResponse>>(
     `/api/v1/reports/dashboard?${params.toString()}`,
+    REPORT_REQUEST,
   )
 }
 
 export async function getDebtAgingReportApi(query: ReportDateQuery) {
-  return apiClient.get<ApiEnvelope<DebtAgingReport>>(`/api/v1/reports/debt-aging${buildQs(query)}`)
+  return apiClient.get<ApiEnvelope<DebtAgingReport>>(
+    `/api/v1/reports/debt-aging${buildQs(query)}`,
+    REPORT_REQUEST,
+  )
 }
 
 export async function getDebtSummaryReportApi(query: ReportDateQuery) {
   return apiClient.get<ApiEnvelope<DebtSummaryReport>>(
     `/api/v1/reports/debt-summary${buildQs(query)}`,
+    REPORT_REQUEST,
   )
 }
 
@@ -71,11 +79,15 @@ export async function getRevenueReportApi(query: RevenueReportQueryParams) {
   const qs = params.toString()
   return apiClient.get<ApiEnvelope<RevenueReportResponse>>(
     `/api/v1/reports/revenue${qs ? `?${qs}` : ''}`,
+    REPORT_REQUEST,
   )
 }
 
 export async function getProfitReportApi(query: ReportDateQuery) {
-  return apiClient.get<ApiEnvelope<ProfitReportResponse>>(`/api/v1/reports/profit${buildQs(query)}`)
+  return apiClient.get<ApiEnvelope<ProfitReportResponse>>(
+    `/api/v1/reports/profit${buildQs(query)}`,
+    REPORT_REQUEST,
+  )
 }
 
 export async function getInventoryReportApi(
@@ -88,6 +100,7 @@ export async function getInventoryReportApi(
   if (categoryId) params.set('categoryId', categoryId)
   return apiClient.get<ApiEnvelope<InventoryReportResponse>>(
     `/api/v1/reports/inventory?${params.toString()}`,
+    REPORT_REQUEST,
   )
 }
 
@@ -100,6 +113,7 @@ export async function getPricingReportApi(query: PricingReportQueryParams) {
   const qs = params.toString()
   return apiClient.get<ApiEnvelope<PricingReportResponse>>(
     `/api/v1/reports/pricing${qs ? `?${qs}` : ''}`,
+    REPORT_REQUEST,
   )
 }
 

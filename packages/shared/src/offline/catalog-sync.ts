@@ -6,10 +6,14 @@ import {
 } from '../schema/sync-management.js'
 import {
   applyPullPage,
+  type CatalogEntity,
+  type CatalogSyncMeta,
   clearCatalogStoreData,
+  finishCatalogReload,
   getCatalogSyncMeta,
   getCursor,
   type OfflineDb,
+  purgeCatalogCostIfForbidden,
   setCatalogSyncMeta,
 } from './catalog-store.js'
 
@@ -50,8 +54,10 @@ export function pullPageQuery(req: PullPageRequest): string {
  * không kéo cả danh mục một lần), mỗi trang nạp trong một transaction kèm con trỏ, nên bị ngắt
  * giữa chừng thì lần sau đọc tiếp. Các lần sau chỉ kéo dòng đổi sau con trỏ, kèm dấu xóa.
  *
- * Quyền xem giá vốn khác với lúc tải (đổi người dùng, đổi vai trò) thì xóa sạch và tải lại, để
- * thiết bị của nhân viên không giữ giá vốn đã tải bởi chủ (BC-13).
+ * Phải tải lại khi đã có bản sao (máy vắng mặt quá hạn lưu dấu xóa, hoặc người dùng mới xem được
+ * giá vốn mà bản sao không có) thì giữ bản sao cũ để POS vẫn bán ngoại tuyến được, tải đè lên rồi
+ * mới dọn dòng không còn ({@link finishCatalogReload}). Người dùng không có quyền xem giá vốn thì
+ * giá vốn bị xóa khỏi máy trước khi làm gì khác (BC-13).
  */
 export async function syncCatalog({
   db,
@@ -66,8 +72,10 @@ export async function syncCatalog({
   fetchPage: (req: PullPageRequest) => Promise<SyncPullResponse>
   onProgress?: (progress: CatalogSyncProgress) => void
 }): Promise<CatalogSyncResult> {
+  await purgeCatalogCostIfForbidden(db, storeId, canViewCost)
   let meta = await getCatalogSyncMeta(db, storeId)
-  if (meta && meta.withCost !== canViewCost) {
+  if (meta && meta.syncedAt === null && meta.withCost !== canViewCost) {
+    // Lượt đầu dở dang với quyền khác: chưa có gì để bán, bỏ đi tải lại cho đúng quyền
     await clearCatalogStoreData(db, storeId)
     meta = null
   }
@@ -75,26 +83,65 @@ export async function syncCatalog({
     meta = { withCost: canViewCost, syncedAt: null }
     await setCatalogSyncMeta(db, storeId, meta)
   }
-  const full = meta.syncedAt === null
+  // Bản sao đang dùng mà thiếu giá vốn người dùng được xem: tải lại, giữ bản cũ tới khi xong
+  const reload = meta.syncedAt !== null && meta.withCost !== canViewCost
+  return runSync({ db, storeId, canViewCost, fetchPage, onProgress }, meta, reload)
+}
 
+async function runSync(
+  {
+    db,
+    storeId,
+    canViewCost,
+    fetchPage,
+    onProgress,
+  }: {
+    db: OfflineDb
+    storeId: string
+    canViewCost: boolean
+    fetchPage: (req: PullPageRequest) => Promise<SyncPullResponse>
+    onProgress?: (progress: CatalogSyncProgress) => void
+  },
+  meta: CatalogSyncMeta,
+  reload: boolean,
+): Promise<CatalogSyncResult> {
+  const full = reload || meta.syncedAt === null
   let loaded = 0
   let total: number | null = full ? 0 : null
   let roundStartedAt: string | null = null
+  // Chỉ dùng khi tải lại: dòng còn sống và con trỏ cuối của từng loại, ghi một lần lúc xong
+  const seen = new Map<CatalogEntity, string[]>()
+  const cursors = new Map<SyncPullEntity, SyncCursor>()
+  const pulledAt = new Map<SyncPullEntity, string>()
 
   for (let index = 0; index < SYNC_PULL_ENTITIES.length; index++) {
     const entity = SYNC_PULL_ENTITIES[index]!
-    let cursor = await getCursor(db, storeId, entity)
+    let cursor = reload ? null : await getCursor(db, storeId, entity)
     let since = cursor !== null ? meta.syncedAt : null
     for (;;) {
       const page = await fetchPage({ entity, cursor, since })
       roundStartedAt ??= page.meta.serverTime
       if (page.meta.resetRequired) {
-        // Máy khách vắng mặt lâu hơn hạn lưu dấu xóa: không biết dòng nào đã mất, tải lại từ đầu
+        // Máy vắng mặt lâu hơn hạn lưu dấu xóa: không biết dòng nào đã mất, tải lại từ đầu
+        if (meta.syncedAt !== null && !reload) {
+          return runSync({ db, storeId, canViewCost, fetchPage, onProgress }, meta, true)
+        }
+        // Chưa có bản sao dùng được (lượt đầu dở dang quá lâu): bỏ phần đã tải, tải lại
         await clearCatalogStoreData(db, storeId)
-        await setCatalogSyncMeta(db, storeId, { withCost: canViewCost, syncedAt: null })
-        return syncCatalog({ db, storeId, canViewCost, fetchPage, onProgress })
+        const fresh = { withCost: canViewCost, syncedAt: null }
+        await setCatalogSyncMeta(db, storeId, fresh)
+        return runSync({ db, storeId, canViewCost, fetchPage, onProgress }, fresh, false)
       }
-      await applyPullPage(db, storeId, page)
+      await applyPullPage(db, storeId, page, { saveCursor: !reload })
+      if (reload) {
+        if (page.meta.nextCursor) cursors.set(entity, page.meta.nextCursor)
+        if (!page.meta.hasMore) pulledAt.set(entity, page.meta.serverTime)
+        if (entity !== 'tombstones') {
+          const ids = seen.get(entity) ?? []
+          for (const row of page.data.rows as Array<{ id: string }>) ids.push(row.id)
+          seen.set(entity, ids)
+        }
+      }
       loaded += page.data.rows.length + page.data.deleted.length
       if (total !== null && page.meta.total !== undefined) total += page.meta.total
       onProgress?.({ entity, loaded, total })
@@ -105,6 +152,8 @@ export async function syncCatalog({
   }
 
   const syncedAt = roundStartedAt ?? new Date().toISOString()
-  await setCatalogSyncMeta(db, storeId, { withCost: canViewCost, syncedAt })
+  const done = { withCost: canViewCost, syncedAt }
+  if (reload) await finishCatalogReload(db, storeId, { seen, cursors, pulledAt, meta: done })
+  else await setCatalogSyncMeta(db, storeId, done)
   return { full, loaded, syncedAt }
 }

@@ -17,6 +17,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { toIsoDate } from '../lib/date.js'
 import { ApiError } from '../lib/errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { diffObjects, logAction, type RequestMeta } from './audit.service.js'
@@ -45,10 +46,6 @@ interface CategoryDiscountRow {
   note: string | null
   createdAt: Date
   updatedAt: Date
-}
-
-function toIsoDate(today: Date): string {
-  return today.toISOString().slice(0, 10)
 }
 
 export function computeEffectiveStatus(

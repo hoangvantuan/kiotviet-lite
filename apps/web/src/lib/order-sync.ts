@@ -5,7 +5,7 @@ import { SYNC_PUSH_MAX_BATCH } from '@kiotviet-lite/shared'
 import { useAuthStore } from '@/stores/use-auth-store'
 import { type ReviewPendingOrder, useOfflineStore } from '@/stores/use-offline-store'
 
-import { ApiClientError, apiFetch, reportBrowserFailure } from './api-client'
+import { ApiClientError, apiFetch, LONG_REQUEST_TIMEOUT_MS, reportBrowserFailure } from './api-client'
 import { broadcastOffline } from './offline-channel'
 import {
   getPendingOrders,
@@ -136,6 +136,7 @@ export async function pushPendingOrders(
         json = await apiFetch<SyncPushResponse>('/api/v1/sync/push', {
           method: 'POST',
           body: { orders: batch.map(toPushPayload) },
+          timeoutMs: LONG_REQUEST_TIMEOUT_MS,
         })
       } catch (err) {
         outcome.blocked = await handleBatchFailure(pglite, batch, err)

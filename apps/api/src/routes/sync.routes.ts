@@ -93,8 +93,9 @@ export function createSyncRoutes({ db }: { db: Db }) {
   app.onError(errorHandler)
   app.use('*', requireAuth(db))
 
-  // GL-03: một trang của một loại dữ liệu danh mục, xem sync-pull.service.ts
-  app.get('/pull', async (c) => {
+  // GL-03: một trang của một loại dữ liệu danh mục, xem sync-pull.service.ts. Chỉ máy bán hàng cần
+  // (khách, công nợ, bảng giá), nên đòi quyền bán hàng như /push
+  app.get('/pull', requirePermission('pos.sell'), async (c) => {
     const auth = c.get('auth')
     const query = syncPullQuerySchema.parse(c.req.query())
     const page = await pullSyncPage({

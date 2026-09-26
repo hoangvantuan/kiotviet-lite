@@ -237,6 +237,11 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
  * gọi chuyển sang đường ngoại tuyến. Cấu hình tập trung ở đây, chỗ nào cần khác thì truyền timeoutMs.
  */
 export const REQUEST_TIMEOUT_MS = 20_000
+/**
+ * Request nặng có chủ đích (nhập bảng giá, tính lại giá, đẩy hàng chờ ngoại tuyến, báo cáo dài
+ * ngày): máy chủ xử lý lâu là bình thường, không coi là mất kết nối sau 20 giây.
+ */
+export const LONG_REQUEST_TIMEOUT_MS = 120_000
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 // 502, 504: nginx mất kết nối hoặc hết giờ chờ API; 524: Cloudflare hết giờ chờ nginx

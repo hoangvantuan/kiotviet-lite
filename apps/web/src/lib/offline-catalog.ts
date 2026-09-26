@@ -10,8 +10,10 @@ import {
 import {
   type CatalogCustomer,
   getCatalogCustomerDebt,
+  getCatalogPulledAt,
   getCatalogSyncMeta,
   type OfflineDb,
+  purgeCatalogCostIfForbidden,
   resolvePricesOffline,
   searchCatalogCustomers,
   searchCatalogProducts,
@@ -38,12 +40,15 @@ async function context(pglite?: PGlite) {
   const user = useAuthStore.getState().user
   if (!user) throw new Error('Chưa đăng nhập')
   const db = (pglite ?? (await getOfflineDB())) as unknown as OfflineDb
+  const includeCost = hasPermission(user.role, 'products.viewCost')
+  // Nhân viên đăng nhập ngoại tuyến trên máy chủ đã tải: giá vốn không được nằm lại trên máy
+  await purgeCatalogCostIfForbidden(db, user.storeId, includeCost)
   const meta = await getCatalogSyncMeta(db, user.storeId)
   if (!meta?.syncedAt) throw new CatalogUnavailableError()
   return {
     db,
     storeId: user.storeId,
-    includeCost: hasPermission(user.role, 'products.viewCost'),
+    includeCost,
     syncedAt: meta.syncedAt,
   }
 }
@@ -91,8 +96,9 @@ export interface OfflineDebtInfo extends DebtInfo {
 
 /**
  * OFF-15: nợ hiện tại và hạn mức của khách theo lần đồng bộ gần nhất, cộng thêm nợ của đơn ghi
- * nợ trên máy này chưa có trong bản sao (còn chờ đồng bộ, hoặc đồng bộ sau thời điểm tải danh mục).
- * Máy chủ vẫn kiểm lại hạn mức khi nhận đơn (ADR-0009).
+ * nợ trên máy này chưa có trong bản sao: đơn còn chờ đồng bộ, hoặc đã lên máy chủ sau lúc kéo dữ
+ * liệu khách (không phải lúc bắt đầu lượt, khách được kéo sau vài loại khác). Đơn bị máy chủ từ
+ * chối (error) không tạo nợ. Máy chủ vẫn kiểm lại hạn mức khi nhận đơn (ADR-0009).
  */
 export async function getCustomerDebtOffline(
   customerId: string,
@@ -101,12 +107,13 @@ export async function getCustomerDebtOffline(
   const { db, storeId, syncedAt } = await context(pglite)
   const info = await getCatalogCustomerDebt(db, { storeId, customerId })
   if (!info) return null
+  const customersPulledAt = (await getCatalogPulledAt(db, storeId, 'customers')) ?? syncedAt
   const pending = await db.query<{ amount: string | number | null }>(
     `SELECT COALESCE(SUM((order_data->>'debtAmount')::bigint), 0) AS amount
      FROM offline_orders
      WHERE store_id = $1 AND order_data->>'customerId' = $2
-       AND (sync_status <> 'synced' OR synced_at > $3::timestamptz)`,
-    [storeId, customerId, syncedAt],
+       AND (sync_status = 'pending' OR (sync_status = 'synced' AND synced_at > $3::timestamptz))`,
+    [storeId, customerId, customersPulledAt],
   )
   const pendingDebt = Number(pending.rows[0]?.amount ?? 0)
   return {

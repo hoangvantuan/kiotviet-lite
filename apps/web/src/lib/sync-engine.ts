@@ -8,6 +8,7 @@ import {
   getCatalogSyncMeta,
   type OfflineDb,
   pullPageQuery,
+  purgeCatalogCostIfForbidden,
   syncCatalog,
 } from '@kiotviet-lite/shared/offline'
 
@@ -75,11 +76,15 @@ export function syncCatalogNow(pglite?: PGlite): Promise<CatalogSyncResult | nul
   return inFlight
 }
 
-/** Đọc thời điểm đồng bộ gần nhất đã lưu trong PGlite vào store (khi mở POS) */
+/**
+ * Khi mở POS: xóa giá vốn khỏi bản sao nếu người dùng hiện tại không được xem (không chờ tới được
+ * máy chủ, BC-13), rồi đọc thời điểm đồng bộ gần nhất vào store.
+ */
 export async function loadCatalogSyncInfo(pglite?: PGlite): Promise<string | null> {
   const user = useAuthStore.getState().user
   if (!user) return null
   const db = await openCatalogDb(pglite)
+  await purgeCatalogCostIfForbidden(db, user.storeId, hasPermission(user.role, 'products.viewCost'))
   const meta = await getCatalogSyncMeta(db, user.storeId)
   const syncedAt = meta?.syncedAt ?? null
   useCatalogSyncStore.getState().setSyncedAt(syncedAt)

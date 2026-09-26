@@ -35,6 +35,7 @@ import type { Db } from '../db/index.js'
 export const SYNC_TOMBSTONE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 /** Mỗi lượt gia tăng đọc lùi lại để không sót dòng của transaction commit muộn hơn mốc của nó. */
 const INCREMENTAL_LOOKBACK = '5 minutes'
+const INCREMENTAL_LOOKBACK_MS = 5 * 60 * 1000
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000'
 
 type ColumnMap = Record<string, PgColumn | SQL>
@@ -282,13 +283,22 @@ async function pullTombstones(
   const hasMore = rows.length > query.limit
   const page = hasMore ? rows.slice(0, query.limit) : rows
   const last = page.at(-1)
+  let nextCursor: SyncCursor | null = last ? { t: last.t, id: last.id } : null
+  if (!hasMore) {
+    // Đọc hết: con trỏ tiến tới gần hiện tại dù không có dấu xóa mới, để cửa hàng ít xóa cứng
+    // không bị coi là vắng mặt quá hạn lưu giữ (resetRequired). Lùi một cửa sổ đọc lại để dấu xóa
+    // của transaction commit muộn vẫn được thấy; đọc lại dấu xóa cũ vô hại (xóa lại không sao).
+    const floor = new Date(Date.parse(serverTime) - INCREMENTAL_LOOKBACK_MS).toISOString()
+    const reached = last?.t ?? cursor.t
+    if (Date.parse(reached) < Date.parse(floor)) nextCursor = { t: floor, id: ZERO_UUID }
+  }
   return {
     data: {
       entity: 'tombstones',
       rows: page.map((r) => ({ entity: r.entity, entityId: r.entityId })),
       deleted: [],
     },
-    meta: { hasMore, nextCursor: last ? { t: last.t, id: last.id } : null, serverTime },
+    meta: { hasMore, nextCursor, serverTime },
   }
 }
 

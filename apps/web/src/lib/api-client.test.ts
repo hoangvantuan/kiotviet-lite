@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/use-auth-store'
 import {
   ApiClientError,
   apiFetch,
+  LONG_REQUEST_TIMEOUT_MS,
   clearBrowserDiagnostics,
   queueBrowserDiagnostic,
   REFRESH_UNAVAILABLE_MESSAGE,
@@ -358,6 +359,33 @@ describe('OFF-06: có Wi-Fi nhưng không tới được máy chủ, request ph�
       const error = await pending
       expect(error).toMatchObject({ code: 'NETWORK_ERROR', details: { timeout: true } })
       expect((error as ApiClientError).message).toContain('Máy chủ không phản hồi')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('request nặng (nhập bảng giá, đẩy hàng chờ) chờ lâu hơn mặc định mà không bị coi là mất mạng', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          () =>
+            new Promise<Response>((resolve) => {
+              setTimeout(
+                () => resolve(new Response(JSON.stringify({ data: 1 }), { status: 200 })),
+                REQUEST_TIMEOUT_MS + 10_000,
+              )
+            }),
+        ),
+      )
+      const pending = apiFetch('/api/v1/sync/push', {
+        method: 'POST',
+        body: {},
+        timeoutMs: LONG_REQUEST_TIMEOUT_MS,
+      })
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS + 10_000)
+      await expect(pending).resolves.toEqual({ data: 1 })
     } finally {
       vi.useRealTimers()
     }

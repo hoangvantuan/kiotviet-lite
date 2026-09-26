@@ -11,12 +11,14 @@ export interface OfflineDb extends OfflineSqlExecutor {
   transaction<T>(fn: (tx: OfflineSqlExecutor) => Promise<T>): Promise<T>
 }
 
-type CatalogEntity = Exclude<SyncPullEntity, 'tombstones'>
+export type CatalogEntity = Exclude<SyncPullEntity, 'tombstones'>
 
 interface TableSpec {
   table: string
   /** [khóa JSON từ /sync/pull, cột cục bộ, kiểu SQL] */
   columns: Array<[string, string, string]>
+  /** Khóa duy nhất trên máy chủ ngoài id (khóa JSON); `lower:` so không phân biệt hoa thường */
+  naturalKey?: string[]
 }
 
 export const CATALOG_TABLES: Record<CatalogEntity, TableSpec> = {
@@ -58,6 +60,7 @@ export const CATALOG_TABLES: Record<CatalogEntity, TableSpec> = {
   },
   unit_conversions: {
     table: 'catalog_unit_conversions',
+    naturalKey: ['productId', 'lower:unit'],
     columns: [
       ['id', 'id', 'uuid'],
       ['productId', 'product_id', 'uuid'],
@@ -102,6 +105,7 @@ export const CATALOG_TABLES: Record<CatalogEntity, TableSpec> = {
   },
   price_list_items: {
     table: 'catalog_price_list_items',
+    naturalKey: ['priceListId', 'productId'],
     columns: [
       ['id', 'id', 'uuid'],
       ['priceListId', 'price_list_id', 'uuid'],
@@ -111,6 +115,7 @@ export const CATALOG_TABLES: Record<CatalogEntity, TableSpec> = {
   },
   customer_prices: {
     table: 'catalog_customer_prices',
+    naturalKey: ['customerId', 'productId'],
     columns: [
       ['id', 'id', 'uuid'],
       ['customerId', 'customer_id', 'uuid'],
@@ -120,6 +125,7 @@ export const CATALOG_TABLES: Record<CatalogEntity, TableSpec> = {
   },
   volume_prices: {
     table: 'catalog_volume_prices',
+    naturalKey: ['productId', 'minQty'],
     columns: [
       ['id', 'id', 'uuid'],
       ['productId', 'product_id', 'uuid'],
@@ -166,6 +172,34 @@ export const CATALOG_STORE_TABLES = [
 ]
 
 const upsertSqlCache = new Map<CatalogEntity, string>()
+
+/**
+ * Xóa dòng cục bộ trùng khóa duy nhất với dòng sắp nạp nhưng khác id: dòng bị xóa rồi tạo lại trên
+ * máy chủ (id mới) có thể về trước dấu xóa của dòng cũ, khi đó bản sao có hai giá cho một cặp.
+ */
+const dedupeSqlCache = new Map<CatalogEntity, string | null>()
+function dedupeSql(entity: CatalogEntity): string | null {
+  if (dedupeSqlCache.has(entity)) return dedupeSqlCache.get(entity)!
+  const spec = CATALOG_TABLES[entity]
+  let sql: string | null = null
+  if (spec.naturalKey) {
+    const typeOf = new Map(spec.columns.map(([key, col, type]) => [key, { col, type }]))
+    const keys = spec.naturalKey.map((k) => ({
+      lower: k.startsWith('lower:'),
+      key: k.replace(/^lower:/, ''),
+    }))
+    const recordType = ['"id" uuid', ...keys.map(({ key }) => `"${key}" ${typeOf.get(key)!.type}`)]
+    const match = keys.map(({ key, lower }) => {
+      const col = `t.${typeOf.get(key)!.col}`
+      return lower ? `LOWER(${col}) = LOWER(r."${key}")` : `${col} = r."${key}"`
+    })
+    sql =
+      `DELETE FROM ${spec.table} AS t USING jsonb_to_recordset($2::jsonb) AS r(${recordType.join(', ')}) ` +
+      `WHERE t.store_id = $1 AND ${match.join(' AND ')} AND t.id <> r."id"`
+  }
+  dedupeSqlCache.set(entity, sql)
+  return sql
+}
 
 /** Một câu INSERT ... SELECT FROM jsonb_to_recordset cho cả trang: nhanh hơn chèn từng dòng nhiều lần */
 function upsertSql(entity: CatalogEntity): string {
@@ -225,11 +259,15 @@ async function deleteRows(
   }
 }
 
-/** Nạp một trang /sync/pull và lưu con trỏ trong CÙNG transaction: dừng giữa chừng vẫn đọc tiếp đúng chỗ */
+/**
+ * Nạp một trang /sync/pull và lưu con trỏ trong CÙNG transaction: dừng giữa chừng vẫn đọc tiếp đúng
+ * chỗ. Khi tải lại trên bản sao đang dùng (`saveCursor: false`), con trỏ chỉ lưu lúc xong cả lượt.
+ */
 export async function applyPullPage(
   db: OfflineDb,
   storeId: string,
   page: SyncPullResponse,
+  { saveCursor: persistCursor = true }: { saveCursor?: boolean } = {},
 ): Promise<void> {
   const { entity, rows, deleted } = page.data
   await db.transaction(async (tx) => {
@@ -244,24 +282,119 @@ export async function applyPullPage(
       }
       for (const [target, ids] of byEntity) await deleteRows(tx, storeId, target, ids, true)
     } else {
-      if (rows.length > 0) await tx.query(upsertSql(entity), [storeId, JSON.stringify(rows)])
+      if (rows.length > 0) {
+        const json = JSON.stringify(rows)
+        const dedupe = dedupeSql(entity)
+        if (dedupe) await tx.query(dedupe, [storeId, json])
+        await tx.query(upsertSql(entity), [storeId, json])
+      }
       await deleteRows(tx, storeId, entity, deleted, false)
     }
-    if (page.meta.nextCursor) await saveCursor(tx, storeId, entity, page.meta.nextCursor)
+    if (persistCursor) {
+      const pulledAt = page.meta.hasMore ? null : page.meta.serverTime
+      if (page.meta.nextCursor || pulledAt) {
+        await saveCursor(tx, storeId, entity, page.meta.nextCursor, pulledAt)
+      }
+    }
   })
 }
 
+/**
+ * Kết thúc một lượt tải lại trên bản sao đang dùng, trong một transaction: xóa dòng máy chủ không
+ * còn trả về (bị xóa khi dấu xóa đã hết hạn), thay con trỏ, ghi thời điểm đồng bộ. Tới lúc này POS
+ * vẫn bán bằng bản sao cũ; bị ngắt trước đó thì con trỏ cũ còn nguyên và lượt sau tải lại từ đầu.
+ */
+export async function finishCatalogReload(
+  db: OfflineDb,
+  storeId: string,
+  {
+    seen,
+    cursors,
+    pulledAt,
+    meta,
+  }: {
+    seen: Map<CatalogEntity, string[]>
+    cursors: Map<SyncPullEntity, SyncCursor>
+    pulledAt: Map<SyncPullEntity, string>
+    meta: CatalogSyncMeta
+  },
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    for (const [entity, spec] of Object.entries(CATALOG_TABLES) as Array<
+      [CatalogEntity, TableSpec]
+    >) {
+      await tx.query(
+        `DELETE FROM ${spec.table} WHERE store_id = $1 AND NOT (id = ANY($2::uuid[]))`,
+        [storeId, seen.get(entity) ?? []],
+      )
+    }
+    await tx.query('DELETE FROM catalog_sync_state WHERE store_id = $1', [storeId])
+    const entities = new Set<SyncPullEntity>([...cursors.keys(), ...pulledAt.keys()])
+    for (const entity of entities) {
+      await saveCursor(
+        tx,
+        storeId,
+        entity,
+        cursors.get(entity) ?? null,
+        pulledAt.get(entity) ?? null,
+      )
+    }
+    await setCatalogSyncMeta(tx, storeId, meta)
+  })
+}
+
+/**
+ * BC-13, quyết định 3: bản sao tải bởi người xem được giá vốn mà người dùng hiện tại không có quyền
+ * thì xóa giá vốn ngay trên máy, không đợi tới được máy chủ. Trả về true nếu đã xóa.
+ */
+export async function purgeCatalogCostIfForbidden(
+  db: OfflineDb,
+  storeId: string,
+  canViewCost: boolean,
+): Promise<boolean> {
+  if (canViewCost) return false
+  const meta = await getCatalogSyncMeta(db, storeId)
+  if (!meta?.withCost) return false
+  await db.transaction(async (tx) => {
+    await tx.query('UPDATE catalog_products SET cost_price = NULL WHERE store_id = $1', [storeId])
+    await tx.query('UPDATE catalog_variants SET cost_price = NULL WHERE store_id = $1', [storeId])
+    await setCatalogSyncMeta(tx, storeId, { ...meta, withCost: false })
+  })
+  return true
+}
+
+/** Lưu con trỏ và/hoặc mốc đọc hết của một loại dữ liệu; giá trị null giữ nguyên giá trị cũ */
 async function saveCursor(
   tx: OfflineSqlExecutor,
   storeId: string,
   entity: SyncPullEntity,
-  cursor: SyncCursor,
+  cursor: SyncCursor | null,
+  pulledAt: string | null,
 ): Promise<void> {
   await tx.query(
-    `INSERT INTO catalog_sync_state (store_id, entity, cursor_t, cursor_id) VALUES ($1, $2, $3, $4)
-     ON CONFLICT (store_id, entity) DO UPDATE SET cursor_t = EXCLUDED.cursor_t, cursor_id = EXCLUDED.cursor_id`,
-    [storeId, entity, cursor.t, cursor.id],
+    `INSERT INTO catalog_sync_state (store_id, entity, cursor_t, cursor_id, pulled_at)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (store_id, entity) DO UPDATE SET
+       cursor_t = COALESCE(EXCLUDED.cursor_t, catalog_sync_state.cursor_t),
+       cursor_id = COALESCE(EXCLUDED.cursor_id, catalog_sync_state.cursor_id),
+       pulled_at = COALESCE(EXCLUDED.pulled_at, catalog_sync_state.pulled_at)`,
+    [storeId, entity, cursor?.t ?? null, cursor?.id ?? null, pulledAt],
   )
+}
+
+/** Thời điểm máy chủ của lần gần nhất đọc hết một loại dữ liệu, null khi chưa có */
+export async function getCatalogPulledAt(
+  db: OfflineSqlExecutor,
+  storeId: string,
+  entity: SyncPullEntity,
+): Promise<string | null> {
+  const { rows } = await db.query<{ pulled_at: string | Date | null }>(
+    'SELECT pulled_at FROM catalog_sync_state WHERE store_id = $1 AND entity = $2',
+    [storeId, entity],
+  )
+  const value = rows[0]?.pulled_at
+  if (value == null) return null
+  return (value instanceof Date ? value : new Date(value)).toISOString()
 }
 
 export async function getCursor(

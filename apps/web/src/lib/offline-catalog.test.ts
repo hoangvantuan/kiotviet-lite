@@ -88,6 +88,9 @@ const PAGES: Partial<Record<SyncPullEntity, SyncPullResponse['data']['rows'][]>>
   ],
 }
 
+/** Khách được kéo sau vài loại khác trong cùng lượt: mốc máy chủ của trang customers muộn hơn */
+const CUSTOMERS_TIME = '2026-09-26T08:00:30.000000Z'
+
 function pullFetch() {
   return vi.fn(async (url: string) => {
     const params = new URL(url, 'http://x').searchParams
@@ -102,7 +105,7 @@ function pullFetch() {
         hasMore,
         // Mã trang kế tiếp nhét vào ký tự cuối của afterId cho gọn
         nextCursor: { t: SERVER_TIME, id: `00000000-0000-7000-8000-00000000000${index + 1}` },
-        serverTime: SERVER_TIME,
+        serverTime: entity === 'customers' ? CUSTOMERS_TIME : SERVER_TIME,
         ...(index === 0 ? { total: pages.flat().length } : {}),
       },
     }
@@ -197,13 +200,24 @@ describe('OFF-09, OFF-15, GL-03: bán hàng trên bản sao danh mục trong PGl
       `INSERT INTO offline_orders (id, store_id, client_id, sync_status, order_data, created_at, synced_at)
        VALUES (gen_random_uuid(), $1, gen_random_uuid(), 'pending', $2, now(), NULL),
               (gen_random_uuid(), $1, gen_random_uuid(), 'synced', $3, now(), '2026-09-26T09:00:00Z'),
-              (gen_random_uuid(), $1, gen_random_uuid(), 'synced', $4, now(), '2026-09-26T07:00:00Z')`,
-      [STORE, debtOrder(100_000), debtOrder(50_000), debtOrder(999_000)],
+              (gen_random_uuid(), $1, gen_random_uuid(), 'synced', $4, now(), '2026-09-26T07:00:00Z'),
+              (gen_random_uuid(), $1, gen_random_uuid(), 'synced', $5, now(), '2026-09-26T08:00:10Z'),
+              (gen_random_uuid(), $1, gen_random_uuid(), 'error', $6, now(), NULL)`,
+      [
+        STORE,
+        debtOrder(100_000),
+        debtOrder(50_000),
+        debtOrder(999_000),
+        debtOrder(70_000),
+        debtOrder(80_000),
+      ],
     )
 
     const debt = await getCustomerDebtOffline(CUSTOMER, pglite)
 
-    // 300k lúc đồng bộ + 100k đang chờ + 50k đồng bộ sau mốc; đơn đồng bộ trước mốc đã nằm trong 300k
+    // 300k lúc kéo khách + 100k đang chờ + 50k lên máy chủ sau lúc kéo khách. Không cộng: đơn lên
+    // trước lượt (999k) và đơn lên sau lúc bắt đầu lượt nhưng trước lúc kéo khách (70k), cả hai đã
+    // nằm trong 300k; đơn bị từ chối (80k) không tạo nợ
     expect(debt).toMatchObject({
       currentDebt: 450_000,
       pendingDebt: 150_000,
