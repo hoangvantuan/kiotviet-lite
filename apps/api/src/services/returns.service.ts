@@ -40,7 +40,7 @@ import type { Db } from '../db/index.js'
 import { toMoneyMethod } from '../lib/cash-flow.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
-import { assertStoredQuantityAllowed } from '../lib/quantity-policy.js'
+import { assertStockStaysWhole, assertStoredQuantityAllowed } from '../lib/quantity-policy.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import {
   lockCustomerForDebt,
@@ -618,6 +618,11 @@ export async function createReturn({
             .limit(1)
           newStock = updated?.currentStock ?? addQty(product.currentStock, restoreQty)
         }
+        assertStockStaysWhole({
+          stock: newStock,
+          productName: product.name,
+          productAllowsDecimal: product.allowDecimalQuantity,
+        })
 
         await tx.insert(inventoryTransactions).values({
           storeId: actor.storeId,

@@ -92,3 +92,22 @@ export async function assertStoredQuantityAllowed(args: {
     ...(args.itemIndex !== undefined ? { itemIndex: args.itemIndex } : {}),
   })
 }
+
+/**
+ * Bất biến I10 (ADR-0015 mục 2): mặt hàng không bật cờ thì tồn luôn nguyên. Dòng gốc lẻ được trả
+ * hoặc hủy lẻ dù cờ đã tắt sau đó, nhưng nếu phép đó làm tồn sản phẩm hoặc biến thể thành số lẻ
+ * thì chặn 422: người dùng bật lại cờ rồi mới trả, hủy phần lẻ. Gọi trong transaction, sau khi tính
+ * tồn mới, để lỗi thì rollback cả chứng từ.
+ */
+export function assertStockStaysWhole(args: {
+  stock: number
+  productName: string
+  productAllowsDecimal: boolean
+}): void {
+  if (args.productAllowsDecimal || isWholeQuantity(args.stock)) return
+  throw new ApiError(
+    'BUSINESS_RULE_VIOLATION',
+    `${args.productName}: Bật lại cho phép số lượng lẻ cho mặt hàng này để trả/hủy phần lẻ`,
+    { reason: 'decimal_stock_not_allowed', stock: args.stock },
+  )
+}

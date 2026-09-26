@@ -435,6 +435,120 @@ describe('GL-07: bán, trả, nhập, kiểm kê với số lượng thập phâ
     expect(await stockOf(pork.id)).toBe(2)
   })
 
+  it('M1: cờ đã tắt, trả hoặc hủy phần lẻ làm tồn thành số lẻ thì 422, tồn giữ nguyên', async () => {
+    const pork = await createProduct({
+      name: 'Thịt bò',
+      unit: 'kg',
+      sellingPrice: 200_000,
+      allowDecimalQuantity: true,
+      initialStock: 10,
+    })
+    const sale = (quantity: number) =>
+      call(
+        'POST',
+        '/pos/orders',
+        orderBody({ productId: pork.id, productName: pork.name, unitPrice: 200_000, quantity }),
+        true,
+      )
+    const first = await sale(1.5)
+    expect(first.status).toBe(201)
+    expect((await sale(0.5)).status).toBe(201)
+    expect(await stockOf(pork.id)).toBe(8)
+    const off = await call('PATCH', `/products/${pork.id}`, { allowDecimalQuantity: false })
+    expect(off.status).toBe(200)
+
+    const [line] = await env.db
+      .select()
+      .from(orderItems)
+      .where(eq(orderItems.orderId, first.body.data.id))
+    const returned = await call(
+      'POST',
+      `/orders/${first.body.data.id}/returns`,
+      { items: [{ orderItemId: line!.id, quantity: 0.5, reason: 'defective' }] },
+      true,
+    )
+    expect(returned.status).toBe(422)
+    expect(returned.body.error.message).toContain(
+      'Bật lại cho phép số lượng lẻ cho mặt hàng này để trả/hủy phần lẻ',
+    )
+    expect(await stockOf(pork.id)).toBe(8)
+
+    const cancelled = await call(
+      'POST',
+      `/orders/${first.body.data.id}/cancel`,
+      { reason: 'Nhập nhầm' },
+      true,
+    )
+    expect(cancelled.status).toBe(422)
+    expect(await stockOf(pork.id)).toBe(8)
+
+    // Bật lại cờ thì trả được phần lẻ
+    expect(
+      (await call('PATCH', `/products/${pork.id}`, { allowDecimalQuantity: true })).status,
+    ).toBe(200)
+    const retry = await call(
+      'POST',
+      `/orders/${first.body.data.id}/returns`,
+      { items: [{ orderItemId: line!.id, quantity: 0.5, reason: 'defective' }] },
+      true,
+    )
+    expect(retry.status).toBe(201)
+    expect(await stockOf(pork.id)).toBe(8.5)
+  })
+
+  it('M1: cờ đã tắt, trả hàng nhập phần lẻ làm tồn thành số lẻ thì 422', async () => {
+    const fish = await createProduct({
+      name: 'Cá thu',
+      unit: 'kg',
+      sellingPrice: 150_000,
+      costPrice: 100_000,
+      allowDecimalQuantity: true,
+      initialStock: 0,
+    })
+    const supplier = await call('POST', '/suppliers', { name: 'NCC cá thu' })
+    const po = await call(
+      'POST',
+      '/purchase-orders',
+      {
+        supplierId: supplier.body.data.id,
+        items: [{ productId: fish.id, quantity: 2.5, unitPrice: 100_000 }],
+      },
+      true,
+    )
+    expect(po.status).toBe(201)
+    const sold = await call(
+      'POST',
+      '/pos/orders',
+      orderBody({ productId: fish.id, productName: fish.name, unitPrice: 150_000, quantity: 0.5 }),
+      true,
+    )
+    expect(sold.status).toBe(201)
+    expect(await stockOf(fish.id)).toBe(2)
+    expect(
+      (await call('PATCH', `/products/${fish.id}`, { allowDecimalQuantity: false })).status,
+    ).toBe(200)
+
+    const ret = await call(
+      'POST',
+      `/purchase-orders/${po.body.data.id}/returns`,
+      { items: [{ purchaseOrderItemId: po.body.data.items[0].id, quantity: 0.5 }] },
+      true,
+    )
+    expect(ret.status).toBe(422)
+    expect(ret.body.error.message).toContain('Bật lại cho phép số lượng lẻ')
+    expect(await stockOf(fish.id)).toBe(2)
+
+    // Trả phần nguyên vẫn được: tồn vẫn nguyên
+    const whole = await call(
+      'POST',
+      `/purchase-orders/${po.body.data.id}/returns`,
+      { items: [{ purchaseOrderItemId: po.body.data.items[0].id, quantity: 1 }] },
+      true,
+    )
+    expect(whole.status).toBe(201)
+    expect(await stockOf(fish.id)).toBe(1)
+  })
+
   it('m2: biến thể đã xóa còn tồn lẻ không chặn tắt bán số lẻ', async () => {
     const shirt = await createProductRow(env, {
       name: 'Áo thun',

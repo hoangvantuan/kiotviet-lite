@@ -13,6 +13,7 @@ import {
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
+import { assertStockStaysWhole } from '../lib/quantity-policy.js'
 import { loadProductForUpdate, loadVariantForUpdate } from './products-lock.helper.js'
 
 /**
@@ -241,6 +242,11 @@ export async function receiveStock({
     const stockBefore = variant.stockQuantity
     const costAfter = computeWac({ costBefore, stockBefore, quantity, totalCost })
     const stockAfter = addQty(stockBefore, quantity)
+    assertStockStaysWhole({
+      stock: stockAfter,
+      productName: product.name,
+      productAllowsDecimal: product.allowDecimalQuantity,
+    })
     await tx
       .update(productVariants)
       .set({ stockQuantity: stockAfter, costPrice: costAfter })
@@ -259,6 +265,11 @@ export async function receiveStock({
   const stockBefore = product.currentStock
   const costAfter = computeWac({ costBefore: productCost, stockBefore, quantity, totalCost })
   const stockAfter = addQty(stockBefore, quantity)
+  assertStockStaysWhole({
+    stock: stockAfter,
+    productName: product.name,
+    productAllowsDecimal: product.allowDecimalQuantity,
+  })
   await tx
     .update(products)
     .set({ currentStock: stockAfter, costPrice: costAfter })
@@ -342,6 +353,11 @@ export async function removeReceivedStock({
     }
     const costAfter = computeWacAfterRemoval({ costBefore, stockBefore, quantity, totalCost })
     const stockAfter = subQty(stockBefore, quantity)
+    assertStockStaysWhole({
+      stock: stockAfter,
+      productName: product.name,
+      productAllowsDecimal: product.allowDecimalQuantity,
+    })
     await tx
       .update(productVariants)
       .set({ stockQuantity: stockAfter, costPrice: costAfter })
@@ -367,6 +383,11 @@ export async function removeReceivedStock({
     totalCost,
   })
   const stockAfter = subQty(stockBefore, quantity)
+  assertStockStaysWhole({
+    stock: stockAfter,
+    productName: product.name,
+    productAllowsDecimal: product.allowDecimalQuantity,
+  })
   await tx
     .update(products)
     .set({ currentStock: stockAfter, costPrice: costAfter })

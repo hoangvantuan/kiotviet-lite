@@ -18,6 +18,7 @@ import {
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
+import { assertStockStaysWhole } from '../lib/quantity-policy.js'
 import { logAction, type RequestMeta } from './audit.service.js'
 import {
   lockCustomerForDebt,
@@ -258,6 +259,11 @@ export async function cancelOrder({
           .returning({ currentStock: products.currentStock })
         newStock = updated?.currentStock ?? addQty(product.currentStock, restoreQty)
       }
+      assertStockStaysWhole({
+        stock: newStock,
+        productName: product.name,
+        productAllowsDecimal: product.allowDecimalQuantity,
+      })
       await tx.insert(inventoryTransactions).values({
         storeId: actor.storeId,
         productId: row.productId,
