@@ -6,6 +6,7 @@ import { productUnitConversions } from './product-unit-conversions.js'
 import { productVariants } from './product-variants.js'
 import { products } from './products.js'
 import { purchaseOrders } from './purchase-orders.js'
+import { quantity } from './quantity-column.js'
 
 export const purchaseOrderItems = pgTable(
   'purchase_order_items',
@@ -25,7 +26,7 @@ export const purchaseOrderItems = pgTable(
     variantLabelSnapshot: varchar({ length: 255 }),
     // quantity, unitPrice, chiết khấu dòng và lineTotal theo đơn vị ghi trên chứng từ
     // (đơn vị tính, hoặc đơn vị quy đổi khi unitConversionId khác null)
-    quantity: integer().notNull(),
+    quantity: quantity().notNull(),
     unitPrice: bigint({ mode: 'number' }).notNull(),
     discountAmount: bigint({ mode: 'number' }).notNull().default(0),
     discountType: varchar({ length: 16 }).notNull().default('amount'),
@@ -43,9 +44,9 @@ export const purchaseOrderItems = pgTable(
     // Giá nhập thực trên một đơn vị tính sau mọi chiết khấu; null = phiếu lập trước quy tắc KHO-04
     unitCost: bigint({ mode: 'number' }),
     costAfter: bigint({ mode: 'number' }),
-    stockAfter: integer(),
+    stockAfter: quantity(),
     // KHO-11: lũy kế số lượng đã trả NCC, theo đơn vị ghi trên chứng từ
-    returnedQuantity: integer().notNull().default(0),
+    returnedQuantity: quantity().notNull().default(0),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

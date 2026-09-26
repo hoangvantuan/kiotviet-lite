@@ -7,6 +7,7 @@ import {
   debts,
   orderItems,
   orders,
+  parseQuantity,
   products,
   stores,
 } from '@kiotviet-lite/shared'
@@ -346,7 +347,7 @@ export async function getTopProducts(
   return result.map((r) => ({
     productId: r.productId,
     name: r.name,
-    quantity: Number(r.quantity),
+    quantity: parseQuantity(r.quantity),
     revenue: Number(r.revenue),
     percentage: totalRevenue > 0 ? Math.round((Number(r.revenue) / totalRevenue) * 10000) / 100 : 0,
   }))

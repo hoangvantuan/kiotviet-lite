@@ -1,9 +1,10 @@
 import { desc } from 'drizzle-orm'
-import { index, integer, pgTable, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { index, pgTable, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
 import { productVariants } from './product-variants.js'
 import { products } from './products.js'
+import { quantity } from './quantity-column.js'
 import { stockChecks } from './stock-checks.js'
 import { stores } from './stores.js'
 import { users } from './users.js'
@@ -24,9 +25,9 @@ export const stockCheckLogs = pgTable(
       .notNull()
       .references(() => products.id, { onDelete: 'restrict' }),
     variantId: uuid().references(() => productVariants.id, { onDelete: 'restrict' }),
-    systemQty: integer().notNull(),
-    actualQty: integer().notNull(),
-    diff: integer().notNull(),
+    systemQty: quantity().notNull(),
+    actualQty: quantity().notNull(),
+    diff: quantity().notNull(),
     adjustedBy: uuid()
       .notNull()
       .references(() => users.id),

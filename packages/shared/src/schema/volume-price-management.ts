@@ -1,13 +1,15 @@
 import { z } from 'zod'
 
+import { hasValidQuantityScale } from '../utils/quantity.js'
 import { paginationSchema } from './pagination.js'
 import { priceSchema } from './price-list-management.js'
 
 export const volumeMinQtySchema = z
   .number({ required_error: 'Vui lòng nhập số lượng tối thiểu' })
-  .int('Số lượng tối thiểu phải là số nguyên')
-  .min(1, 'Số lượng tối thiểu phải ≥ 1')
+  // ADR-0015: hàng cân ký đặt được bậc lẻ (từ 0,5 kg)
+  .positive('Số lượng tối thiểu phải lớn hơn 0')
   .max(1_000_000, 'Số lượng tối thiểu vượt giới hạn cho phép')
+  .refine(hasValidQuantityScale, 'Số lượng tối thiểu tối đa 3 chữ số lẻ')
 
 export const volumePriceTierInputSchema = z.object({
   minQty: volumeMinQtySchema,
@@ -64,7 +66,7 @@ export const listVolumePricesQuerySchema = paginationSchema.extend({
 
 export const volumePriceTierSchema = z.object({
   id: z.string().uuid(),
-  minQty: z.number().int(),
+  minQty: z.number(),
   price: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),

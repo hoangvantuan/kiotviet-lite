@@ -79,5 +79,6 @@ export function orderItemNetRevenueExpr(): SQL<number> {
  * không viết lại lợi nhuận quá khứ. Dòng lúc bán chưa có giá vốn tính 0.
  */
 export function orderItemCogsExpr(): SQL<number> {
-  return sql<number>`(coalesce(${orderItems.unitCost}, 0) * ${orderItems.conversionFactor} * ${orderItemNetQuantityExpr()})`
+  // GL-07: làm tròn từng dòng về đồng như tiền dòng (ADR-0015 mục 4)
+  return sql<number>`round(coalesce(${orderItems.unitCost}, 0) * ${orderItems.conversionFactor} * ${orderItemNetQuantityExpr()})`
 }

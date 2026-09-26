@@ -66,6 +66,7 @@ describe('GL-02: nhập tồn đầu kỳ từ tệp thành phiếu kiểm nháp
     costPrice?: number | null
     currentStock?: number
     hasVariants?: boolean
+    allowDecimalQuantity?: boolean
   }) {
     const [row] = await env.db
       .insert(products)
@@ -78,6 +79,7 @@ describe('GL-02: nhập tồn đầu kỳ từ tệp thành phiếu kiểm nháp
         trackInventory: values.trackInventory ?? true,
         currentStock: values.currentStock ?? 0,
         hasVariants: values.hasVariants ?? false,
+        allowDecimalQuantity: values.allowDecimalQuantity ?? false,
       })
       .returning({ id: products.id })
     return row!.id
@@ -86,10 +88,10 @@ describe('GL-02: nhập tồn đầu kỳ từ tệp thành phiếu kiểm nháp
   const codes = (body: PreviewBody) =>
     Object.fromEntries(body.data!.conversions.map((c) => [c.code, c.count]))
 
-  it('tệp xuất KiotViet: kẹp âm, làm tròn lẻ, bỏ dòng quy đổi, cần chấp thuận rồi tạo phiếu nháp có vết', async () => {
+  it('tệp xuất KiotViet: kẹp âm, giữ tồn lẻ (làm tròn về 3 chữ số lẻ), bỏ dòng quy đổi, cần chấp thuận rồi tạo phiếu nháp có vết', async () => {
     const positive = await seedProduct({ sku: 'SP01' })
     await seedProduct({ sku: 'SP02', currentStock: 3 })
-    await seedProduct({ sku: 'SP03' })
+    await seedProduct({ sku: 'SP03', allowDecimalQuantity: true })
     await seedProduct({ sku: 'SP04' })
     await seedProduct({ sku: 'DV01', trackInventory: false })
     await seedProduct({ sku: 'SP05', costPrice: null })
@@ -110,7 +112,7 @@ describe('GL-02: nhập tồn đầu kỳ từ tệp thành phiếu kiểm nháp
     const bytes = workbook(KV_HEADERS, [
       ['SP01', 'Hàng 1', 'Cái', 12, 'SP01'],
       ['SP02', 'Hàng 2', 'Cái', -7, 'SP02'],
-      ['SP03', 'Hàng 3', 'Kg', 2.6, 'SP03'],
+      ['SP03', 'Hàng 3', 'Kg', 2.6004, 'SP03'],
       ['SP04', 'Hàng 4', 'Cái', 0, 'SP04'],
       ['SP04-THUNG', 'Hàng 4 thùng', 'Thùng', 5, 'SP04'],
       ['DV01', 'Dịch vụ', 'Lần', 4, 'DV01'],
@@ -166,7 +168,7 @@ describe('GL-02: nhập tồn đầu kỳ từ tệp thành phiếu kiểm nháp
       { sku: 'AO', variantId: variant!.id, systemQty: 0, actualQty: 6 },
       { sku: 'SP01', variantId: null, systemQty: 0, actualQty: 12 },
       { sku: 'SP02', variantId: null, systemQty: 3, actualQty: 0 },
-      { sku: 'SP03', variantId: null, systemQty: 0, actualQty: 3 },
+      { sku: 'SP03', variantId: null, systemQty: 0, actualQty: 2.6 },
       { sku: 'SP05', variantId: null, systemQty: 0, actualQty: 9 },
     ])
 

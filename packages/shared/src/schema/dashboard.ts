@@ -31,7 +31,7 @@ export const revenueChartItemSchema = z.object({
 export const topProductSchema = z.object({
   productId: z.string().uuid(),
   name: z.string(),
-  quantity: z.number().int(),
+  quantity: z.number(),
   revenue: z.number().int(),
   percentage: z.number(),
 })
@@ -39,8 +39,8 @@ export const topProductSchema = z.object({
 export const lowStockAlertSchema = z.object({
   productId: z.string().uuid(),
   name: z.string(),
-  currentStock: z.number().int(),
-  minStock: z.number().int(),
+  currentStock: z.number(),
+  minStock: z.number(),
   status: z.enum(['out', 'low']),
 })
 

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { PRICE_SOURCES } from '../constants/pricing.js'
+import { positiveQuantitySchema } from './quantity-input.js'
 
 export const priceSourceSchema = z.enum(PRICE_SOURCES)
 
@@ -8,7 +9,7 @@ export const resolvePriceItemSchema = z.object({
   productId: z.string().uuid(),
   variantId: z.string().uuid().nullable().optional(),
   unitConversionId: z.string().uuid().nullable().optional(),
-  quantity: z.number().int().min(1),
+  quantity: positiveQuantitySchema(),
 })
 
 export const resolvePricesSchema = z

@@ -1,17 +1,9 @@
 import { sql } from 'drizzle-orm'
-import {
-  bigint,
-  index,
-  integer,
-  pgTable,
-  timestamp,
-  uniqueIndex,
-  uuid,
-  varchar,
-} from 'drizzle-orm/pg-core'
+import { bigint, index, pgTable, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
 import { products } from './products.js'
+import { quantity } from './quantity-column.js'
 import { stores } from './stores.js'
 
 export const productVariants = pgTable(
@@ -34,7 +26,7 @@ export const productVariants = pgTable(
     attribute2Value: varchar({ length: 50 }),
     sellingPrice: bigint({ mode: 'number' }).notNull().default(0),
     costPrice: bigint({ mode: 'number' }),
-    stockQuantity: integer().notNull().default(0),
+    stockQuantity: quantity().notNull().default(0),
     status: varchar({ length: 16 }).notNull().default('active'),
     deletedAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

@@ -5,6 +5,7 @@ import {
   calculateOrderDiscount,
   type CreateOrderInput,
   hasPermission,
+  lineAmount,
   type OrderPaymentStatus,
   type OrderPolicyViolation,
   type Permission,
@@ -393,7 +394,7 @@ export async function evaluatePriceApproval({
     const source = lineSources?.[idx] ?? null
     const specialPrice = source !== null && source !== 'retail_price'
     if (!item.priceOverride && item.discountAmount <= 0 && !specialPrice) return
-    if (item.lineTotal < unitCost * item.quantity) belowCostLines.add(idx)
+    if (item.lineTotal < lineAmount(unitCost, item.quantity)) belowCostLines.add(idx)
   })
   // Dòng giá đặc biệt dưới giá vốn mà không có sửa giá hay chiết khấu nào vẫn phải duyệt
   const specialBelowCost = belowCostLines.size > 0 && !edited
@@ -401,7 +402,7 @@ export async function evaluatePriceApproval({
   if (hasOrderDiscount) {
     const knownCost = input.items.reduce((sum, item, idx) => {
       const unitCost = unitCosts[idx]
-      return unitCost == null ? sum : sum + unitCost * item.quantity
+      return unitCost == null ? sum : sum + lineAmount(unitCost, item.quantity)
     }, 0)
     orderBelowCost = input.total < knownCost
   }

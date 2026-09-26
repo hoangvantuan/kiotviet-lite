@@ -1,6 +1,15 @@
 import { and, eq, isNull, sql } from 'drizzle-orm'
 
-import { products, productVariants } from '@kiotviet-lite/shared'
+import {
+  addQty,
+  parseQuantity,
+  products,
+  productVariants,
+  stockValueMilli,
+  subQty,
+  unitAmountOf,
+  weightedAverageCost,
+} from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
@@ -57,11 +66,16 @@ export function computeWac(args: {
   totalCost: number
 }): number {
   const { costBefore, stockBefore, quantity, totalCost } = args
+  // ADR-0015: số lượng lẻ, tính trên nghìn đơn vị bằng BigInt, làm tròn nửa lên một lần
   if (costBefore === null || stockBefore <= 0) {
-    return Math.round(totalCost / quantity)
+    return unitAmountOf(totalCost, quantity)
   }
-  const newStock = stockBefore + quantity
-  return Math.round((stockBefore * costBefore + totalCost) / newStock)
+  return weightedAverageCost({
+    stockBefore,
+    costBefore,
+    addedValue: totalCost,
+    stockAfter: addQty(stockBefore, quantity),
+  })
 }
 
 /**
@@ -128,14 +142,16 @@ export async function computeParentFromVariants({
 }): Promise<{ currentStock: number; costPrice: number | null }> {
   const rows = await db
     .select({
-      totalStock: sql<number>`COALESCE(SUM(${productVariants.stockQuantity}), 0)::int`,
+      totalStock: sql<number>`COALESCE(SUM(${productVariants.stockQuantity}), 0)`.mapWith(
+        parseQuantity,
+      ),
       costedQty: sql<string>`COALESCE(SUM(GREATEST(${productVariants.stockQuantity}, 0)) FILTER (WHERE ${productVariants.costPrice} IS NOT NULL), 0)`,
       costedValue: sql<string>`COALESCE(SUM(GREATEST(${productVariants.stockQuantity}, 0)::numeric * ${productVariants.costPrice}) FILTER (WHERE ${productVariants.costPrice} IS NOT NULL), 0)`,
     })
     .from(productVariants)
     .where(and(eq(productVariants.productId, productId), isNull(productVariants.deletedAt)))
   const row = rows[0]
-  const currentStock = Number(row?.totalStock ?? 0)
+  const currentStock = row?.totalStock ?? 0
   const costedQty = Number(row?.costedQty ?? 0)
   const costedValue = Number(row?.costedValue ?? 0)
   const costPrice = costedQty > 0 ? Math.round(costedValue / costedQty) : fallbackCost
@@ -215,7 +231,7 @@ export async function receiveStock({
   if (!product.hasVariants && variantId) {
     throw new ApiError('VALIDATION_ERROR', 'Sản phẩm không có biến thể')
   }
-  const unitCost = Math.round(totalCost / quantity)
+  const unitCost = unitAmountOf(totalCost, quantity)
   const productCost = product.costPrice === null ? null : Number(product.costPrice)
 
   if (product.hasVariants && variantId) {
@@ -224,7 +240,7 @@ export async function receiveStock({
     const costBefore = variant.costPrice === null ? productCost : Number(variant.costPrice)
     const stockBefore = variant.stockQuantity
     const costAfter = computeWac({ costBefore, stockBefore, quantity, totalCost })
-    const stockAfter = stockBefore + quantity
+    const stockAfter = addQty(stockBefore, quantity)
     await tx
       .update(productVariants)
       .set({ stockQuantity: stockAfter, costPrice: costAfter })
@@ -242,7 +258,7 @@ export async function receiveStock({
 
   const stockBefore = product.currentStock
   const costAfter = computeWac({ costBefore: productCost, stockBefore, quantity, totalCost })
-  const stockAfter = stockBefore + quantity
+  const stockAfter = addQty(stockBefore, quantity)
   await tx
     .update(products)
     .set({ currentStock: stockAfter, costPrice: costAfter })
@@ -273,11 +289,13 @@ export function computeWacAfterRemoval(args: {
 }): number | null {
   const { costBefore, stockBefore, quantity, totalCost } = args
   if (costBefore === null) return null
-  const stockAfter = stockBefore - quantity
+  const stockAfter = subQty(stockBefore, quantity)
   if (stockAfter <= 0) return costBefore
-  const remainingValue = stockBefore * costBefore - totalCost
-  if (remainingValue <= 0) return costBefore
-  return Math.round(remainingValue / stockAfter)
+  // Giá trị còn lại tính bằng nghìn đồng (tồn × giá theo nghìn đơn vị) để không lệch với số lẻ
+  if (stockValueMilli(stockBefore, costBefore) - BigInt(Math.round(totalCost)) * 1000n <= 0n) {
+    return costBefore
+  }
+  return weightedAverageCost({ stockBefore, costBefore, addedValue: -totalCost, stockAfter })
 }
 
 export interface RemoveReceivedStockResult {
@@ -323,7 +341,7 @@ export async function removeReceivedStock({
       throw new ApiError('BUSINESS_RULE_VIOLATION', `Tồn kho của ${product.name} không đủ`)
     }
     const costAfter = computeWacAfterRemoval({ costBefore, stockBefore, quantity, totalCost })
-    const stockAfter = stockBefore - quantity
+    const stockAfter = subQty(stockBefore, quantity)
     await tx
       .update(productVariants)
       .set({ stockQuantity: stockAfter, costPrice: costAfter })
@@ -348,7 +366,7 @@ export async function removeReceivedStock({
     quantity,
     totalCost,
   })
-  const stockAfter = stockBefore - quantity
+  const stockAfter = subQty(stockBefore, quantity)
   await tx
     .update(products)
     .set({ currentStock: stockAfter, costPrice: costAfter })

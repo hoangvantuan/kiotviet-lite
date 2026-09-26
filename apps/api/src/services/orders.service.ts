@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, ilike, isNull, lte, ne, type SQL, sql } from 'drizzle-orm'
 
 import {
+  addQty,
   allocateOrderDiscount,
   calculateLineTotal,
   type CreateOrderInput,
@@ -8,8 +9,12 @@ import {
   customers,
   debts,
   formatCurrencyVnd as formatVnd,
+  formatQuantity,
   inventoryTransactions,
+  lineAmount,
   type ListOrdersQuery,
+  mulQty,
+  negQty,
   OFFLINE_ORDER_NUMBER_PATTERN,
   orderItems,
   type OrderPolicyViolation,
@@ -22,6 +27,7 @@ import {
   productVariants,
   resolveEffectiveDebtLimit,
   stores,
+  subQty,
   type UserRole,
   users,
 } from '@kiotviet-lite/shared'
@@ -32,6 +38,7 @@ import { env } from '../lib/env.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
+import { assertQuantityAllowed } from '../lib/quantity-policy.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { parseDateRangeBoundary } from '../lib/timezone.js'
 import { logAction, type RequestMeta } from './audit.service.js'
@@ -536,12 +543,17 @@ export async function createOrder({
           itemCostPrice = variant.costPrice != null ? Number(variant.costPrice) : itemCostPrice
         }
 
-        let conv: { conversionFactor: number; sellingPrice: number | null } | null = null
+        let conv: {
+          conversionFactor: number
+          sellingPrice: number | null
+          allowDecimalQuantity: boolean
+        } | null = null
         if (item.unitConversionId) {
           const convRows = await tx
             .select({
               conversionFactor: productUnitConversions.conversionFactor,
               sellingPrice: productUnitConversions.sellingPrice,
+              allowDecimalQuantity: productUnitConversions.allowDecimalQuantity,
             })
             .from(productUnitConversions)
             .where(
@@ -565,8 +577,19 @@ export async function createOrder({
               foundConv.sellingPrice != null && Number(foundConv.sellingPrice) > 0
                 ? Number(foundConv.sellingPrice)
                 : null,
+            allowDecimalQuantity: foundConv.allowDecimalQuantity,
           }
         }
+
+        // ADR-0015: số lượng lẻ chỉ cho mặt hàng (hoặc đơn vị quy đổi) bật cờ. Áp cả đơn ngoại
+        // tuyến: máy bán dùng cùng cờ từ bản sao danh mục, đơn sai cờ là dữ liệu hỏng.
+        assertQuantityAllowed({
+          quantity: item.quantity,
+          productName: item.productName,
+          productAllowsDecimal: product.allowDecimalQuantity,
+          unitConversion: conv,
+          itemIndex: itemIdx,
+        })
 
         // T10: Máy chủ đối chiếu đơn giá với giá tự tính
         const resolvedPrice = resolvedPrices[itemIdx]!
@@ -756,7 +779,7 @@ export async function createOrder({
             type: 'audit.price_override',
             severity: 'warn',
             title: `Bán dưới giá vốn: ${item.productName}`,
-            body: `Sản phẩm ${item.productName} được bán ${formatVnd(effectiveLineTotal)} cho ${item.quantity} đơn vị, thấp hơn giá vốn ${formatVnd(lineUnitCost * item.quantity)}`,
+            body: `Sản phẩm ${item.productName} được bán ${formatVnd(effectiveLineTotal)} cho ${formatQuantity(item.quantity)} đơn vị, thấp hơn giá vốn ${formatVnd(lineAmount(lineUnitCost, item.quantity))}`,
             context: {
               orderId: createdId,
               productName: item.productName,
@@ -805,7 +828,7 @@ export async function createOrder({
 
           // M26: Unit conversion: multiply by conversionFactor
           if (conv) {
-            deductQty = item.quantity * conv.conversionFactor
+            deductQty = mulQty(item.quantity, conv.conversionFactor)
           }
 
           let newStock: number
@@ -818,7 +841,7 @@ export async function createOrder({
                 productId: item.productId,
                 variantId: item.variantId,
               }))
-            newStock = v.stockQuantity - deductQty
+            newStock = subQty(v.stockQuantity, deductQty)
             await tx
               .update(productVariants)
               .set({ stockQuantity: newStock })
@@ -844,7 +867,7 @@ export async function createOrder({
               .from(products)
               .where(eq(products.id, item.productId))
               .limit(1)
-            newStock = updated?.currentStock ?? product.currentStock - deductQty
+            newStock = updated?.currentStock ?? subQty(product.currentStock, deductQty)
           }
 
           // Insert inventory transaction
@@ -856,7 +879,7 @@ export async function createOrder({
             productId: item.productId,
             variantId: item.variantId ?? null,
             type: 'sale',
-            quantity: -deductQty,
+            quantity: negQty(deductQty),
             stockAfter: newStock,
             note: inventoryNote,
             referenceType: 'order',
@@ -906,12 +929,12 @@ export async function createOrder({
                 type: 'stock.negative',
                 severity: 'error',
                 title: `Tồn kho âm: ${item.productName}`,
-                body: `Tồn kho ${item.productName} bị âm (${newStock}) sau ${source === 'offline_sync' ? 'đồng bộ đơn offline' : 'bán hàng'}. Cần nhập thêm hoặc kiểm kho.`,
+                body: `Tồn kho ${item.productName} bị âm (${formatQuantity(newStock)}) sau ${source === 'offline_sync' ? 'đồng bộ đơn offline' : 'bán hàng'}. Cần nhập thêm hoặc kiểm kho.`,
                 context: {
                   productId: item.productId,
                   productName: item.productName,
                   currentStock: newStock,
-                  previousStock: newStock + deductQty,
+                  previousStock: addQty(newStock, deductQty),
                 },
               })
             }

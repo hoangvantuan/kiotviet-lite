@@ -13,7 +13,9 @@ import {
   customerGroups,
   customers,
   formatVndWithSuffix,
+  hasValidQuantityScale,
   products,
+  roundQty,
   suppliers,
   updateCustomerSchema,
   updateProductSchema,
@@ -101,6 +103,9 @@ const fields = {
     'status',
     'trackInventory',
     'minStock',
+    // Cột Tồn kho (chỉ xem): không có trường, luôn bị bỏ qua
+    'stockReadOnly',
+    'allowDecimalQuantity',
   ],
   customers: [
     'code',
@@ -116,10 +121,12 @@ const fields = {
   suppliers: ['code', 'name', 'phone', 'email', 'address', 'taxId', 'notes'],
 } as const
 const keyField = { products: 'sku', customers: 'code', suppliers: 'code' } as const
-const numericFields = new Set(['sellingPrice', 'costPrice', 'weight', 'minStock', 'debtLimit'])
+const numericFields = new Set(['sellingPrice', 'costPrice', 'weight', 'debtLimit'])
 // GL-24: cột tiền hiện trong dữ liệu mẫu có phân cách hàng nghìn
 const moneyFields = new Set(['sellingPrice', 'costPrice', 'debtLimit'])
-const boolField = 'trackInventory'
+// Số lượng nhận tối đa 3 chữ số lẻ (ADR-0015)
+const quantityFields = new Set(['minStock'])
+const boolFields = new Set(['trackInventory', 'allowDecimalQuantity'])
 const categoryColumn = 'Danh mục'
 const brandColumn = 'Thương hiệu'
 const groupColumn = 'Nhóm khách hàng'
@@ -236,7 +243,8 @@ function workbookData(bytes: Uint8Array, kind: BulkImportKind) {
     })
     return { rows, expected, report, sourceFormat: 'kiotviet' as const }
   }
-  const missing = expected.filter((name) => !header.includes(name))
+  const optional = BULK_EXPORT_FORMAT.optionalColumns[kind] as readonly string[]
+  const missing = expected.filter((name) => !header.includes(name) && !optional.includes(name))
   if (missing.length)
     throw new ApiError('VALIDATION_ERROR', `Thiếu cột bắt buộc: ${missing.join(', ')}`)
   const duplicates = expected.filter((name) => header.filter((item) => item === name).length > 1)
@@ -245,7 +253,9 @@ function workbookData(bytes: Uint8Array, kind: BulkImportKind) {
   const columns = expected.map((name) => header.indexOf(name))
   const rows: BulkImportSourceRow[] = []
   for (let index = 1; index <= range.e.r; index++) {
-    const values = columns.map((column) => readCell(sheet, index, column))
+    const values = columns.map((column) =>
+      column < 0 ? undefined : readCell(sheet, index, column),
+    )
     if (values.every((value) => value === undefined || value === null || value === '')) continue
     rows.push({ row: index + 1, values })
   }
@@ -298,7 +308,18 @@ function fieldValue(
     }
     return value
   }
-  if (field === boolField) {
+  if (quantityFields.has(field)) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || !hasValidQuantityScale(value)) {
+      errors.push({
+        row,
+        column,
+        message: 'Phải là số XLSX, tối đa 3 chữ số lẻ, không có dấu phân cách hoặc công thức',
+      })
+      return undefined
+    }
+    return roundQty(value)
+  }
+  if (boolFields.has(field)) {
     if (value !== 'Có' && value !== 'Không') {
       errors.push({ row, column, message: 'Chỉ chấp nhận Có hoặc Không' })
       return undefined

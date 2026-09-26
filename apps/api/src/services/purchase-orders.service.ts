@@ -6,7 +6,9 @@ import {
   type DiscountType,
   type DocumentStatus,
   inventoryTransactions,
+  lineAmount,
   type ListPurchaseOrdersQuery,
+  mulQty,
   type PaymentStatus,
   productUnitConversions,
   type PurchaseOrderDetail,
@@ -27,6 +29,7 @@ import type { Db } from '../db/index.js'
 import { toMoneyMethod } from '../lib/cash-flow.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
+import { assertQuantityAllowed } from '../lib/quantity-policy.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { parseDateRangeBoundary } from '../lib/timezone.js'
 import { logAction, type RequestMeta } from './audit.service.js'
@@ -297,11 +300,13 @@ export async function createPurchaseOrder({
       const unitConversionId = item.unitConversionId ?? null
       let unitNameSnapshot: string | null = null
       let conversionFactor = 1
+      let unitAllowsDecimal: boolean | null = null
       if (unitConversionId) {
         const convRows = await tx
           .select({
             unit: productUnitConversions.unit,
             conversionFactor: productUnitConversions.conversionFactor,
+            allowDecimalQuantity: productUnitConversions.allowDecimalQuantity,
           })
           .from(productUnitConversions)
           .where(
@@ -321,8 +326,19 @@ export async function createPurchaseOrder({
         }
         unitNameSnapshot = conv.unit
         conversionFactor = Number(conv.conversionFactor)
+        unitAllowsDecimal = conv.allowDecimalQuantity
       }
-      const baseQuantity = item.quantity * conversionFactor
+      // GL-07: số lẻ theo cờ của mặt hàng và đơn vị (ADR-0015 mục 2)
+      assertQuantityAllowed({
+        quantity: item.quantity,
+        productName: product.name,
+        productAllowsDecimal: product.allowDecimalQuantity,
+        unitConversion:
+          unitAllowsDecimal === null
+            ? null
+            : { conversionFactor, allowDecimalQuantity: unitAllowsDecimal },
+      })
+      const baseQuantity = mulQty(item.quantity, conversionFactor)
       if (baseQuantity > MAX_BASE_QUANTITY) {
         throw new ApiError(
           'BUSINESS_RULE_VIOLATION',
@@ -330,7 +346,7 @@ export async function createPurchaseOrder({
         )
       }
 
-      const lineSubtotal = item.quantity * item.unitPrice
+      const lineSubtotal = lineAmount(item.unitPrice, item.quantity)
       const discountAmount = applyDiscount(lineSubtotal, item.discountType, item.discountValue)
       if (discountAmount > lineSubtotal) {
         throw new ApiError('BUSINESS_RULE_VIOLATION', 'Chiết khấu dòng vượt quá thành tiền')
@@ -628,7 +644,7 @@ export async function getPurchaseOrder({
     unitConversionId: it.unitConversionId,
     unitName: it.unitNameSnapshot,
     conversionFactor: it.conversionFactor,
-    baseQuantity: it.quantity * it.conversionFactor,
+    baseQuantity: mulQty(it.quantity, it.conversionFactor),
     quantity: it.quantity,
     unitPrice: Number(it.unitPrice),
     discountAmount: Number(it.discountAmount),

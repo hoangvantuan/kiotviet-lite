@@ -1,6 +1,6 @@
 import { and, eq, gt, isNull, type SQL, sql } from 'drizzle-orm'
 
-import { products, productVariants } from '@kiotviet-lite/shared'
+import { parseQuantity, products, productVariants } from '@kiotviet-lite/shared'
 
 /**
  * Tồn hiệu lực của một sản phẩm (BC-11): có biến thể thì cộng tồn các biến thể còn hoạt động,
@@ -8,23 +8,24 @@ import { products, productVariants } from '@kiotviet-lite/shared'
  * dùng chung một định nghĩa này, để không còn cảnh "đủ tồn kho" cạnh chuông "sắp hết hàng".
  */
 export function effectiveStockSql(): SQL<number> {
+  // ADR-0015: tồn thập phân numeric(14,3), không ép ::int (làm tròn mất phần lẻ)
   return sql<number>`(CASE WHEN ${products.hasVariants} THEN COALESCE((
     SELECT SUM(${productVariants.stockQuantity}) FROM ${productVariants}
     WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL
-  ), 0) ELSE ${products.currentStock} END)::int`
+  ), 0) ELSE ${products.currentStock} END)::numeric(14, 3)`.mapWith(parseQuantity)
 }
 
 /**
- * Giá trị tồn của một sản phẩm (BC-11). Sản phẩm có biến thể cộng tồn × giá vốn từng biến thể còn
+ * Giá trị tồn của một sản phẩm (BC-11), mỗi dòng làm tròn round(tồn × giá vốn) về đồng (ADR-0015). Sản phẩm có biến thể cộng tồn × giá vốn từng biến thể còn
  * hoạt động, biến thể chưa có giá vốn riêng lấy giá vốn cha (ADR-0007, như `getEffectiveCostPrice`).
  * Không dùng tồn cha × giá vốn cha: giá vốn cha chỉ là số tóm tắt, không tính lại khi bán, trả, kiểm kê.
  */
 export function effectiveStockValueSql(): SQL<number> {
   return sql<number>`(CASE WHEN ${products.hasVariants} THEN (
-    SELECT coalesce(sum(${productVariants.stockQuantity}::bigint * coalesce(${productVariants.costPrice}, ${products.costPrice}, 0)), 0)
+    SELECT coalesce(sum(round(${productVariants.stockQuantity} * coalesce(${productVariants.costPrice}, ${products.costPrice}, 0))), 0)
     FROM ${productVariants}
     WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL
-  ) ELSE ${products.currentStock}::bigint * coalesce(${products.costPrice}, 0) END)`
+  ) ELSE round(${products.currentStock} * coalesce(${products.costPrice}, 0)) END)::bigint`
 }
 
 /**

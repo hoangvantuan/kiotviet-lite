@@ -1,17 +1,15 @@
 import { z } from 'zod'
 
 import { dateFilterSchema, paginationSchema } from './pagination.js'
+import { nonNegativeQuantitySchema } from './quantity-input.js'
 
 export const stockCheckStatusSchema = z.enum(['draft', 'confirmed'])
 
 export const stockCheckItemInputSchema = z.object({
   productId: z.string().uuid('Sản phẩm không hợp lệ'),
   variantId: z.string().uuid('Biến thể không hợp lệ').nullable().optional(),
-  actualQty: z
-    .number()
-    .int('Số lượng thực tế phải là số nguyên')
-    .min(0, 'Số lượng thực tế ≥ 0')
-    .max(1_000_000_000, 'Số lượng thực tế vượt giới hạn'),
+  // ADR-0015: số lẻ chỉ cho mặt hàng bật cờ, máy chủ kiểm khi nạp mặt hàng
+  actualQty: nonNegativeQuantitySchema('Số lượng thực tế'),
   note: z.string().trim().max(255, 'Ghi chú dòng tối đa 255 ký tự').nullable().optional(),
 })
 
@@ -46,9 +44,9 @@ export const stockCheckItemDetailSchema = z.object({
   productNameSnapshot: z.string(),
   productSkuSnapshot: z.string(),
   variantLabelSnapshot: z.string().nullable(),
-  systemQty: z.number().int(),
-  actualQty: z.number().int(),
-  diff: z.number().int(),
+  systemQty: z.number(),
+  actualQty: z.number(),
+  diff: z.number(),
   note: z.string().nullable(),
 })
 
@@ -57,8 +55,8 @@ export const stockCheckListItemSchema = z.object({
   code: z.string(),
   status: stockCheckStatusSchema,
   totalItems: z.number().int(),
-  totalDiffPositive: z.number().int(),
-  totalDiffNegative: z.number().int(),
+  totalDiffPositive: z.number(),
+  totalDiffNegative: z.number(),
   note: z.string().nullable(),
   createdAt: z.string(),
   confirmedAt: z.string().nullable(),
@@ -85,9 +83,9 @@ export const negativeStockDetailSchema = z.object({
   variantId: z.string().uuid().nullable(),
   productName: z.string(),
   variantLabel: z.string().nullable(),
-  currentStock: z.number().int(),
-  diff: z.number().int(),
-  wouldBe: z.number().int(),
+  currentStock: z.number(),
+  diff: z.number(),
+  wouldBe: z.number(),
 })
 
 // Dòng có tồn hệ thống đã đổi (nhập, bán, trả, phiếu kiểm khác) sau lúc đếm: số đếm cũ không
@@ -97,8 +95,8 @@ export const staleStockCheckItemSchema = z.object({
   variantId: z.string().uuid().nullable(),
   productName: z.string(),
   variantLabel: z.string().nullable(),
-  systemQty: z.number().int(),
-  currentStock: z.number().int(),
+  systemQty: z.number(),
+  currentStock: z.number(),
 })
 
 export type StockCheckStatus = z.infer<typeof stockCheckStatusSchema>

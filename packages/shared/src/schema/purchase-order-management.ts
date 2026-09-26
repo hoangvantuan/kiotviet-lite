@@ -4,6 +4,7 @@ import { moneyMethodSchema } from './cash-management.js'
 import { documentStatusSchema } from './document-cancel.js'
 import { dateFilterSchema, paginationSchema } from './pagination.js'
 import { purchaseReturnSchema } from './purchase-return-management.js'
+import { positiveQuantitySchema } from './quantity-input.js'
 
 export const discountTypeSchema = z.enum(['amount', 'percent'])
 export const paymentStatusSchema = z.enum(['unpaid', 'partial', 'paid'])
@@ -14,11 +15,7 @@ export const purchaseOrderItemInputSchema = z.object({
   // Nhập theo đơn vị quy đổi (ví dụ thùng): quantity và unitPrice tính theo đơn vị đó,
   // máy chủ quy ra đơn vị tính cho tồn kho và giá vốn
   unitConversionId: z.string().uuid('Đơn vị quy đổi không hợp lệ').nullable().optional(),
-  quantity: z
-    .number()
-    .int('Số lượng phải là số nguyên')
-    .min(1, 'Số lượng phải ≥ 1')
-    .max(1_000_000, 'Số lượng vượt giới hạn'),
+  quantity: positiveQuantitySchema(),
   unitPrice: z.number().int('Đơn giá nhập phải là số nguyên').min(0, 'Đơn giá nhập ≥ 0'),
   discountType: discountTypeSchema.default('amount'),
   discountValue: z

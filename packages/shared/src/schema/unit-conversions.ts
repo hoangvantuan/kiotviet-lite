@@ -9,6 +9,8 @@ export const unitConversionInputSchema = z.object({
     .max(100_000, 'Hệ số tối đa 100.000'),
   sellingPrice: z.number().int('Giá phải là số nguyên').min(0, 'Giá ≥ 0'),
   sortOrder: z.number().int().min(0).default(0).optional(),
+  // ADR-0015: cho phép bán số lẻ theo đơn vị này
+  allowDecimalQuantity: z.boolean().optional(),
 })
 
 export const unitConversionUpdateSchema = unitConversionInputSchema
@@ -24,6 +26,7 @@ export const unitConversionItemSchema = z.object({
   conversionFactor: z.number(),
   sellingPrice: z.number(),
   sortOrder: z.number(),
+  allowDecimalQuantity: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })

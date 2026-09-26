@@ -1,16 +1,13 @@
 import { z } from 'zod'
 
 import { documentShiftIdSchema, moneyMethodSchema, refundMethodSchema } from './cash-management.js'
+import { positiveQuantitySchema } from './quantity-input.js'
 
 export const purchaseReturnItemInputSchema = z
   .object({
     purchaseOrderItemId: z.string().uuid('Dòng phiếu nhập không hợp lệ'),
     // Theo đơn vị ghi trên dòng phiếu nhập gốc
-    quantity: z
-      .number()
-      .int('Số lượng phải là số nguyên')
-      .min(1, 'Số lượng trả phải ≥ 1')
-      .max(1_000_000, 'Số lượng vượt giới hạn'),
+    quantity: positiveQuantitySchema('Số lượng trả'),
   })
   .strict()
 

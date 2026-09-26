@@ -1,7 +1,9 @@
 import { z } from 'zod'
 
+import { lineAmount } from '../utils/quantity.js'
 import { paginationSchema } from './pagination.js'
 import { priceSourceSchema } from './pricing-resolve.js'
+import { positiveQuantitySchema } from './quantity-input.js'
 import type { ApprovalPermissionInput } from './user-management.js'
 
 export const orderDiscountTypeSchema = z.enum(['percent', 'amount'])
@@ -69,11 +71,8 @@ export const createOrderItemSchema = z
       .default(null),
     unit: z.string().trim().max(50, 'Đơn vị tối đa 50 ký tự').nullable().default(null),
     unitPrice: z.number().int('Đơn giá phải là số nguyên').min(0, 'Đơn giá >= 0'),
-    quantity: z
-      .number()
-      .int('Số lượng phải là số nguyên')
-      .min(1, 'Số lượng >= 1')
-      .max(1_000_000, 'Số lượng vượt giới hạn'),
+    // ADR-0015: tối đa 3 chữ số lẻ; mặt hàng không bật cờ số lẻ bị máy chủ chặn khi tạo đơn
+    quantity: positiveQuantitySchema(),
     discountType: orderDiscountTypeSchema.nullable().default(null),
     discountValue: z
       .number()
@@ -107,9 +106,12 @@ export const createOrderItemSchema = z
   })
   // R6: trường lạ bị từ chối thay vì bị cắt lặng lẽ
   .strict()
-  .refine((item) => item.lineTotal === item.unitPrice * item.quantity - item.discountAmount, {
-    message: 'lineTotal không khớp với unitPrice * quantity - discountAmount',
-  })
+  .refine(
+    (item) => item.lineTotal === lineAmount(item.unitPrice, item.quantity) - item.discountAmount,
+    {
+      message: 'lineTotal không khớp với round(unitPrice * quantity) - discountAmount',
+    },
+  )
   .refine((item) => !item.priceOverride || item.originalPrice !== null, {
     message: 'priceOverride yêu cầu originalPrice',
   })

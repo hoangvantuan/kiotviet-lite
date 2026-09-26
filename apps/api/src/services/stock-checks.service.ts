@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, ilike, isNull, like, lte, type SQL, sql } from 'drizzle-orm'
 
 import {
+  addQty,
   type CreateStockCheckInput,
   inventoryTransactions,
   type ListStockChecksQuery,
@@ -17,6 +18,7 @@ import {
   stockCheckLogs,
   stockChecks,
   type StockCheckStatus,
+  subQty,
   type UpdateStockCheckInput,
   type UserRole,
   users,
@@ -26,6 +28,7 @@ import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
+import { assertQuantityAllowed } from '../lib/quantity-policy.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { parseDateRangeBoundary } from '../lib/timezone.js'
 import { logAction, type RequestMeta } from './audit.service.js'
@@ -106,8 +109,8 @@ export function recomputeStockCheckTotals(items: { diff: number }[]): StockCheck
   let pos = 0
   let neg = 0
   for (const it of items) {
-    if (it.diff > 0) pos += it.diff
-    else if (it.diff < 0) neg += -it.diff
+    if (it.diff > 0) pos = addQty(pos, it.diff)
+    else if (it.diff < 0) neg = subQty(neg, it.diff)
   }
   return {
     totalItems: items.length,
@@ -204,7 +207,13 @@ async function resolveItems({
       systemQty = product.currentStock
     }
 
-    const diff = item.actualQty - systemQty
+    // GL-07: tồn thực tế lẻ chỉ nhận ở mặt hàng bật số lẻ (ADR-0015 mục 2)
+    assertQuantityAllowed({
+      quantity: item.actualQty,
+      productName: product.name,
+      productAllowsDecimal: product.allowDecimalQuantity,
+    })
+    const diff = subQty(item.actualQty, systemQty)
 
     resolved.push({
       productId: product.id,
@@ -582,7 +591,7 @@ export async function confirmStockCheck({
       }
       if (item.diff === 0) continue
 
-      const newStock = currentStock + item.diff
+      const newStock = addQty(currentStock, item.diff)
       if (newStock < 0) {
         negativeErrors.push({
           productId: product.id,
@@ -664,7 +673,7 @@ export async function confirmStockCheck({
         productId: p.productId,
         variantId: p.variantId,
         systemQty: p.systemQtyAtConfirm,
-        actualQty: p.systemQtyAtConfirm + p.diff,
+        actualQty: addQty(p.systemQtyAtConfirm, p.diff),
         diff: p.diff,
         adjustedBy: actor.userId,
       })

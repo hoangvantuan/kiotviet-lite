@@ -5,9 +5,11 @@ import {
   categories,
   type CreateProductInput,
   inventoryTransactions,
+  isWholeQuantity,
   type ListProductsQuery,
   orderItems,
   orderReturnItems,
+  parseQuantity,
   type PosProductItem,
   type PosUnitConversion,
   type PosVariantItem,
@@ -31,6 +33,7 @@ import {
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
+import { assertQuantityAllowed } from '../lib/quantity-policy.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { diffObjects, logAction, type RequestMeta } from './audit.service.js'
 import {
@@ -69,6 +72,7 @@ interface ProductRow {
   status: string
   hasVariants: boolean
   trackInventory: boolean
+  allowDecimalQuantity: boolean
   currentStock: number
   minStock: number
   deletedAt: Date | null
@@ -103,6 +107,7 @@ function toProductDetail(
     status: (row.status as ProductStatus) ?? 'active',
     hasVariants: row.hasVariants,
     trackInventory: row.trackInventory,
+    allowDecimalQuantity: row.allowDecimalQuantity,
     currentStock: effectiveStock !== undefined ? effectiveStock : row.currentStock,
     minStock: row.minStock,
     deletedAt: row.deletedAt ? row.deletedAt.toISOString() : null,
@@ -151,6 +156,7 @@ function toProductListItem(
     imageUrl: row.imageUrl,
     status: (row.status as ProductStatus) ?? 'active',
     trackInventory: row.trackInventory,
+    allowDecimalQuantity: row.allowDecimalQuantity,
     currentStock: effectiveStock,
     minStock: row.minStock,
     hasVariants: row.hasVariants,
@@ -379,7 +385,7 @@ async function aggregateVariantStock({
   const rows = await db
     .select({
       productId: productVariants.productId,
-      total: sql<number>`COALESCE(SUM(${productVariants.stockQuantity}), 0)::int`,
+      total: sql<number>`COALESCE(SUM(${productVariants.stockQuantity}), 0)`.mapWith(parseQuantity),
     })
     .from(productVariants)
     .where(and(inArray(productVariants.productId, productIds), isNull(productVariants.deletedAt)))
@@ -551,6 +557,7 @@ async function queryProductsList({
       status: products.status,
       hasVariants: products.hasVariants,
       trackInventory: products.trackInventory,
+      allowDecimalQuantity: products.allowDecimalQuantity,
       currentStock: products.currentStock,
       minStock: products.minStock,
       deletedAt: products.deletedAt,
@@ -594,6 +601,7 @@ async function queryProductsList({
       status: row.status,
       hasVariants: row.hasVariants,
       trackInventory: row.trackInventory,
+      allowDecimalQuantity: row.allowDecimalQuantity,
       currentStock: row.currentStock,
       minStock: row.minStock,
       deletedAt: row.deletedAt,
@@ -882,6 +890,20 @@ export interface CreateProductDeps {
   transaction?: ServiceTransaction
 }
 
+async function hasDecimalVariantStock(db: Db, productId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: productVariants.id })
+    .from(productVariants)
+    .where(
+      and(
+        eq(productVariants.productId, productId),
+        sql`${productVariants.stockQuantity} <> trunc(${productVariants.stockQuantity})`,
+      ),
+    )
+    .limit(1)
+  return row !== undefined
+}
+
 export async function createProduct({
   db: rootDb,
   actor,
@@ -894,6 +916,13 @@ export async function createProduct({
   const trackInventory = input.trackInventory ?? false
   const initialStock = !hasVariantsConfig && trackInventory ? (input.initialStock ?? 0) : 0
   const minStock = input.minStock ?? 0
+  const allowDecimalQuantity = input.allowDecimalQuantity ?? false
+  // GL-07: tồn ban đầu lẻ chỉ nhận ở mặt hàng bật số lẻ (ADR-0015 mục 2)
+  assertQuantityAllowed({
+    quantity: initialStock,
+    productName: input.name,
+    productAllowsDecimal: allowDecimalQuantity,
+  })
 
   if (input.categoryId) {
     await ensureCategoryInStore({ db, storeId: actor.storeId, categoryId: input.categoryId })
@@ -940,6 +969,7 @@ export async function createProduct({
           status: input.status ?? 'active',
           hasVariants: hasVariantsConfig,
           trackInventory,
+          allowDecimalQuantity,
           minStock,
           currentStock: hasVariantsConfig ? 0 : trackInventory ? initialStock : 0,
         })
@@ -1238,6 +1268,22 @@ export async function updateProduct({
   if (input.status !== undefined && input.status !== target.status) updates.status = input.status
   if (input.minStock !== undefined && input.minStock !== target.minStock)
     updates.minStock = input.minStock
+  if (
+    input.allowDecimalQuantity !== undefined &&
+    input.allowDecimalQuantity !== target.allowDecimalQuantity
+  ) {
+    // GL-07: tắt số lẻ khi tồn đang lẻ thì tồn không còn bán hết được theo số nguyên
+    if (
+      !input.allowDecimalQuantity &&
+      (!isWholeQuantity(target.currentStock) || (await hasDecimalVariantStock(db, target.id)))
+    ) {
+      throw new ApiError(
+        'BUSINESS_RULE_VIOLATION',
+        'Tồn kho đang có số lẻ, vui lòng kiểm kho về số nguyên trước khi tắt bán số lẻ',
+      )
+    }
+    updates.allowDecimalQuantity = input.allowDecimalQuantity
+  }
 
   if (input.trackInventory !== undefined && input.trackInventory !== target.trackInventory) {
     if (target.trackInventory && !input.trackInventory && target.currentStock > 0) {
@@ -1370,6 +1416,7 @@ export async function updateProduct({
       imageUrl: target.imageUrl,
       status: target.status,
       trackInventory: target.trackInventory,
+      allowDecimalQuantity: target.allowDecimalQuantity,
       minStock: target.minStock,
     }
     const after: Record<string, unknown> = {
@@ -1386,6 +1433,7 @@ export async function updateProduct({
       imageUrl: updated.imageUrl,
       status: updated.status,
       trackInventory: updated.trackInventory,
+      allowDecimalQuantity: updated.allowDecimalQuantity,
       minStock: updated.minStock,
     }
     const fieldDiff = diffObjects(before, after)

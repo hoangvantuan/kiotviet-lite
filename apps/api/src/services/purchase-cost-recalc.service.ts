@@ -6,6 +6,7 @@ import {
   products,
   purchaseOrderItems,
   purchaseOrders,
+  subQty,
   users,
 } from '@kiotviet-lite/shared'
 
@@ -232,7 +233,7 @@ async function replayInflation(
     }
     const qty = row.quantity
     const stockAfter = row.stockAfter
-    const stockBefore = stockAfter - qty
+    const stockBefore = subQty(stockAfter, qty)
     const missed =
       (row.referenceType === 'purchase_order' && row.referenceId
         ? pending.get(row.referenceId)?.shift()

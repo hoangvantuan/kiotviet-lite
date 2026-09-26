@@ -1,19 +1,10 @@
 import { sql } from 'drizzle-orm'
-import {
-  bigint,
-  check,
-  index,
-  integer,
-  pgTable,
-  text,
-  timestamp,
-  uuid,
-  varchar,
-} from 'drizzle-orm/pg-core'
+import { bigint, check, index, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
 import { productVariants } from './product-variants.js'
 import { products } from './products.js'
+import { quantity } from './quantity-column.js'
 import { stores } from './stores.js'
 import { users } from './users.js'
 
@@ -48,10 +39,10 @@ export const inventoryTransactions = pgTable(
       .references(() => products.id, { onDelete: 'restrict' }),
     variantId: uuid().references(() => productVariants.id, { onDelete: 'restrict' }),
     type: varchar({ length: 32 }).notNull(),
-    quantity: integer().notNull(),
+    quantity: quantity().notNull(),
     unitCost: bigint({ mode: 'number' }),
     costAfter: bigint({ mode: 'number' }),
-    stockAfter: integer(),
+    stockAfter: quantity(),
     note: text(),
     // POS-18: truy dòng sổ về chứng từ gốc thay vì khớp theo ghi chú
     referenceType: varchar({ length: 32 }).$type<InventoryReferenceType>().notNull(),

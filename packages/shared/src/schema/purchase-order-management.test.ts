@@ -90,11 +90,19 @@ describe('purchaseOrderItemInputSchema', () => {
     ).toBe(true)
   })
 
-  it('từ chối quantity không phải số nguyên', () => {
+  // ADR-0015: schema nhận tối đa 3 chữ số lẻ; cờ số lẻ của mặt hàng do máy chủ kiểm
+  it('nhận quantity 3 chữ số lẻ, từ chối quá 3 chữ số lẻ', () => {
     expect(
       purchaseOrderItemInputSchema.safeParse({
         productId: productUuid,
-        quantity: 1.5,
+        quantity: 10.5,
+        unitPrice: 100,
+      }).success,
+    ).toBe(true)
+    expect(
+      purchaseOrderItemInputSchema.safeParse({
+        productId: productUuid,
+        quantity: 1.2345,
         unitPrice: 100,
       }).success,
     ).toBe(false)

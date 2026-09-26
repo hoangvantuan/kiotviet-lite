@@ -4,8 +4,11 @@ import {
   customerEmailSchema,
   customerPhoneSchema,
   customerTaxIdSchema,
+  hasValidQuantityScale,
+  isWholeQuantity,
   productBarcodeSchema,
   productSkuSchema,
+  roundQty,
   supplierEmailSchema,
   supplierPhoneSchema,
   supplierTaxIdSchema,
@@ -119,7 +122,38 @@ const handledColumns: Record<BulkExportKind, string[]> = {
 }
 
 const KV_CATEGORY_SEPARATOR = '>>'
-const roundedColumns = new Set(['Giá bán', 'Giá vốn', 'Trọng lượng', 'Định mức tối thiểu'])
+const roundedColumns = new Set(['Giá bán', 'Giá vốn', 'Trọng lượng'])
+// Số lượng giữ tối đa 3 chữ số lẻ (ADR-0015)
+const quantityColumns = new Set(['Định mức tối thiểu'])
+// ĐVT là đơn vị đo thì hàng bán theo cân, đo: bật Bán số lẻ (ADR-0015 mục 6)
+const MEASURE_UNITS = new Set([
+  'kg',
+  'kí',
+  'ký',
+  'g',
+  'gr',
+  'gam',
+  'gram',
+  'lạng',
+  'tạ',
+  'tấn',
+  'l',
+  'lít',
+  'lit',
+  'ml',
+  'm',
+  'mét',
+  'cm',
+  'm2',
+  'm²',
+  'm3',
+  'm³',
+])
+
+export function isMeasureUnit(unit: unknown): boolean {
+  if (typeof unit !== 'string') return false
+  return MEASURE_UNITS.has(unit.normalize('NFC').trim().toLowerCase().replace(/[\s.]/g, ''))
+}
 const droppable: Record<BulkExportKind, Record<string, ZodTypeAny>> = {
   products: { 'Mã vạch': productBarcodeSchema },
   customers: {
@@ -248,7 +282,16 @@ export function readKiotVietRows({
       }
       let value = cell(names[0]!)
       if (blank(value)) continue
-      if (roundedColumns.has(target)) {
+      if (quantityColumns.has(target)) {
+        if (typeof value === 'number' && !hasValidQuantityScale(value)) {
+          report.add(
+            'number_rounded',
+            `${names[0]} có hơn 3 chữ số lẻ, được làm tròn về 3 chữ số lẻ`,
+            row,
+          )
+          value = roundQty(value)
+        }
+      } else if (roundedColumns.has(target)) {
         if (typeof value === 'number' && !Number.isInteger(value)) {
           report.add(
             'number_rounded',
@@ -319,6 +362,18 @@ export function readKiotVietRows({
           row,
         )
       const stock = cell('Tồn kho')
+      // GL-07: hàng cân đo hoặc có tồn lẻ thì bật Bán số lẻ, để tồn đầu kỳ lẻ nhập được bằng
+      // chính tệp này. Hàng khác để trống: giữ cờ đang có (hàng mới mặc định Không).
+      const decimalStock = typeof stock === 'number' && !isWholeQuantity(roundQty(stock))
+      if (isMeasureUnit(cell('ĐVT')) || decimalStock) {
+        values[expected.indexOf('Bán số lẻ' as never)] = 'Có'
+        report.add(
+          'decimal_quantity_enabled',
+          'Hàng tính theo đơn vị đo hoặc có tồn lẻ được bật Bán số lẻ',
+          row,
+          false,
+        )
+      }
       if (typeof stock === 'number' && stock !== 0)
         report.add(
           'stock_ignored',

@@ -7,6 +7,7 @@ import {
   debts,
   orderItems,
   orders,
+  parseQuantity,
   products,
   type RevenueByCustomerResponse,
   type RevenueByDimensionResponse,
@@ -14,6 +15,7 @@ import {
   type RevenueByProductResponse,
   type RevenueByTimeResponse,
   type RevenueGroupBy,
+  sumQty,
   users,
 } from '@kiotviet-lite/shared'
 
@@ -128,13 +130,13 @@ export async function getRevenueByProduct(
     .orderBy(sql`revenue DESC`)
 
   const totalRevenue = result.reduce((sum, r) => sum + Number(r.revenue), 0)
-  const totalQuantity = result.reduce((sum, r) => sum + Number(r.quantity), 0)
+  const totalQuantity = sumQty(result.map((r) => parseQuantity(r.quantity)))
 
   const rows = result.map((r) => ({
     productId: r.productId,
     productName: r.productName,
     sku: r.sku,
-    quantity: Number(r.quantity),
+    quantity: parseQuantity(r.quantity),
     revenue: Number(r.revenue),
     percentage: totalRevenue > 0 ? Math.round((Number(r.revenue) / totalRevenue) * 10000) / 100 : 0,
   }))

@@ -79,6 +79,10 @@ _Tránh dùng_: ưu tiên giá, độ ưu tiên bảng giá
 Số lượng một sản phẩm đang thực có, tính theo đơn vị tính.
 _Tránh dùng_: số lượng, tồn, số lượng còn lại
 
+**Bán số lẻ**:
+Tính chất của một sản phẩm (và của từng đơn vị quy đổi) cho phép số lượng có phần lẻ, tối đa ba chữ số sau dấu phẩy, như 1,255 kg thịt. Mặc định tắt: hàng đếm cái chỉ nhận số nguyên. Thành tiền dòng bằng đơn giá nhân số lượng làm tròn nửa lên về đồng. Quy tắc ở ADR-0015.
+_Tránh dùng_: hàng cân, số lượng thập phân, bán lẻ ký
+
 **Theo dõi tồn kho**:
 Tính chất của một sản phẩm cho biết cửa hàng có đếm tồn kho của nó hay không.
 _Tránh dùng_: quản lý kho, bật kho
