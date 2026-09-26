@@ -428,6 +428,13 @@
       "when": 1790411379328,
       "tag": "0060_pos18_inventory_reference",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1790415479416,
+      "tag": "0061_pos08_pos13_price_variants_stock_policy",
+      "breakpoints": true
     }
   ]
 }
