@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { reconcileCash, todayLocal } from './cash-reconciliation'
+import { reconcileCash } from './cash-reconciliation'
 
 describe('BC-06: đối soát tiền mặt cuối ngày khi không dùng ca', () => {
   it('phải có = đầu ngày + thu tiền mặt ròng; chênh lệch = thực đếm - phải có', () => {
@@ -11,9 +11,5 @@ describe('BC-06: đối soát tiền mặt cuối ngày khi không dùng ca', ()
       expectedCash: -20_000,
       difference: null,
     })
-  })
-
-  it('ngày hôm nay theo giờ máy', () => {
-    expect(todayLocal(new Date(2026, 8, 6, 23, 59))).toBe('2026-09-06')
   })
 })

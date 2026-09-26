@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import {
+  calendarDateKey,
   type CashFlowReport as CashFlowReportData,
   formatVndWithSuffix,
   moneyMethodLabel,
@@ -24,7 +25,7 @@ import { differenceLabel } from '@/features/shifts/shift-format'
 import { formatDateTime } from '@/lib/date'
 import { cn } from '@/lib/utils'
 
-import { reconcileCash, todayLocal } from './cash-reconciliation'
+import { reconcileCash } from './cash-reconciliation'
 import { useCashFlowReportQuery } from './use-cash-flow'
 
 function Metric({ label, value, hint }: { label: string; value: number; hint?: string }) {
@@ -261,8 +262,9 @@ function ShiftsSection({
  * tính là tiền thu cho tới khi có phiếu thu.
  */
 export function CashFlowReport() {
-  const [from, setFrom] = useState(() => todayLocal())
-  const [to, setTo] = useState(() => todayLocal())
+  // Ngày theo lịch cửa hàng như máy chủ cắt kỳ (R7), không theo giờ máy
+  const [from, setFrom] = useState(() => calendarDateKey(new Date()))
+  const [to, setTo] = useState(() => calendarDateKey(new Date()))
   const [viewShiftId, setViewShiftId] = useState<string | null>(null)
   const { data, isLoading, isError } = useCashFlowReportQuery({ from, to })
 
