@@ -1,8 +1,11 @@
 import type {
+  CancelDocumentInput,
   CreatePurchaseOrderInput,
+  CreatePurchaseReturnInput,
   ListPurchaseOrdersQuery,
   PurchaseOrderDetail,
   PurchaseOrderListItem,
+  PurchaseReturn,
 } from '@kiotviet-lite/shared'
 
 import { apiClient } from '@/lib/api-client'
@@ -23,6 +26,7 @@ function buildQuery(q: Partial<ListPurchaseOrdersQuery>): string {
   if (q.search) params.set('search', q.search)
   if (q.supplierId) params.set('supplierId', q.supplierId)
   if (q.paymentStatus) params.set('paymentStatus', q.paymentStatus)
+  if (q.status) params.set('status', q.status)
   if (q.fromDate) params.set('fromDate', q.fromDate)
   if (q.toDate) params.set('toDate', q.toDate)
   const s = params.toString()
@@ -41,6 +45,30 @@ export function getPurchaseOrderApi(id: string) {
 
 export function createPurchaseOrderApi(input: CreatePurchaseOrderInput, idempotencyKey?: string) {
   return apiClient.post<Envelope<PurchaseOrderDetail>>('/api/v1/purchase-orders', input, {
+    idempotencyKey,
+  })
+}
+
+/** KHO-11: hủy phiếu nhập, rút lại hàng và công nợ NCC */
+export function cancelPurchaseOrderApi(
+  id: string,
+  input: CancelDocumentInput,
+  idempotencyKey?: string,
+) {
+  return apiClient.post<Envelope<PurchaseOrderDetail>>(
+    `/api/v1/purchase-orders/${id}/cancel`,
+    input,
+    { idempotencyKey },
+  )
+}
+
+/** KHO-11: trả hàng nhập theo phiếu nhập gốc */
+export function createPurchaseReturnApi(
+  id: string,
+  input: CreatePurchaseReturnInput,
+  idempotencyKey?: string,
+) {
+  return apiClient.post<Envelope<PurchaseReturn>>(`/api/v1/purchase-orders/${id}/returns`, input, {
     idempotencyKey,
   })
 }

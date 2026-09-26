@@ -95,6 +95,14 @@ _Tránh dùng_: giá gốc, giá nhập, cost
 Số tiền thực trả cho một đơn vị tính trên một dòng phiếu nhập hàng: thành tiền dòng sau chiết khấu dòng, trừ phần chiết khấu phiếu phân bổ cho dòng, chia cho số lượng quy ra đơn vị tính. Chiết khấu phiếu phân bổ theo tỷ lệ thành tiền dòng, tổng phân bổ khớp đúng số chiết khấu. Đây là số đi vào giá vốn và sổ giao dịch kho, khác đơn giá ghi trên phiếu (chuẩn mực VAS 02 đoạn 06, cách KiotViet tính).
 _Tránh dùng_: giá sau chiết khấu, đơn giá thực, giá nhập ròng
 
+**Trả hàng nhập**:
+Chứng từ ghi nhận cửa hàng trả lại cho nhà cung cấp một phần hàng của một phiếu nhập hàng gốc. Mỗi dòng trả tối đa số đã nhập trừ số đã trả trước đó; giá trị trả theo giá nhập thực của dòng gốc. Hàng trả giảm tồn kho và tính lại giá vốn theo quy tắc rút lô; giá trị trả giảm công nợ NCC phần phiếu còn nợ, phần vượt ghi thành tiền NCC phải hoàn. Quy tắc ở ADR-0012.
+_Tránh dùng_: xuất trả NCC, hoàn hàng nhập
+
+**Rút lô**:
+Việc lấy lại khỏi kho một lượng hàng đã nhập khi hủy phiếu nhập hàng hoặc trả hàng nhập. Giá vốn tính ngược bình quân gia quyền: (tồn trước × giá vốn trước − giá trị thực của phần rút) / tồn sau; tồn sau hoặc giá trị còn lại không dương thì giữ giá vốn cũ. Tồn hiện tại không đủ để rút thì không làm được. Quy tắc ở ADR-0012.
+_Tránh dùng_: xuất kho ngược, trừ kho nhập
+
 **Kiểm kê**:
 Việc đếm lại hàng thực tế trong kho rồi ghi nhận chênh lệch so với sổ sách.
 _Tránh dùng_: cân bằng kho, kiểm hàng
@@ -200,12 +208,16 @@ Chứng từ ghi nhận cửa hàng nhận tiền khách trả nợ.
 _Tránh dùng_: phiếu thu tiền, biên nhận
 
 **Phiếu chi**:
-Chứng từ ghi nhận cửa hàng trả tiền nợ cho nhà cung cấp.
+Chứng từ ghi nhận cửa hàng trả tiền nợ cho nhà cung cấp. Có thể gắn một phiếu nhập hàng để trả cho đúng phiếu đó, khi ấy số chi không vượt số phiếu còn nợ.
 _Tránh dùng_: phiếu chi tiền, thanh toán NCC
 
 **Điều chỉnh nợ**:
 Bút toán tăng hoặc giảm công nợ một số tiền chênh lệch, kèm lý do, vì một việc nằm ngoài mua bán và thu chi, ví dụ chiết khấu cuối kỳ hay ghi nhận sai sót. Tăng nợ tạo một khoản nợ mới; giảm nợ giảm trừ các khoản nợ cũ nhất trước. Không gõ thẳng số công nợ mới.
 _Tránh dùng_: sửa nợ, chỉnh nợ
+
+**Hủy chứng từ**:
+Việc vô hiệu một chứng từ đã ghi (phiếu thu, phiếu chi, đơn hàng, phiếu nhập hàng) bằng cách ghi bút toán ngược đúng những gì chứng từ đã ghi, không xóa chứng từ. Chứng từ đã hủy giữ người hủy, lúc hủy và lý do, không còn tính vào báo cáo, công nợ và tồn kho. Đơn hàng đã có trả hàng hoặc phiếu thu, phiếu nhập đã có trả hàng nhập hoặc phiếu chi gắn phiếu thì không hủy được. Quy tắc ở ADR-0012.
+_Tránh dùng_: xóa phiếu, xóa đơn, hoàn tác
 
 ### Chuyển dữ liệu
 

@@ -23,6 +23,7 @@ import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
 import { formatDateTime } from '@/lib/date'
 import { useAuthStore } from '@/stores/use-auth-store'
 
+import { OrderCancelButton, OrderCancelledNotice } from './order-cancel'
 import { OrderInvoiceA4, OrderInvoiceA5, OrderInvoiceThermal } from './order-invoice-template'
 import { PrintButton } from './print-button'
 import { ReturnDialog } from './return-dialog'
@@ -137,9 +138,12 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
               <RotateCcw className="size-4 mr-1" /> Trả hàng
             </Button>
           )}
+          <OrderCancelButton order={order} />
           <PrintButton onPrint={handlePrint} label="In lại" size="sm" />
         </div>
       </header>
+
+      <OrderCancelledNotice order={order} />
 
       {/* Cảnh báo đơn ngoại tuyến vượt hạn mức nợ */}
       {order.debtLimitExceeded && (

@@ -121,10 +121,10 @@ export function SupplierPaymentsManager() {
       {!isLoading && !isEmpty && (
         <>
           <div className="hidden md:block">
-            <SupplierPaymentsTable items={items} />
+            <SupplierPaymentsTable items={items} canCancel={isOwner} />
           </div>
           <div className="md:hidden">
-            <SupplierPaymentsCardList items={items} />
+            <SupplierPaymentsCardList items={items} canCancel={isOwner} />
           </div>
         </>
       )}

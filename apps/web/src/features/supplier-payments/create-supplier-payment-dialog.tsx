@@ -25,19 +25,30 @@ import { showSuccess } from '@/lib/toast'
 
 import { useCreateSupplierPaymentMutation } from './use-supplier-payments'
 
-const KNOWN_FIELDS = ['supplierId', 'amount', 'note']
+const KNOWN_FIELDS = ['supplierId', 'amount', 'note', 'purchaseOrderId']
+
+/** TIEN-104: mở từ phiếu nhập hoặc bảng nợ NCC thì điền sẵn NCC, có thể gắn một phiếu nhập */
+export interface SupplierPaymentPreset {
+  supplierId: string
+  purchaseOrderId?: string
+  purchaseOrderCode?: string
+  /** Số còn phải trả của phiếu nhập, là mức tối đa khi gắn phiếu */
+  purchaseOrderOutstanding?: number
+}
 
 interface CreateSupplierPaymentDialogProps {
   open: boolean
   onOpenChange: (v: boolean) => void
   onCreated?: () => void
+  preset?: SupplierPaymentPreset
 }
 
-function emptyValues(): CreateSupplierPaymentInput {
+function emptyValues(preset?: SupplierPaymentPreset): CreateSupplierPaymentInput {
   return {
-    supplierId: '',
+    supplierId: preset?.supplierId ?? '',
     amount: 0,
     note: null,
+    purchaseOrderId: preset?.purchaseOrderId ?? null,
   }
 }
 
@@ -45,6 +56,7 @@ export function CreateSupplierPaymentDialog({
   open,
   onOpenChange,
   onCreated,
+  preset,
 }: CreateSupplierPaymentDialogProps) {
   const mutation = useCreateSupplierPaymentMutation()
   const handleOpenChange = useGuardedOpenChange(onOpenChange, mutation)
@@ -52,13 +64,15 @@ export function CreateSupplierPaymentDialog({
   const form = useForm<CreateSupplierPaymentInput>({
     resolver: zodResolver(createSupplierPaymentSchema),
     mode: 'onTouched',
-    defaultValues: emptyValues(),
+    defaultValues: emptyValues(preset),
   })
 
   useEffect(() => {
     if (open) {
-      form.reset(emptyValues())
+      form.reset(emptyValues(preset))
     }
+    // preset là object mới mỗi lần render ở nơi gọi, chỉ reset khi mở hộp thoại
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, form])
 
   const supplierId = useWatch({ control: form.control, name: 'supplierId' })
@@ -66,16 +80,22 @@ export function CreateSupplierPaymentDialog({
   const noSuppliersWithDebt = !checkDebtQuery.isLoading && checkDebtQuery.data?.data.length === 0
   const { data: supplierDetail } = useSupplierQuery(supplierId || undefined)
   const selectedSupplier = supplierDetail
-  const currentDebt = selectedSupplier?.currentDebt ?? 0
+  const supplierDebt = selectedSupplier?.currentDebt ?? 0
+  const linkedPo = preset?.purchaseOrderId ? preset : undefined
+  // Gắn phiếu nhập: tối đa là số còn phải trả của phiếu, không vượt nợ NCC
+  const currentDebt =
+    linkedPo?.purchaseOrderOutstanding !== undefined
+      ? Math.min(linkedPo.purchaseOrderOutstanding, supplierDebt)
+      : supplierDebt
 
   const noteValue = useWatch({ control: form.control, name: 'note' }) ?? ''
 
   const submit = form.handleSubmit(async (values) => {
-    if (selectedSupplier && values.amount > selectedSupplier.currentDebt) {
+    if (selectedSupplier && values.amount > currentDebt) {
       form.setError('amount', {
-        message: `Số tiền chi vượt quá nợ phải trả nhà cung cấp (${formatVndWithSuffix(
-          selectedSupplier.currentDebt,
-        )})`,
+        message: linkedPo
+          ? `Số tiền chi vượt quá số còn phải trả của phiếu ${linkedPo.purchaseOrderCode ?? ''} (${formatVndWithSuffix(currentDebt)})`
+          : `Số tiền chi vượt quá nợ phải trả nhà cung cấp (${formatVndWithSuffix(currentDebt)})`,
       })
       return
     }
@@ -83,6 +103,7 @@ export function CreateSupplierPaymentDialog({
       supplierId: values.supplierId,
       amount: values.amount,
       note: values.note?.toString().trim() ? values.note.toString().trim() : null,
+      ...(linkedPo ? { purchaseOrderId: linkedPo.purchaseOrderId } : {}),
     }
     try {
       const result = await mutation.mutateAsync(payload)
@@ -120,7 +141,7 @@ export function CreateSupplierPaymentDialog({
               Nhà cung cấp <span className="text-destructive">*</span>
             </Label>
             <SupplierCombobox
-              disabled={noSuppliersWithDebt}
+              disabled={noSuppliersWithDebt || !!preset}
               value={supplierId || undefined}
               onChange={(v) => form.setValue('supplierId', v ?? '', { shouldValidate: true })}
               hasDebt="yes"
@@ -136,6 +157,13 @@ export function CreateSupplierPaymentDialog({
               <p className="text-xs text-destructive">{errors.supplierId.message}</p>
             )}
           </div>
+
+          {linkedPo && (
+            <p className="rounded-md bg-muted/50 p-2 text-sm">
+              Thanh toán cho phiếu nhập{' '}
+              <span className="font-mono font-medium">{linkedPo.purchaseOrderCode}</span>
+            </p>
+          )}
 
           <div className="grid gap-2">
             <Label htmlFor="payment-amount">
@@ -162,7 +190,7 @@ export function CreateSupplierPaymentDialog({
             </div>
             {selectedSupplier && (
               <p className="text-xs text-muted-foreground">
-                Nợ hiện tại: {formatVndWithSuffix(currentDebt)}. Tối đa:{' '}
+                Nợ hiện tại: {formatVndWithSuffix(supplierDebt)}. Tối đa:{' '}
                 {formatVndWithSuffix(currentDebt)}
               </p>
             )}

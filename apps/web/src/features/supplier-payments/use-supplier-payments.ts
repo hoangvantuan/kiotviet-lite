@@ -1,10 +1,15 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import type { CreateSupplierPaymentInput, ListSupplierPaymentsQuery } from '@kiotviet-lite/shared'
+import type {
+  CancelDocumentInput,
+  CreateSupplierPaymentInput,
+  ListSupplierPaymentsQuery,
+} from '@kiotviet-lite/shared'
 
 import { useDocumentMutation } from '@/hooks/use-document-mutation'
 
 import {
+  cancelSupplierPaymentApi,
   createSupplierPaymentApi,
   getSupplierPaymentApi,
   listSupplierPaymentsApi,
@@ -37,6 +42,23 @@ export function useCreateSupplierPaymentMutation() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: SUPPLIER_PAYMENTS_KEY })
       qc.invalidateQueries({ queryKey: ['suppliers'] })
+      qc.invalidateQueries({ queryKey: ['purchase-orders'] })
+    },
+  })
+}
+
+export function useCancelSupplierPaymentMutation() {
+  const qc = useQueryClient()
+  return useDocumentMutation({
+    intent: 'supplier-payment.cancel',
+    instance: (v: { id: string; input: CancelDocumentInput }) => v.id,
+    fingerprint: (v) => v.id,
+    mutationFn: (v: { id: string; input: CancelDocumentInput }, idempotencyKey) =>
+      cancelSupplierPaymentApi(v.id, v.input, idempotencyKey),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: SUPPLIER_PAYMENTS_KEY })
+      qc.invalidateQueries({ queryKey: ['suppliers'] })
+      qc.invalidateQueries({ queryKey: ['purchase-orders'] })
     },
   })
 }

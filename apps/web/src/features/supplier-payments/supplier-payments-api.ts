@@ -1,4 +1,5 @@
 import type {
+  CancelDocumentInput,
   CreateSupplierPaymentInput,
   ListSupplierPaymentsQuery,
   SupplierPaymentDetail,
@@ -45,4 +46,17 @@ export function createSupplierPaymentApi(
   return apiClient.post<Envelope<SupplierPaymentDetail>>('/api/v1/supplier-payments', input, {
     idempotencyKey,
   })
+}
+
+/** TIEN-107: hủy phiếu chi, cộng lại nợ phải trả NCC (chỉ chủ cửa hàng) */
+export function cancelSupplierPaymentApi(
+  id: string,
+  input: CancelDocumentInput,
+  idempotencyKey?: string,
+) {
+  return apiClient.post<Envelope<SupplierPaymentDetail>>(
+    `/api/v1/supplier-payments/${id}/cancel`,
+    input,
+    { idempotencyKey },
+  )
 }

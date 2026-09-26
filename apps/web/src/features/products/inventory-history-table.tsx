@@ -28,6 +28,9 @@ const TYPE_LABELS: Record<InventoryTransactionItem['type'], string> = {
   manual_adjustment: 'Điều chỉnh',
   return: 'Trả hàng',
   stock_check: 'Kiểm kê',
+  order_cancel: 'Hủy đơn bán',
+  purchase_cancel: 'Hủy phiếu nhập',
+  purchase_return: 'Trả hàng nhập',
 }
 
 const TYPE_VARIANTS: Record<
@@ -40,6 +43,9 @@ const TYPE_VARIANTS: Record<
   manual_adjustment: 'secondary',
   return: 'outline',
   stock_check: 'secondary',
+  order_cancel: 'destructive',
+  purchase_cancel: 'destructive',
+  purchase_return: 'outline',
 }
 
 export function InventoryHistoryTable({ productId }: InventoryHistoryTableProps) {
