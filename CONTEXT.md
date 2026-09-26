@@ -141,6 +141,14 @@ _Tránh dùng_: người phê duyệt, người ký
 Đơn bán lập khi máy mất mạng, lưu tại máy và gửi lên khi có mạng trở lại.
 _Tránh dùng_: đơn offline, đơn chờ đồng bộ
 
+**Giờ bán**:
+Thời điểm đơn được lập tại quầy. Đơn ngoại tuyến lấy giờ trên máy bán, máy chủ giới hạn (quá 5 phút sau giờ nhận, cũ hơn 7 ngày, hoặc trước lúc tạo cửa hàng thì ghi theo giờ nhận và gắn cờ chờ duyệt). Báo cáo theo ngày tính theo giờ bán, không theo lúc đồng bộ. Quy tắc ở ADR-0014.
+_Tránh dùng_: giờ đồng bộ, giờ tạo (khi nói về đơn ngoại tuyến)
+
+**Mã tạm**:
+Mã `TAM-` in trên hóa đơn của đơn ngoại tuyến, trước khi máy chủ cấp mã đơn thật. Sau đồng bộ đơn mang mã `HD-`, tìm bằng mã tạm vẫn ra đúng đơn đó.
+_Tránh dùng_: mã offline, mã nháp
+
 **Đơn chờ duyệt**:
 Đơn ngoại tuyến đã được nhận (đã trừ kho, đã ghi nợ) nhưng vi phạm chính sách giá, chiết khấu hay hạn mức nợ mà không có người duyệt hợp lệ. Chủ hoặc quản lý đủ quyền duyệt hoặc từ chối; từ chối chỉ ghi nhận, không huỷ đơn. Quy tắc ở ADR-0009.
 _Tránh dùng_: đơn treo, đơn bị khoá, đơn lỗi

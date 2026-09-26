@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "build:e2e": "VITE_API_URL= vite build --outDir dist-e2e --emptyOutDir",
+    "build:e2e": "VITE_API_URL= VITE_E2E_HOOKS=1 vite build --outDir dist-e2e --emptyOutDir",
     "test:e2e:prod": "E2E_TARGET=prod playwright test"
   },
   "dependencies": {

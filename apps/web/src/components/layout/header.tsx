@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { LogOut, Menu } from 'lucide-react'
 
@@ -5,10 +6,12 @@ import { hasPermission } from '@kiotviet-lite/shared'
 
 import { OfflineIndicator } from '@/components/shared/OfflineIndicator'
 import { Button } from '@/components/ui/button'
+import { LogoutGuardDialog } from '@/features/auth/logout-guard-dialog'
 import { useLogout } from '@/features/auth/use-logout'
 import { LowStockBell } from '@/features/products/low-stock-bell'
 import { useSidebarStore } from '@/hooks/use-sidebar'
 import { useAuthStore } from '@/stores/use-auth-store'
+import { useOfflineStore } from '@/stores/use-offline-store'
 
 export function Header() {
   const user = useAuthStore((s) => s.user)
@@ -16,10 +19,26 @@ export function Header() {
   const isMobileOpen = useSidebarStore((s) => s.isMobileOpen)
   const logout = useLogout()
   const navigate = useNavigate()
+  const [guardOpen, setGuardOpen] = useState(false)
 
-  const onLogout = async () => {
-    await logout.mutateAsync()
+  const doLogout = async () => {
+    setGuardOpen(false)
+    try {
+      await logout.mutateAsync()
+    } catch {
+      // Mất mạng: máy chủ không nhận lệnh đăng xuất, nhưng phiên trên máy đã dọn ở onSettled
+    }
     navigate({ to: '/login', replace: true })
+  }
+
+  const onLogout = () => {
+    // OFF-05: còn đơn chưa lên máy chủ thì hỏi trước
+    const { pendingOrderCount, errorOrderCount } = useOfflineStore.getState()
+    if (pendingOrderCount + errorOrderCount > 0) {
+      setGuardOpen(true)
+      return
+    }
+    void doLogout()
   }
 
   return (
@@ -54,6 +73,11 @@ export function Header() {
           </span>
         </Button>
       </div>
+      <LogoutGuardDialog
+        open={guardOpen}
+        onOpenChange={setGuardOpen}
+        onConfirmLogout={() => void doLogout()}
+      />
     </header>
   )
 }

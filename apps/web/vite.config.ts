@@ -30,7 +30,9 @@ export const pwaOptions: Partial<VitePWAOptions> = {
     ],
   },
   workbox: {
-    globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}'],
+    // OFF-03: 'data' là gói tệp hệ thống của PGlite (pglite-*.data, khoảng 5MB). Thiếu nó thì tải
+    // lại khi mất mạng không mở được PGlite, không đọc được hàng chờ đơn
+    globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,data}'],
     // Script nạp bằng importScripts, không precache
     globIgnores: ['**/sw-cleanup.js'],
     // PGlite wasm ~9MB và bundle chính ~3MB vượt trần mặc định 2MiB;
@@ -55,5 +57,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+  },
+  // OFF-04: worker PGlite dùng import động và top-level await, định dạng iife mặc định không chạy được
+  worker: {
+    format: 'es',
   },
 })

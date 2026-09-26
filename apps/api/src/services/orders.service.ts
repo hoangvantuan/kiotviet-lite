@@ -8,9 +8,9 @@ import {
   customers,
   debts,
   formatCurrencyVnd as formatVnd,
-  hasPermission,
   inventoryTransactions,
   type ListOrdersQuery,
+  OFFLINE_ORDER_NUMBER_PATTERN,
   orderItems,
   type OrderPolicyViolation,
   type OrderReviewStatus,
@@ -39,6 +39,7 @@ import { addCustomerDebt, lockCustomerForDebt } from './customer-debt-ledger.ser
 import { nextDocumentCode } from './document-codes.service.js'
 import { emitEvent } from './notification-emitter.js'
 import {
+  actorHasPermission,
   assertDiscountAmounts,
   debtLimitViolation,
   derivePayment,
@@ -46,6 +47,7 @@ import {
   loadLineUnitCosts,
   priceViolation,
   resolveDebtLimitApproval,
+  resolveOfflineSoldAt,
 } from './order-policy.js'
 import { resolveProductPrice } from './pricing.service.js'
 import {
@@ -66,6 +68,8 @@ export interface OrdersActor {
   userId: string
   storeId: string
   role: UserRole
+  /** OFF-05: người đồng bộ đơn ngoại tuyến khi khác người bán (actor là người bán), xem PolicyActor */
+  syncedBy?: { userId: string; role: UserRole } | null
 }
 
 export interface OrderDetailItem {
@@ -160,16 +164,9 @@ export interface CreateOrderDeps {
   source?: 'pos' | 'offline_sync'
   clientId?: string | null
   offlineCreatedAt?: string
+  /** Vi phạm phát hiện ở lớp đồng bộ (OFF-05: người bán đã bị khóa), đơn vẫn nhận nhưng chờ duyệt */
+  offlineViolations?: OrderPolicyViolation[]
   skipDebtLimitCheck?: boolean
-}
-
-/** Giờ bán của đơn ngoại tuyến; thiếu, sai hay ở tương lai (đồng hồ máy lệch) thì lấy giờ máy chủ. */
-function offlineSoldAt(offlineCreatedAt: string | undefined): Date {
-  const now = new Date()
-  if (!offlineCreatedAt) return now
-  const soldAt = new Date(offlineCreatedAt)
-  if (Number.isNaN(soldAt.getTime()) || soldAt > now) return now
-  return soldAt
 }
 
 export async function createOrder({
@@ -181,9 +178,11 @@ export async function createOrder({
   source = 'pos',
   clientId: explicitClientId,
   offlineCreatedAt,
+  offlineViolations = [],
   skipDebtLimitCheck = false,
 }: CreateOrderDeps): Promise<OrderDetail> {
   const db = serviceDb(rootDb, transaction)
+  const syncedByUserId = actor.syncedBy?.userId ?? null
   let input = requestedInput
   if (input.items.length === 0) {
     throw new ApiError('VALIDATION_ERROR', 'Đơn hàng phải có ít nhất 1 sản phẩm')
@@ -304,10 +303,23 @@ export async function createOrder({
   // POS-04: vượt hạn mức cần PIN của người giữ pos.overrideDebtLimit, không phải PIN người bán
   const debtLimitApprover = await resolveDebtLimitApproval({ db, actor, input, source, meta })
   // ADR-0009: đơn ngoại tuyến vi phạm chính sách vẫn nhận (hàng đã giao) nhưng chờ chủ duyệt
-  const policyViolations: OrderPolicyViolation[] = []
+  const policyViolations: OrderPolicyViolation[] =
+    source === 'offline_sync' ? [...offlineViolations] : []
+  // OFF-11 (ADR-0014): đơn ngoại tuyến ghi theo giờ bán trên máy bán, đã kiểm giới hạn
+  const receivedAt = new Date()
+  let offlineSale: ReturnType<typeof resolveOfflineSoldAt> | null = null
+  if (source === 'offline_sync') {
+    const [store] = await db
+      .select({ createdAt: stores.createdAt })
+      .from(stores)
+      .where(eq(stores.id, actor.storeId))
+      .limit(1)
+    offlineSale = resolveOfflineSoldAt(offlineCreatedAt, receivedAt, store?.createdAt ?? null)
+  }
+  if (offlineSale?.violation) policyViolations.push(offlineSale.violation)
   const priceIssue = priceViolation(priceApproval)
   if (priceIssue) policyViolations.push(priceIssue)
-  const canViewCost = hasPermission(actor.role, 'products.viewCost')
+  const canViewCost = actorHasPermission(actor, 'products.viewCost')
 
   // Validate manual price list if selected
   let snapshotPriceListName: string | null = null
@@ -390,9 +402,9 @@ export async function createOrder({
       // POS-06: gắn ca trước mọi khóa khác (thứ tự khóa: ca, customers, debts, products). Đơn POS
       // bị chặn khi cửa hàng dùng ca mà người bán chưa mở ca; đơn ngoại tuyến gắn theo giờ bán,
       // không khớp ca nào thì để trống và hiện ở đối soát.
-      // BC-06: đơn ngoại tuyến lưu giờ bán để báo cáo tính đúng ngày; đơn trực tuyến để cột lấy
-      // mặc định now(), bằng created_at
-      const soldAt = source === 'offline_sync' ? offlineSoldAt(offlineCreatedAt) : undefined
+      // BC-06, OFF-11 (ADR-0014): đơn ngoại tuyến dùng một giờ bán hiệu lực (đã kẹp theo giờ nhận)
+      // cho cả sold_at, created_at và ca; đơn trực tuyến để hai cột lấy mặc định now()
+      const soldAt = offlineSale?.soldAt
       const shiftId = soldAt
         ? await resolveShiftAt(txDb, actor.storeId, actor.userId, soldAt)
         : await requireShiftForSale(txDb, actor.storeId, actor.userId)
@@ -408,13 +420,22 @@ export async function createOrder({
         db: txDb,
         storeId: actor.storeId,
         kind: 'order',
+        // Mã đơn theo ngày bán, khớp với ngày đơn nằm trong báo cáo
+        ...(offlineSale ? { date: offlineSale.soldAt } : {}),
       })
       const [row] = await tx
         .insert(orders)
         .values({
           storeId: actor.storeId,
           orderNumber,
-          ...(soldAt ? { soldAt } : {}),
+          ...(offlineSale
+            ? {
+                createdAt: offlineSale.soldAt,
+                soldAt: offlineSale.soldAt,
+                syncedAt: receivedAt,
+                syncedByUserId,
+              }
+            : {}),
           customerId: input.customerId ?? null,
           userId: actor.userId,
           priceListId: effectivePriceListId,
@@ -1301,6 +1322,8 @@ export async function createOrder({
             violations: policyViolations,
             sellerId: actor.userId,
             sellerRole: actor.role,
+            syncedById: actor.syncedBy?.userId ?? actor.userId,
+            syncedByRole: actor.syncedBy?.role ?? actor.role,
             clientId,
             offlineCreatedAt: offlineAt,
             device: { ipAddress: meta?.ipAddress ?? null, userAgent: meta?.userAgent ?? null },
@@ -1348,6 +1371,14 @@ export async function createOrder({
           paymentStatus: payment.paymentStatus,
           source,
           clientId,
+          ...(offlineSale
+            ? {
+                soldAt: offlineSale.soldAt.toISOString(),
+                ...(offlineSale.claimedAt ? { claimedSoldAt: offlineSale.claimedAt } : {}),
+                syncedByUserId: syncedByUserId ?? actor.userId,
+                syncedByRole: actor.syncedBy?.role ?? actor.role,
+              }
+            : {}),
         },
         ipAddress: meta?.ipAddress,
         userAgent: meta?.userAgent,
@@ -1686,7 +1717,11 @@ export async function listOrders({
   if (clientId) conditions.push(eq(orders.clientId, clientId))
 
   const trimmedSearch = search?.trim()
-  if (trimmedSearch) {
+  const tempCode = trimmedSearch ? OFFLINE_ORDER_NUMBER_PATTERN.exec(trimmedSearch) : null
+  if (tempCode) {
+    // OFF-17: hóa đơn ngoại tuyến in mã tạm, mã tạm lấy từ đầu clientId
+    conditions.push(sql`${orders.clientId}::text LIKE ${`${tempCode[1]!.toLowerCase()}%`}`)
+  } else if (trimmedSearch) {
     const escaped = escapeLikePattern(trimmedSearch)
     const pattern = `%${escaped}%`
     conditions.push(ilike(orders.orderNumber, pattern))

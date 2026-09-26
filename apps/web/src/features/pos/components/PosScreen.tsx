@@ -530,7 +530,8 @@ export function PosScreen() {
       {/* Story 3.3: Order completion dialog */}
       <OrderCompletionDialog
         open={completionDialogOpen}
-        onOpenChange={setCompletionDialogOpen}
+        // OFF-16: đóng bằng X hay Esc cũng là xong đơn, giỏ phải trống như bấm "Đơn mới"
+        onOpenChange={(open) => (open ? setCompletionDialogOpen(true) : handleNewOrder())}
         order={completionOrder}
         onNewOrder={handleNewOrder}
       />

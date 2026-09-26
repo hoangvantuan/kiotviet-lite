@@ -2,6 +2,9 @@ import { removePersistedCart } from '@/stores/cart-persistence'
 import { useAuthStore } from '@/stores/use-auth-store'
 import { createInitialTabs, useCartStore } from '@/stores/use-cart-store'
 
+import { clearBrowserDiagnostics } from './api-client'
+import { clearOfflineStoreData } from './offline-store-data'
+import { forgetOfflineDataStore } from './offline-sync-runtime'
 import { queryClient } from './query-client'
 
 /** Cache mà service worker các bản cũ dùng để lưu phản hồi /api/ (C-01). */
@@ -20,7 +23,8 @@ async function deleteLegacyApiCache() {
 /**
  * Dọn mọi dữ liệu gắn với người vừa đăng xuất trên máy này, để người đăng nhập sau (có thể
  * ở cửa hàng khác) không thấy lại (C-01, POS-14): dữ liệu React Query trong bộ nhớ, mutation
- * đang chờ, giỏ POS đã lưu, và api-cache do service worker cũ để lại.
+ * đang chờ, giỏ POS đã lưu, api-cache do service worker cũ để lại, dữ liệu cửa hàng trong PGlite
+ * (OFF-05) và chẩn đoán chưa gửi (OFF-22). Đơn ngoại tuyến chưa đồng bộ KHÔNG bị xóa.
  */
 export async function endSession() {
   const user = useAuthStore.getState().user
@@ -29,5 +33,12 @@ export async function endSession() {
   if (user) removePersistedCart(user)
   useCartStore.setState({ tabs: createInitialTabs(), activeTab: 1 })
   queryClient.clear()
+  clearBrowserDiagnostics()
+  forgetOfflineDataStore()
   await deleteLegacyApiCache()
+  try {
+    await clearOfflineStoreData()
+  } catch (error) {
+    console.warn('[session] không dọn được dữ liệu ngoại tuyến', error)
+  }
 }

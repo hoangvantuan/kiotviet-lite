@@ -77,10 +77,16 @@ export const orders = pgTable(
     shiftId: uuid().references(() => cashShifts.id, { onDelete: 'restrict' }),
     priceListId: uuid().references(() => priceLists.id, { onDelete: 'set null' }),
     priceListName: varchar({ length: 100 }),
+    // OFF-11 (ADR-0014): giờ bán. Đơn trực tuyến là lúc máy chủ ghi; đơn ngoại tuyến là giờ bán
+    // trên máy bán (đã kiểm giới hạn), nên mọi báo cáo theo thời gian tính theo giờ bán.
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
-    // BC-06: giờ bán. Đơn trực tuyến bằng giờ tạo; đơn ngoại tuyến là giờ bán trên máy (đã kiểm,
-    // không ở tương lai) còn created_at là giờ đồng bộ. Báo cáo dòng tiền và gắn ca theo cột này.
+    // BC-06: giờ bán, báo cáo dòng tiền và gắn ca theo cột này. Đơn ngoại tuyến có sold_at bằng
+    // created_at, cùng là giờ bán hiệu lực (ADR-0014).
     soldAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    // OFF-11: lúc máy chủ nhận đơn ngoại tuyến; NULL với đơn bán trực tuyến.
+    syncedAt: timestamp({ withTimezone: true }),
+    // OFF-05: người đồng bộ đơn ngoại tuyến khi khác người bán (userId), để đối soát.
+    syncedByUserId: uuid().references(() => users.id),
     updatedAt: timestamp({ withTimezone: true })
       .notNull()
       .defaultNow()

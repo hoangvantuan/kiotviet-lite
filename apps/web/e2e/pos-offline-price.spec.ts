@@ -1,4 +1,5 @@
 import { expect, type Page, test } from './fixtures/auth.fixture'
+import { waitForOfflineDB } from './helpers/offline'
 
 /**
  * Issue #34 E2E: POS offline price warning smoke test
@@ -38,6 +39,7 @@ test.describe('#34 POS Offline Price Warning & Checkout Smoke Test', () => {
 
     // Exercise the browser's actual offline state rather than dispatching a
     // synthetic event while navigator.onLine remains true.
+    await waitForOfflineDB(page)
     await page.context().setOffline(true)
     await expect(offlineWarning).toBeVisible({ timeout: 5000 })
     await expect(offlineWarning).toContainText('Đang ngoại tuyến: Không thể cập nhật giá')

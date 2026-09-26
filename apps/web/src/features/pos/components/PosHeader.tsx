@@ -68,17 +68,7 @@ export function PosHeader({ showProductGrid, onToggleProductGrid, shiftControl }
           </Label>
         </div>
 
-        <div className="ml-4 flex items-center gap-2 text-sm text-muted-foreground">
-          <span>Khách lẻ</span>
-          <button
-            disabled
-            className="cursor-not-allowed rounded-md border border-input px-2.5 py-1 text-xs text-muted-foreground opacity-50"
-            title="Chức năng chọn khách hàng sẽ kích hoạt trong Epic 4 (Story 4.5)"
-          >
-            Chọn khách hàng
-          </button>
-        </div>
-
+        {/* OFF-21: bỏ nút "Chọn khách hàng" luôn bị khóa ở đây; chọn khách ở ô khách hàng của giỏ */}
         <KeyboardShortcutsTooltip />
       </div>
     </header>

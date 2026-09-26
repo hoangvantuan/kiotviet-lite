@@ -233,6 +233,17 @@ async function postReceipt(
   )
 }
 
+/**
+ * OFF-11 (ADR-0014): giờ bán ngoại tuyến trước lúc tạo cửa hàng bị kẹp về giờ nhận. Cửa hàng của
+ * test tạo ngay lúc chạy, nên lùi ngày tạo để giờ bán trong quá khứ được giữ nguyên.
+ */
+async function storeOpenedDaysAgo(days: number) {
+  await env.db
+    .update(stores)
+    .set({ createdAt: new Date(Date.now() - days * 86_400_000) })
+    .where(eq(stores.id, env.storeId))
+}
+
 async function enableShifts() {
   await env.db.update(stores).set({ shiftsEnabled: true }).where(eq(stores.id, env.storeId))
 }
@@ -570,6 +581,7 @@ describe('POS-06: ca bán hàng', () => {
   })
 
   it('đơn ngoại tuyến đồng bộ gắn ca theo giờ bán và người bán; ngoài ca thì để trống', async () => {
+    await storeOpenedDaysAgo(30)
     await enableShifts()
     const product = await createProduct(env, { sellingPrice: 10_000, currentStock: 10 })
     const actor = { userId: env.staff.id, storeId: env.storeId, role: env.staff.role }
@@ -983,6 +995,7 @@ describe('BC-06 (review MAJOR 2): đối soát trong ngày với các ca nối t
 
 describe('BC-06 (review MAJOR 3): đơn ngoại tuyến tính theo giờ bán', () => {
   it('bán ngoại tuyến 21:00 hôm qua, đồng bộ hôm nay: đơn ở ngày hôm qua và ở ca A', async () => {
+    await storeOpenedDaysAgo(30)
     const product = await createProduct(env, { sellingPrice: 30_000, currentStock: 10 })
     const soldAt = new Date(`${dayKey(-1)}T21:00:00+07:00`)
     const [shiftA] = await env.db
@@ -1013,6 +1026,8 @@ describe('BC-06 (review MAJOR 3): đơn ngoại tuyến tính theo giờ bán', 
     const [saved] = await env.db.select().from(orders).where(eq(orders.id, order.id))
     expect(saved!.shiftId).toBe(shiftA!.id)
     expect(saved!.soldAt.toISOString()).toBe(soldAt.toISOString())
+    // ADR-0014: báo cáo doanh thu (created_at) và dòng tiền (sold_at) cùng một giờ bán
+    expect(saved!.createdAt.toISOString()).toBe(soldAt.toISOString())
 
     const yesterday = await cashFlow(dayKey(-1))
     expect(yesterday.revenue.orderCount).toBe(1)

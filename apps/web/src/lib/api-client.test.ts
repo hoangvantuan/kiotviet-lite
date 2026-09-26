@@ -2,12 +2,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useAuthStore } from '@/stores/use-auth-store'
 
-import { ApiClientError, apiFetch } from './api-client'
+import {
+  ApiClientError,
+  apiFetch,
+  clearBrowserDiagnostics,
+  queueBrowserDiagnostic,
+  REFRESH_UNAVAILABLE_MESSAGE,
+} from './api-client'
 
 const SERVER_ID = 'c85c283b-6907-4195-a75b-f7d2a54c35f9'
+const STORE_A = '0199aa00-0000-7000-8000-00000000000a'
+const STORE_B = '0199aa00-0000-7000-8000-00000000000b'
+
+function signIn(storeId: string, accessToken = 'test-token') {
+  useAuthStore.setState({
+    accessToken,
+    user: { id: crypto.randomUUID(), storeId, name: 'Thu ngân', phone: null, role: 'staff' },
+  })
+}
 
 beforeEach(() => {
-  useAuthStore.setState({ accessToken: 'test-token' })
+  clearBrowserDiagnostics()
+  signIn(STORE_A)
   vi.stubGlobal('navigator', { onLine: true })
 })
 
@@ -208,5 +224,91 @@ describe('apiFetch 401 do PIN sai (POS-10)', () => {
     await apiFetch('/api/v1/products').catch(() => undefined)
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2)
     expect(String(fetchMock.mock.calls[1]![0])).toContain('/refresh')
+  })
+})
+
+describe('OFF-03: làm mới phiên không tới được máy chủ', () => {
+  const expired = () =>
+    new Response(
+      JSON.stringify({
+        error: { code: 'UNAUTHORIZED', message: 'Phiên đăng nhập đã hết hạn' },
+      }),
+      { status: 401 },
+    )
+
+  it('mất mạng lúc làm mới: báo mất kết nối, không báo phiên hết hạn, giữ phiên', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(expired())
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const error = await apiFetch('/api/v1/sync/push', { method: 'POST', body: {} }).catch(
+      (e: unknown) => e,
+    )
+
+    expect(error).toMatchObject({ status: 0, code: 'NETWORK_ERROR' })
+    expect((error as ApiClientError).message).toContain(REFRESH_UNAVAILABLE_MESSAGE)
+    expect((error as ApiClientError).message).not.toContain('hết hạn')
+    expect(useAuthStore.getState().accessToken).toBe('test-token')
+  })
+
+  it('máy chủ lỗi 502 lúc làm mới: cũng là lỗi tạm thời', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(expired())
+      .mockResolvedValueOnce(new Response('<html>502</html>', { status: 502 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(apiFetch('/api/v1/products')).rejects.toMatchObject({ code: 'NETWORK_ERROR' })
+  })
+})
+
+describe('OFF-22: chẩn đoán trình duyệt gắn với cửa hàng', () => {
+  it('chẩn đoán ghi khi cửa hàng A đăng nhập không được gửi bằng token của cửa hàng B', async () => {
+    vi.stubGlobal('navigator', { onLine: false })
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+    queueBrowserDiagnostic({ kind: 'offline_sync_error', requestId: SERVER_ID, code: 'X' })
+
+    signIn(STORE_B, 'token-b')
+    vi.stubGlobal('navigator', { onLine: true })
+    await apiFetch('/api/v1/products')
+
+    await new Promise((r) => setTimeout(r, 10))
+    const diagnosticCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).endsWith('/api/v1/client-diagnostics'),
+    )
+    expect(diagnosticCalls).toHaveLength(0)
+  })
+
+  it('cùng cửa hàng thì gửi, và không gửi storeId lên máy chủ', async () => {
+    vi.stubGlobal('navigator', { onLine: false })
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+    queueBrowserDiagnostic({ kind: 'offline_sync_error', requestId: SERVER_ID, code: 'X' })
+
+    vi.stubGlobal('navigator', { onLine: true })
+    await apiFetch('/api/v1/products')
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    const body = JSON.parse(fetchMock.mock.calls[1]![1].body as string)
+    expect(body).toEqual({ kind: 'offline_sync_error', requestId: SERVER_ID, code: 'X' })
+  })
+
+  it('đăng xuất xóa hàng chẩn đoán chưa gửi', () => {
+    const stored = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => stored.get(k) ?? null,
+      setItem: (k: string, v: string) => stored.set(k, v),
+      removeItem: (k: string) => stored.delete(k),
+    })
+    vi.stubGlobal('navigator', { onLine: false })
+    queueBrowserDiagnostic({ kind: 'offline_sync_error', requestId: SERVER_ID, code: 'X' })
+    expect(stored.get('kiotviet-browser-diagnostics')).toContain(SERVER_ID)
+
+    clearBrowserDiagnostics()
+    expect(stored.has('kiotviet-browser-diagnostics')).toBe(false)
+    vi.unstubAllGlobals()
   })
 })

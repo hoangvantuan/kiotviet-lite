@@ -29,7 +29,7 @@ describe('cấu hình PWA (C-01, OFF-18)', () => {
 
   it('vẫn precache app shell để mở được khi ngoại tuyến', () => {
     const globs = workbox.globPatterns?.join(',') ?? ''
-    for (const ext of ['js', 'css', 'html', 'wasm']) expect(globs).toContain(ext)
+    for (const ext of ['js', 'css', 'html', 'wasm', 'data']) expect(globs).toContain(ext)
   })
 
   it('nạp script dọn api-cache cũ vào service worker', () => {

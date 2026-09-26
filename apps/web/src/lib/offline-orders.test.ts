@@ -7,6 +7,8 @@ import { pgliteMigrations } from '@kiotviet-lite/shared/migrations/pglite'
 import { saveOfflineOrder } from './offline-orders'
 import { runPGliteMigrations } from './pglite-migrations'
 
+const OWNER = { storeId: 'store-1', userId: 'user-1' }
+
 const order = {
   subtotal: 10_000,
   discountAmount: 0,
@@ -42,7 +44,7 @@ describe('R4 OFF-07: hàng chờ ngoại tuyến dùng clientId của lần bán
   it('lưu đúng clientId được cấp, không tự sinh clientId mới', async () => {
     const clientId = crypto.randomUUID()
 
-    const saved = await saveOfflineOrder(pglite, 'store-1', { ...order, clientId }, clientId)
+    const saved = await saveOfflineOrder(pglite, OWNER, { ...order, clientId }, clientId)
 
     expect(saved).toBe(clientId)
     const rows = await pglite.query<{ client_id: string }>('SELECT client_id FROM offline_orders')
@@ -52,8 +54,8 @@ describe('R4 OFF-07: hàng chờ ngoại tuyến dùng clientId của lần bán
   it('lưu lại cùng clientId không thêm dòng thứ hai', async () => {
     const clientId = crypto.randomUUID()
 
-    await saveOfflineOrder(pglite, 'store-1', { ...order, clientId }, clientId)
-    await saveOfflineOrder(pglite, 'store-1', { ...order, clientId }, clientId)
+    await saveOfflineOrder(pglite, OWNER, { ...order, clientId }, clientId)
+    await saveOfflineOrder(pglite, OWNER, { ...order, clientId }, clientId)
 
     const rows = await pglite.query('SELECT client_id FROM offline_orders')
     expect(rows.rows).toHaveLength(1)

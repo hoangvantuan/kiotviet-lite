@@ -2,7 +2,8 @@ import { PIN_INVALID_REASON } from '@kiotviet-lite/shared'
 
 import { useAuthStore } from '@/stores/use-auth-store'
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000'
+export const API_BASE_URL =
+  (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000'
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -23,6 +24,12 @@ interface BrowserDiagnostic {
   clientId?: string
   status?: number
   code?: string
+  /**
+   * OFF-22: cửa hàng của người đang đăng nhập lúc ghi nhận. Chỉ gửi bằng token của đúng cửa hàng
+   * đó, để chẩn đoán của cửa hàng trước không bị ghi vào cửa hàng của người đăng nhập sau.
+   * Chỉ dùng ở máy khách, không gửi lên máy chủ.
+   */
+  storeId?: string
 }
 
 const DIAGNOSTIC_KEY = 'kiotviet-browser-diagnostics'
@@ -58,6 +65,9 @@ function cleanDiagnostic(value: unknown): BrowserDiagnostic | null {
       ? { status: item.status }
       : {}),
     ...(typeof item.code === 'string' && CODE_PATTERN.test(item.code) ? { code: item.code } : {}),
+    ...(typeof item.storeId === 'string' && UUID_PATTERN.test(item.storeId)
+      ? { storeId: item.storeId }
+      : {}),
   }
 }
 
@@ -85,15 +95,39 @@ function persistDiagnostics(): void {
   }
 }
 
+/** Bỏ các mục không thuộc cửa hàng đang đăng nhập: gửi bằng token này sẽ ghi sai cửa hàng */
+function dropForeignDiagnostics(storeId: string): void {
+  const queue = pendingDiagnostics()
+  const own = queue.filter((item) => item.storeId === storeId)
+  if (own.length === queue.length) return
+  queue.splice(0, queue.length, ...own)
+  persistDiagnostics()
+}
+
+/** OFF-22: đăng xuất thì xóa hàng chẩn đoán chưa gửi của người đó */
+export function clearBrowserDiagnostics(): void {
+  queuedDiagnostics = []
+  try {
+    localStorage.removeItem(DIAGNOSTIC_KEY)
+  } catch {
+    // localStorage unavailable
+  }
+}
+
 function flushBrowserDiagnostics(): void {
   if (flushPromise || (typeof navigator !== 'undefined' && !navigator.onLine)) return
-  const token = useAuthStore.getState().accessToken
-  if (!token || pendingDiagnostics().length === 0) return
+  const { accessToken: token, user } = useAuthStore.getState()
+  if (!token || !user || pendingDiagnostics().length === 0) return
+  dropForeignDiagnostics(user.storeId)
+  if (pendingDiagnostics().length === 0) return
 
   flushPromise = (async () => {
     while (pendingDiagnostics().length > 0 && navigator.onLine) {
       if (useAuthStore.getState().accessToken !== token) break
       const item = pendingDiagnostics()[0]!
+      // storeId chỉ dùng ở máy để chọn token, không gửi lên
+      const body: Partial<BrowserDiagnostic> = { ...item }
+      delete body.storeId
       try {
         const response = await fetch(`${API_BASE_URL}/api/v1/client-diagnostics`, {
           method: 'POST',
@@ -103,7 +137,7 @@ function flushBrowserDiagnostics(): void {
             'Content-Type': 'application/json',
             'X-Request-Id': crypto.randomUUID(),
           },
-          body: JSON.stringify(item),
+          body: JSON.stringify(body),
         })
         // 400 means the server will never accept this item; drop it so it cannot block the queue.
         if (!response.ok && response.status !== 400) break
@@ -121,7 +155,8 @@ function flushBrowserDiagnostics(): void {
 }
 
 export function queueBrowserDiagnostic(diagnostic: BrowserDiagnostic): void {
-  const clean = cleanDiagnostic(diagnostic)
+  const storeId = useAuthStore.getState().user?.storeId
+  const clean = cleanDiagnostic({ ...diagnostic, ...(storeId ? { storeId } : {}) })
   if (!clean) return
   const queue = pendingDiagnostics()
   queue.push(clean)
@@ -232,9 +267,18 @@ function gatewayUnknownOutcome(
   )
 }
 
-let refreshPromise: Promise<boolean> | null = null
+/**
+ * Kết quả làm mới phiên: `unavailable` là chưa tới được máy chủ (mất mạng, máy chủ lỗi), khác hẳn
+ * `expired` là phiên hết hạn thật.
+ */
+type RefreshOutcome = 'refreshed' | 'expired' | 'unavailable'
 
-async function tryRefresh(): Promise<boolean> {
+export const REFRESH_UNAVAILABLE_MESSAGE =
+  'Chưa kết nối được máy chủ để làm mới phiên đăng nhập. Kiểm tra mạng rồi thử lại.'
+
+let refreshPromise: Promise<RefreshOutcome> | null = null
+
+async function tryRefresh(): Promise<RefreshOutcome> {
   if (!refreshPromise) {
     refreshPromise = (async () => {
       try {
@@ -256,19 +300,23 @@ async function tryRefresh(): Promise<boolean> {
           }
           throw error
         }
-        if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          // Phiên thật sự hết hạn: đăng nhập lại. Đơn chờ ngoại tuyến vẫn nằm trong PGlite,
+          // đồng bộ khi người của cửa hàng đó đăng nhập lại (OFF-03)
           useAuthStore.getState().clearAuth()
           window.location.href = '/login'
-          return false
+          return 'expired'
         }
+        // Máy chủ lỗi hay cổng trung gian hết giờ: không phải hết phiên, giữ nguyên để thử lại
+        if (!res.ok) return 'unavailable'
         const json = (await res.json()) as { data: { accessToken: string; expiresIn: number } }
         useAuthStore.getState().setAccessToken(json.data.accessToken)
         flushBrowserDiagnostics()
-        return true
+        return 'refreshed'
       } catch {
-        useAuthStore.getState().clearAuth()
-        window.location.href = '/login'
-        return false
+        // OFF-03: mất mạng khi làm mới phiên không phải hết phiên. Không xóa phiên, không chuyển
+        // trang: đang bán ngoại tuyến thì bán tiếp, có mạng lại sẽ làm mới
+        return 'unavailable'
       } finally {
         refreshPromise = null
       }
@@ -341,8 +389,16 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   if (res.status === 401 && auth && !skipRefresh && !(await isPinInvalid(res))) {
     const refreshed = await tryRefresh()
-    if (refreshed) {
+    if (refreshed === 'refreshed') {
       return apiFetch<T>(path, { ...options, skipRefresh: true })
+    }
+    // Không làm mới được vì mạng: báo mất kết nối (lỗi tạm thời), không báo phiên hết hạn
+    if (refreshed === 'unavailable') {
+      throw new ApiClientError(
+        0,
+        { code: 'NETWORK_ERROR', message: REFRESH_UNAVAILABLE_MESSAGE },
+        receivedRequestId,
+      )
     }
   }
 

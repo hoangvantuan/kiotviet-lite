@@ -41,6 +41,8 @@ const REJECT_NEXT_STEPS: Record<OrderPolicyViolation['code'], string> = {
     'Lập phiếu trả hàng hoặc thu thêm tiền chênh lệch với khách nếu giá bán sai',
   debt_limit_exceeded: 'Thu nợ hoặc lập phiếu điều chỉnh công nợ cho khách',
   no_credit: 'Thu nợ hoặc lập phiếu điều chỉnh công nợ, cấp hạn mức nếu vẫn cho khách nợ',
+  sold_at_suspect: 'Kiểm tra đồng hồ của máy bán hàng và đối chiếu giờ bán với sổ sách trong ngày',
+  seller_inactive: 'Đối chiếu đơn với người bán đã nghỉ, lập phiếu trả hàng nếu đơn không có thật',
 }
 
 export async function reviewOrder({

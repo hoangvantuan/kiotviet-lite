@@ -7,15 +7,19 @@ import {
   hasPermission,
   type OrderPaymentStatus,
   type OrderPolicyViolation,
+  type Permission,
   products,
   productUnitConversions,
   productVariants,
+  SYNC_SOLD_AT_MAX_AGE_DAYS,
+  SYNC_SOLD_AT_MAX_FUTURE_MS,
   type UserRole,
   users,
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
+import { getStoreTimezone } from '../lib/timezone.js'
 import {
   type ApprovalRequester,
   assertApprovalAllowed,
@@ -35,6 +39,19 @@ export interface PolicyActor {
   userId: string
   storeId: string
   role: UserRole
+  /**
+   * OFF-05: người đồng bộ đơn ngoại tuyến khi khác người bán. `sellerUserId` do máy khách gửi, nên
+   * quyền dùng để tự duyệt là giao quyền của người bán và người đồng bộ: nhân viên không mượn được
+   * quyền của chủ bằng cách khai chủ là người bán, và chủ đồng bộ hộ không nâng quyền cho đơn của
+   * nhân viên.
+   */
+  syncedBy?: { userId: string; role: UserRole } | null
+}
+
+/** Quyền thực của actor khi đánh giá chính sách, xem PolicyActor.syncedBy. */
+export function actorHasPermission(actor: PolicyActor, permission: Permission): boolean {
+  if (!hasPermission(actor.role, permission)) return false
+  return !actor.syncedBy || hasPermission(actor.syncedBy.role, permission)
 }
 
 export interface Approver {
@@ -390,7 +407,7 @@ export async function evaluatePriceApproval({
   const required: ApprovalPermission[] = ['pos.editPrice']
   if (belowCost) required.push('pos.editPriceBelowCost')
 
-  const sellerHasAll = required.every((perm) => hasPermission(actor.role, perm))
+  const sellerHasAll = required.every((perm) => actorHasPermission(actor, perm))
   if (sellerHasAll && !hasOverride) {
     return {
       ...base,
@@ -404,7 +421,7 @@ export async function evaluatePriceApproval({
 
   // Người bán không được xem giá vốn thì không được biết dòng nào dưới giá vốn trước khi có một
   // PIN đúng (BC-13): trước PIN chỉ nói tới pos.editPrice, pos.editPriceBelowCost kiểm sau PIN.
-  const canViewCost = hasPermission(actor.role, 'products.viewCost')
+  const canViewCost = actorHasPermission(actor, 'products.viewCost')
   const beforePin: ApprovalPermission[] = canViewCost ? required : ['pos.editPrice']
   const afterPin: ApprovalPermission[] = canViewCost
     ? []
@@ -532,6 +549,52 @@ export function debtLimitViolation(params: {
     message: `Ghi nợ vượt hạn mức: nợ sau đơn ${params.debtAfter.toLocaleString('vi-VN')}đ, hạn mức ${params.effectiveDebtLimit.toLocaleString('vi-VN')}đ`,
     requiredPermissions: ['pos.overrideDebtLimit'],
   }
+}
+
+/**
+ * OFF-11 (ADR-0014): giờ bán của đơn ngoại tuyến do máy bán gửi, không tin được hoàn toàn. Giờ bán
+ * nằm ngoài khoảng tin được thì đơn ghi theo giờ nhận và gắn cờ để chủ đối chiếu; giờ gốc trả về ở
+ * `claimedAt` để lưu vào nhật ký. Khoảng tin được:
+ * - không quá SYNC_SOLD_AT_MAX_FUTURE_MS về tương lai (đồng hồ sai, hoặc sửa để dời doanh thu);
+ * - không cũ hơn SYNC_SOLD_AT_MAX_AGE_DAYS (đồng hồ chỉnh lùi để đẩy doanh thu vào kỳ đã chốt);
+ * - không trước lúc tạo cửa hàng (trừ độ lệch SYNC_SOLD_AT_MAX_FUTURE_MS).
+ * Ca bán hàng (PR #58) dùng chung quy tắc này.
+ */
+export function resolveOfflineSoldAt(
+  claimed: string | undefined,
+  receivedAt: Date,
+  storeCreatedAt: Date | null = null,
+): { soldAt: Date; violation: OrderPolicyViolation | null; claimedAt: string | null } {
+  const parsed = claimed ? new Date(claimed) : null
+  if (!parsed || Number.isNaN(parsed.getTime())) {
+    return { soldAt: receivedAt, violation: null, claimedAt: null }
+  }
+  const replaced = (message: string) => ({
+    soldAt: receivedAt,
+    claimedAt: parsed.toISOString(),
+    violation: {
+      code: 'sold_at_suspect' as const,
+      message: `${message}, đơn được ghi theo giờ máy chủ nhận đơn`,
+      requiredPermissions: ['pos.editPrice' as const],
+    },
+  })
+  if (parsed.getTime() - receivedAt.getTime() > SYNC_SOLD_AT_MAX_FUTURE_MS) {
+    return replaced(`Giờ bán trên máy (${formatVnDateTime(parsed)}) ở sau giờ nhận đơn`)
+  }
+  const maxAgeMs = SYNC_SOLD_AT_MAX_AGE_DAYS * 24 * 60 * 60 * 1000
+  if (receivedAt.getTime() - parsed.getTime() > maxAgeMs) {
+    return replaced(
+      `Giờ bán trên máy (${formatVnDateTime(parsed)}) cũ hơn ${SYNC_SOLD_AT_MAX_AGE_DAYS} ngày so với giờ nhận đơn`,
+    )
+  }
+  if (storeCreatedAt && storeCreatedAt.getTime() - parsed.getTime() > SYNC_SOLD_AT_MAX_FUTURE_MS) {
+    return replaced(`Giờ bán trên máy (${formatVnDateTime(parsed)}) ở trước lúc tạo cửa hàng`)
+  }
+  return { soldAt: parsed, violation: null, claimedAt: null }
+}
+
+function formatVnDateTime(date: Date): string {
+  return date.toLocaleString('vi-VN', { timeZone: getStoreTimezone(), hour12: false })
 }
 
 /** Quyền được liệt kê người duyệt; cũng là tập quyền hợp lệ cho `/verify-pin` của người khác. */

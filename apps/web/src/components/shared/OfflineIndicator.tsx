@@ -5,18 +5,66 @@ import { AlertCircle, CloudOff, RefreshCw, RotateCcw, ShieldAlert, WifiOff } fro
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { formatVndWithSuffix } from '@/lib/currency'
-import { getErrorOrders, type OfflineOrder } from '@/lib/offline-orders'
 import {
-  reportSyncCycleFailure,
-  retryErrorOrders,
-  retrySingleOrder,
-  startSyncCycle,
-} from '@/lib/order-sync'
+  getErrorOrders,
+  type OfflineOrder,
+  offlineOrderNumber,
+  resetErrorOrders,
+  resetSingleErrorOrder,
+} from '@/lib/offline-orders'
+import { requestSync } from '@/lib/offline-sync-runtime'
+import { reportSyncCycleFailure } from '@/lib/order-sync'
 import { getPGliteClient } from '@/lib/pglite'
-import { useOfflineStore } from '@/stores/use-offline-store'
+import { useAuthStore } from '@/stores/use-auth-store'
+import { type Connectivity, type OfflineStatus, useOfflineStore } from '@/stores/use-offline-store'
+
+/** Câu giải thích cho người bán (OFF-20, UAT 7.1 bước 2) */
+export function describeOfflineState(
+  connectivity: Connectivity,
+  status: OfflineStatus,
+): { title: string; explanation: string | null } {
+  if (connectivity === 'offline') {
+    return {
+      title: 'Đang ngoại tuyến',
+      explanation:
+        'Ứng dụng đang hoạt động ở chế độ ngoại tuyến. Dữ liệu sẽ được lưu cục bộ và tự động đồng bộ khi có mạng.',
+    }
+  }
+  if (connectivity === 'unreachable') {
+    return {
+      title: 'Không kết nối được máy chủ',
+      explanation:
+        'Máy vẫn có mạng nhưng không gọi được máy chủ. Đơn bán lúc này được lưu trên máy và tự đồng bộ khi máy chủ trả lời lại.',
+    }
+  }
+  if (status === 'error') return { title: 'Lỗi đồng bộ', explanation: null }
+  return { title: 'Đồng bộ dữ liệu', explanation: null }
+}
+
+/** Nhãn đọc màn hình cho nút chỉ báo: nói rõ trạng thái và số đơn */
+export function indicatorAriaLabel(input: {
+  connectivity: Connectivity
+  status: OfflineStatus
+  pending: number
+  errors: number
+}): string {
+  const parts = [describeOfflineState(input.connectivity, input.status).title]
+  if (input.status === 'syncing') parts.push('đang đồng bộ')
+  if (input.pending > 0) parts.push(`${input.pending} đơn ngoại tuyến chưa đồng bộ`)
+  if (input.errors > 0) parts.push(`${input.errors} đơn lỗi`)
+  return parts.join(', ')
+}
+
+function badgeText(count: number): string {
+  return count > 9 ? '9+' : String(count)
+}
 
 export function OfflineIndicator() {
   const status = useOfflineStore((s) => s.status)
+  const connectivity = useOfflineStore((s) => s.connectivity)
+  const errorOrderCount = useOfflineStore((s) => s.errorOrderCount)
+  const otherStoreOrderCount = useOfflineStore((s) => s.otherStoreOrderCount)
+  const storeId = useAuthStore((s) => s.user?.storeId ?? null)
   const pendingOrderCount = useOfflineStore((s) => s.pendingOrderCount)
   const errorMessage = useOfflineStore((s) => s.errorMessage)
   const lastSyncedAt = useOfflineStore((s) => s.lastSyncedAt)
@@ -28,34 +76,39 @@ export function OfflineIndicator() {
 
   const loadErrorOrders = useCallback(async () => {
     const pglite = getPGliteClient()
-    if (!pglite) return
+    if (!pglite || !storeId) {
+      setErrorOrders([])
+      return
+    }
     try {
-      const list = await getErrorOrders(pglite)
+      const list = await getErrorOrders(pglite, storeId)
       setErrorOrders(list)
     } catch {
       // Bỏ qua lỗi truy vấn PGlite cục bộ
     }
-  }, [])
+  }, [storeId])
 
   useEffect(() => {
     loadErrorOrders()
-  }, [status, pendingOrderCount, loadErrorOrders])
+  }, [status, pendingOrderCount, errorOrderCount, loadErrorOrders])
+
+  const online = connectivity === 'online'
 
   if (
     status === 'online' &&
+    online &&
     pendingOrderCount === 0 &&
     errorOrders.length === 0 &&
+    otherStoreOrderCount === 0 &&
     reviewPendingOrders.length === 0
   )
     return null
 
+  // Mọi lượt đẩy đi qua runtime để giữ khóa giữa các tab (OFF-02, OFF-04)
   const handleManualSync = async () => {
-    const pglite = getPGliteClient()
-    if (!pglite) return
-
     setSyncing(true)
     try {
-      await startSyncCycle(pglite, undefined, undefined, lastSyncedAt)
+      await requestSync('manual')
     } catch (error) {
       reportSyncCycleFailure(error, 'manual_sync')
     } finally {
@@ -66,11 +119,12 @@ export function OfflineIndicator() {
 
   const handleRetryAllErrors = async () => {
     const pglite = getPGliteClient()
-    if (!pglite) return
+    if (!pglite || !storeId) return
 
     setSyncing(true)
     try {
-      await retryErrorOrders(pglite)
+      await resetErrorOrders(pglite, storeId)
+      await requestSync('manual')
     } catch (error) {
       reportSyncCycleFailure(error, 'manual_sync')
     } finally {
@@ -85,7 +139,8 @@ export function OfflineIndicator() {
 
     setRetryingClientId(clientId)
     try {
-      await retrySingleOrder(pglite, clientId)
+      await resetSingleErrorOrder(pglite, clientId)
+      await requestSync('manual')
     } catch (error) {
       reportSyncCycleFailure(error, 'manual_sync')
     } finally {
@@ -94,19 +149,30 @@ export function OfflineIndicator() {
     }
   }
 
-  const totalBadge = pendingOrderCount + errorOrders.length
+  const errorCount = Math.max(errorOrderCount, errorOrders.length)
+  const { title, explanation } = describeOfflineState(connectivity, status)
+  const ariaLabel = indicatorAriaLabel({
+    connectivity,
+    status: syncing ? 'syncing' : status,
+    pending: pendingOrderCount,
+    errors: errorCount,
+  })
 
   const icon =
-    status === 'offline' ? (
+    connectivity === 'offline' ? (
       <WifiOff className="h-4 w-4 text-neutral-400" />
+    ) : connectivity === 'unreachable' ? (
+      <CloudOff className="h-4 w-4 text-neutral-400" />
     ) : status === 'syncing' || syncing ? (
       <RefreshCw className="h-4 w-4 animate-spin text-primary" />
-    ) : status === 'error' || errorOrders.length > 0 ? (
+    ) : status === 'error' || errorCount > 0 ? (
       <CloudOff className="h-4 w-4 text-amber-500" />
     ) : pendingOrderCount > 0 ? (
       <RefreshCw className="h-4 w-4 text-primary" />
     ) : reviewPendingOrders.length > 0 ? (
       <ShieldAlert className="h-4 w-4 text-orange-500" />
+    ) : otherStoreOrderCount > 0 ? (
+      <AlertCircle className="h-4 w-4 text-amber-500" />
     ) : null
 
   if (!icon) return null
@@ -116,12 +182,29 @@ export function OfflineIndicator() {
       <PopoverTrigger asChild>
         <button
           type="button"
+          aria-label={ariaLabel}
+          title={ariaLabel}
+          data-testid="offline-indicator"
           className="relative flex items-center gap-1 p-1 rounded hover:bg-accent focus:outline-none"
         >
           {icon}
-          {totalBadge > 0 && (
-            <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
-              {totalBadge > 9 ? '9+' : totalBadge}
+          {/* Huy hiệu tách riêng (OFF-20): xanh là đơn đang chờ, đỏ là đơn lỗi cần xử lý */}
+          {pendingOrderCount > 0 && (
+            <span
+              aria-hidden="true"
+              data-testid="offline-pending-badge"
+              className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 text-[10px] text-primary-foreground"
+            >
+              {badgeText(pendingOrderCount)}
+            </span>
+          )}
+          {errorCount > 0 && (
+            <span
+              aria-hidden="true"
+              data-testid="offline-error-badge"
+              className="absolute -bottom-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] text-white"
+            >
+              {badgeText(errorCount)}
             </span>
           )}
         </button>
@@ -129,13 +212,7 @@ export function OfflineIndicator() {
       <PopoverContent className="w-80" align="end">
         <div className="space-y-3 text-sm">
           <div className="flex items-center justify-between">
-            <div className="font-semibold text-foreground">
-              {status === 'offline'
-                ? 'Đang ngoại tuyến'
-                : status === 'error'
-                  ? 'Lỗi đồng bộ'
-                  : 'Đồng bộ dữ liệu'}
-            </div>
+            <div className="font-semibold text-foreground">{title}</div>
             {lastSyncedAt && (
               <span className="text-[11px] text-muted-foreground">
                 {new Date(lastSyncedAt).toLocaleTimeString('vi-VN')}
@@ -143,9 +220,11 @@ export function OfflineIndicator() {
             )}
           </div>
 
+          {explanation && <p className="text-xs text-muted-foreground">{explanation}</p>}
+
           {pendingOrderCount > 0 && (
             <div className="flex items-center justify-between text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-              <span>Đơn ngoại tuyến:</span>
+              <span>Đơn ngoại tuyến chưa đồng bộ:</span>
               <span className="font-medium text-foreground">{pendingOrderCount}</span>
             </div>
           )}
@@ -177,12 +256,22 @@ export function OfflineIndicator() {
                       params={{ orderId: o.serverId }}
                       className="font-mono underline underline-offset-2"
                     >
-                      #{o.clientId.slice(0, 8).toUpperCase()}
+                      {o.orderNumber ?? offlineOrderNumber(o.clientId)}
                     </Link>
                     <span className="font-medium">{formatVndWithSuffix(o.total)}</span>
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {otherStoreOrderCount > 0 && (
+            <div className="flex items-start gap-1.5 rounded bg-amber-50 p-2 text-xs text-amber-900">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Máy này còn {otherStoreOrderCount} đơn chưa đồng bộ của cửa hàng khác. Đơn đó chỉ
+                được đồng bộ khi người của cửa hàng đó đăng nhập trên máy này.
+              </span>
             </div>
           )}
 
@@ -197,9 +286,9 @@ export function OfflineIndicator() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-destructive">
-                  Đơn hàng lỗi ({errorOrders.length}):
+                  Đơn hàng lỗi ({errorCount}):
                 </span>
-                {navigator.onLine && (
+                {online && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -221,7 +310,7 @@ export function OfflineIndicator() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-mono text-muted-foreground">
-                        #{order.clientId.slice(0, 8).toUpperCase()}
+                        {offlineOrderNumber(order.clientId)}
                       </span>
                       <span className="font-semibold text-foreground">
                         {formatVndWithSuffix(order.orderData.total)}
@@ -232,7 +321,7 @@ export function OfflineIndicator() {
                         {order.errorMessage}
                       </span>
                     )}
-                    {navigator.onLine && (
+                    {online && (
                       <div className="flex justify-end pt-1">
                         <Button
                           size="sm"
@@ -256,7 +345,7 @@ export function OfflineIndicator() {
             </div>
           )}
 
-          {navigator.onLine && pendingOrderCount > 0 && (
+          {connectivity !== 'offline' && pendingOrderCount > 0 && (
             <Button
               size="sm"
               variant="default"
