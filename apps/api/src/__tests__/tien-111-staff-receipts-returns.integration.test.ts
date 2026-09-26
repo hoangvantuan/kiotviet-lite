@@ -2,8 +2,9 @@ import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { debts, orderReturns, receipts, stores } from '@kiotviet-lite/shared'
+import { debts, orderReturns, orders, receipts, stores, users } from '@kiotviet-lite/shared'
 
+import { hashPassword } from '../lib/password.js'
 import { createOrdersRoutes } from '../routes/orders.routes.js'
 import { createReceiptsRoutes } from '../routes/receipts.routes.js'
 import { createShiftsRoutes } from '../routes/shifts.routes.js'
@@ -47,10 +48,20 @@ interface Resp {
   body: any
 }
 
-async function call(method: string, path: string, user: SeededUser, body?: unknown): Promise<Resp> {
+async function call(
+  method: string,
+  path: string,
+  user: SeededUser,
+  body?: unknown,
+  idempotencyKey?: string,
+): Promise<Resp> {
   const res = await app.request(path, {
     method,
-    headers: { ...user.authHeader, 'Content-Type': 'application/json' },
+    headers: {
+      ...user.authHeader,
+      'Content-Type': 'application/json',
+      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   const text = await res.text()
@@ -330,5 +341,45 @@ describe('TIEN-111: hoàn vượt số khách đã trả qua từng kênh', () =
     )
     expect(transfer.status, JSON.stringify(transfer.body)).toBe(201)
     expect(transfer.body.data.refundAmount).toBe(100_000)
+  })
+})
+
+describe('TIEN-111: gửi lại cùng Idempotency-Key không kiểm PIN lại', () => {
+  async function changeManagerPin() {
+    await env.db
+      .update(users)
+      .set({ pinHash: await hashPassword('999999') })
+      .where(eq(users.id, env.manager.id))
+  }
+
+  it('phiếu trả đã tạo: gửi lại sau khi người duyệt đổi PIN vẫn nhận phản hồi cũ', async () => {
+    const { order, itemId } = await transferSale()
+    const body = returnBody(itemId, {
+      refundMethod: 'cash',
+      approverId: env.manager.id,
+      approverPin: env.manager.pin,
+    })
+    const first = await call('POST', `/orders/${order.id}/returns`, env.staff, body, 'ret-key-0001')
+    expect(first.status, JSON.stringify(first.body)).toBe(201)
+
+    await changeManagerPin()
+    const again = await call('POST', `/orders/${order.id}/returns`, env.staff, body, 'ret-key-0001')
+    expect(again.status, JSON.stringify(again.body)).toBe(201)
+    expect(again.body.data.id).toBe(first.body.data.id)
+    expect(await env.db.select().from(orderReturns)).toHaveLength(1)
+  })
+
+  it('đơn đã hủy bằng PIN quản lý: gửi lại sau khi đổi PIN vẫn nhận phản hồi cũ', async () => {
+    const product = await stockedProduct(env)
+    const order = await sell(env, [{ product, quantity: 1 }])
+    const body = { reason: 'Nhập nhầm', approverId: env.manager.id, approverPin: env.manager.pin }
+    const first = await call('POST', `/orders/${order.id}/cancel`, env.staff, body, 'cancel-key-01')
+    expect(first.status, JSON.stringify(first.body)).toBe(200)
+
+    await changeManagerPin()
+    const again = await call('POST', `/orders/${order.id}/cancel`, env.staff, body, 'cancel-key-01')
+    expect(again.status, JSON.stringify(again.body)).toBe(200)
+    const [row] = await env.db.select().from(orders).where(eq(orders.id, order.id))
+    expect(row!.status).toBe('cancelled')
   })
 })

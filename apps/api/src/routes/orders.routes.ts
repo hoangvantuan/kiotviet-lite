@@ -13,7 +13,7 @@ import { parseJson } from '../lib/http.js'
 import { requireAuth } from '../middleware/auth.middleware.js'
 import { cancelDocumentRoute } from '../middleware/document-cancel.js'
 import { errorHandler } from '../middleware/error-handler.js'
-import { idempotent } from '../middleware/idempotency.js'
+import { idempotentWithPreflight } from '../middleware/idempotency.js'
 import { requirePermission } from '../middleware/rbac.middleware.js'
 import { getRequestMeta } from '../services/audit.service.js'
 import { cancelOrder } from '../services/order-cancel.service.js'
@@ -111,29 +111,34 @@ export function createOrdersRoutes({ db }: OrdersRoutesDeps) {
 
   // POST /:id/returns - Create a return
   // TIEN-111: PIN người duyệt vượt quyền (nếu gửi) kiểm trên kết nối gốc, trước transaction của
-  // idempotent(), để lần nhập sai được đếm dù phiếu trả không tạo được
+  // idempotent(), để lần nhập sai được đếm dù phiếu trả không tạo được. Gửi lại cùng
+  // Idempotency-Key sau khi phiếu đã tạo nhận phản hồi cũ, không kiểm PIN lại
   app.post('/:id/returns', requirePermission('orders.return'), async (c) => {
     const input = await parseJson(c, createOrderReturnSchema)
-    const approver = await authorizeReturnOverride({
+    return idempotentWithPreflight(
       db,
-      actor: c.get('auth'),
-      input,
-      meta: getRequestMeta(c),
-    })
-    return idempotent(db, async (ctx, transaction) => {
-      const auth = ctx.get('auth')
-      const id = uuidParam.parse(ctx.req.param('id'))
-      const data = await createReturn({
-        db,
-        transaction,
-        actor: auth,
-        orderId: id,
-        input,
-        meta: getRequestMeta(ctx),
-        preauthorized: { approver },
-      })
-      return ctx.json({ data }, 201)
-    })(c)
+      (ctx) =>
+        authorizeReturnOverride({
+          db,
+          actor: ctx.get('auth'),
+          input,
+          meta: getRequestMeta(ctx),
+        }),
+      async (ctx, transaction, approver) => {
+        const auth = ctx.get('auth')
+        const id = uuidParam.parse(ctx.req.param('id'))
+        const data = await createReturn({
+          db,
+          transaction,
+          actor: auth,
+          orderId: id,
+          input,
+          meta: getRequestMeta(ctx),
+          preauthorized: { approver },
+        })
+        return ctx.json({ data }, 201)
+      },
+    )(c)
   })
 
   // TIEN-107: hủy đơn bán. Nhân viên được gọi nhưng phải kèm PIN của người có quyền hủy

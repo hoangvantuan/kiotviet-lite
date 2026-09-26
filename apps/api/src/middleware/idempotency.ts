@@ -67,15 +67,7 @@ export function idempotent(db: Db, handler: IdempotentHandler) {
           if (!previous || previous.responseStatus === null) {
             throw new ApiError('CONFLICT', 'Yêu cầu này đang được xử lý, vui lòng thử lại sau')
           }
-          if (previous.requestHash !== requestHash) {
-            throw new ApiError(
-              'BUSINESS_RULE_VIOLATION',
-              'Idempotency-Key đã dùng cho một yêu cầu khác. Vui lòng tải lại trang rồi thao tác lại',
-              { reason: 'idempotency_key_reused' },
-            )
-          }
-          c.header(IDEMPOTENT_REPLAY_HEADER, 'true')
-          return c.json(previous.responseBody, previous.responseStatus as ContentfulStatusCode)
+          return replay(c, previous, requestHash)
         }
 
         const response = await handler(c, tx)
@@ -91,6 +83,50 @@ export function idempotent(db: Db, handler: IdempotentHandler) {
       if (err instanceof DiscardedResponse) return err.response
       throw err
     }
+  }
+}
+
+type IdempotencyRow = typeof idempotencyKeys.$inferSelect
+
+/** Trả nguyên phản hồi đã lưu của khóa; cùng khóa khác nội dung thì 422 */
+function replay(c: Context, previous: IdempotencyRow, requestHash: string): Response {
+  if (previous.requestHash !== requestHash) {
+    throw new ApiError(
+      'BUSINESS_RULE_VIOLATION',
+      'Idempotency-Key đã dùng cho một yêu cầu khác. Vui lòng tải lại trang rồi thao tác lại',
+      { reason: 'idempotency_key_reused' },
+    )
+  }
+  c.header(IDEMPOTENT_REPLAY_HEADER, 'true')
+  return c.json(previous.responseBody, previous.responseStatus as ContentfulStatusCode)
+}
+
+/**
+ * Như `idempotent()`, thêm bước `preflight` chạy trên kết nối gốc NGOÀI transaction, ví dụ kiểm PIN
+ * người duyệt để lần nhập sai được đếm dù request rollback. Khóa đã có phản hồi hoàn tất thì trả
+ * phản hồi cũ TRƯỚC, không chạy preflight: gửi lại sau khi chứng từ đã tạo không kiểm PIN lại (PIN
+ * có thể đã đổi hoặc bị khóa) và không ghi thêm lượt duyệt.
+ */
+export function idempotentWithPreflight<T>(
+  db: Db,
+  preflight: (c: Context) => Promise<T>,
+  handler: (c: Context, transaction: ServiceTransaction | undefined, pre: T) => Promise<Response>,
+) {
+  return async (c: Context): Promise<Response> => {
+    const key = c.req.header(IDEMPOTENCY_HEADER)
+    if (key !== undefined && KEY_PATTERN.test(key)) {
+      const auth = c.get('auth')
+      const [previous] = await db
+        .select()
+        .from(idempotencyKeys)
+        .where(and(eq(idempotencyKeys.storeId, auth.storeId), eq(idempotencyKeys.key, key)))
+        .limit(1)
+      if (previous && previous.responseStatus !== null) {
+        return replay(c, previous, await hashRequest(c, auth.userId))
+      }
+    }
+    const pre = await preflight(c)
+    return idempotent(db, (ctx, transaction) => handler(ctx, transaction, pre))(c)
   }
 }
 
