@@ -24,15 +24,11 @@ import { formatDateTime } from '@/lib/date'
 import { showSuccess } from '@/lib/toast'
 import { useAuthStore } from '@/stores/use-auth-store'
 
+import { purchaseOrderOutstanding } from './purchase-order-outstanding'
 import {
   useCancelPurchaseOrderMutation,
   useCreatePurchaseReturnMutation,
 } from './use-purchase-orders'
-
-/** Số còn phải trả NCC của phiếu: giá trị sau trả hàng trừ phần đã trả ròng */
-export function purchaseOrderOutstanding(order: PurchaseOrderDetail): number {
-  return Math.max(0, order.totalAmount - order.returnedAmount - order.paidAmount)
-}
 
 /** Giá trị thực nhập của dòng (sau chiết khấu dòng và phần chiết khấu phiếu phân bổ) */
 function lineNet(item: PurchaseOrderDetail['items'][number]): number {

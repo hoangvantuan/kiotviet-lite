@@ -22,9 +22,9 @@ import { formatDateTime } from '@/lib/date'
 import {
   PurchaseOrderActions,
   PurchaseOrderCancelledNotice,
-  purchaseOrderOutstanding,
   PurchaseReturnsSection,
 } from './purchase-order-actions'
+import { purchaseOrderOutstanding } from './purchase-order-outstanding'
 import { usePurchaseOrderQuery } from './use-purchase-orders'
 
 interface PurchaseOrderDetailViewProps {
