@@ -901,19 +901,19 @@ export async function createOrder({
             // POS-13: cửa hàng không cho bán âm kho thì chặn đơn POS (hàng đã khóa nên số tồn là
             // số thật tại lúc bán). Đơn ngoại tuyến đã giao hàng tại quầy nên vẫn ghi, nhưng vào
             // chờ duyệt với vi phạm negative_stock_policy, không phụ thuộc bật cảnh báo tồn âm.
-            const available = Math.max(0, newStock + deductQty)
+            const available = Math.max(0, addQty(newStock, deductQty))
             const label = item.variantName
               ? `${item.productName} (${item.variantName})`
               : item.productName
             if (!allowNegativeStock && source === 'offline_sync') {
               overSoldLines.push(
-                `${label} còn ${available} ${product.unit}, bán ${deductQty} ${product.unit}`,
+                `${label} còn ${formatQuantity(available)} ${product.unit}, bán ${formatQuantity(deductQty)} ${product.unit}`,
               )
             }
             if (!allowNegativeStock && source === 'pos') {
               throw new ApiError(
                 'BUSINESS_RULE_VIOLATION',
-                `Không đủ tồn kho: ${label} chỉ còn ${available} ${product.unit}`,
+                `Không đủ tồn kho: ${label} chỉ còn ${formatQuantity(available)} ${product.unit}`,
                 {
                   reason: 'insufficient_stock',
                   itemIndex: itemIdx,

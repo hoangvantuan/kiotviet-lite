@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 
+import { addQty, formatQuantity, mulQty } from '@kiotviet-lite/shared'
+
 import { showError, showWarning } from '@/lib/toast'
 import { type CartItem, useCartStore } from '@/stores/use-cart-store'
 
@@ -7,7 +9,8 @@ import { type CartItem, useCartStore } from '@/stores/use-cart-store'
  * POS-13: một chỗ kiểm tồn kho cho mọi đường đưa hàng vào giỏ (thêm, sửa số lượng, đổi đơn vị,
  * quét mã vạch). Tồn kho tính theo đơn vị cơ bản của sản phẩm hoặc của biến thể, cộng mọi dòng cùng
  * hàng trong giỏ (một hàng có thể nằm ở nhiều dòng đơn vị quy đổi). Cửa hàng cho bán âm thì chỉ cảnh
- * báo, không cho thì chặn; máy chủ kiểm lại cùng quy tắc khi tạo đơn.
+ * báo, không cho thì chặn; máy chủ kiểm lại cùng quy tắc khi tạo đơn. Số lượng có thể lẻ (ADR-0015):
+ * cộng, nhân qua addQty/mulQty để 0,1 kg + 0,1 túi 2 kg đúng bằng 0,3 kg.
  */
 interface StockPolicyState {
   /** Theo cài đặt cửa hàng; mặc định cho bán âm như máy chủ */
@@ -62,7 +65,7 @@ export function cartBaseQuantity(
         i.productId === productId &&
         (i.variantId ?? null) === (variantId ?? null),
     )
-    .reduce((sum, i) => sum + i.quantity * conversionFactorOf(i), 0)
+    .reduce((sum, i) => addQty(sum, mulQty(i.quantity, conversionFactorOf(i))), 0)
 }
 
 /** Kiểm khi giỏ sẽ có tổng `nextBaseQty` (đơn vị cơ bản) của hàng `target` */
@@ -77,7 +80,7 @@ export function checkStock(
   const detail =
     available === 0
       ? `Hết hàng: ${target.name}`
-      : `Vượt tồn kho: ${target.name} chỉ còn ${available}${unit}, trong giỏ sẽ có ${nextBaseQty}${unit}`
+      : `Vượt tồn kho: ${target.name} chỉ còn ${formatQuantity(available)}${unit}, trong giỏ sẽ có ${formatQuantity(nextBaseQty)}${unit}`
   if (allowNegativeStock) return { status: 'warn', message: `${detail}. Tồn kho sẽ bị âm` }
   return { status: 'blocked', message: `${detail}. Cửa hàng không cho bán vượt tồn kho` }
 }
@@ -113,7 +116,7 @@ function targetOf(item: CartItem): StockTarget {
 export function guardAddToCart(target: StockTarget, addBaseQty: number): boolean {
   const inCart = cartBaseQuantity(activeItems(), target.productId, target.variantId)
   return reportStockCheck(
-    checkStock(target, inCart + addBaseQty, usePosStockPolicy.getState().allowNegativeStock),
+    checkStock(target, addQty(inCart, addBaseQty), usePosStockPolicy.getState().allowNegativeStock),
   )
 }
 
@@ -123,7 +126,7 @@ export function updateCartQuantity(id: string, qty: number): boolean {
   if (!item) return false
   if (qty > item.quantity) {
     const others = cartBaseQuantity(activeItems(), item.productId, item.variantId, id)
-    const next = others + qty * conversionFactorOf(item)
+    const next = addQty(others, mulQty(qty, conversionFactorOf(item)))
     const ok = reportStockCheck(
       checkStock(targetOf(item), next, usePosStockPolicy.getState().allowNegativeStock),
     )
@@ -138,8 +141,11 @@ export function changeCartItemUnit(id: string, unitConversionId: string | null):
   const item = activeItems().find((i) => i.id === id)
   if (!item) return false
   const others = cartBaseQuantity(activeItems(), item.productId, item.variantId, id)
-  const next = others + item.quantity * conversionFactorOf({ ...item, unitConversionId })
-  const current = others + item.quantity * conversionFactorOf(item)
+  const next = addQty(
+    others,
+    mulQty(item.quantity, conversionFactorOf({ ...item, unitConversionId })),
+  )
+  const current = addQty(others, mulQty(item.quantity, conversionFactorOf(item)))
   if (next > current) {
     const ok = reportStockCheck(
       checkStock(targetOf(item), next, usePosStockPolicy.getState().allowNegativeStock),

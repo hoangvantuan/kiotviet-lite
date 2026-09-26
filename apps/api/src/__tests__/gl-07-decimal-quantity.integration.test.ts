@@ -18,8 +18,10 @@ import {
   inventoryTransactions,
   lineAmount,
   orderItems,
+  orders,
   products,
   stockCheckItems,
+  stores,
 } from '@kiotviet-lite/shared'
 
 import { createOrdersRoutes } from '../routes/orders.routes.js'
@@ -566,7 +568,8 @@ describe('GL-07: bán, trả, nhập, kiểm kê với số lượng thập phâ
       ].map((l) => ({
         storeId: env.storeId,
         productId: shirt.id,
-        type: 'stock_check',
+        type: 'manual_adjustment',
+        referenceType: 'manual' as const,
         stockAfter: l.quantity,
         createdBy: env.owner.id,
         ...l,
@@ -574,6 +577,51 @@ describe('GL-07: bán, trả, nhập, kiểm kê với số lượng thập phâ
     )
     const off = await call('PATCH', `/products/${shirt.id}`, { allowDecimalQuantity: false })
     expect(off.status).toBe(200)
+  })
+
+  it('POS-13 với số lẻ: cửa hàng không cho bán âm, thông báo tồn còn lại chính xác theo vi-VN', async () => {
+    await env.db.update(stores).set({ allowNegativeStock: false }).where(eq(stores.id, env.storeId))
+    const mushroom = await createProduct({
+      name: 'Nấm đùi gà',
+      unit: 'kg',
+      sellingPrice: 80_000,
+      allowDecimalQuantity: true,
+      initialStock: 0.3,
+    })
+    const body = orderBody({
+      productId: mushroom.id,
+      productName: mushroom.name,
+      unitPrice: 80_000,
+      quantity: 0.4,
+    })
+    // Tồn sau trừ -0,1 cộng lại 0,4 bằng float ra 0,30000000000000004
+    const blocked = await call('POST', '/pos/orders', body, true)
+    expect(blocked.status).toBe(422)
+    expect(blocked.body.error.message).toBe('Không đủ tồn kho: Nấm đùi gà chỉ còn 0,3 kg')
+    expect(blocked.body.error.details).toMatchObject({
+      reason: 'insufficient_stock',
+      available: 0.3,
+    })
+    expect(await stockOf(mushroom.id)).toBe(0.3)
+
+    const pushed = await call('POST', '/sync/push', {
+      clientId: randomUUID(),
+      orders: [{ clientId: randomUUID(), createdAt: new Date().toISOString(), orderData: body }],
+    })
+    expect(pushed.status).toBe(200)
+    const result = pushed.body.data.results[0]
+    expect(result).toMatchObject({ status: 'synced', reviewStatus: 'pending_review' })
+    const [row] = await env.db.select().from(orders).where(eq(orders.id, result.serverId))
+    expect(row!.policyViolations).toEqual([
+      {
+        code: 'negative_stock_policy',
+        message:
+          'Bán vượt tồn kho khi cửa hàng không cho bán âm: Nấm đùi gà còn 0,3 kg, bán 0,4 kg',
+        requiredPermissions: [],
+      },
+    ])
+    expect(await stockOf(mushroom.id)).toBe(-0.1)
+    expect(await invariantViolations()).toEqual([])
   })
 
   it('B1: chiết khấu danh mục với số lượng lẻ, có khách: tính giá, tạo đơn, đồng bộ ngoại tuyến không 500', async () => {

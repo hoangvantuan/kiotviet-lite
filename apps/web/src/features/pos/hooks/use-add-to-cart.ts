@@ -1,5 +1,7 @@
 import { useCallback } from 'react'
 
+import { mulQty } from '@kiotviet-lite/shared'
+
 import { useCartStore } from '@/stores/use-cart-store'
 
 import { guardAddToCart } from '../stock-guard'
@@ -52,7 +54,7 @@ export function addToCartAction({
       name: variant ? `${product.name} (${variant.name})` : product.name,
       baseUnit: product.unit ?? null,
     },
-    quantity * (unitConversion?.conversionFactor ?? 1),
+    mulQty(quantity, unitConversion?.conversionFactor ?? 1),
   )
   if (!allowed) return false
   useCartStore.getState().addItem(

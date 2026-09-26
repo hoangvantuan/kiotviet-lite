@@ -123,3 +123,67 @@ describe('kiểm tồn trên giỏ', () => {
     expect(toast.showError).toHaveBeenCalledTimes(1)
   })
 })
+
+// GL-07 (ADR-0015): hàng số lẻ ở hai đơn vị, cộng dồn tồn giỏ phải chính xác tới 0,001
+describe('kiểm tồn hàng số lẻ ở nhiều đơn vị', () => {
+  const rice = {
+    ...coke,
+    productId: 'prod-gao',
+    productName: 'Gạo ST25',
+    sku: 'GAO-ST25',
+    unitName: 'kg',
+    baseUnit: 'kg',
+    unitPrice: 30_000,
+    baseUnitPrice: 30_000,
+    allowDecimalQuantity: true,
+    baseStockQuantity: 0.3,
+    stockQuantity: 0.3,
+    unitConversions: [
+      {
+        id: 'uc-tui',
+        unit: 'Túi 2kg',
+        conversionFactor: 2,
+        sellingPrice: 58_000,
+        allowDecimalQuantity: true,
+      },
+    ],
+  }
+  const riceTarget: StockTarget = {
+    productId: 'prod-gao',
+    variantId: null,
+    trackInventory: true,
+    baseStock: 0.3,
+    name: 'Gạo ST25',
+    baseUnit: 'kg',
+  }
+
+  beforeEach(() => usePosStockPolicy.getState().setAllowNegativeStock(false))
+
+  it('0,1 kg và 0,1 túi (0,2 kg) vừa đúng tồn 0,3 kg: không bị chặn', () => {
+    useCartStore.getState().addItem(rice, 0.1)
+    expect(cartBaseQuantity(items(), 'prod-gao', null)).toBe(0.1)
+    expect(guardAddToCart(riceTarget, 0.2)).toBe(true)
+    useCartStore
+      .getState()
+      .addItem({ ...rice, unitConversionId: 'uc-tui', unitName: 'Túi 2kg' }, 0.1)
+    expect(cartBaseQuantity(items(), 'prod-gao', null)).toBe(0.3)
+    const tui = items().find((i) => i.unitConversionId === 'uc-tui')!
+    // Sửa lại đúng số cũ qua đường tăng số lượng: vẫn trong tồn
+    useCartStore.getState().updateQuantity(tui.id, 0.05)
+    expect(updateCartQuantity(tui.id, 0.1)).toBe(true)
+    expect(toast.showError).not.toHaveBeenCalled()
+  })
+
+  it('vượt tồn ở hai đơn vị: chặn, báo số lẻ theo vi-VN', () => {
+    useCartStore.getState().addItem(rice, 0.2)
+    useCartStore
+      .getState()
+      .addItem({ ...rice, unitConversionId: 'uc-tui', unitName: 'Túi 2kg' }, 0.05)
+    const tui = items().find((i) => i.unitConversionId === 'uc-tui')!
+    expect(updateCartQuantity(tui.id, 0.1)).toBe(false)
+    expect(items().find((i) => i.id === tui.id)!.quantity).toBe(0.05)
+    expect(toast.showError).toHaveBeenCalledWith(
+      'Vượt tồn kho: Gạo ST25 chỉ còn 0,3 kg, trong giỏ sẽ có 0,4 kg. Cửa hàng không cho bán vượt tồn kho',
+    )
+  })
+})

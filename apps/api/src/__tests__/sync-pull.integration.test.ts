@@ -829,9 +829,86 @@ describe('GL-07: số lượng lẻ trên bản sao danh mục (PGlite v006)', (
     expect(offlinePrices.map((p) => p.price)).toEqual([45_000, 45_000, 40_000])
   })
 
-  it('v006 đổi cột bản sao cũ sang số lẻ, giữ dữ liệu, xóa con trỏ để tải lại cờ', async () => {
+  it('ngưỡng bậc giá, chiết khấu danh mục so theo đơn vị cơ bản chính xác: 0,5 thùng 24 = 12, 0,58 bao 50 = 29', async () => {
+    const beer = await createProduct(env, {
+      name: 'Bia lon',
+      sku: 'BIA-01',
+      unit: 'lon',
+      sellingPrice: 10_000,
+      allowDecimalQuantity: true,
+    })
+    const crate = await createUnitConversion(env, beer.id, {
+      unit: 'thùng',
+      conversionFactor: 24,
+      sellingPrice: 0,
+      allowDecimalQuantity: true,
+    })
+    const [cat] = await env.db
+      .insert(categories)
+      .values({ storeId: env.storeId, name: 'Gạo' })
+      .returning()
+    const rice = await createProduct(env, {
+      name: 'Gạo ST25',
+      sku: 'GAO-01',
+      unit: 'kg',
+      sellingPrice: 20_000,
+      categoryId: cat!.id,
+      allowDecimalQuantity: true,
+    })
+    const sack = await createUnitConversion(env, rice.id, {
+      unit: 'bao',
+      conversionFactor: 50,
+      sellingPrice: 0,
+      allowDecimalQuantity: true,
+    })
+    await env.db.insert(volumePrices).values([
+      { storeId: env.storeId, productId: beer.id, minQty: 12, price: 9_000 },
+      { storeId: env.storeId, productId: rice.id, minQty: 29, price: 18_000 },
+    ])
+    const customer = await createCustomer(env, { name: 'Khách mua gạo' })
+    await env.db.insert(categoryDiscounts).values({
+      storeId: env.storeId,
+      categoryId: cat!.id,
+      customerId: customer.id,
+      discountType: 'percent',
+      discountValue: 10,
+      minQty: 29,
+    })
+    await sync(env.owner.authHeader, true)
+
+    const items = [
+      { productId: beer.id, unitConversionId: crate.id, quantity: 0.5 },
+      { productId: beer.id, unitConversionId: crate.id, quantity: 0.499 },
+      // 0,58 × 50 nhân float ra 28,999999999999996, dưới ngưỡng 29
+      { productId: rice.id, unitConversionId: sack.id, quantity: 0.58 },
+    ]
+    const cases = [
+      { customerId: null, expected: [216_000, 240_000, 900_000] },
+      { customerId: customer.id, expected: [216_000, 240_000, 900_000] },
+    ]
+    for (const { customerId, expected } of cases) {
+      const input = { customerId, priceListId: null, items }
+      const res = await app.request('/api/v1/pos/resolve-prices', {
+        method: 'POST',
+        headers: { ...env.staff.authHeader, 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+      expect(res.status).toBe(200)
+      const online = ((await res.json()) as { data: ResolvedPriceItem[] }).data
+      const offline = await resolvePricesOffline(client, { storeId: env.storeId, input })
+      expect(offline).toEqual(online)
+      expect(online.map((p) => p.price)).toEqual(expected)
+      expect(online.map((p) => p.source)).toEqual([
+        'volume_price',
+        'retail_price',
+        customerId ? 'category_discount' : 'volume_price',
+      ])
+    }
+  })
+
+  it('bản sao v004 lên mới nhất (v005 rồi v006): đổi cột sang số lẻ, giữ dữ liệu, xóa con trỏ để tải lại cờ', async () => {
     const old = new PGlite()
-    for (const m of pgliteMigrations.filter((x) => x.version < 6)) await old.exec(m.sql)
+    for (const m of pgliteMigrations.filter((x) => x.version <= 4)) await old.exec(m.sql)
     const productId = randomUUID()
     await old.query(
       `INSERT INTO catalog_products (store_id, id, name, sku, selling_price, unit, current_stock)
@@ -839,17 +916,33 @@ describe('GL-07: số lượng lẻ trên bản sao danh mục (PGlite v006)', (
       [env.storeId, productId],
     )
     await old.query(
+      `INSERT INTO catalog_volume_prices (store_id, id, product_id, min_qty, price)
+       VALUES ($1, $2, $3, 12, 18000)`,
+      [env.storeId, randomUUID(), productId],
+    )
+    await old.query(
       `INSERT INTO catalog_sync_state (store_id, entity, cursor_t, cursor_id)
        VALUES ($1, 'products', '2026-01-01T00:00:00.000Z', $2)`,
       [env.storeId, productId],
     )
-    await old.exec(pgliteMigrations.find((x) => x.version === 6)!.sql)
+    const pending = pgliteMigrations
+      .filter((x) => x.version > 4)
+      .sort((a, b) => a.version - b.version)
+    expect(pending.map((m) => m.version)).toEqual([5, 6])
+    for (const m of pending) await old.exec(m.sql)
+
     await old.query(`UPDATE catalog_products SET current_stock = 7.125 WHERE id = $1`, [productId])
     const { rows } = await old.query<{ current_stock: string; allow_decimal_quantity: boolean }>(
       'SELECT current_stock, allow_decimal_quantity FROM catalog_products WHERE id = $1',
       [productId],
     )
     expect(rows[0]).toEqual({ current_stock: '7.125', allow_decimal_quantity: false })
+    // v005 thêm variant_id (dòng cũ theo sản phẩm là null), v006 đổi ngưỡng sang số lẻ
+    const tiers = await old.query<{ min_qty: string; variant_id: string | null }>(
+      'SELECT min_qty, variant_id FROM catalog_volume_prices WHERE product_id = $1',
+      [productId],
+    )
+    expect(tiers.rows).toEqual([{ min_qty: '12.000', variant_id: null }])
     const state = await old.query('SELECT * FROM catalog_sync_state')
     expect(state.rows).toHaveLength(0)
     await old.close()

@@ -4,7 +4,7 @@
 - Ngày: 2026-09-26
 - Phạm vi: `packages/shared/src/utils/quantity.ts`, `packages/shared/src/schema/quantity-column.ts`,
   `packages/shared/src/utils/pricing.ts`, các schema zod có số lượng, cột số lượng và tồn kho ở
-  `packages/shared/src/schema/*`, migration `*_d4_decimal_quantity`, PGlite `v006`, các dịch vụ bán,
+  `packages/shared/src/schema/*`, migration `0062_d4_decimal_quantity`, PGlite `v006`, các dịch vụ bán,
   trả hàng, nhập hàng, trả hàng nhập, kiểm kê, nhập liệu hàng loạt, báo cáo tồn, `apps/api/scripts/invariants.sql`,
   ô nhập số lượng và mẫu in ở `apps/web`
 - Bổ sung cho: [ADR-0006](0006-nhap-lieu-hang-loat-khong-dong-ton-kho.md),
@@ -31,10 +31,15 @@ hàng tính theo kg): `products.current_stock`, `products.min_stock`,
 `purchase_return_items.quantity`, `.base_quantity`, `.stock_after`,
 `inventory_transactions.quantity`, `.stock_after`, `stock_check_items` và `stock_check_logs`
 (`system_qty`, `actual_qty`, `diff`), `stock_checks.total_diff_positive`, `.total_diff_negative`,
-`volume_prices.min_qty`, `category_discounts.min_qty` (ngưỡng so với số lượng dòng, có thể lẻ; đầu vào
-vẫn nhận số nguyên). Bản sao danh mục và hàng chờ ngoại tuyến trên PGlite đổi theo ở migration `v006`.
-Câu SQL so ngưỡng với số lượng dòng ép tham số `::numeric`, không để Postgres suy kiểu tham số theo
-cột.
+`volume_prices.min_qty`, `category_discounts.min_qty` (ngưỡng có thể lẻ; đầu vào chiết khấu danh mục
+vẫn nhận số nguyên). Bản sao danh mục và hàng chờ ngoại tuyến trên PGlite đổi theo ở migration `v006`
+(sau `v005` giá theo biến thể của POS-08).
+
+Ngưỡng bậc giá và chiết khấu danh mục theo quy tắc POS-16: so với số lượng quy ra đơn vị cơ bản
+(`pricingBaseQuantity` = `mulQty(số lượng, hệ số quy đổi)`), lọc trong `resolvePriceFromSources`
+chung cho máy chủ và PGlite, không so trong SQL. Ví dụ 0,5 thùng 24 lon là 12 lon, đạt bậc 12; 0,58
+bao 50 kg là đúng 29 kg (nhân float ra 28,999999999999996 thì trượt bậc 29). Câu SQL còn so số lượng
+với cột numeric thì ép tham số `::numeric`, không để Postgres suy kiểu tham số theo cột.
 
 Migration đổi kiểu bằng `USING col::numeric(14,3)`, giữ nguyên dữ liệu. Hệ số quy đổi
 (`conversion_factor`) giữ số nguyên dương: "1 thùng = 24 lon". Tiền giữ `bigint` đồng.
@@ -59,7 +64,7 @@ bán, trả, nhập phải dương. API nhận số lượng dạng số JSON; m
 - Kiểm kê, điều chỉnh tồn tay, tồn ban đầu khi tạo sản phẩm theo cờ sản phẩm. Tồn ban đầu của biến
   thể giữ số nguyên; biến thể có tồn lẻ qua kiểm kê hoặc nhập hàng.
 - Chỉ tắt được cờ khi tồn của sản phẩm và mọi biến thể còn hoạt động đã nguyên (422 nếu không).
-  Bất biến `I10` của `invariants.sql` kiểm hàng không bật cờ thì tồn nguyên (bỏ biến thể đã xóa).
+  Bất biến `I11` của `invariants.sql` kiểm hàng không bật cờ thì tồn nguyên (bỏ biến thể đã xóa).
 - Cờ đã tắt mà trả hàng, hủy đơn, trả hàng nhập, hủy phiếu nhập làm tồn sản phẩm hoặc biến thể thành
   số lẻ thì trả `422 BUSINESS_RULE_VIOLATION` "Bật lại cho phép số lượng lẻ cho mặt hàng này để
   trả/hủy phần lẻ" (`assertStockStaysWhole`), cả chứng từ rollback. Ví dụ bán 1,5 kg và 0,5 kg (tồn
@@ -107,6 +112,10 @@ dòng rồi mới cộng, như tiền dòng.
 - Chi tiết phiếu nhập, danh sách dòng trả được và chi tiết phiếu kiểm trả kèm `allowDecimalQuantity`
   của từng dòng (cờ hiện tại, hoặc true khi dòng gốc đã lẻ) để ô nhập biết có nhận số lẻ không.
 - Ngưỡng bậc giá theo số lượng luôn nhận số lẻ (bậc 2,5 kg).
+- Kiểm tồn giỏ POS (POS-13, `stock-guard.ts`) cộng mọi dòng cùng hàng ở mọi đơn vị qua `addQty` và
+  `mulQty`: 0,1 kg cộng 0,1 túi 2 kg đúng bằng 0,3 kg, không bị chặn oan khi tồn còn 0,3 kg. Thông
+  báo vượt tồn ở POS và ở máy chủ (chặn đơn POS, vi phạm `negative_stock_policy` của đơn ngoại tuyến)
+  in số lượng bằng `formatQuantity` ("chỉ còn 0,3 kg").
 - Ô số lượng ở giỏ POS ghi khi rời ô hoặc nhấn Enter (gõ "0,5" không đi qua 0 làm xóa dòng); ô ở
   form chứng từ ghi ngay mỗi lần gõ ra số hợp lệ.
 

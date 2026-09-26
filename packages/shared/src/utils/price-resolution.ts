@@ -1,6 +1,6 @@
 import type { PriceSource } from '../constants/pricing.js'
 import type { TierBreakdown } from '../schema/pricing-resolve.js'
-import { formatQuantity } from './quantity.js'
+import { formatQuantity, mulQty } from './quantity.js'
 
 /**
  * Quy tắc giá 6 tầng của POS, dạng hàm thuần. Máy chủ (`pricing.service.ts`, đọc Postgres) và máy
@@ -144,13 +144,14 @@ export type CategoryDiscountCandidate = Pick<
 
 /**
  * Số lượng dùng so ngưỡng giá theo số lượng và chiết khấu danh mục: quy ra đơn vị tính (M1). Ngưỡng
- * khai theo đơn vị tính như giá của các bậc, nên bán 1 thùng 24 lon là 24.
+ * khai theo đơn vị tính như giá của các bậc, nên bán 1 thùng 24 lon là 24. Nhân qua mulQty (ADR-0015):
+ * 0,58 bao 50 kg đúng bằng 29 kg, nhân float ra 28,999999999999996 thì trượt ngưỡng 29.
  */
 export function pricingBaseQuantity(
   quantity: number,
   unitConversion: { conversionFactor: number } | null,
 ): number {
-  return quantity * (unitConversion?.conversionFactor ?? 1)
+  return mulQty(quantity, unitConversion?.conversionFactor ?? 1)
 }
 
 /** Dữ liệu nguồn của một dòng hàng, do nơi gọi đọc từ cơ sở dữ liệu của mình. */
