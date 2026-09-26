@@ -15,14 +15,15 @@ export function usePosShiftGate(isOffline: boolean) {
   const shiftRequired =
     !isOffline && currentShift.data?.shiftsEnabled === true && !currentShift.data.shift
 
-  // Nhắc một lần khi vào POS; sau đó (ví dụ vừa đóng ca) nhắc lại lúc bấm thanh toán
-  const prompted = useRef(false)
+  // Chỉ xét nhắc ở lần đầu có số liệu ca khi vào POS. Vào lúc đang có ca rồi đóng ca thì không
+  // tự bật hộp mở ca (đè lên biên bản đóng ca); bán tiếp mới nhắc, lúc bấm thanh toán.
+  const hasData = !isOffline && currentShift.data !== undefined
+  const checkedOnEntry = useRef(false)
   useEffect(() => {
-    if (shiftRequired && !prompted.current) {
-      prompted.current = true
-      setOpenShiftOpen(true)
-    }
-  }, [shiftRequired])
+    if (!hasData || checkedOnEntry.current) return
+    checkedOnEntry.current = true
+    if (shiftRequired) setOpenShiftOpen(true)
+  }, [hasData, shiftRequired])
 
   /** Được bán thì trả true; chưa mở ca thì mở hộp mở ca và trả false. */
   const ensureShift = useCallback(() => {

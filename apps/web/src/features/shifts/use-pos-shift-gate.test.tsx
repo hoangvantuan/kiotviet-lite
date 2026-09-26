@@ -110,6 +110,32 @@ describe('POS-06: POS yêu cầu mở ca khi cửa hàng bật ca', () => {
     expect(result.current.ensureShift()).toBe(true)
   })
 
+  it('vào POS khi đang có ca rồi đóng ca: không bật hộp mở ca đè lên biên bản', async () => {
+    const fetchMock = currentShift({ shiftsEnabled: true, shift: OPEN_SHIFT })
+    const { result } = setup()
+    await waitFor(() => expect(result.current.currentShift.isSuccess).toBe(true))
+
+    // Đóng ca xong, truy vấn ca hiện tại trả về không còn ca
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ data: { shiftsEnabled: true, shift: null } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    )
+    await act(async () => {
+      await result.current.currentShift.refetch()
+    })
+
+    await waitFor(() => expect(result.current.shiftRequired).toBe(true))
+    expect(result.current.openShiftOpen).toBe(false)
+    // Bán tiếp thì vẫn phải mở ca mới
+    act(() => {
+      result.current.ensureShift()
+    })
+    expect(result.current.openShiftOpen).toBe(true)
+  })
+
   it('mất mạng: không chặn bán, đơn ngoại tuyến gắn ca khi đồng bộ', async () => {
     currentShift({ shiftsEnabled: true, shift: null })
     const { result } = setup(true)
