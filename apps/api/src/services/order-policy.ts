@@ -8,6 +8,7 @@ import {
   type OrderPaymentStatus,
   type OrderPolicyViolation,
   type Permission,
+  type PriceSource,
   products,
   productUnitConversions,
   productVariants,
@@ -333,7 +334,10 @@ export interface PriceApproval {
   edited: boolean
   hasOverride: boolean
   hasDiscount: boolean
-  /** Dòng có sửa giá hoặc chiết khấu mà thành tiền thấp hơn giá vốn */
+  /**
+   * Dòng thành tiền thấp hơn giá vốn: dòng có sửa giá hoặc chiết khấu, và dòng lấy giá đặc biệt
+   * (bảng giá, giá riêng khách, chiết khấu danh mục, giá theo số lượng) mà giá đó dưới giá vốn
+   */
   belowCostLines: Set<number>
   /** Chiết khấu đơn kéo tổng đơn xuống dưới tổng giá vốn đã biết */
   orderBelowCost: boolean
@@ -353,6 +357,8 @@ export interface EvaluatePriceApprovalDeps {
   input: CreateOrderInput
   source: 'pos' | 'offline_sync'
   unitCosts: Array<number | null>
+  /** Nguồn giá máy chủ tính cho từng dòng; bỏ trống thì chỉ kiểm dòng có sửa giá, chiết khấu */
+  lineSources?: Array<PriceSource | null>
   meta?: RequestMeta
 }
 
@@ -360,7 +366,8 @@ export interface EvaluatePriceApprovalDeps {
  * Sửa giá, chiết khấu dòng, chiết khấu đơn cần quyền `pos.editPrice`; nếu kéo thành tiền xuống
  * dưới giá vốn thì cần thêm `pos.editPriceBelowCost`. Người bán đủ quyền thì không cần ai duyệt,
  * riêng sửa giá luôn cần PIN (ADR-0002). Thiếu quyền thì cần `priceApproverId` cộng PIN của
- * người duyệt giữ đủ các quyền đó.
+ * người duyệt giữ đủ các quyền đó. Dòng không sửa giá mà giá đặc biệt đã dưới giá vốn (giá vốn biến
+ * thể nếu có, POS-08) cũng cần `pos.editPriceBelowCost`.
  * Đơn POS vi phạm bị từ chối. Đơn ngoại tuyến đã bán xong tại quầy nên vẫn nhận, trả về
  * `approved = false` để nơi gọi ghi nhật ký và cảnh báo (ADR-0002, OFF-12).
  */
@@ -370,6 +377,7 @@ export async function evaluatePriceApproval({
   input,
   source,
   unitCosts,
+  lineSources,
   meta,
 }: EvaluatePriceApprovalDeps): Promise<PriceApproval> {
   const hasOverride = input.items.some((i) => i.priceOverride)
@@ -382,9 +390,13 @@ export async function evaluatePriceApproval({
   input.items.forEach((item, idx) => {
     const unitCost = unitCosts[idx]
     if (unitCost == null) return
-    if (!item.priceOverride && item.discountAmount <= 0) return
+    const source = lineSources?.[idx] ?? null
+    const specialPrice = source !== null && source !== 'retail_price'
+    if (!item.priceOverride && item.discountAmount <= 0 && !specialPrice) return
     if (item.lineTotal < unitCost * item.quantity) belowCostLines.add(idx)
   })
+  // Dòng giá đặc biệt dưới giá vốn mà không có sửa giá hay chiết khấu nào vẫn phải duyệt
+  const specialBelowCost = belowCostLines.size > 0 && !edited
   let orderBelowCost = false
   if (hasOrderDiscount) {
     const knownCost = input.items.reduce((sum, item, idx) => {
@@ -395,7 +407,7 @@ export async function evaluatePriceApproval({
   }
 
   const base = { edited, hasOverride, hasDiscount, belowCostLines, orderBelowCost }
-  if (!edited) {
+  if (!edited && !specialBelowCost) {
     return {
       ...base,
       required: [],
@@ -407,7 +419,7 @@ export async function evaluatePriceApproval({
   }
 
   const belowCost = belowCostLines.size > 0 || orderBelowCost
-  const required: ApprovalPermission[] = ['pos.editPrice']
+  const required: ApprovalPermission[] = edited ? ['pos.editPrice'] : []
   if (belowCost) required.push('pos.editPriceBelowCost')
 
   const sellerHasAll = required.every((perm) => actorHasPermission(actor, perm))
@@ -434,7 +446,9 @@ export async function evaluatePriceApproval({
   if (!pin) {
     const message = hasOverride
       ? 'Sửa giá yêu cầu mã PIN'
-      : 'Chiết khấu vượt quyền của bạn, cần mã PIN của người có quyền duyệt'
+      : hasDiscount
+        ? 'Chiết khấu vượt quyền của bạn, cần mã PIN của người có quyền duyệt'
+        : 'Giá áp dụng cho đơn cần mã PIN của người có quyền duyệt'
     if (source === 'pos') {
       throw new ApiError('VALIDATION_ERROR', message, { requiredPermissions: beforePin })
     }

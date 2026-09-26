@@ -10,6 +10,7 @@ import {
   customerGroups,
   customers,
   type EffectiveStatus,
+  firstCategoryDiscountFor,
   type ListCategoryDiscountsQuery,
   products,
   type UpdateCategoryDiscountInput,
@@ -591,29 +592,42 @@ export interface CategoryDiscountResolved {
   finalPrice: number
 }
 
-export async function findApplicableCategoryDiscount({
+export interface CategoryDiscountCandidateRow {
+  id: string
+  discountType: CategoryDiscountType
+  discountValue: number
+  minQty: number
+}
+
+/**
+ * Chiết khấu danh mục áp được cho khách với sản phẩm (đúng danh mục, đang bật, đang hiệu lực, nhắm
+ * đúng khách hoặc nhóm), xếp theo thứ tự ưu tiên nhưng chưa lọc ngưỡng số lượng: ngưỡng so với số
+ * lượng quy ra đơn vị tính ở `resolvePriceFromSources` (M1). Thứ tự ORDER BY phải khớp
+ * `rankCategoryDiscounts` (định giá ngoại tuyến).
+ */
+export async function listCategoryDiscountCandidates({
   db,
   storeId,
   productId,
   customerId,
   customerGroupId,
-  quantity,
   date = new Date(),
-  basePrice,
-}: FindApplicableCategoryDiscountInput & {
-  basePrice?: number
-}): Promise<CategoryDiscountResolved | null> {
+}: Omit<FindApplicableCategoryDiscountInput, 'quantity'>): Promise<{
+  product: { sellingPrice: number } | null
+  candidates: CategoryDiscountCandidateRow[]
+}> {
   const product = await db.query.products.findFirst({
     where: eq(products.id, productId),
   })
-  if (!product || product.storeId !== storeId || !product.categoryId) return null
+  if (!product || product.storeId !== storeId || !product.categoryId) {
+    return { product: null, candidates: [] }
+  }
 
   const todayStr = toIsoDate(date)
   const conditions: SQL[] = [
     eq(categoryDiscounts.storeId, storeId),
     eq(categoryDiscounts.categoryId, product.categoryId),
     eq(categoryDiscounts.isActive, true),
-    sql`${categoryDiscounts.minQty} <= ${quantity}`,
     sql`(${categoryDiscounts.effectiveFrom} IS NULL OR ${categoryDiscounts.effectiveFrom} <= ${todayStr})`,
     sql`(${categoryDiscounts.effectiveTo} IS NULL OR ${categoryDiscounts.effectiveTo} >= ${todayStr})`,
   ]
@@ -627,16 +641,15 @@ export async function findApplicableCategoryDiscount({
   } else if (customerGroupId) {
     conditions.push(eq(categoryDiscounts.customerGroupId, customerGroupId))
   } else {
-    return null
+    return { product, candidates: [] }
   }
 
   const rows = await db
     .select({
       id: categoryDiscounts.id,
-      customerId: categoryDiscounts.customerId,
-      customerGroupId: categoryDiscounts.customerGroupId,
       discountType: categoryDiscounts.discountType,
       discountValue: categoryDiscounts.discountValue,
+      minQty: categoryDiscounts.minQty,
     })
     .from(categoryDiscounts)
     .where(and(...conditions))
@@ -645,16 +658,32 @@ export async function findApplicableCategoryDiscount({
       desc(categoryDiscounts.discountValue),
       asc(categoryDiscounts.id),
     )
-    .limit(1)
 
-  const winner = rows[0]
-  if (!winner) return null
+  return {
+    product,
+    candidates: rows.map((r) => ({
+      id: r.id,
+      discountType: r.discountType as CategoryDiscountType,
+      discountValue: Number(r.discountValue),
+      minQty: r.minQty,
+    })),
+  }
+}
+
+/** Chiết khấu danh mục thắng cho `quantity` (đã theo đơn vị tính) cùng giá sau chiết khấu */
+export async function findApplicableCategoryDiscount({
+  quantity,
+  basePrice,
+  ...input
+}: FindApplicableCategoryDiscountInput & {
+  basePrice?: number
+}): Promise<CategoryDiscountResolved | null> {
+  const { product, candidates } = await listCategoryDiscountCandidates(input)
+  const winner = firstCategoryDiscountFor(candidates, quantity)
+  if (!product || !winner) return null
 
   const baseSellingPrice = basePrice ?? Number(product.sellingPrice)
-  const discountType = winner.discountType as CategoryDiscountType
-  const discountValue = Number(winner.discountValue)
-
-  // Thứ tự ưu tiên ở ORDER BY trên phải khớp `pickCategoryDiscount` (định giá ngoại tuyến)
+  const { discountType, discountValue } = winner
   return {
     discountId: winner.id,
     discountType,

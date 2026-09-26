@@ -96,6 +96,8 @@ describe('computeCompareSummary', () => {
   function makeRow(overrides: Partial<CompareRow>): CompareRow {
     return {
       productId: 'p',
+      variantId: null,
+      variantName: null,
       productName: 'p',
       productSku: 'sku',
       productImageUrl: null,

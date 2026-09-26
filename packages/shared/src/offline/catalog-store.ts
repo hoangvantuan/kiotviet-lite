@@ -105,30 +105,33 @@ export const CATALOG_TABLES: Record<CatalogEntity, TableSpec> = {
   },
   price_list_items: {
     table: 'catalog_price_list_items',
-    naturalKey: ['priceListId', 'productId'],
+    naturalKey: ['priceListId', 'productId', 'variantId'],
     columns: [
       ['id', 'id', 'uuid'],
       ['priceListId', 'price_list_id', 'uuid'],
       ['productId', 'product_id', 'uuid'],
+      ['variantId', 'variant_id', 'uuid'],
       ['price', 'price', 'bigint'],
     ],
   },
   customer_prices: {
     table: 'catalog_customer_prices',
-    naturalKey: ['customerId', 'productId'],
+    naturalKey: ['customerId', 'productId', 'variantId'],
     columns: [
       ['id', 'id', 'uuid'],
       ['customerId', 'customer_id', 'uuid'],
       ['productId', 'product_id', 'uuid'],
+      ['variantId', 'variant_id', 'uuid'],
       ['price', 'price', 'bigint'],
     ],
   },
   volume_prices: {
     table: 'catalog_volume_prices',
-    naturalKey: ['productId', 'minQty'],
+    naturalKey: ['productId', 'variantId', 'minQty'],
     columns: [
       ['id', 'id', 'uuid'],
       ['productId', 'product_id', 'uuid'],
+      ['variantId', 'variant_id', 'uuid'],
       ['minQty', 'min_qty', 'integer'],
       ['price', 'price', 'bigint'],
     ],
@@ -191,7 +194,8 @@ function dedupeSql(entity: CatalogEntity): string | null {
     const recordType = ['"id" uuid', ...keys.map(({ key }) => `"${key}" ${typeOf.get(key)!.type}`)]
     const match = keys.map(({ key, lower }) => {
       const col = `t.${typeOf.get(key)!.col}`
-      return lower ? `LOWER(${col}) = LOWER(r."${key}")` : `${col} = r."${key}"`
+      // Khóa có cột null được (variant_id, POS-08): máy chủ coi hai null là trùng (NULLS NOT DISTINCT)
+      return lower ? `LOWER(${col}) = LOWER(r."${key}")` : `${col} IS NOT DISTINCT FROM r."${key}"`
     })
     sql =
       `DELETE FROM ${spec.table} AS t USING jsonb_to_recordset($2::jsonb) AS r(${recordType.join(', ')}) ` +
@@ -246,11 +250,17 @@ async function deleteRows(
           ['catalog_customer_prices', 'product_id'],
           ['catalog_volume_prices', 'product_id'],
         ]
-      : entity === 'price_lists'
-        ? [['catalog_price_list_items', 'price_list_id']]
-        : entity === 'customers'
-          ? [['catalog_customer_prices', 'customer_id']]
-          : []
+      : entity === 'variants'
+        ? [
+            ['catalog_price_list_items', 'variant_id'],
+            ['catalog_customer_prices', 'variant_id'],
+            ['catalog_volume_prices', 'variant_id'],
+          ]
+        : entity === 'price_lists'
+          ? [['catalog_price_list_items', 'price_list_id']]
+          : entity === 'customers'
+            ? [['catalog_customer_prices', 'customer_id']]
+            : []
   for (const [childTable, fk] of children) {
     await tx.query(`DELETE FROM ${childTable} WHERE store_id = $1 AND ${fk} = ANY($2::uuid[])`, [
       storeId,

@@ -20,11 +20,13 @@ export function useVolumePricesQuery(query: Partial<ListVolumePricesQuery>) {
 
 export function useVolumePricesForProductQuery(
   productId: string | undefined,
+  variantId?: string | null,
   options?: { enabled?: boolean },
 ) {
   return useQuery({
-    queryKey: [...VOLUME_PRICES_KEY, 'product', productId],
-    queryFn: async () => (await getVolumePricesForProductApi(productId as string)).data,
+    queryKey: [...VOLUME_PRICES_KEY, 'product', productId, variantId ?? null],
+    queryFn: async () =>
+      (await getVolumePricesForProductApi(productId as string, variantId ?? undefined)).data,
     enabled: Boolean(productId) && options?.enabled !== false,
   })
 }

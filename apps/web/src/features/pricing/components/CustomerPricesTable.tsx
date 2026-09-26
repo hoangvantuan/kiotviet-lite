@@ -14,6 +14,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
+import { VariantNameHint } from './VariantSelect'
+
 interface Props {
   items: CustomerPriceListItem[]
   onEdit: (p: CustomerPriceListItem) => void
@@ -54,6 +56,7 @@ export function CustomerPricesTable({ items, onEdit, onDelete }: Props) {
                 </TableCell>
                 <TableCell className="align-top">
                   <div className="font-medium">{p.productName}</div>
+                  <VariantNameHint variantName={p.variantName} />
                   <div className="text-xs text-muted-foreground">Mã hàng {p.productSku}</div>
                 </TableCell>
                 <TableCell className="text-right tabular-nums">

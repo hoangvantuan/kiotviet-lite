@@ -45,7 +45,14 @@ export function createVolumePricesRoutes({ db }: VolumePricesRoutesDeps) {
   app.get('/products/:productId', async (c) => {
     const auth = c.get('auth')
     const productId = uuidParam.parse(c.req.param('productId'))
-    const data = await listVolumePricesForProduct({ db, storeId: auth.storeId, productId })
+    const rawVariantId = c.req.query('variantId')
+    const variantId = rawVariantId ? uuidParam.parse(rawVariantId) : null
+    const data = await listVolumePricesForProduct({
+      db,
+      storeId: auth.storeId,
+      productId,
+      variantId,
+    })
     return c.json({ data })
   })
 

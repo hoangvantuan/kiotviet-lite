@@ -13,6 +13,7 @@ import { formatVndWithSuffix } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 
 import { useAddToCart } from '../hooks/use-add-to-cart'
+import { usePosStockPolicy } from '../stock-guard'
 import type { PosProductItem, PosProductVariant, PosUnitConversion } from '../types'
 import { computeUnitConversionPriceAndStock } from '../utils'
 
@@ -28,6 +29,7 @@ export function VariantSelectionDialog({
   onOpenChange,
 }: VariantSelectionDialogProps) {
   const addToCart = useAddToCart()
+  const allowNegativeStock = usePosStockPolicy((s) => s.allowNegativeStock)
   const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({})
   const [quantity, setQuantity] = useState(1)
   const [notes, setNotes] = useState('')
@@ -77,10 +79,11 @@ export function VariantSelectionDialog({
     return product.stockQuantity
   }, [product, selectedVariant])
 
+  // POS-13: cửa hàng cho bán âm thì không giới hạn số lượng theo tồn, bước thêm vào giỏ sẽ cảnh báo
   const maxStock = useMemo(() => {
-    if (rawStock === Infinity) return Infinity
+    if (rawStock === Infinity || allowNegativeStock) return Infinity
     return computeUnitConversionPriceAndStock(0, rawStock, selectedUnit).stockQuantity
-  }, [rawStock, selectedUnit])
+  }, [rawStock, selectedUnit, allowNegativeStock])
 
   useEffect(() => {
     if (maxStock !== Infinity && quantity > maxStock) {
@@ -124,13 +127,14 @@ export function VariantSelectionDialog({
   function handleAdd() {
     if (!product) return
 
-    addToCart({
+    const added = addToCart({
       product,
       variant: selectedVariant,
       unitConversion: selectedUnit,
       quantity,
       notes,
     })
+    if (!added) return
 
     onOpenChange(false)
     resetState()
@@ -144,7 +148,7 @@ export function VariantSelectionDialog({
   if (!product) return null
 
   const isVariantReady = product.hasVariants ? selectedVariant !== null : true
-  const isOutOfStock = product.trackInventory && maxStock <= 0
+  const isOutOfStock = product.trackInventory && !allowNegativeStock && maxStock <= 0
   const canAdd =
     isVariantReady &&
     !isOutOfStock &&

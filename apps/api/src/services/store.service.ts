@@ -19,6 +19,7 @@ function toStoreSettings(row: typeof stores.$inferSelect): StoreSettings {
     debtWarningPercent: row.debtWarningPercent,
     debtOverdueDays: row.debtOverdueDays,
     negativeStockAlertsEnabled: row.negativeStockAlertsEnabled,
+    allowNegativeStock: row.allowNegativeStock,
     shiftsEnabled: row.shiftsEnabled,
     bankBin: row.bankBin,
     bankAccountNumber: row.bankAccountNumber,
@@ -86,6 +87,7 @@ export async function updateStore({
   if (input.debtOverdueDays !== undefined) updates.debtOverdueDays = input.debtOverdueDays
   if (input.negativeStockAlertsEnabled !== undefined)
     updates.negativeStockAlertsEnabled = input.negativeStockAlertsEnabled
+  if (input.allowNegativeStock !== undefined) updates.allowNegativeStock = input.allowNegativeStock
   if (input.shiftsEnabled !== undefined) updates.shiftsEnabled = input.shiftsEnabled
   if (input.bankBin !== undefined) updates.bankBin = input.bankBin
   if (input.bankAccountNumber !== undefined) updates.bankAccountNumber = input.bankAccountNumber
@@ -110,6 +112,7 @@ export async function updateStore({
       debtWarningPercent: before.debtWarningPercent,
       debtOverdueDays: before.debtOverdueDays,
       negativeStockAlertsEnabled: before.negativeStockAlertsEnabled,
+      allowNegativeStock: before.allowNegativeStock,
       shiftsEnabled: before.shiftsEnabled,
       bankBin: before.bankBin,
       bankAccountNumber: before.bankAccountNumber,
@@ -123,6 +126,7 @@ export async function updateStore({
       debtWarningPercent: updated.debtWarningPercent,
       debtOverdueDays: updated.debtOverdueDays,
       negativeStockAlertsEnabled: updated.negativeStockAlertsEnabled,
+      allowNegativeStock: updated.allowNegativeStock,
       shiftsEnabled: updated.shiftsEnabled,
       bankBin: updated.bankBin,
       bankAccountNumber: updated.bankAccountNumber,

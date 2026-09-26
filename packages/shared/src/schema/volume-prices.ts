@@ -6,11 +6,12 @@ import {
   integer,
   pgTable,
   timestamp,
-  uniqueIndex,
+  unique,
   uuid,
 } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
+import { productVariants } from './product-variants.js'
 import { products } from './products.js'
 import { stores } from './stores.js'
 
@@ -26,6 +27,8 @@ export const volumePrices = pgTable(
     productId: uuid()
       .notNull()
       .references(() => products.id, { onDelete: 'cascade' }),
+    // POS-08: null là bậc giá cho mọi biến thể của sản phẩm; có giá trị là bậc riêng của biến thể
+    variantId: uuid().references(() => productVariants.id, { onDelete: 'cascade' }),
     minQty: integer().notNull(),
     price: bigint({ mode: 'number' }).notNull(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -35,7 +38,9 @@ export const volumePrices = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    uniqueIndex('uniq_volume_prices_product_min_qty').on(table.productId, table.minQty),
+    unique('uniq_volume_prices_product_variant_min_qty')
+      .on(table.productId, table.variantId, table.minQty)
+      .nullsNotDistinct(),
     index('idx_volume_prices_product').on(table.productId),
     index('idx_volume_prices_store_product').on(table.storeId, table.productId),
     check('check_volume_prices_min_qty_positive', sql`${table.minQty} >= 1`),

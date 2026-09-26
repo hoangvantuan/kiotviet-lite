@@ -32,6 +32,23 @@ export function isEffectiveOn(window: EffectiveWindow, today: string): boolean {
   return true
 }
 
+/**
+ * POS-08: bảng giá, giá riêng khách và giá theo số lượng gắn được theo biến thể (`variantId`) hoặc
+ * theo sản phẩm (`variantId` null, áp cho mọi biến thể). Dòng đang bán là một biến thể mà có dòng
+ * riêng của biến thể đó thì chỉ dùng các dòng của biến thể; không có thì dùng các dòng theo sản
+ * phẩm. Dòng của biến thể khác không bao giờ được dùng.
+ */
+export function selectVariantScoped<T extends { variantId: string | null }>(
+  rows: T[],
+  variantId: string | null,
+): T[] {
+  if (variantId) {
+    const own = rows.filter((row) => row.variantId === variantId)
+    if (own.length > 0) return own
+  }
+  return rows.filter((row) => row.variantId === null)
+}
+
 export interface VolumeTierSource {
   minQty: number
   price: number
@@ -60,27 +77,34 @@ export interface CategoryDiscountRule extends EffectiveWindow {
   minQty: number
 }
 
+/** Chiết khấu danh mục đứng đầu thứ tự ưu tiên mà số lượng (đơn vị tính) đạt ngưỡng */
+export function firstCategoryDiscountFor<T extends Pick<CategoryDiscountRule, 'minQty'>>(
+  ranked: T[],
+  baseQuantity: number,
+): T | null {
+  return ranked.find((rule) => rule.minQty <= baseQuantity) ?? null
+}
+
 /**
- * Chiết khấu danh mục áp cho khách: đúng danh mục, đang hiệu lực, đủ số lượng, nhắm đúng khách hoặc
- * nhóm của khách. Nhiều quy tắc cùng khớp thì ưu tiên quy tắc riêng của khách, rồi giá trị chiết
- * khấu lớn hơn, rồi id nhỏ hơn (cố định kết quả).
+ * Các chiết khấu danh mục có thể áp cho khách: đúng danh mục, đang hiệu lực, nhắm đúng khách hoặc
+ * nhóm của khách. Xếp ưu tiên quy tắc riêng của khách, rồi giá trị chiết khấu lớn hơn, rồi id nhỏ
+ * hơn (cố định kết quả). Chưa lọc ngưỡng số lượng: ngưỡng so với số lượng quy ra đơn vị tính trong
+ * `resolvePriceFromSources` (M1).
  */
-export function pickCategoryDiscount(
+export function rankCategoryDiscounts(
   rules: CategoryDiscountRule[],
   ctx: {
     categoryId: string | null
     customerId: string | null
     customerGroupId: string | null
-    quantity: number
     today: string
   },
-): CategoryDiscountRule | null {
-  const { categoryId, customerId, customerGroupId, quantity, today } = ctx
-  if (!categoryId || (!customerId && !customerGroupId)) return null
+): CategoryDiscountRule[] {
+  const { categoryId, customerId, customerGroupId, today } = ctx
+  if (!categoryId || (!customerId && !customerGroupId)) return []
 
   const matches = rules.filter((rule) => {
     if (rule.categoryId !== categoryId) return false
-    if (rule.minQty > quantity) return false
     if (!isEffectiveOn(rule, today)) return false
     const forCustomer = customerId !== null && rule.customerId === customerId
     const forGroup = customerGroupId !== null && rule.customerGroupId === customerGroupId
@@ -92,7 +116,7 @@ export function pickCategoryDiscount(
     if (b.discountValue !== a.discountValue) return b.discountValue - a.discountValue
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
   })
-  return matches[0] ?? null
+  return matches
 }
 
 /** Giá sau chiết khấu danh mục, không âm. */
@@ -112,8 +136,26 @@ export interface NamedListPrice {
   priceListName: string
 }
 
+export type CategoryDiscountCandidate = Pick<
+  CategoryDiscountRule,
+  'discountType' | 'discountValue' | 'minQty'
+>
+
+/**
+ * Số lượng dùng so ngưỡng giá theo số lượng và chiết khấu danh mục: quy ra đơn vị tính (M1). Ngưỡng
+ * khai theo đơn vị tính như giá của các bậc, nên bán 1 thùng 24 lon là 24.
+ */
+export function pricingBaseQuantity(
+  quantity: number,
+  unitConversion: { conversionFactor: number } | null,
+): number {
+  return quantity * (unitConversion?.conversionFactor ?? 1)
+}
+
 /** Dữ liệu nguồn của một dòng hàng, do nơi gọi đọc từ cơ sở dữ liệu của mình. */
 export interface PriceSources {
+  /** Số lượng của dòng theo đơn vị đang bán (đơn vị quy đổi nếu có) */
+  quantity: number
   /** null: hàng không tồn tại (hoặc đã xóa) trong cửa hàng */
   product: { sellingPrice: number } | null
   /** Giá bán biến thể khi dòng có biến thể và biến thể còn tồn tại */
@@ -124,10 +166,12 @@ export interface PriceSources {
   /** Có khi đơn gắn khách */
   customer: {
     customerPrice: number | null
-    categoryDiscount: Pick<CategoryDiscountRule, 'discountType' | 'discountValue'> | null
+    /** Chiết khấu danh mục áp được cho khách, đã xếp ưu tiên (`rankCategoryDiscounts`) */
+    categoryDiscounts: CategoryDiscountCandidate[]
     groupPriceList: NamedListPrice | null
   } | null
-  volumePrice: VolumeTierSource | null
+  /** Mọi bậc giá theo số lượng của dòng (đã chọn theo biến thể), chưa lọc ngưỡng */
+  volumeTiers: VolumeTierSource[]
 }
 
 export interface ResolvedPrice {
@@ -140,8 +184,10 @@ export interface ResolvedPrice {
 
 /**
  * Ghép giá theo thứ tự ưu tiên: bảng giá thu ngân chọn, giá riêng khách, chiết khấu danh mục, giá
- * theo số lượng, bảng giá của nhóm khách, giá bán lẻ. Giá nguồn tính cho đơn vị cơ bản được nhân hệ
- * số quy đổi, trừ khi đơn vị quy đổi có giá bán riêng.
+ * theo số lượng, bảng giá của nhóm khách, giá bán của đơn vị quy đổi, giá bán (CONTEXT.md, "Thứ tự
+ * nguồn giá"). Các nguồn đặc biệt khai cho đơn vị tính nên dòng bán theo đơn vị quy đổi lấy giá
+ * nguồn nhân hệ số quy đổi; giá bán riêng của đơn vị quy đổi chỉ thay cho giá bán (POS-16), không
+ * đè lên nguồn đặc biệt, và khi nó được dùng thì nguồn giá là giá bán.
  */
 export function resolvePriceFromSources(sources: PriceSources): ResolvedPrice {
   if (!sources.product) {
@@ -162,7 +208,10 @@ export function resolvePriceFromSources(sources: PriceSources): ResolvedPrice {
   const unitConv = sources.unitConversion
   const conversionFactor = unitConv?.conversionFactor ?? 1
   const retailPrice = unitConv?.sellingPrice ?? Math.round(rawRetailPrice * conversionFactor)
-  const scaled = (raw: number) => unitConv?.sellingPrice ?? Math.round(raw * conversionFactor)
+  const scaled = (raw: number) => Math.round(raw * conversionFactor)
+  // M1: ngưỡng số lượng so theo đơn vị tính, cùng đơn vị với giá của bậc. Mỗi dòng giỏ tính riêng,
+  // không gộp các dòng cùng hàng khác đơn vị.
+  const baseQuantity = pricingBaseQuantity(sources.quantity, unitConv)
 
   const breakdown: TierBreakdown[] = []
   let winner: { price: number; source: PriceSource; sourceDetail: string | null } | null = null
@@ -172,7 +221,7 @@ export function resolvePriceFromSources(sources: PriceSources): ResolvedPrice {
     const manualItem = sources.manualPriceList.item
     if (manualItem) {
       // Bảng giá thu ngân chọn thắng cả giá bán riêng của đơn vị quy đổi (nhân hệ số)
-      const manualPrice = Math.round(manualItem.price * conversionFactor)
+      const manualPrice = scaled(manualItem.price)
       winner = { price: manualPrice, source: 'price_list', sourceDetail: manualItem.priceListName }
       breakdown.push({
         tier: 1,
@@ -199,7 +248,7 @@ export function resolvePriceFromSources(sources: PriceSources): ResolvedPrice {
     const t1Hit = !winner && cp !== null && cp >= 0
     breakdown.push({
       tier: 1,
-      name: 'Giá riêng KH',
+      name: 'Giá riêng khách hàng',
       price: cp,
       matched: t1Hit,
       reason: cp !== null ? `Giá riêng: ${cp.toLocaleString('vi-VN')}đ` : 'Không có giá riêng',
@@ -208,12 +257,15 @@ export function resolvePriceFromSources(sources: PriceSources): ResolvedPrice {
       winner = {
         price: cp!,
         source: 'customer_price',
-        sourceDetail: isFallback ? 'Giá dự phòng: Giá riêng cho KH' : 'Giá riêng cho KH',
+        sourceDetail: isFallback
+          ? 'Giá dự phòng: Giá riêng cho khách hàng'
+          : 'Giá riêng cho khách hàng',
       }
     }
 
-    const rule = sources.customer.categoryDiscount
-    const catFinal = rule ? categoryDiscountFinalPrice(retailPrice, rule) : null
+    const rule = firstCategoryDiscountFor(sources.customer.categoryDiscounts, baseQuantity)
+    // Chiết khấu danh mục là nguồn đặc biệt: tính trên giá bán đơn vị cơ bản rồi nhân hệ số (POS-16)
+    const catFinal = rule ? scaled(categoryDiscountFinalPrice(rawRetailPrice, rule)) : null
     const catDetail = rule
       ? rule.discountType === 'percent'
         ? `Giảm ${rule.discountValue}%`
@@ -222,10 +274,10 @@ export function resolvePriceFromSources(sources: PriceSources): ResolvedPrice {
     const t2Hit = !winner && catFinal !== null && catFinal >= 0
     breakdown.push({
       tier: 2,
-      name: 'CK danh mục',
+      name: 'Chiết khấu danh mục',
       price: catFinal,
       matched: t2Hit,
-      reason: catDetail ?? 'Không có CK danh mục',
+      reason: catDetail ?? 'Không có chiết khấu danh mục',
     })
     if (t2Hit) {
       winner = {
@@ -237,14 +289,14 @@ export function resolvePriceFromSources(sources: PriceSources): ResolvedPrice {
   } else {
     breakdown.push({
       tier: 1,
-      name: 'Giá riêng KH',
+      name: 'Giá riêng khách hàng',
       price: null,
       matched: false,
       reason: 'Khách lẻ',
     })
     breakdown.push({
       tier: 2,
-      name: 'CK danh mục',
+      name: 'Chiết khấu danh mục',
       price: null,
       matched: false,
       reason: 'Khách lẻ',
@@ -259,18 +311,18 @@ export function resolvePriceFromSources(sources: PriceSources): ResolvedPrice {
     reason: 'Client state',
   })
 
-  const rawVp = sources.volumePrice
+  const rawVp = pickVolumePrice(sources.volumeTiers, baseQuantity)
   const vpPrice = rawVp !== null ? scaled(rawVp.price) : null
   const t4Hit = !winner && vpPrice !== null && vpPrice >= 0
   breakdown.push({
     tier: 4,
-    name: 'Giá theo SL',
+    name: 'Giá theo số lượng',
     price: vpPrice,
     matched: t4Hit,
     reason:
       rawVp !== null
         ? `SL >= ${rawVp.minQty}: ${vpPrice?.toLocaleString('vi-VN')}đ`
-        : 'Không có giá SL phù hợp',
+        : 'Không có giá theo số lượng phù hợp',
   })
   if (t4Hit) {
     winner = {
@@ -286,7 +338,7 @@ export function resolvePriceFromSources(sources: PriceSources): ResolvedPrice {
     const t5Hit = !winner && plpPrice !== null && plpPrice >= 0
     breakdown.push({
       tier: 5,
-      name: 'Bảng giá nhóm KH',
+      name: 'Bảng giá nhóm khách hàng',
       price: plpPrice,
       matched: t5Hit,
       reason: rawPlp ? `Bảng giá: ${rawPlp.priceListName}` : 'Không có bảng giá nhóm',
@@ -301,7 +353,7 @@ export function resolvePriceFromSources(sources: PriceSources): ResolvedPrice {
   } else {
     breakdown.push({
       tier: 5,
-      name: 'Bảng giá nhóm KH',
+      name: 'Bảng giá nhóm khách hàng',
       price: null,
       matched: false,
       reason: 'Khách lẻ',

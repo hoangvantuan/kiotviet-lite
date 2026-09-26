@@ -14,6 +14,9 @@ export const stores = pgTable('stores', {
   customerCodeCounter: integer().notNull().default(0),
   supplierCodeCounter: integer().notNull().default(0),
   negativeStockAlertsEnabled: boolean().notNull().default(true),
+  // POS-13: cho bán vượt tồn kho (tồn kho âm). Mặc định bật như hành vi trước đây; tắt thì quầy và máy
+  // chủ cùng chặn dòng bán vượt tồn
+  allowNegativeStock: boolean().notNull().default(true),
   // POS-06: dùng ca bán hàng. Mặc định tắt để không chặn bán ngày đầu; bật thì phải mở ca mới bán
   shiftsEnabled: boolean().notNull().default(false),
   // POS-07: tài khoản nhận chuyển khoản để sinh mã VietQR tại quầy

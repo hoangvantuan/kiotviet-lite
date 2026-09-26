@@ -43,6 +43,8 @@ const REJECT_NEXT_STEPS: Record<OrderPolicyViolation['code'], string> = {
   no_credit: 'Thu nợ hoặc lập phiếu điều chỉnh công nợ, cấp hạn mức nếu vẫn cho khách nợ',
   sold_at_suspect: 'Kiểm tra đồng hồ của máy bán hàng và đối chiếu giờ bán với sổ sách trong ngày',
   seller_inactive: 'Đối chiếu đơn với người bán đã nghỉ, lập phiếu trả hàng nếu đơn không có thật',
+  negative_stock_policy:
+    'Kiểm kho mặt hàng bị âm, lập phiếu nhập hoặc điều chỉnh tồn; lập phiếu trả hàng nếu đơn bán nhầm',
 }
 
 export async function reviewOrder({

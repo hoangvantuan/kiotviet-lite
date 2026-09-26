@@ -4,10 +4,10 @@ import { resolveEffectiveDebtLimit } from '../utils/debt-limit.js'
 import {
   type CategoryDiscountRule,
   isEffectiveOn,
-  pickCategoryDiscount,
-  pickVolumePrice,
   type PriceSources,
+  rankCategoryDiscounts,
   resolvePriceFromSources,
+  selectVariantScoped,
   storeIsoDate,
 } from '../utils/price-resolution.js'
 import { normalizeSearchText, searchLikePattern } from '../utils/search-text.js'
@@ -415,12 +415,31 @@ export async function resolvePricesOffline(
     }
   }
 
-  const listPrice = async (listId: string, productId: string) => {
-    const row = await first<{ price: unknown }>(
-      db,
-      `SELECT price FROM catalog_price_list_items
-       WHERE store_id = $1 AND price_list_id = $2 AND product_id = $3 LIMIT 1`,
+  // POS-08: dòng theo sản phẩm (variant_id null) cộng dòng riêng của biến thể đang bán, rồi chọn
+  // bằng cùng quy tắc với máy chủ (selectVariantScoped)
+  const scoped = async <T extends { variant_id: string | null }>(
+    sql: string,
+    params: unknown[],
+    variantId: string | null,
+  ): Promise<T[]> => {
+    const rows = (
+      await db.query<T>(`${sql} AND (variant_id IS NULL OR variant_id = $${params.length + 1})`, [
+        ...params,
+        variantId,
+      ])
+    ).rows
+    return selectVariantScoped(
+      rows.map((r) => ({ ...r, variantId: r.variant_id })),
+      variantId,
+    )
+  }
+
+  const listPrice = async (listId: string, productId: string, variantId: string | null) => {
+    const [row] = await scoped<{ price: unknown; variant_id: string | null }>(
+      `SELECT price, variant_id FROM catalog_price_list_items
+       WHERE store_id = $1 AND price_list_id = $2 AND product_id = $3`,
       [storeId, listId, productId],
+      variantId,
     )
     return row ? num(row.price) : null
   }
@@ -438,17 +457,21 @@ export async function resolvePricesOffline(
       unitConversion: null,
       manualPriceList: null,
       customer: null,
-      volumePrice: null,
+      volumeTiers: [],
+      quantity: item.quantity,
     }
 
     if (product) {
+      // Biến thể không còn trong bản sao thì bán theo sản phẩm, như máy chủ
+      let variantId: string | null = null
       if (item.variantId) {
-        const v = await first<{ selling_price: unknown }>(
+        const v = await first<{ id: string; selling_price: unknown }>(
           db,
-          `SELECT selling_price FROM catalog_variants WHERE store_id = $1 AND id = $2 AND product_id = $3`,
+          `SELECT id, selling_price FROM catalog_variants WHERE store_id = $1 AND id = $2 AND product_id = $3`,
           [storeId, item.variantId, item.productId],
         )
         sources.variantSellingPrice = v?.selling_price ? num(v.selling_price) : null
+        variantId = v?.id ?? null
       }
       if (item.unitConversionId) {
         const uc = await first<{ conversion_factor: number; selling_price: unknown }>(
@@ -467,26 +490,27 @@ export async function resolvePricesOffline(
       }
 
       const tiers = (
-        await db.query<{ min_qty: number; price: unknown }>(
-          'SELECT min_qty, price FROM catalog_volume_prices WHERE store_id = $1 AND product_id = $2',
+        await scoped<{ min_qty: number; price: unknown; variant_id: string | null }>(
+          'SELECT min_qty, price, variant_id FROM catalog_volume_prices WHERE store_id = $1 AND product_id = $2',
           [storeId, item.productId],
+          variantId,
         )
-      ).rows.map((r) => ({ minQty: r.min_qty, price: num(r.price) }))
-      sources.volumePrice = pickVolumePrice(tiers, item.quantity)
+      ).map((r) => ({ minQty: r.min_qty, price: num(r.price) }))
+      sources.volumeTiers = tiers
 
       if (manualList) {
-        const price = await listPrice(manualList.id, item.productId)
+        const price = await listPrice(manualList.id, item.productId, variantId)
         sources.manualPriceList = {
           item: price !== null ? { price, priceListName: manualList.name } : null,
         }
       }
 
       if (customerId) {
-        const cp = await first<{ price: unknown }>(
-          db,
-          `SELECT price FROM catalog_customer_prices
-           WHERE store_id = $1 AND customer_id = $2 AND product_id = $3 LIMIT 1`,
+        const [cp] = await scoped<{ price: unknown; variant_id: string | null }>(
+          `SELECT price, variant_id FROM catalog_customer_prices
+           WHERE store_id = $1 AND customer_id = $2 AND product_id = $3`,
           [storeId, customerId, item.productId],
+          variantId,
         )
         const rules = product.category_id
           ? (
@@ -520,17 +544,18 @@ export async function resolvePricesOffline(
               }),
             )
           : []
-        const rule = pickCategoryDiscount(rules, {
+        const ranked = rankCategoryDiscounts(rules, {
           categoryId: product.category_id,
           customerId,
           customerGroupId,
-          quantity: item.quantity,
           today,
         })
-        const groupPrice = groupList ? await listPrice(groupList.id, item.productId) : null
+        const groupPrice = groupList
+          ? await listPrice(groupList.id, item.productId, variantId)
+          : null
         sources.customer = {
           customerPrice: cp ? num(cp.price) : null,
-          categoryDiscount: rule,
+          categoryDiscounts: ranked,
           groupPriceList:
             groupPrice !== null && groupList
               ? { price: groupPrice, priceListName: groupList.name }

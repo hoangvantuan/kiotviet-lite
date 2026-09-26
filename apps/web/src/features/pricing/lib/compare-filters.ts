@@ -27,7 +27,8 @@ export function applyCompareFilters(
     if (
       term &&
       !r.productName.toLowerCase().includes(term) &&
-      !r.productSku.toLowerCase().includes(term)
+      !r.productSku.toLowerCase().includes(term) &&
+      !(r.variantName ?? '').toLowerCase().includes(term)
     )
       return false
     return true

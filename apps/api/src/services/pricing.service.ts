@@ -1,4 +1,5 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm'
+import { and, eq, isNull, or, type SQL, sql } from 'drizzle-orm'
+import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 
 import {
   customerGroups,
@@ -13,13 +14,14 @@ import {
   type ResolvedPriceItem,
   resolvePriceFromSources,
   type ResolvePricesInput,
+  selectVariantScoped,
   volumePrices,
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { toIsoDate } from '../lib/date.js'
 import { ApiError } from '../lib/errors.js'
-import { findApplicableCategoryDiscount } from './category-discounts.service.js'
+import { listCategoryDiscountCandidates } from './category-discounts.service.js'
 
 interface ResolveContext {
   db: Db
@@ -67,47 +69,58 @@ async function findUnitConversion(
   }
 }
 
+/** Dòng theo sản phẩm (variant_id null) cộng dòng riêng của biến thể đang bán, nếu có (POS-08) */
+function variantScope(column: AnyPgColumn, variantId: string | null): SQL {
+  return variantId ? or(isNull(column), eq(column, variantId))! : isNull(column)
+}
+
 async function findCustomerPrice(
   db: Db,
   storeId: string,
   customerId: string,
   productId: string,
+  variantId: string | null,
 ): Promise<number | null> {
   const rows = await db
-    .select({ price: customerPrices.price })
+    .select({ price: customerPrices.price, variantId: customerPrices.variantId })
     .from(customerPrices)
     .where(
       and(
         eq(customerPrices.storeId, storeId),
         eq(customerPrices.customerId, customerId),
         eq(customerPrices.productId, productId),
+        variantScope(customerPrices.variantId, variantId),
       ),
     )
-    .limit(1)
-  if (!rows[0]) return null
-  return Number(rows[0].price)
+  const row = selectVariantScoped(rows, variantId)[0]
+  return row ? Number(row.price) : null
 }
 
-async function findVolumePrice(
+/** Mọi bậc giá theo số lượng của dòng (chọn theo biến thể); ngưỡng lọc ở `resolvePriceFromSources` */
+async function findVolumeTiers(
   db: Db,
   storeId: string,
   productId: string,
-  quantity: number,
-): Promise<{ price: number; minQty: number } | null> {
+  variantId: string | null,
+): Promise<Array<{ price: number; minQty: number }>> {
   const rows = await db
-    .select({ price: volumePrices.price, minQty: volumePrices.minQty })
+    .select({
+      price: volumePrices.price,
+      minQty: volumePrices.minQty,
+      variantId: volumePrices.variantId,
+    })
     .from(volumePrices)
     .where(
       and(
         eq(volumePrices.storeId, storeId),
         eq(volumePrices.productId, productId),
-        sql`${volumePrices.minQty} <= ${quantity}`,
+        variantScope(volumePrices.variantId, variantId),
       ),
     )
-    .orderBy(desc(volumePrices.minQty))
-    .limit(1)
-  if (!rows[0]) return null
-  return { price: Number(rows[0].price), minQty: rows[0].minQty }
+  return selectVariantScoped(rows, variantId).map((r) => ({
+    minQty: r.minQty,
+    price: Number(r.price),
+  }))
 }
 
 async function findPriceListPrice(
@@ -115,12 +128,15 @@ async function findPriceListPrice(
   storeId: string,
   customerId: string,
   productId: string,
+  variantId: string | null,
+  today: Date,
 ): Promise<{ price: number; priceListName: string } | null> {
-  const todayStr = toIsoDate(new Date())
+  const todayStr = toIsoDate(today)
 
   const rows = await db
     .select({
       price: priceListItems.price,
+      variantId: priceListItems.variantId,
       priceListName: priceLists.name,
     })
     .from(customers)
@@ -128,7 +144,11 @@ async function findPriceListPrice(
     .innerJoin(priceLists, eq(customerGroups.defaultPriceListId, priceLists.id))
     .innerJoin(
       priceListItems,
-      and(eq(priceListItems.priceListId, priceLists.id), eq(priceListItems.productId, productId)),
+      and(
+        eq(priceListItems.priceListId, priceLists.id),
+        eq(priceListItems.productId, productId),
+        variantScope(priceListItems.variantId, variantId),
+      ),
     )
     .where(
       and(
@@ -143,10 +163,9 @@ async function findPriceListPrice(
         sql`(${priceLists.effectiveTo} IS NULL OR ${priceLists.effectiveTo} >= ${todayStr})`,
       ),
     )
-    .limit(1)
 
-  if (!rows[0]) return null
-  return { price: Number(rows[0].price), priceListName: rows[0].priceListName }
+  const row = selectVariantScoped(rows, variantId)[0]
+  return row ? { price: Number(row.price), priceListName: row.priceListName } : null
 }
 
 async function findManualPriceListItem(
@@ -154,18 +173,24 @@ async function findManualPriceListItem(
   storeId: string,
   priceListId: string,
   productId: string,
+  variantId: string | null,
   today: Date = new Date(),
 ): Promise<{ price: number; priceListName: string } | null> {
   const todayStr = toIsoDate(today)
   const rows = await db
     .select({
       price: priceListItems.price,
+      variantId: priceListItems.variantId,
       priceListName: priceLists.name,
     })
     .from(priceLists)
     .innerJoin(
       priceListItems,
-      and(eq(priceListItems.priceListId, priceLists.id), eq(priceListItems.productId, productId)),
+      and(
+        eq(priceListItems.priceListId, priceLists.id),
+        eq(priceListItems.productId, productId),
+        variantScope(priceListItems.variantId, variantId),
+      ),
     )
     .where(
       and(
@@ -177,10 +202,9 @@ async function findManualPriceListItem(
         sql`(${priceLists.effectiveTo} IS NULL OR ${priceLists.effectiveTo} >= ${todayStr})`,
       ),
     )
-    .limit(1)
 
-  if (!rows[0]) return null
-  return { price: Number(rows[0].price), priceListName: rows[0].priceListName }
+  const row = selectVariantScoped(rows, variantId)[0]
+  return row ? { price: Number(row.price), priceListName: row.priceListName } : null
 }
 
 async function getProduct(db: Db, storeId: string, productId: string) {
@@ -226,6 +250,9 @@ export async function resolveProductPrice(ctx: ResolveContext): Promise<Resolved
   if (!product) return resolvePriceFromSources(EMPTY_SOURCES)
 
   let variantSellingPrice: number | null = null
+  // Biến thể không còn (đã xóa, khác sản phẩm) thì coi như bán theo sản phẩm: không lấy dòng giá
+  // riêng của nó
+  let liveVariantId: string | null = null
   if (variantId) {
     const variantResult = await db.query.productVariants.findFirst({
       where: (vt, { eq, and, isNull }) =>
@@ -235,9 +262,10 @@ export async function resolveProductPrice(ctx: ResolveContext): Promise<Resolved
           eq(vt.storeId, storeId),
           isNull(vt.deletedAt),
         ),
-      columns: { sellingPrice: true },
+      columns: { id: true, sellingPrice: true },
     })
     variantSellingPrice = variantResult?.sellingPrice ? Number(variantResult.sellingPrice) : null
+    liveVariantId = variantResult?.id ?? null
   }
 
   const unitConversion = unitConversionId
@@ -245,46 +273,50 @@ export async function resolveProductPrice(ctx: ResolveContext): Promise<Resolved
     : null
 
   const sources: PriceSources = {
+    quantity,
     product: { sellingPrice: Number(product.sellingPrice) },
     variantSellingPrice,
     unitConversion,
     manualPriceList: null,
     customer: null,
-    volumePrice: await findVolumePrice(db, storeId, productId, quantity),
+    volumeTiers: await findVolumeTiers(db, storeId, productId, liveVariantId),
   }
 
+  const today = ctx.context?.orderDate ?? new Date()
   if (priceListId) {
-    const today = ctx.context?.orderDate ?? new Date()
     sources.manualPriceList = {
-      item: await findManualPriceListItem(db, storeId, priceListId, productId, today),
+      item: await findManualPriceListItem(
+        db,
+        storeId,
+        priceListId,
+        productId,
+        liveVariantId,
+        today,
+      ),
     }
   }
 
   if (customerId) {
-    // Chiết khấu danh mục tính trên giá lẻ đã quy đổi đơn vị, như tầng giá lẻ
-    const rawRetail =
-      variantSellingPrice !== null && variantSellingPrice > 0
-        ? variantSellingPrice
-        : Number(product.sellingPrice)
-    const retailPrice =
-      unitConversion?.sellingPrice ??
-      Math.round(rawRetail * (unitConversion?.conversionFactor ?? 1))
     const customerGroupId = await getCustomerGroupId(db, storeId, customerId)
-    const catDiscount = await findApplicableCategoryDiscount({
+    const { candidates } = await listCategoryDiscountCandidates({
       db,
       storeId,
       productId,
       customerId,
       customerGroupId,
-      quantity,
-      basePrice: retailPrice,
+      date: today,
     })
     sources.customer = {
-      customerPrice: await findCustomerPrice(db, storeId, customerId, productId),
-      categoryDiscount: catDiscount
-        ? { discountType: catDiscount.discountType, discountValue: catDiscount.discountValue }
-        : null,
-      groupPriceList: await findPriceListPrice(db, storeId, customerId, productId),
+      customerPrice: await findCustomerPrice(db, storeId, customerId, productId, liveVariantId),
+      categoryDiscounts: candidates,
+      groupPriceList: await findPriceListPrice(
+        db,
+        storeId,
+        customerId,
+        productId,
+        liveVariantId,
+        today,
+      ),
     }
   }
 
@@ -297,7 +329,8 @@ const EMPTY_SOURCES: PriceSources = {
   unitConversion: null,
   manualPriceList: null,
   customer: null,
-  volumePrice: null,
+  volumeTiers: [],
+  quantity: 0,
 }
 
 export async function resolvePrices({

@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 
 import { useCartStore } from '@/stores/use-cart-store'
 
+import { guardAddToCart } from '../stock-guard'
 import type { PosProductItem, PosProductVariant, PosUnitConversion } from '../types'
 import { computeUnitConversionPriceAndStock } from '../utils'
 import { buildCartItemId, repriceOnAddAction, useRepriceOnAdd } from './use-auto-reprice'
@@ -15,6 +16,7 @@ export interface AddToCartOptions {
   notes?: string | null
 }
 
+/** Thêm hàng vào giỏ đang mở; trả về false khi không thêm (số lượng sai, bị chặn vì tồn kho) */
 export function addToCartAction({
   product,
   variant = null,
@@ -22,9 +24,8 @@ export function addToCartAction({
   unitConversionId = null,
   quantity = 1,
   notes = null,
-}: AddToCartOptions) {
-  if (!Number.isInteger(quantity) || quantity <= 0) return
-
+}: AddToCartOptions): boolean {
+  if (!Number.isInteger(quantity) || quantity <= 0) return false
   const unitConversion =
     explicitUnitConversion ??
     (unitConversionId
@@ -41,6 +42,19 @@ export function addToCartAction({
 
   const effectiveUnitConversionId = unitConversion?.id ?? null
 
+  // POS-13: kiểm tồn kho theo tổng cùng hàng trong giỏ, cùng quy tắc với sửa số lượng và quét mã
+  const allowed = guardAddToCart(
+    {
+      productId: product.id,
+      variantId: variant?.id ?? null,
+      trackInventory: product.trackInventory,
+      baseStock: rawStock,
+      name: variant ? `${product.name} (${variant.name})` : product.name,
+      baseUnit: product.unit ?? null,
+    },
+    quantity * (unitConversion?.conversionFactor ?? 1),
+  )
+  if (!allowed) return false
   useCartStore.getState().addItem(
     {
       productId: product.id,
@@ -72,15 +86,14 @@ export function addToCartAction({
   const totalQty = existing ? existing.quantity : quantity
 
   repriceOnAddAction(product.id, variant?.id ?? null, effectiveUnitConversionId, totalQty)
+  return true
 }
 
 export function useAddToCart() {
   const repriceOnAdd = useRepriceOnAdd()
 
   return useCallback(
-    (options: AddToCartOptions) => {
-      addToCartAction(options)
-    },
+    (options: AddToCartOptions) => addToCartAction(options),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [repriceOnAdd],
   )

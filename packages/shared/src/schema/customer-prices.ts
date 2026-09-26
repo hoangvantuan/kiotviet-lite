@@ -1,7 +1,8 @@
-import { bigint, index, pgTable, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core'
+import { bigint, index, pgTable, timestamp, unique, uuid, varchar } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
 import { customers } from './customers.js'
+import { productVariants } from './product-variants.js'
 import { products } from './products.js'
 import { stores } from './stores.js'
 
@@ -20,6 +21,8 @@ export const customerPrices = pgTable(
     productId: uuid()
       .notNull()
       .references(() => products.id, { onDelete: 'cascade' }),
+    // POS-08: null là giá cho mọi biến thể của sản phẩm; có giá trị là giá riêng của biến thể đó
+    variantId: uuid().references(() => productVariants.id, { onDelete: 'cascade' }),
     price: bigint({ mode: 'number' }).notNull(),
     note: varchar({ length: 255 }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -29,7 +32,9 @@ export const customerPrices = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    uniqueIndex('uniq_customer_prices_customer_product').on(table.customerId, table.productId),
+    unique('uniq_customer_prices_customer_product_variant')
+      .on(table.customerId, table.productId, table.variantId)
+      .nullsNotDistinct(),
     index('idx_customer_prices_store_customer').on(table.storeId, table.customerId),
     index('idx_customer_prices_product').on(table.productId),
   ],

@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import {
   type ListVolumePricesQuery,
   products,
+  productVariants,
   type ReplaceVolumePricesInput,
   type UserRole,
   volumePrices,
@@ -15,7 +16,12 @@ import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
-
+import {
+  aliveVariantCondition,
+  effectiveCostPriceSql,
+  effectiveSellingPriceSql,
+  variantNameSql,
+} from './price-variant-scope.js'
 export interface VolumePricesActor {
   userId: string
   storeId: string
@@ -37,6 +43,58 @@ function toVolumePriceTier(row: VolumePriceRow): VolumePriceTier {
     price: Number(row.price),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  }
+}
+
+/** POS-08: bộ bậc giá của biến thể, hoặc bộ bậc theo sản phẩm (variant_id null) */
+function tierScope(productId: string, storeId: string, variantId: string | null): SQL {
+  return and(
+    eq(volumePrices.productId, productId),
+    eq(volumePrices.storeId, storeId),
+    variantId ? eq(volumePrices.variantId, variantId) : isNull(volumePrices.variantId),
+  )!
+}
+
+/** Biến thể phải thuộc sản phẩm; trả tên, giá bán và giá vốn hiệu lực của dòng */
+async function resolveVariant({
+  db,
+  storeId,
+  product,
+  variantId,
+}: {
+  db: Db
+  storeId: string
+  product: { sellingPrice: number; costPrice: number | null; id: string }
+  variantId: string | null
+}): Promise<{ variantName: string | null; sellingPrice: number; costPrice: number | null }> {
+  if (!variantId) {
+    return { variantName: null, sellingPrice: product.sellingPrice, costPrice: product.costPrice }
+  }
+  const [row] = await db
+    .select({
+      name: variantNameSql,
+      sellingPrice: productVariants.sellingPrice,
+      costPrice: productVariants.costPrice,
+    })
+    .from(productVariants)
+    .where(
+      and(
+        eq(productVariants.id, variantId),
+        eq(productVariants.productId, product.id),
+        eq(productVariants.storeId, storeId),
+        isNull(productVariants.deletedAt),
+      ),
+    )
+    .limit(1)
+  if (!row) {
+    throw new ApiError('NOT_FOUND', 'Không tìm thấy biến thể của sản phẩm này', {
+      field: 'variantId',
+    })
+  }
+  return {
+    variantName: row.name,
+    sellingPrice: Number(row.sellingPrice) > 0 ? Number(row.sellingPrice) : product.sellingPrice,
+    costPrice: row.costPrice === null ? product.costPrice : Number(row.costPrice),
   }
 }
 
@@ -93,7 +151,11 @@ export async function listVolumePrices({
 }: ListVolumePricesDeps): Promise<VolumePricesListResult> {
   const { page, pageSize, search } = query
 
-  const conditions: SQL[] = [eq(volumePrices.storeId, storeId), isNull(products.deletedAt)]
+  const conditions: SQL[] = [
+    eq(volumePrices.storeId, storeId),
+    isNull(products.deletedAt),
+    aliveVariantCondition(volumePrices.variantId),
+  ]
 
   const trimmed = search?.trim()
   if (trimmed) {
@@ -108,40 +170,46 @@ export async function listVolumePrices({
 
   const offset = (page - 1) * pageSize
 
-  // Aggregate by product_id
+  // Gom theo sản phẩm và biến thể (POS-08)
   const aggRows = await db
     .select({
       productId: volumePrices.productId,
+      variantId: volumePrices.variantId,
+      variantName: variantNameSql,
       productName: products.name,
       productSku: products.sku,
       productImageUrl: products.imageUrl,
-      productSellingPrice: products.sellingPrice,
-      productCostPrice: products.costPrice,
+      productSellingPrice: effectiveSellingPriceSql(products.sellingPrice),
+      productCostPrice: effectiveCostPriceSql(products.costPrice),
       tierCount: sql<number>`count(${volumePrices.id})::int`,
       minPrice: sql<number>`min(${volumePrices.price})::int`,
       maxPrice: sql<number>`max(${volumePrices.price})::int`,
     })
     .from(volumePrices)
     .innerJoin(products, eq(volumePrices.productId, products.id))
+    .leftJoin(productVariants, eq(volumePrices.variantId, productVariants.id))
     .where(whereClause)
     .groupBy(
       volumePrices.productId,
+      volumePrices.variantId,
+      productVariants.id,
       products.name,
       products.sku,
       products.imageUrl,
       products.sellingPrice,
       products.costPrice,
     )
-    .orderBy(asc(products.name))
+    .orderBy(asc(products.name), sql`${volumePrices.variantId} NULLS FIRST`)
     .limit(pageSize)
     .offset(offset)
 
   const totalRows = await db
     .select({
-      count: sql<number>`count(distinct ${volumePrices.productId})::int`,
+      count: sql<number>`count(distinct (${volumePrices.productId}, ${volumePrices.variantId}))::int`,
     })
     .from(volumePrices)
     .innerJoin(products, eq(volumePrices.productId, products.id))
+    .leftJoin(productVariants, eq(volumePrices.variantId, productVariants.id))
     .where(whereClause)
 
   const total = totalRows[0]?.count ?? 0
@@ -155,6 +223,7 @@ export async function listVolumePrices({
       .select({
         id: volumePrices.id,
         productId: volumePrices.productId,
+        variantId: volumePrices.variantId,
         minQty: volumePrices.minQty,
         price: volumePrices.price,
         createdAt: volumePrices.createdAt,
@@ -165,16 +234,19 @@ export async function listVolumePrices({
       .orderBy(asc(volumePrices.minQty))
 
     for (const row of tierRows) {
-      const list = tiersByProduct.get(row.productId) ?? []
+      const key = `${row.productId}:${row.variantId ?? ''}`
+      const list = tiersByProduct.get(key) ?? []
       list.push(toVolumePriceTier(row as VolumePriceRow))
-      tiersByProduct.set(row.productId, list)
+      tiersByProduct.set(key, list)
     }
   }
 
   const items: VolumePricesListItem[] = aggRows.map((r) => {
-    const tiers = tiersByProduct.get(r.productId) ?? []
+    const tiers = tiersByProduct.get(`${r.productId}:${r.variantId ?? ''}`) ?? []
     return {
       productId: r.productId,
+      variantId: r.variantId,
+      variantName: r.variantName,
       productName: r.productName,
       productSku: r.productSku,
       productImageUrl: r.productImageUrl,
@@ -194,14 +266,17 @@ export interface ListVolumePricesForProductDeps {
   db: Db
   storeId: string
   productId: string
+  variantId?: string | null
 }
 
 export async function listVolumePricesForProduct({
   db,
   storeId,
   productId,
+  variantId = null,
 }: ListVolumePricesForProductDeps): Promise<VolumePricesForProduct> {
   const product = await ensureProductAlive({ db, storeId, productId })
+  const scope = await resolveVariant({ db, storeId, product, variantId })
 
   const rows = await db
     .select({
@@ -212,7 +287,7 @@ export async function listVolumePricesForProduct({
       updatedAt: volumePrices.updatedAt,
     })
     .from(volumePrices)
-    .where(and(eq(volumePrices.productId, productId), eq(volumePrices.storeId, storeId)))
+    .where(tierScope(productId, storeId, variantId))
     .orderBy(asc(volumePrices.minQty))
 
   const tiers = rows.map((row) => toVolumePriceTier(row as VolumePriceRow))
@@ -222,8 +297,10 @@ export async function listVolumePricesForProduct({
     productName: product.name,
     productSku: product.sku,
     productImageUrl: product.imageUrl,
-    productSellingPrice: product.sellingPrice,
-    productCostPrice: product.costPrice,
+    variantId,
+    variantName: scope.variantName,
+    productSellingPrice: scope.sellingPrice,
+    productCostPrice: scope.costPrice,
     tiers,
   }
 }
@@ -244,6 +321,8 @@ export async function replaceVolumePricesForProduct({
   meta,
 }: ReplaceVolumePricesDeps): Promise<VolumePricesForProduct> {
   const product = await ensureProductAlive({ db, storeId: actor.storeId, productId })
+  const variantId = input.variantId ?? null
+  const scope = await resolveVariant({ db, storeId: actor.storeId, product, variantId })
 
   const sortedTiers = [...input.tiers].sort((a, b) => a.minQty - b.minQty)
 
@@ -251,18 +330,17 @@ export async function replaceVolumePricesForProduct({
     const existing = await tx
       .select({ id: volumePrices.id })
       .from(volumePrices)
-      .where(and(eq(volumePrices.productId, productId), eq(volumePrices.storeId, actor.storeId)))
+      .where(tierScope(productId, actor.storeId, variantId))
     const tierCountBefore = existing.length
 
-    await tx
-      .delete(volumePrices)
-      .where(and(eq(volumePrices.productId, productId), eq(volumePrices.storeId, actor.storeId)))
+    await tx.delete(volumePrices).where(tierScope(productId, actor.storeId, variantId))
 
     if (sortedTiers.length > 0) {
       await tx.insert(volumePrices).values(
         sortedTiers.map((t) => ({
           storeId: actor.storeId,
           productId,
+          variantId,
           minQty: t.minQty,
           price: t.price,
         })),
@@ -279,6 +357,7 @@ export async function replaceVolumePricesForProduct({
       targetId: productId,
       changes: {
         productId,
+        variantId,
         tierCountBefore,
         tierCountAfter: sortedTiers.length,
         tiers: sortedTiers.map((t) => ({ minQty: t.minQty, price: t.price })),
@@ -296,7 +375,7 @@ export async function replaceVolumePricesForProduct({
         updatedAt: volumePrices.updatedAt,
       })
       .from(volumePrices)
-      .where(and(eq(volumePrices.productId, productId), eq(volumePrices.storeId, actor.storeId)))
+      .where(tierScope(productId, actor.storeId, variantId))
       .orderBy(asc(volumePrices.minQty))
 
     return {
@@ -304,8 +383,10 @@ export async function replaceVolumePricesForProduct({
       productName: product.name,
       productSku: product.sku,
       productImageUrl: product.imageUrl,
-      productSellingPrice: product.sellingPrice,
-      productCostPrice: product.costPrice,
+      variantId,
+      variantName: scope.variantName,
+      productSellingPrice: scope.sellingPrice,
+      productCostPrice: scope.costPrice,
       tiers: rows.map((row) => toVolumePriceTier(row as VolumePriceRow)),
     }
   })

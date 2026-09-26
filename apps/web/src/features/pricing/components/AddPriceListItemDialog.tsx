@@ -24,27 +24,30 @@ import { Label } from '@/components/ui/label'
 import { handleApiError } from '@/lib/api-error'
 import { showError, showSuccess } from '@/lib/toast'
 
-import { useProductsQuery } from '../../products/use-products'
+import { useProductQuery, useProductsQuery } from '../../products/use-products'
+import { buildVariantName } from '../../products/variants-utils'
 import { useCreatePriceListItemMutation } from '../use-price-lists'
+import { VariantSelect } from './VariantSelect'
 
 interface FormShape {
   productId: string
+  variantId: string | null
   price: number | null
+}
+
+export interface ExistingPriceListItemKey {
+  productId: string
+  variantId: string | null
 }
 
 interface Props {
   open: boolean
   onOpenChange: (v: boolean) => void
   priceList: PriceListDetail
-  excludeProductIds: string[]
+  existingItems: ExistingPriceListItemKey[]
 }
 
-export function AddPriceListItemDialog({
-  open,
-  onOpenChange,
-  priceList,
-  excludeProductIds,
-}: Props) {
+export function AddPriceListItemDialog({ open, onOpenChange, priceList, existingItems }: Props) {
   const mutation = useCreatePriceListItemMutation()
   const productsQuery = useProductsQuery({ status: 'active', pageSize: MAX_PAGE_SIZE, page: 1 })
 
@@ -52,33 +55,65 @@ export function AddPriceListItemDialog({
 
   const form = useForm<FormShape>({
     mode: 'onTouched',
-    defaultValues: { productId: '', price: null },
+    defaultValues: { productId: '', variantId: null, price: null },
   })
 
   useEffect(() => {
     if (open) {
-      form.reset({ productId: '', price: null })
+      form.reset({ productId: '', variantId: null, price: null })
       setSearch('')
     }
   }, [open, form])
 
   const products = useMemo(() => productsQuery.data?.data ?? [], [productsQuery.data])
 
+  const existingByProduct = useMemo(() => {
+    const map = new Map<string, Set<string | null>>()
+    for (const it of existingItems) {
+      const set = map.get(it.productId) ?? new Set<string | null>()
+      set.add(it.variantId)
+      map.set(it.productId, set)
+    }
+    return map
+  }, [existingItems])
+
   const filtered = useMemo(() => {
-    const excluded = new Set(excludeProductIds)
     const term = search.trim().toLowerCase()
     return products
-      .filter((p) => !excluded.has(p.id))
+      .filter((p) => {
+        // Sản phẩm không biến thể, đã có dòng giá thì ẩn hẳn. Sản phẩm có biến
+        // thể vẫn hiện để chọn biến thể khác chưa có giá riêng.
+        if (!p.hasVariants) return !existingByProduct.get(p.id)?.has(null)
+        return true
+      })
       .filter((p) => {
         if (!term) return true
         return p.name.toLowerCase().includes(term) || p.sku.toLowerCase().includes(term)
       })
       .slice(0, 50)
-  }, [products, excludeProductIds, search])
+  }, [products, existingByProduct, search])
 
   const productId = form.watch('productId')
+  const variantId = form.watch('variantId')
   const price = form.watch('price') ?? 0
   const selectedProduct = products.find((p) => p.id === productId) ?? null
+
+  const productDetailQuery = useProductQuery(selectedProduct?.hasVariants ? productId : undefined)
+  const variants = productDetailQuery.data?.variantsConfig?.variants ?? []
+  const selectedVariant = variants.find((v) => v.id === variantId) ?? null
+
+  const existingForProduct = existingByProduct.get(productId)
+  const disabledVariantIds = useMemo(
+    () => new Set(Array.from(existingForProduct ?? []).filter((v): v is string => v !== null)),
+    [existingForProduct],
+  )
+  const disableAllVariantsOption = existingForProduct?.has(null) ?? false
+  const isDuplicateCombo =
+    variantId === null ? disableAllVariantsOption : disabledVariantIds.has(variantId)
+
+  useEffect(() => {
+    form.setValue('variantId', null)
+  }, [productId, form])
 
   const previewRounded = useMemo(
     () => applyRounding(price, priceList.roundingRule),
@@ -96,6 +131,7 @@ export function AddPriceListItemDialog({
     }
     const payload: CreatePriceListItemInput = {
       productId: values.productId,
+      variantId: values.variantId,
       price: values.price,
     }
     try {
@@ -154,6 +190,24 @@ export function AddPriceListItemDialog({
             )}
           </div>
 
+          {selectedProduct && variants.length > 0 && (
+            <div className="space-y-1">
+              <Label>Biến thể</Label>
+              <VariantSelect
+                variants={variants}
+                value={variantId}
+                onChange={(v) => form.setValue('variantId', v, { shouldValidate: true })}
+                disabledVariantIds={disabledVariantIds}
+                disableAllVariantsOption={disableAllVariantsOption}
+              />
+              {isDuplicateCombo && (
+                <p className="text-xs text-destructive">
+                  Dòng giá cho lựa chọn này đã tồn tại, vui lòng chọn biến thể khác.
+                </p>
+              )}
+            </div>
+          )}
+
           {selectedProduct && (
             <div className="space-y-1">
               <Label htmlFor="apl-price">
@@ -165,8 +219,11 @@ export function AddPriceListItemDialog({
                 onChange={(v) => form.setValue('price', v, { shouldValidate: true })}
               />
               <p className="text-xs text-muted-foreground">
-                Sản phẩm: {selectedProduct.name}. Sau làm tròn:{' '}
-                {formatVndWithSuffix(previewRounded)}
+                Sản phẩm: {selectedProduct.name}
+                {selectedVariant
+                  ? ` (${buildVariantName(selectedVariant.attribute1Value, selectedVariant.attribute2Value)})`
+                  : ''}
+                . Sau làm tròn: {formatVndWithSuffix(previewRounded)}
               </p>
               {form.formState.errors.price && (
                 <p className="text-sm text-destructive">{form.formState.errors.price.message}</p>
@@ -185,7 +242,9 @@ export function AddPriceListItemDialog({
             </Button>
             <Button
               type="submit"
-              disabled={mutation.isPending || !productId || form.watch('price') === null}
+              disabled={
+                mutation.isPending || !productId || form.watch('price') === null || isDuplicateCombo
+              }
             >
               {mutation.isPending ? 'Đang lưu…' : 'Thêm'}
             </Button>

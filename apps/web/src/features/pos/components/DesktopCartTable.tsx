@@ -32,6 +32,7 @@ import {
   repriceOnQuantityAction,
   useRepriceOnQuantity,
 } from '../hooks/use-auto-reprice'
+import { changeCartItemUnit, updateCartQuantity } from '../stock-guard'
 import { EditUnitPriceDialog } from './EditUnitPriceDialog'
 import { PriceSourceBadge } from './PriceSourceBadge'
 import { StockInfoPopover } from './StockInfoPopover'
@@ -42,11 +43,9 @@ interface DesktopCartRowProps {
 }
 
 function DesktopCartRow({ item, index }: DesktopCartRowProps) {
-  const updateQuantity = useCartStore((s) => s.updateQuantity)
   const removeItem = useCartStore((s) => s.removeItem)
   const updateLineDiscount = useCartStore((s) => s.updateLineDiscount)
   const updateLineNotes = useCartStore((s) => s.updateLineNotes)
-  const changeItemUnit = useCartStore((s) => s.changeItemUnit)
 
   const permissions = usePermissions()
   const canEditPrice = permissions.has('pos.editPrice')
@@ -85,7 +84,10 @@ function DesktopCartRow({ item, index }: DesktopCartRowProps) {
       return
     }
     if (parsed === item.quantity) return
-    updateQuantity(item.id, parsed)
+    if (!updateCartQuantity(item.id, parsed)) {
+      setDraftQty(String(item.quantity))
+      return
+    }
     repriceOnQuantity(item.id, parsed)
   }
 
@@ -186,7 +188,7 @@ function DesktopCartRow({ item, index }: DesktopCartRowProps) {
             onChange={(e) => {
               const val = e.target.value
               const nextUnitConversionId = val === '' ? null : val
-              changeItemUnit(item.id, nextUnitConversionId)
+              if (!changeCartItemUnit(item.id, nextUnitConversionId)) return
               const currentTab = useCartStore.getState().activeTab
               const updatedTab = useCartStore.getState().tabs[currentTab]
               const targetId = buildCartItemId(item.productId, item.variantId, nextUnitConversionId)
@@ -217,7 +219,7 @@ function DesktopCartRow({ item, index }: DesktopCartRowProps) {
           <button
             type="button"
             onClick={() => {
-              updateQuantity(item.id, item.quantity - 1)
+              updateCartQuantity(item.id, item.quantity - 1)
               if (item.quantity - 1 > 0) repriceOnQuantity(item.id, item.quantity - 1)
             }}
             className="flex h-8 w-8 items-center justify-center rounded border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -242,8 +244,9 @@ function DesktopCartRow({ item, index }: DesktopCartRowProps) {
           <button
             type="button"
             onClick={() => {
-              updateQuantity(item.id, item.quantity + 1)
-              repriceOnQuantity(item.id, item.quantity + 1)
+              if (updateCartQuantity(item.id, item.quantity + 1)) {
+                repriceOnQuantity(item.id, item.quantity + 1)
+              }
             }}
             className="flex h-8 w-8 items-center justify-center rounded border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             aria-label="Tăng số lượng"

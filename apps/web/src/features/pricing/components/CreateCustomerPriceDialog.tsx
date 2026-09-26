@@ -23,10 +23,12 @@ import { handleApiError } from '@/lib/api-error'
 import { showSuccess } from '@/lib/toast'
 
 import { useCreateCustomerPriceMutation } from '../use-customer-prices'
+import { VariantSelect } from './VariantSelect'
 
 interface FormShape {
   customerId: string
   productId: string
+  variantId: string | null
   price: number | null
   note: string
 }
@@ -51,6 +53,7 @@ export function CreateCustomerPriceDialog({
     defaultValues: {
       customerId: defaultCustomerId ?? '',
       productId: defaultProductId ?? '',
+      variantId: null,
       price: null,
       note: '',
     },
@@ -61,6 +64,7 @@ export function CreateCustomerPriceDialog({
       form.reset({
         customerId: defaultCustomerId ?? '',
         productId: defaultProductId ?? '',
+        variantId: null,
         price: null,
         note: '',
       })
@@ -69,10 +73,21 @@ export function CreateCustomerPriceDialog({
 
   const customerId = form.watch('customerId')
   const productId = form.watch('productId')
+  const variantId = form.watch('variantId')
   const price = form.watch('price')
 
   const { data: productDetail } = useProductQuery(productId || undefined)
   const selectedProduct = productDetail
+  const variants = selectedProduct?.variantsConfig?.variants ?? []
+  const selectedVariant = variants.find((v) => v.id === variantId) ?? null
+  const referenceSellingPrice = selectedVariant?.sellingPrice ?? selectedProduct?.sellingPrice ?? 0
+  const referenceCostPrice = selectedVariant
+    ? selectedVariant.costPrice
+    : (selectedProduct?.costPrice ?? null)
+
+  useEffect(() => {
+    form.setValue('variantId', null)
+  }, [productId, form])
 
   const submit = form.handleSubmit(async (values) => {
     if (!values.customerId) {
@@ -90,6 +105,7 @@ export function CreateCustomerPriceDialog({
     const payload: CreateCustomerPriceInput = {
       customerId: values.customerId,
       productId: values.productId,
+      variantId: values.variantId,
       price: values.price,
       note: values.note.trim() ? values.note.trim() : null,
     }
@@ -141,13 +157,24 @@ export function CreateCustomerPriceDialog({
             )}
             {selectedProduct && (
               <p className="text-xs text-muted-foreground">
-                Giá lẻ chuẩn: {formatVndWithSuffix(selectedProduct.sellingPrice)}
-                {selectedProduct.costPrice !== null
-                  ? ` • Giá vốn: ${formatVndWithSuffix(selectedProduct.costPrice)}`
+                Giá lẻ chuẩn: {formatVndWithSuffix(referenceSellingPrice)}
+                {referenceCostPrice !== null
+                  ? ` • Giá vốn: ${formatVndWithSuffix(referenceCostPrice)}`
                   : ''}
               </p>
             )}
           </div>
+
+          {variants.length > 0 && (
+            <div className="space-y-1">
+              <Label>Biến thể</Label>
+              <VariantSelect
+                variants={variants}
+                value={variantId}
+                onChange={(v) => form.setValue('variantId', v, { shouldValidate: true })}
+              />
+            </div>
+          )}
 
           <div className="space-y-1">
             <Label htmlFor="cp-price">
@@ -166,8 +193,8 @@ export function CreateCustomerPriceDialog({
           {selectedProduct && price !== null && (
             <PriceWarning
               price={price}
-              sellingPrice={selectedProduct.sellingPrice}
-              costPrice={selectedProduct.costPrice}
+              sellingPrice={referenceSellingPrice}
+              costPrice={referenceCostPrice}
             />
           )}
 

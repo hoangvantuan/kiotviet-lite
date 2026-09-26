@@ -17,6 +17,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
+import { VariantNameHint } from './VariantSelect'
+
 interface Props {
   priceList: PriceListDetail
   items: PriceListItemListItem[]
@@ -41,7 +43,10 @@ export function PriceListItemsTable({ priceList, items, onEdit, onDelete }: Prop
         <TableBody>
           {items.map((it) => (
             <TableRow key={it.id}>
-              <TableCell className="font-medium">{it.productName}</TableCell>
+              <TableCell className="font-medium">
+                {it.productName}
+                <VariantNameHint variantName={it.variantName} />
+              </TableCell>
               <TableCell className="text-sm text-muted-foreground">{it.productSku}</TableCell>
               <TableCell className="text-right tabular-nums text-muted-foreground">
                 {formatVndWithSuffix(it.productSellingPrice)}

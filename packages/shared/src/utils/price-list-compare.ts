@@ -2,6 +2,9 @@ import type { CompareRow, CompareSummary } from '../schema/price-list-management
 
 export interface ComputeCompareRowInput {
   productId: string
+  /** POS-08: dòng gắn biến thể; giá bán, giá vốn truyền vào là của biến thể */
+  variantId?: string | null
+  variantName?: string | null
   productName: string
   productSku: string
   productImageUrl: string | null
@@ -52,6 +55,8 @@ export function computeCompareRow(input: ComputeCompareRowInput): CompareRow {
 
   return {
     productId,
+    variantId: input.variantId ?? null,
+    variantName: input.variantName ?? null,
     productName,
     productSku,
     productImageUrl,

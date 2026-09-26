@@ -60,13 +60,7 @@ export function BarcodeScanner({ open, onOpenChange, onSelectProduct }: BarcodeS
 
         const exactMatch = products.find((p) => p.barcode === barcode)
         const product = exactMatch ?? products[0]!
-        const isOutOfStock = product.trackInventory && product.stockQuantity <= 0
-        if (isOutOfStock) {
-          showWarning(`Sản phẩm "${product.name}" đã hết hàng`)
-          onOpenChange(false)
-          return
-        }
-
+        // POS-13: hết hàng hay vượt tồn kho do bước thêm vào giỏ báo và áp cài đặt bán âm
         if (product.hasVariants) {
           onOpenChange(false)
           onSelectProduct(product)

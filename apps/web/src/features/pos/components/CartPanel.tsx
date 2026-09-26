@@ -37,6 +37,8 @@ export function CartPanel({ onPayment }: CartPanelProps) {
   const totalQty = useCartStore((s) =>
     (s.tabs[s.activeTab]?.items ?? []).reduce((sum, i) => sum + i.quantity, 0),
   )
+  // POS-20: "Tổng tiền hàng (N sản phẩm)" đếm số dòng hàng, không cộng số lượng
+  const lineCount = useCartStore((s) => (s.tabs[s.activeTab]?.items ?? []).length)
   const clearCart = useCartStore((s) => s.clearCart)
 
   useAutoReprice()
@@ -96,7 +98,7 @@ export function CartPanel({ onPayment }: CartPanelProps) {
         <div className="shrink-0 space-y-2 border-t border-border bg-background p-3">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">
-              Tổng tiền hàng ({totalQty} sản phẩm)
+              Tổng tiền hàng ({lineCount} sản phẩm)
             </span>
             <span className="font-mono text-sm text-muted-foreground">
               {formatVndWithSuffix(subtotal)}

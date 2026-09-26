@@ -6,6 +6,8 @@ import { formatVndWithSuffix } from '@kiotviet-lite/shared'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
+import { VariantNameHint } from './VariantSelect'
+
 interface Props {
   items: VolumePricesListItem[]
   onEdit: (item: VolumePricesListItem) => void
@@ -16,11 +18,15 @@ export function VolumePricesCardList({ items, onEdit, onClear }: Props) {
   return (
     <div className="space-y-2">
       {items.map((p) => (
-        <div key={p.productId} className="rounded-md border border-border p-3">
+        <div
+          key={`${p.productId}-${p.variantId ?? 'all'}`}
+          className="rounded-md border border-border p-3"
+        >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <div className="font-medium">{p.productName}</div>
               <div className="text-xs text-muted-foreground">Mã hàng {p.productSku}</div>
+              <VariantNameHint variantName={p.variantName} />
               <div className="mt-1 text-xs text-muted-foreground">
                 Giá lẻ chuẩn: {formatVndWithSuffix(p.productSellingPrice)}
               </div>

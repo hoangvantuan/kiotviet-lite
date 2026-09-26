@@ -58,6 +58,8 @@ export const dateStringSchema = z
 
 export const priceListItemInputSchema = z.object({
   productId: z.string().uuid('Sản phẩm không hợp lệ'),
+  // POS-08: null hoặc bỏ trống là giá cho mọi biến thể của sản phẩm
+  variantId: z.string().uuid('Biến thể không hợp lệ').nullable().optional(),
   price: priceSchema,
 })
 
@@ -183,6 +185,9 @@ export const priceListItemListItemSchema = z.object({
   productName: z.string(),
   productSku: z.string(),
   productImageUrl: z.string().nullable(),
+  variantId: z.string().uuid().nullable(),
+  variantName: z.string().nullable(),
+  /** Giá bán, giá vốn của biến thể nếu dòng gắn biến thể, ngược lại của sản phẩm */
   productSellingPrice: z.number(),
   productCostPrice: z.number().nullable(),
   price: z.number(),
@@ -235,6 +240,8 @@ export const comparePriceListsQuerySchema = z
 
 export const compareRowSchema = z.object({
   productId: z.string().uuid(),
+  variantId: z.string().uuid().nullable(),
+  variantName: z.string().nullable(),
   productName: z.string(),
   productSku: z.string(),
   productImageUrl: z.string().nullable(),

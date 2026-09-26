@@ -299,10 +299,14 @@ export function PaymentDialog({
             {method === 'cash' && (
               <>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-foreground">
+                  <label
+                    htmlFor="pos-cash-amount"
+                    className="mb-1 block text-sm font-medium text-foreground"
+                  >
                     Tiền khách đưa
                   </label>
                   <CurrencyInput
+                    id="pos-cash-amount"
                     ref={cashInputRef}
                     value={cashAmount}
                     onChange={setCashAmount}

@@ -30,9 +30,12 @@ export function listVolumePricesApi(query: Partial<ListVolumePricesQuery>) {
   )
 }
 
-export function getVolumePricesForProductApi(productId: string) {
+export function getVolumePricesForProductApi(productId: string, variantId?: string | null) {
+  const params = new URLSearchParams()
+  if (variantId) params.set('variantId', variantId)
+  const qs = params.toString()
   return apiClient.get<Envelope<VolumePricesForProduct>>(
-    `/api/v1/volume-prices/products/${productId}`,
+    `/api/v1/volume-prices/products/${productId}${qs ? `?${qs}` : ''}`,
   )
 }
 

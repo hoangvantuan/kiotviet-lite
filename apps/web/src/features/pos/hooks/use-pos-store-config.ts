@@ -6,9 +6,13 @@ import { useStoreQuery } from '@/features/settings/use-store-settings'
 import type { BankConfig } from '@/lib/vietqr'
 import { useAuthStore } from '@/stores/use-auth-store'
 
-/** Phần cài đặt cửa hàng POS cần cả khi mất mạng: tài khoản nhận tiền (POS-07) và bật ca (POS-06). */
+/**
+ * Phần cài đặt cửa hàng POS cần cả khi mất mạng: tài khoản nhận tiền (POS-07), bật ca (POS-06) và
+ * cho bán âm kho (POS-13).
+ */
 export interface PosStoreConfig extends BankConfig {
   shiftsEnabled: boolean
+  allowNegativeStock: boolean
 }
 
 const STORAGE_PREFIX = 'kiotviet-pos-store-config:'
@@ -16,6 +20,7 @@ const STORAGE_PREFIX = 'kiotviet-pos-store-config:'
 function pick(store: StoreSettings): PosStoreConfig {
   return {
     shiftsEnabled: store.shiftsEnabled,
+    allowNegativeStock: store.allowNegativeStock,
     bankBin: store.bankBin,
     bankAccountNumber: store.bankAccountNumber,
     bankAccountName: store.bankAccountName,
@@ -30,6 +35,8 @@ export function readCachedPosStoreConfig(storeId: string): PosStoreConfig | null
     if (!saved || typeof saved !== 'object') return null
     return {
       shiftsEnabled: saved.shiftsEnabled === true,
+      // Bản lưu cũ chưa có cờ: theo mặc định của máy chủ là cho bán âm
+      allowNegativeStock: saved.allowNegativeStock !== false,
       bankBin: typeof saved.bankBin === 'string' ? saved.bankBin : null,
       bankAccountNumber:
         typeof saved.bankAccountNumber === 'string' ? saved.bankAccountNumber : null,
@@ -42,7 +49,7 @@ export function readCachedPosStoreConfig(storeId: string): PosStoreConfig | null
 
 /**
  * Cài đặt cửa hàng cho POS. Có mạng thì lấy từ máy chủ và lưu một bản vào localStorage (chỉ BIN,
- * số tài khoản, tên chủ tài khoản, cờ bật ca: không có dữ liệu nhạy cảm), mất mạng thì dùng bản đã
+ * số tài khoản, tên chủ tài khoản, cờ bật ca, cờ bán âm kho: không có dữ liệu nhạy cảm), mất mạng thì dùng bản đã
  * lưu để vẫn sinh được mã VietQR.
  */
 export function usePosStoreConfig(): PosStoreConfig | null {

@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { PGLITE_SCHEMA_VERSION } from '@kiotviet-lite/shared'
+import { pgliteMigrations } from '@kiotviet-lite/shared/migrations/pglite'
 
 import { createSyncRoutes } from '../routes/sync.routes.js'
 import {
@@ -46,6 +47,8 @@ describe('Sync API Integration Tests', () => {
       expect(res.status).toBe(200)
       const body = (await res.json()) as { data: { version: number } }
       expect(body.data.version).toBe(PGLITE_SCHEMA_VERSION)
+      // Khớp migration PGlite mới nhất mà máy bán hàng chạy
+      expect(body.data.version).toBe(pgliteMigrations.at(-1)!.version)
     })
   })
 

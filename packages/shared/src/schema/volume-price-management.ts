@@ -16,6 +16,8 @@ export const volumePriceTierInputSchema = z.object({
 
 export const replaceVolumePricesSchema = z
   .object({
+    // POS-08: bộ bậc giá của một biến thể; null hoặc bỏ trống là bộ bậc cho mọi biến thể
+    variantId: z.string().uuid('Biến thể không hợp lệ').nullable().optional(),
     tiers: z
       .array(volumePriceTierInputSchema)
       .max(5, 'Tối đa 5 mức giá theo số lượng cho mỗi sản phẩm')
@@ -70,6 +72,8 @@ export const volumePriceTierSchema = z.object({
 
 export const volumePricesForProductSchema = z.object({
   productId: z.string().uuid(),
+  variantId: z.string().uuid().nullable(),
+  variantName: z.string().nullable(),
   productName: z.string(),
   productSku: z.string(),
   productImageUrl: z.string().nullable(),
@@ -80,6 +84,8 @@ export const volumePricesForProductSchema = z.object({
 
 export const volumePricesListItemSchema = z.object({
   productId: z.string().uuid(),
+  variantId: z.string().uuid().nullable(),
+  variantName: z.string().nullable(),
   productName: z.string(),
   productSku: z.string(),
   productImageUrl: z.string().nullable(),

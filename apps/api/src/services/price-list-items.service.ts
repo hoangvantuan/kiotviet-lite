@@ -7,6 +7,7 @@ import {
   priceListItems,
   priceLists,
   products,
+  productVariants,
   type RoundingRule,
   type UpdatePriceListItemInput,
   type UserRole,
@@ -17,6 +18,13 @@ import { ApiError } from '../lib/errors.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { logAction, type RequestMeta } from './audit.service.js'
+import {
+  aliveVariantCondition,
+  effectiveCostPriceSql,
+  effectiveSellingPriceSql,
+  ensureVariantOfProduct,
+  variantNameSql,
+} from './price-variant-scope.js'
 
 export interface PriceListItemsActor {
   userId: string
@@ -30,6 +38,8 @@ interface PriceListItemRow {
   productName: string
   productSku: string
   productImageUrl: string | null
+  variantId: string | null
+  variantName: string | null
   productSellingPrice: number
   productCostPrice: number | null
   price: number
@@ -45,6 +55,8 @@ function toItem(row: PriceListItemRow): PriceListItemListItem {
     productName: row.productName,
     productSku: row.productSku,
     productImageUrl: row.productImageUrl,
+    variantId: row.variantId,
+    variantName: row.variantName,
     productSellingPrice: Number(row.productSellingPrice),
     productCostPrice: row.productCostPrice === null ? null : Number(row.productCostPrice),
     price: Number(row.price),
@@ -100,6 +112,7 @@ export async function listPriceListItems({
   const conditions: SQL[] = [
     eq(priceListItems.priceListId, priceListId),
     isNull(products.deletedAt),
+    aliveVariantCondition(priceListItems.variantId),
   ]
 
   const trimmed = search?.trim()
@@ -120,8 +133,10 @@ export async function listPriceListItems({
       productName: products.name,
       productSku: products.sku,
       productImageUrl: products.imageUrl,
-      productSellingPrice: products.sellingPrice,
-      productCostPrice: products.costPrice,
+      variantId: priceListItems.variantId,
+      variantName: variantNameSql,
+      productSellingPrice: effectiveSellingPriceSql(products.sellingPrice),
+      productCostPrice: effectiveCostPriceSql(products.costPrice),
       price: priceListItems.price,
       isOverridden: priceListItems.isOverridden,
       createdAt: priceListItems.createdAt,
@@ -129,8 +144,9 @@ export async function listPriceListItems({
     })
     .from(priceListItems)
     .innerJoin(products, eq(priceListItems.productId, products.id))
+    .leftJoin(productVariants, eq(priceListItems.variantId, productVariants.id))
     .where(whereClause)
-    .orderBy(asc(products.name))
+    .orderBy(asc(products.name), sql`${priceListItems.variantId} NULLS FIRST`)
     .limit(pageSize)
     .offset(offset)
 
@@ -138,6 +154,7 @@ export async function listPriceListItems({
     .select({ count: sql<number>`count(*)::int` })
     .from(priceListItems)
     .innerJoin(products, eq(priceListItems.productId, products.id))
+    .leftJoin(productVariants, eq(priceListItems.variantId, productVariants.id))
     .where(whereClause)
 
   const total = totalRows[0]?.count ?? 0
@@ -168,8 +185,10 @@ async function getItemRow({
       productName: products.name,
       productSku: products.sku,
       productImageUrl: products.imageUrl,
-      productSellingPrice: products.sellingPrice,
-      productCostPrice: products.costPrice,
+      variantId: priceListItems.variantId,
+      variantName: variantNameSql,
+      productSellingPrice: effectiveSellingPriceSql(products.sellingPrice),
+      productCostPrice: effectiveCostPriceSql(products.costPrice),
       price: priceListItems.price,
       isOverridden: priceListItems.isOverridden,
       createdAt: priceListItems.createdAt,
@@ -177,6 +196,7 @@ async function getItemRow({
     })
     .from(priceListItems)
     .innerJoin(products, eq(priceListItems.productId, products.id))
+    .leftJoin(productVariants, eq(priceListItems.variantId, productVariants.id))
     .where(and(eq(priceListItems.priceListId, priceListId), eq(priceListItems.id, itemId)))
     .limit(1)
   const row = rows[0]
@@ -211,6 +231,12 @@ export async function createPriceListItem({
   if (!product || product.storeId !== actor.storeId || product.deletedAt !== null) {
     throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm')
   }
+  await ensureVariantOfProduct({
+    db,
+    storeId: actor.storeId,
+    productId: input.productId,
+    variantId: input.variantId,
+  })
 
   const finalPrice = applyRounding(input.price, roundingRule)
   const isOverridden = method === 'formula'
@@ -223,6 +249,7 @@ export async function createPriceListItem({
         .values({
           priceListId,
           productId: input.productId,
+          variantId: input.variantId ?? null,
           price: finalPrice,
           isOverridden,
         })
@@ -231,8 +258,12 @@ export async function createPriceListItem({
       createdId = row.id
     } catch (err) {
       if (err instanceof ApiError) throw err
-      if (isUniqueViolation(err, 'uniq_price_list_items_list_product')) {
-        throw new ApiError('CONFLICT', 'Sản phẩm đã có trong bảng giá', { field: 'productId' })
+      if (isUniqueViolation(err, 'uniq_price_list_items_list_product_variant')) {
+        throw new ApiError(
+          'CONFLICT',
+          input.variantId ? 'Biến thể đã có trong bảng giá' : 'Sản phẩm đã có trong bảng giá',
+          { field: input.variantId ? 'variantId' : 'productId' },
+        )
       }
       throw err
     }
@@ -248,6 +279,7 @@ export async function createPriceListItem({
       changes: {
         priceListId,
         productId: input.productId,
+        variantId: input.variantId ?? null,
         price: finalPrice,
         isOverridden,
       },
@@ -379,6 +411,7 @@ export async function deletePriceListItem({
       changes: {
         priceListId,
         productId: target.productId,
+        variantId: target.variantId,
         price: Number(target.price),
         isOverridden: target.isOverridden,
       },

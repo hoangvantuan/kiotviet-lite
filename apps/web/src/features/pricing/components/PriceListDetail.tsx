@@ -75,8 +75,12 @@ export function PriceListDetail({ priceListId }: Props) {
   const items = itemsQuery.data?.data ?? []
   const meta = itemsQuery.data?.meta
 
-  const itemProductIds = useMemo(
-    () => (itemsQuery.data?.data ?? []).map((i) => i.productId),
+  const existingItemKeys = useMemo(
+    () =>
+      (itemsQuery.data?.data ?? []).map((i) => ({
+        productId: i.productId,
+        variantId: i.variantId,
+      })),
     [itemsQuery.data],
   )
 
@@ -277,7 +281,7 @@ export function PriceListDetail({ priceListId }: Props) {
         open={addItemOpen}
         onOpenChange={setAddItemOpen}
         priceList={priceList}
-        excludeProductIds={itemProductIds}
+        existingItems={existingItemKeys}
       />
       <EditPriceListItemDialog
         open={editItem !== null}
@@ -296,7 +300,10 @@ export function PriceListDetail({ priceListId }: Props) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Xoá dòng {deleteItem?.productName}?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Xoá dòng {deleteItem?.productName}
+              {deleteItem?.variantName ? ` - ${deleteItem.variantName}` : ''}?
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {priceList.method === 'formula' && deleteItem && !deleteItem.isOverridden
                 ? 'Dòng này đến từ công thức và không có override. Hãy gỡ sản phẩm khỏi bảng giá nền hoặc tạo override trước.'

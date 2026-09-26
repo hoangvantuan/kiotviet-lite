@@ -30,6 +30,9 @@ export const orderPolicyViolationCodeSchema = z.enum([
   // OFF-05: người bán đã bị khóa hoặc mất quyền bán trước khi đơn ngoại tuyến kịp đồng bộ. Tiền đã
   // thu nên đơn vẫn vào sổ, chủ duyệt lại
   'seller_inactive',
+  // POS-13: cửa hàng không cho bán vượt tồn kho nhưng đơn ngoại tuyến bán quá tồn (máy bán chỉ
+  // cảnh báo vì tồn trên bản sao có thể cũ). Hàng đã giao nên đơn vẫn vào sổ, chủ duyệt lại
+  'negative_stock_policy',
 ])
 
 export interface OrderPolicyViolation {

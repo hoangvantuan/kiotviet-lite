@@ -26,6 +26,7 @@ import {
 
 import { DISCOUNT_TYPE } from '../constants'
 import { useRepriceOnQuantity } from '../hooks/use-auto-reprice'
+import { updateCartQuantity } from '../stock-guard'
 import { EditUnitPriceDialog } from './EditUnitPriceDialog'
 import { PriceSourceBadge } from './PriceSourceBadge'
 import { StockInfoPopover } from './StockInfoPopover'
@@ -35,7 +36,6 @@ interface CartItemProps {
 }
 
 export function CartItem({ item }: CartItemProps) {
-  const updateQuantity = useCartStore((s) => s.updateQuantity)
   const removeItem = useCartStore((s) => s.removeItem)
   const updateLineDiscount = useCartStore((s) => s.updateLineDiscount)
   const updateLineNotes = useCartStore((s) => s.updateLineNotes)
@@ -74,7 +74,10 @@ export function CartItem({ item }: CartItemProps) {
       return
     }
     if (parsed === item.quantity) return
-    updateQuantity(item.id, parsed)
+    if (!updateCartQuantity(item.id, parsed)) {
+      setDraftQty(String(item.quantity))
+      return
+    }
     repriceOnQuantity(item.id, parsed)
   }
 
@@ -214,7 +217,7 @@ export function CartItem({ item }: CartItemProps) {
           <button
             type="button"
             onClick={() => {
-              updateQuantity(item.id, item.quantity - 1)
+              updateCartQuantity(item.id, item.quantity - 1)
               if (item.quantity - 1 > 0) repriceOnQuantity(item.id, item.quantity - 1)
             }}
             className="flex h-11 w-11 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:h-7 sm:w-7"
@@ -226,8 +229,9 @@ export function CartItem({ item }: CartItemProps) {
           <button
             type="button"
             onClick={() => {
-              updateQuantity(item.id, item.quantity + 1)
-              repriceOnQuantity(item.id, item.quantity + 1)
+              if (updateCartQuantity(item.id, item.quantity + 1)) {
+                repriceOnQuantity(item.id, item.quantity + 1)
+              }
             }}
             className="flex h-11 w-11 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:h-7 sm:w-7"
             aria-label="Tăng số lượng"

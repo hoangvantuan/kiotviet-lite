@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { pgliteMigrations } from '../migrations/pglite/index.js'
+
 /**
  * GL-03: các loại dữ liệu danh mục máy bán hàng kéo về. `tombstones` là dấu vết dòng bị xóa cứng.
  * Thứ tự này cũng là thứ tự máy khách kéo trong một lượt.
@@ -70,7 +72,8 @@ export const schemaVersionResponseSchema = z.object({
 })
 export type SchemaVersionResponse = z.infer<typeof schemaVersionResponseSchema>
 
-export const PGLITE_SCHEMA_VERSION = 4
+/** Phiên bản schema PGlite mới nhất, suy từ danh sách migration để không lệch khi thêm bản mới */
+export const PGLITE_SCHEMA_VERSION = Math.max(...pgliteMigrations.map((m) => m.version))
 
 /**
  * OFF-17: mã tạm in trên hóa đơn của đơn ngoại tuyến là tiền tố này cộng 8 ký tự đầu của
