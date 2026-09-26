@@ -1,4 +1,4 @@
-# ADR-0012: Ca bán hàng và dòng tiền theo phương thức
+# ADR-0013: Ca bán hàng và dòng tiền theo phương thức
 
 - Trạng thái: Đã chốt
 - Ngày: 2026-09-26
@@ -51,6 +51,12 @@ shift_choice_required`, kèm danh sách ca) để giao diện hỏi chọn ca; k
    HD. Khóa này được lưu vào `orders.client_id` (cả đơn trực tuyến lẫn ngoại tuyến), nhưng nội
    dung chỉ mang 8 ký tự đầu và chưa có màn nào tìm đơn theo tiền tố đó; hiện người bán đối chiếu
    sao kê theo số tiền và giờ bán.
+9. **Chứng từ hủy (ADR-0012) không rút ngược số của ngày cũ hay ca đã đóng.** Phiếu thu, phiếu chi
+   đã hủy không tính vào ca và dòng tiền. Đơn bị hủy giữ tiền bán ở ngày bán, ca bán; phần khách
+   đã trả lúc bán là một khoản chi riêng ghi trên đơn (`cancel_refund_amount`, kênh
+   `cancel_refund_method`, ca `cancel_shift_id`), tính vào ngày hủy và ca hủy theo quy tắc chọn ca
+   ở mục 4. Phần doanh thu vẫn loại đơn hủy. Tiền nhà cung cấp hoàn (phiếu trả hàng nhập theo ngày
+   lập, phiếu nhập bị hủy theo ngày hủy) là tiền vào theo kênh nhận, cũng gắn ca theo mục 4.
 
 ## Hệ quả
 
@@ -61,3 +67,6 @@ shift_choice_required`, kèm danh sách ca) để giao diện hỏi chọn ca; k
 - Báo cáo doanh thu cũ (màn Báo cáo) vẫn lọc đơn theo `created_at`; chỉ báo cáo dòng tiền đi theo
   `sold_at`. Hai màn có thể lệch nhau ở đơn ngoại tuyến đồng bộ qua ngày.
 - Dấu chênh lệch thống nhất: thực đếm trừ phải có (âm là thiếu, dương là thừa).
+- Tiền đã trả lúc nhập hàng (`purchase_orders.paid_amount`) không có phương thức nên chưa vào
+  dòng tiền ra, trong khi khoản NCC hoàn khi hủy phiếu thì vào dòng tiền vào. Đơn hủy và phiếu
+  hoàn lập trước thay đổi này có kênh NULL, hiện ở dòng "Chưa rõ".
