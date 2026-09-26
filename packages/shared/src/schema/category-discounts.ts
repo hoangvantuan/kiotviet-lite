@@ -5,7 +5,6 @@ import {
   check,
   date,
   index,
-  integer,
   pgTable,
   timestamp,
   uuid,
@@ -16,6 +15,7 @@ import { uuidv7 } from 'uuidv7'
 import { categories } from './categories.js'
 import { customerGroups } from './customer-groups.js'
 import { customers } from './customers.js'
+import { quantity } from './quantity-column.js'
 import { stores } from './stores.js'
 
 export const categoryDiscounts = pgTable(
@@ -34,7 +34,8 @@ export const categoryDiscounts = pgTable(
     customerGroupId: uuid().references(() => customerGroups.id, { onDelete: 'cascade' }),
     discountType: varchar({ length: 16 }).notNull(),
     discountValue: bigint({ mode: 'number' }).notNull(),
-    minQty: integer().notNull().default(1),
+    // ADR-0015: so với số lượng dòng (có thể lẻ); đầu vào vẫn nhận số nguyên
+    minQty: quantity().notNull().default(1),
     effectiveFrom: date({ mode: 'string' }),
     effectiveTo: date({ mode: 'string' }),
     isActive: boolean().notNull().default(true),

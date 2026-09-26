@@ -150,7 +150,7 @@ export const CATALOG_TABLES: Record<CatalogEntity, TableSpec> = {
       ['customerGroupId', 'customer_group_id', 'uuid'],
       ['discountType', 'discount_type', 'text'],
       ['discountValue', 'discount_value', 'bigint'],
-      ['minQty', 'min_qty', 'integer'],
+      ['minQty', 'min_qty', 'numeric'],
       ['effectiveFrom', 'effective_from', 'text'],
       ['effectiveTo', 'effective_to', 'text'],
       ['isActive', 'is_active', 'boolean'],

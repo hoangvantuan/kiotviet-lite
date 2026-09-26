@@ -17,6 +17,8 @@ export const v006DecimalQuantity = {
       ADD COLUMN IF NOT EXISTS allow_decimal_quantity BOOLEAN NOT NULL DEFAULT false;
     ALTER TABLE catalog_volume_prices
       ALTER COLUMN min_qty TYPE NUMERIC(14,3) USING min_qty::numeric(14,3);
+    ALTER TABLE catalog_category_discounts
+      ALTER COLUMN min_qty TYPE NUMERIC(14,3) USING min_qty::numeric(14,3);
     DELETE FROM catalog_sync_state;
   `,
 }

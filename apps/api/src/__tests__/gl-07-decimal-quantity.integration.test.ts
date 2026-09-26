@@ -13,6 +13,8 @@ import {
   amountByQtyRatio,
   bulkImportJobs,
   calculateLineTotal,
+  categories,
+  categoryDiscounts,
   inventoryTransactions,
   lineAmount,
   orderItems,
@@ -30,6 +32,7 @@ import { createSyncRoutes } from '../routes/sync.routes.js'
 import { createBulkImportJob } from '../services/bulk-import-jobs.service.js'
 import { previewBulkImport } from '../services/bulk-import-preview.service.js'
 import { runBulkImportJob } from '../services/bulk-import-runner.service.js'
+import { createCustomer } from './helpers/factories.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 // GL-07, POS-09 (ADR-0015): số lượng thập phân cho hàng cân ký. Sau mỗi ca, bộ bất biến GL-14
@@ -426,6 +429,67 @@ describe('GL-07: bán, trả, nhập, kiểm kê với số lượng thập phâ
     )
     expect(cancelled.status).toBe(200)
     expect(await stockOf(pork.id)).toBe(2)
+  })
+
+  it('B1: chiết khấu danh mục với số lượng lẻ, có khách: tính giá, tạo đơn, đồng bộ ngoại tuyến không 500', async () => {
+    const [category] = await env.db
+      .insert(categories)
+      .values({ storeId: env.storeId, name: 'Thịt tươi' })
+      .returning()
+    const pork = await createProduct({
+      name: 'Thịt ba chỉ',
+      unit: 'kg',
+      sellingPrice: 45_000,
+      categoryId: category!.id,
+      allowDecimalQuantity: true,
+      initialStock: 10,
+    })
+    const customer = await createCustomer(env)
+    await env.db.insert(categoryDiscounts).values({
+      storeId: env.storeId,
+      categoryId: category!.id,
+      customerId: customer.id,
+      discountType: 'percent',
+      discountValue: 10,
+      minQty: 1,
+      isActive: true,
+    })
+
+    const resolved = await call('POST', '/pos/resolve-prices', {
+      customerId: customer.id,
+      items: [
+        { productId: pork.id, quantity: 1.5 },
+        { productId: pork.id, quantity: 0.5 },
+      ],
+    })
+    expect(resolved.status).toBe(200)
+    expect(
+      resolved.body.data.map((p: { price: number; source: string }) => [p.price, p.source]),
+    ).toEqual([
+      [40_500, 'category_discount'],
+      [45_000, 'retail_price'],
+    ])
+
+    const body = {
+      ...orderBody({
+        productId: pork.id,
+        productName: pork.name,
+        unitPrice: 40_500,
+        quantity: 1.5,
+      }),
+      customerId: customer.id,
+    }
+    // 1,5 × 40.500 = 60.750
+    expect(body.total).toBe(60_750)
+    const online = await call('POST', '/pos/orders', body, true)
+    expect(online.status).toBe(201)
+    const pushed = await call('POST', '/sync/push', {
+      clientId: randomUUID(),
+      orders: [{ clientId: randomUUID(), createdAt: new Date().toISOString(), orderData: body }],
+    })
+    expect(pushed.status).toBe(200)
+    expect(pushed.body.data.results[0].status).toBe('synced')
+    expect(await stockOf(pork.id)).toBe(7)
   })
 
   it('đơn ngoại tuyến số lẻ đồng bộ đúng, cùng tiền dòng với đơn trực tuyến', async () => {

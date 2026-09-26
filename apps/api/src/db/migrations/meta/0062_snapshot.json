@@ -1,5 +1,5 @@
 {
-  "id": "c0d071e7-5d34-4568-a108-1ac370c6738f",
+  "id": "175d5065-b880-475f-ab61-c1a5820361da",
   "prevId": "430ad929-d8db-4284-8cd7-3870b60c43a4",
   "version": "7",
   "dialect": "postgresql",
@@ -893,7 +893,7 @@
         },
         "min_qty": {
           "name": "min_qty",
-          "type": "integer",
+          "type": "numeric(14, 3)",
           "primaryKey": false,
           "notNull": true,
           "default": 1

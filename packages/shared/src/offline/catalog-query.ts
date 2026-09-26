@@ -533,7 +533,7 @@ export async function resolvePricesOffline(
                 customer_group_id: string | null
                 discount_type: 'percent' | 'amount'
                 discount_value: unknown
-                min_qty: number
+                min_qty: unknown
                 effective_from: string | null
                 effective_to: string | null
                 is_active: boolean
@@ -549,7 +549,7 @@ export async function resolvePricesOffline(
                 customerGroupId: r.customer_group_id,
                 discountType: r.discount_type,
                 discountValue: num(r.discount_value),
-                minQty: r.min_qty,
+                minQty: parseQuantity(r.min_qty),
                 effectiveFrom: r.effective_from,
                 effectiveTo: r.effective_to,
                 isActive: r.is_active,
