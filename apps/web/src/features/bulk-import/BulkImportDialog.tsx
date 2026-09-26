@@ -377,7 +377,7 @@ export function BulkImportDialog({
                     setMode('create-only')
                   }}
                 />
-                Chỉ thêm mới — mã đã tồn tại sẽ được báo lỗi, không ghi đè
+                Chỉ thêm mới (mã đã tồn tại sẽ được báo lỗi, không ghi đè)
               </label>
               <label className="flex items-start gap-2 text-sm">
                 <input
@@ -512,7 +512,7 @@ export function BulkImportDialog({
                       {Object.entries(row).map(([key, value]) => (
                         <div key={key}>
                           <dt className="inline text-muted-foreground">{key}: </dt>
-                          <dd className="inline">{value == null ? '—' : String(value)}</dd>
+                          <dd className="inline">{value == null ? '(trống)' : String(value)}</dd>
                         </div>
                       ))}
                     </dl>

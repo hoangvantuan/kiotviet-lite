@@ -403,7 +403,7 @@ export function createBulkWorkbook(
         // Data worksheet stays empty: importing the downloaded template cannot create examples.
         sheet.commit()
         const guide = workbook.addWorksheet(BULK_EXPORT_FORMAT.examplesSheet)
-        guide.addRow(['Ví dụ — chỉ tham khảo, không nhập sheet này']).commit()
+        guide.addRow(['Ví dụ: chỉ tham khảo, không nhập sheet này']).commit()
         guide.addRow([...BULK_EXPORT_HEADERS[request.kind]]).commit()
         for (const example of examples[request.kind]) guide.addRow(example).commit()
         guide.addRow([]).commit()
