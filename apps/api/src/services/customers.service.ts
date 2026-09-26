@@ -40,6 +40,7 @@ import {
 
 import type { Db } from '../db/index.js'
 import { ApiError } from '../lib/errors.js'
+import { orderNetRevenueExpr, revenueStatusFilter } from '../lib/order-status.js'
 import { paginationMeta } from '../lib/pagination.js'
 import { isUniqueViolation } from '../lib/pg-errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
@@ -198,6 +199,25 @@ async function ensureGroupValid({
   }
 }
 
+/**
+ * TIEN-105: "Tổng mua" và "Số đơn" tính khi đọc từ đơn còn hiệu lực (hoàn thành hoặc trả một phần),
+ * tổng mua trừ phần đã trả. Không lưu cột đếm nên bán, trả, hủy (kể cả hủy đảo bút toán #57) và
+ * đồng bộ ngoại tuyến đều tự đúng, không cần backfill. Dùng chỉ mục idx_orders_store_customer.
+ */
+const customerPurchaseCount = sql<number>`(
+  SELECT count(*) FROM ${orders}
+  WHERE ${orders.storeId} = ${customers.storeId}
+    AND ${orders.customerId} = ${customers.id}
+    AND ${revenueStatusFilter()}
+)`.mapWith(Number)
+
+const customerTotalPurchased = sql<number>`coalesce((
+  SELECT sum(${orderNetRevenueExpr()}) FROM ${orders}
+  WHERE ${orders.storeId} = ${customers.storeId}
+    AND ${orders.customerId} = ${customers.id}
+    AND ${revenueStatusFilter()}
+), 0)`.mapWith(Number)
+
 const customerSelectColumns = {
   id: customers.id,
   storeId: customers.storeId,
@@ -211,8 +231,8 @@ const customerSelectColumns = {
   debtLimit: customers.debtLimit,
   debtUnlimited: customers.debtUnlimited,
   groupId: customers.groupId,
-  totalPurchased: customers.totalPurchased,
-  purchaseCount: customers.purchaseCount,
+  totalPurchased: customerTotalPurchased,
+  purchaseCount: customerPurchaseCount,
   currentDebt: customers.currentDebt,
   deletedAt: customers.deletedAt,
   createdAt: customers.createdAt,

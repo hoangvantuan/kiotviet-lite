@@ -3,7 +3,6 @@ import {
   bigint,
   boolean,
   index,
-  integer,
   pgTable,
   text,
   timestamp,
@@ -37,8 +36,7 @@ export const customers = pgTable(
     debtLimit: bigint({ mode: 'number' }),
     debtUnlimited: boolean().notNull().default(false),
     groupId: uuid().references(() => customerGroups.id, { onDelete: 'set null' }),
-    totalPurchased: bigint({ mode: 'number' }).notNull().default(0),
-    purchaseCount: integer().notNull().default(0),
+    // TIEN-105: "Tổng mua" và "Số đơn" không lưu cột, tính khi đọc từ đơn còn hiệu lực trừ trả hàng
     currentDebt: bigint({ mode: 'number' }).notNull().default(0),
     deletedAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
