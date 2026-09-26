@@ -3,15 +3,17 @@ import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { inventoryTransactions, products, productVariants } from '@kiotviet-lite/shared'
+import { inventoryTransactions, orders, products, productVariants } from '@kiotviet-lite/shared'
 
 import { createPosRoutes } from '../routes/pos.routes.js'
 import { createStoreRoutes } from '../routes/store.routes.js'
+import { createSyncRoutes } from '../routes/sync.routes.js'
 import { createProduct, createVariant } from './helpers/factories.js'
 import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 // POS-13: một cài đặt cửa hàng "cho bán vượt tồn kho", mặc định cho. Tắt thì đơn POS vượt tồn bị
-// chặn với lỗi nêu rõ hàng và số còn; bật thì đơn vẫn tạo, tồn kho âm.
+// chặn với lỗi nêu rõ hàng và số còn; bật thì đơn vẫn tạo, tồn kho âm. Đơn ngoại tuyến vượt tồn khi
+// tắt vẫn nhận (hàng đã giao) nhưng chờ chủ duyệt với vi phạm negative_stock_policy.
 
 const notifyMock = vi.hoisted(() =>
   vi.fn<(db: unknown, event: NotificationEvent) => Promise<SendResult[]>>(async () => []),
@@ -33,11 +35,13 @@ beforeAll(() => {
 let env: TestEnv
 let pos: Hono
 let store: Hono
+let sync: Hono
 
 beforeEach(async () => {
   env = await createTestEnv()
   pos = createPosRoutes({ db: env.db })
   store = createStoreRoutes({ db: env.db })
+  sync = createSyncRoutes({ db: env.db })
 })
 
 afterEach(async () => {
@@ -176,5 +180,81 @@ describe('POS-13: cài đặt bán vượt tồn kho', () => {
       .from(productVariants)
       .where(eq(productVariants.id, variant.id))
     expect(row?.stockQuantity).toBe(1)
+  })
+})
+
+describe('POS-13: đơn ngoại tuyến vượt tồn', () => {
+  async function pushOffline(productId: string, quantity: number) {
+    const unitPrice = 100_000
+    const total = quantity * unitPrice
+    const res = await sync.request('/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...env.staff.authHeader },
+      body: JSON.stringify({
+        orders: [
+          {
+            clientId: crypto.randomUUID(),
+            createdAt: new Date().toISOString(),
+            orderData: {
+              subtotal: total,
+              discountAmount: 0,
+              total,
+              paymentMethod: 'cash',
+              paymentStatus: 'paid',
+              cashAmount: total,
+              items: [
+                {
+                  productId,
+                  productName: 'Nước suối',
+                  unitPrice,
+                  quantity,
+                  discountAmount: 0,
+                  lineTotal: total,
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      data: { results: Array<{ status: string; serverId?: string; reviewStatus?: string }> }
+    }
+    return body.data.results[0]!
+  }
+
+  it('tắt bán âm: vẫn nhận đơn, tồn âm, chờ duyệt với vi phạm negative_stock_policy', async () => {
+    await setAllow(false)
+    const product = await createProduct(env, {
+      currentStock: 1,
+      unit: 'chai',
+      sellingPrice: 100_000,
+      costPrice: 50_000,
+    })
+    const result = await pushOffline(product.id, 3)
+    expect(result.status).toBe('synced')
+    expect(result.reviewStatus).toBe('pending_review')
+    expect(await stockOf(product.id)).toBe(-2)
+    const [row] = await env.db.select().from(orders).where(eq(orders.id, result.serverId!))
+    expect(row!.reviewStatus).toBe('pending_review')
+    expect(row!.policyViolations).toEqual([
+      {
+        code: 'negative_stock_policy',
+        message: 'Bán vượt tồn kho khi cửa hàng không cho bán âm: Nước suối còn 1 chai, bán 3 chai',
+        requiredPermissions: [],
+      },
+    ])
+  })
+
+  it('cho bán âm (mặc định): đơn ngoại tuyến vượt tồn không cần duyệt', async () => {
+    const product = await createProduct(env, {
+      currentStock: 1,
+      sellingPrice: 100_000,
+      costPrice: 50_000,
+    })
+    const result = await pushOffline(product.id, 3)
+    expect(result.status).toBe('synced')
+    expect(result.reviewStatus).toBeUndefined()
   })
 })

@@ -5,7 +5,6 @@ import {
   customerGroups,
   customerPrices,
   customers,
-  pickVolumePrice,
   priceListItems,
   priceLists,
   type PriceSources,
@@ -22,7 +21,7 @@ import {
 import type { Db } from '../db/index.js'
 import { toIsoDate } from '../lib/date.js'
 import { ApiError } from '../lib/errors.js'
-import { findApplicableCategoryDiscount } from './category-discounts.service.js'
+import { listCategoryDiscountCandidates } from './category-discounts.service.js'
 
 interface ResolveContext {
   db: Db
@@ -97,13 +96,13 @@ async function findCustomerPrice(
   return row ? Number(row.price) : null
 }
 
-async function findVolumePrice(
+/** Mọi bậc giá theo số lượng của dòng (chọn theo biến thể); ngưỡng lọc ở `resolvePriceFromSources` */
+async function findVolumeTiers(
   db: Db,
   storeId: string,
   productId: string,
   variantId: string | null,
-  quantity: number,
-): Promise<{ price: number; minQty: number } | null> {
+): Promise<Array<{ price: number; minQty: number }>> {
   const rows = await db
     .select({
       price: volumePrices.price,
@@ -118,11 +117,10 @@ async function findVolumePrice(
         variantScope(volumePrices.variantId, variantId),
       ),
     )
-  const tiers = selectVariantScoped(rows, variantId).map((r) => ({
+  return selectVariantScoped(rows, variantId).map((r) => ({
     minQty: r.minQty,
     price: Number(r.price),
   }))
-  return pickVolumePrice(tiers, quantity)
 }
 
 async function findPriceListPrice(
@@ -131,8 +129,9 @@ async function findPriceListPrice(
   customerId: string,
   productId: string,
   variantId: string | null,
+  today: Date,
 ): Promise<{ price: number; priceListName: string } | null> {
-  const todayStr = toIsoDate(new Date())
+  const todayStr = toIsoDate(today)
 
   const rows = await db
     .select({
@@ -274,16 +273,17 @@ export async function resolveProductPrice(ctx: ResolveContext): Promise<Resolved
     : null
 
   const sources: PriceSources = {
+    quantity,
     product: { sellingPrice: Number(product.sellingPrice) },
     variantSellingPrice,
     unitConversion,
     manualPriceList: null,
     customer: null,
-    volumePrice: await findVolumePrice(db, storeId, productId, liveVariantId, quantity),
+    volumeTiers: await findVolumeTiers(db, storeId, productId, liveVariantId),
   }
 
+  const today = ctx.context?.orderDate ?? new Date()
   if (priceListId) {
-    const today = ctx.context?.orderDate ?? new Date()
     sources.manualPriceList = {
       item: await findManualPriceListItem(
         db,
@@ -297,30 +297,26 @@ export async function resolveProductPrice(ctx: ResolveContext): Promise<Resolved
   }
 
   if (customerId) {
-    // Chiết khấu danh mục tính trên giá lẻ đã quy đổi đơn vị, như tầng giá lẻ
-    const rawRetail =
-      variantSellingPrice !== null && variantSellingPrice > 0
-        ? variantSellingPrice
-        : Number(product.sellingPrice)
-    const retailPrice =
-      unitConversion?.sellingPrice ??
-      Math.round(rawRetail * (unitConversion?.conversionFactor ?? 1))
     const customerGroupId = await getCustomerGroupId(db, storeId, customerId)
-    const catDiscount = await findApplicableCategoryDiscount({
+    const { candidates } = await listCategoryDiscountCandidates({
       db,
       storeId,
       productId,
       customerId,
       customerGroupId,
-      quantity,
-      basePrice: retailPrice,
+      date: today,
     })
     sources.customer = {
       customerPrice: await findCustomerPrice(db, storeId, customerId, productId, liveVariantId),
-      categoryDiscount: catDiscount
-        ? { discountType: catDiscount.discountType, discountValue: catDiscount.discountValue }
-        : null,
-      groupPriceList: await findPriceListPrice(db, storeId, customerId, productId, liveVariantId),
+      categoryDiscounts: candidates,
+      groupPriceList: await findPriceListPrice(
+        db,
+        storeId,
+        customerId,
+        productId,
+        liveVariantId,
+        today,
+      ),
     }
   }
 
@@ -333,7 +329,8 @@ const EMPTY_SOURCES: PriceSources = {
   unitConversion: null,
   manualPriceList: null,
   customer: null,
-  volumePrice: null,
+  volumeTiers: [],
+  quantity: 0,
 }
 
 export async function resolvePrices({

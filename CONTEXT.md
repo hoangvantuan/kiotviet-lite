@@ -70,7 +70,7 @@ Một bộ giá bán có thể gắn với nhóm khách hàng hoặc được ch
 _Tránh dùng_: chính sách giá, biểu giá
 
 **Thứ tự nguồn giá**:
-Thứ tự hệ thống chọn giá cho một dòng hàng, nguồn đứng trước thắng: bảng giá người bán chọn cho đơn, giá riêng của khách hàng, chiết khấu danh mục, giá theo số lượng, bảng giá của nhóm khách hàng, giá bán của đơn vị quy đổi, giá bán. Mỗi nguồn có thể đặt cho cả sản phẩm hoặc cho một biến thể; dòng của biến thể thắng dòng của sản phẩm cùng nguồn. Bán theo đơn vị quy đổi thì giá của các nguồn đặc biệt (đặt theo đơn vị tính) nhân hệ số quy đổi; giá bán riêng của đơn vị quy đổi chỉ thay cho giá bán, không đè lên nguồn đặc biệt. Nhãn giá trên dòng chỉ nêu nguồn thực sự được áp. Mọi nguồn ra giá dưới giá vốn (giá vốn của biến thể nếu bán biến thể) đều cần người duyệt như bán dưới giá vốn. Máy chủ và máy bán ngoại tuyến tính cùng một hàm nên ra cùng giá.
+Thứ tự hệ thống chọn giá cho một dòng hàng, nguồn đứng trước thắng: bảng giá người bán chọn cho đơn, giá riêng của khách hàng, chiết khấu danh mục, giá theo số lượng, bảng giá của nhóm khách hàng, giá bán của đơn vị quy đổi, giá bán. Mỗi nguồn có thể đặt cho cả sản phẩm hoặc cho một biến thể; dòng của biến thể thắng dòng của sản phẩm cùng nguồn. Bán theo đơn vị quy đổi thì giá của các nguồn đặc biệt (đặt theo đơn vị tính) nhân hệ số quy đổi; giá bán riêng của đơn vị quy đổi chỉ thay cho giá bán, không đè lên nguồn đặc biệt. Ngưỡng số lượng của giá theo số lượng và của chiết khấu danh mục so với số lượng quy ra đơn vị tính (số lượng nhân hệ số quy đổi), cùng đơn vị với giá của bậc: bậc từ 12 lon áp cho dòng 1 thùng 24 lon. Mỗi dòng giỏ xét ngưỡng riêng; cùng một hàng bán ở nhiều dòng hay nhiều đơn vị không gộp số lượng. Nhãn giá trên dòng chỉ nêu nguồn thực sự được áp. Dòng lấy giá từ nguồn đặc biệt (mọi nguồn trừ giá bán và giá bán của đơn vị quy đổi) mà thành tiền dưới giá vốn (giá vốn của biến thể nếu bán biến thể) cần người duyệt như bán dưới giá vốn; giá bán và giá bán của đơn vị quy đổi do chủ cửa hàng tự đặt nên không cần duyệt. Máy chủ và máy bán ngoại tuyến tính cùng một hàm nên ra cùng giá.
 _Tránh dùng_: ưu tiên giá, độ ưu tiên bảng giá
 
 ### Tồn kho
@@ -116,7 +116,7 @@ Trạng thái tồn kho của một sản phẩm xuống dưới không.
 _Tránh dùng_: âm kho, thiếu hàng
 
 **Bán vượt tồn kho**:
-Cài đặt của cửa hàng cho phép bán khi tồn kho không đủ, làm tồn kho âm. Mặc định cho phép. Bật thì quầy chỉ cảnh báo; tắt thì quầy chặn ở mọi đường đưa hàng vào giỏ (bấm, tìm, quét mã vạch, sửa số lượng, đổi đơn vị) và máy chủ từ chối đơn. Số cần có tính trên tổng mọi dòng cùng hàng trong giỏ, quy ra đơn vị tính. Đơn ngoại tuyến đã giao hàng tại quầy nên vẫn được nhận.
+Cài đặt của cửa hàng cho phép bán khi tồn kho không đủ, làm tồn kho âm. Mặc định cho phép. Bật thì quầy chỉ cảnh báo; tắt thì quầy chặn ở mọi đường đưa hàng vào giỏ (bấm, tìm, quét mã vạch, sửa số lượng, đổi đơn vị) và máy chủ từ chối đơn. Số cần có tính trên tổng mọi dòng cùng hàng trong giỏ, quy ra đơn vị tính. Khi mất mạng, quầy chỉ cảnh báo, không chặn, vì tồn trên bản sao của máy bán có thể đã cũ. Đơn ngoại tuyến đã giao hàng tại quầy nên vẫn được nhận; nếu cửa hàng đã tắt bán vượt tồn kho mà đơn làm tồn không đủ thì đơn vào chờ duyệt với vi phạm bán vượt tồn kho, dù có bật cảnh báo tồn âm hay không.
 _Tránh dùng_: cho âm kho, bán âm
 
 **Tồn tối thiểu**:

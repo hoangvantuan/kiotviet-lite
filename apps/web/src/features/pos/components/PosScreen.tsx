@@ -180,8 +180,9 @@ export function PosScreen() {
   const handlePaymentOpenChange = useGuardedOpenChange(setPaymentDialogOpen, checkoutMutation)
   const addToCart = useAddToCart()
   const posConfig = usePosStoreConfig()
-  // POS-13: mọi đường thêm hàng vào giỏ đọc cùng một cờ bán âm kho của cửa hàng
-  const allowNegativeStock = posConfig?.allowNegativeStock ?? true
+  // POS-13: mọi đường thêm hàng vào giỏ đọc cùng một cờ bán âm kho của cửa hàng. Mất mạng thì chỉ
+  // cảnh báo, không chặn: tồn trên bản sao có thể cũ, máy chủ đưa đơn vượt tồn vào chờ duyệt.
+  const allowNegativeStock = isOffline || (posConfig?.allowNegativeStock ?? true)
   useEffect(() => {
     usePosStockPolicy.getState().setAllowNegativeStock(allowNegativeStock)
   }, [allowNegativeStock])

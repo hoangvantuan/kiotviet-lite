@@ -77,27 +77,34 @@ export interface CategoryDiscountRule extends EffectiveWindow {
   minQty: number
 }
 
+/** Chiết khấu danh mục đứng đầu thứ tự ưu tiên mà số lượng (đơn vị tính) đạt ngưỡng */
+export function firstCategoryDiscountFor<T extends Pick<CategoryDiscountRule, 'minQty'>>(
+  ranked: T[],
+  baseQuantity: number,
+): T | null {
+  return ranked.find((rule) => rule.minQty <= baseQuantity) ?? null
+}
+
 /**
- * Chiết khấu danh mục áp cho khách: đúng danh mục, đang hiệu lực, đủ số lượng, nhắm đúng khách hoặc
- * nhóm của khách. Nhiều quy tắc cùng khớp thì ưu tiên quy tắc riêng của khách, rồi giá trị chiết
- * khấu lớn hơn, rồi id nhỏ hơn (cố định kết quả).
+ * Các chiết khấu danh mục có thể áp cho khách: đúng danh mục, đang hiệu lực, nhắm đúng khách hoặc
+ * nhóm của khách. Xếp ưu tiên quy tắc riêng của khách, rồi giá trị chiết khấu lớn hơn, rồi id nhỏ
+ * hơn (cố định kết quả). Chưa lọc ngưỡng số lượng: ngưỡng so với số lượng quy ra đơn vị tính trong
+ * `resolvePriceFromSources` (M1).
  */
-export function pickCategoryDiscount(
+export function rankCategoryDiscounts(
   rules: CategoryDiscountRule[],
   ctx: {
     categoryId: string | null
     customerId: string | null
     customerGroupId: string | null
-    quantity: number
     today: string
   },
-): CategoryDiscountRule | null {
-  const { categoryId, customerId, customerGroupId, quantity, today } = ctx
-  if (!categoryId || (!customerId && !customerGroupId)) return null
+): CategoryDiscountRule[] {
+  const { categoryId, customerId, customerGroupId, today } = ctx
+  if (!categoryId || (!customerId && !customerGroupId)) return []
 
   const matches = rules.filter((rule) => {
     if (rule.categoryId !== categoryId) return false
-    if (rule.minQty > quantity) return false
     if (!isEffectiveOn(rule, today)) return false
     const forCustomer = customerId !== null && rule.customerId === customerId
     const forGroup = customerGroupId !== null && rule.customerGroupId === customerGroupId
@@ -109,7 +116,7 @@ export function pickCategoryDiscount(
     if (b.discountValue !== a.discountValue) return b.discountValue - a.discountValue
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
   })
-  return matches[0] ?? null
+  return matches
 }
 
 /** Giá sau chiết khấu danh mục, không âm. */
@@ -129,8 +136,26 @@ export interface NamedListPrice {
   priceListName: string
 }
 
+export type CategoryDiscountCandidate = Pick<
+  CategoryDiscountRule,
+  'discountType' | 'discountValue' | 'minQty'
+>
+
+/**
+ * Số lượng dùng so ngưỡng giá theo số lượng và chiết khấu danh mục: quy ra đơn vị tính (M1). Ngưỡng
+ * khai theo đơn vị tính như giá của các bậc, nên bán 1 thùng 24 lon là 24.
+ */
+export function pricingBaseQuantity(
+  quantity: number,
+  unitConversion: { conversionFactor: number } | null,
+): number {
+  return quantity * (unitConversion?.conversionFactor ?? 1)
+}
+
 /** Dữ liệu nguồn của một dòng hàng, do nơi gọi đọc từ cơ sở dữ liệu của mình. */
 export interface PriceSources {
+  /** Số lượng của dòng theo đơn vị đang bán (đơn vị quy đổi nếu có) */
+  quantity: number
   /** null: hàng không tồn tại (hoặc đã xóa) trong cửa hàng */
   product: { sellingPrice: number } | null
   /** Giá bán biến thể khi dòng có biến thể và biến thể còn tồn tại */
@@ -141,10 +166,12 @@ export interface PriceSources {
   /** Có khi đơn gắn khách */
   customer: {
     customerPrice: number | null
-    categoryDiscount: Pick<CategoryDiscountRule, 'discountType' | 'discountValue'> | null
+    /** Chiết khấu danh mục áp được cho khách, đã xếp ưu tiên (`rankCategoryDiscounts`) */
+    categoryDiscounts: CategoryDiscountCandidate[]
     groupPriceList: NamedListPrice | null
   } | null
-  volumePrice: VolumeTierSource | null
+  /** Mọi bậc giá theo số lượng của dòng (đã chọn theo biến thể), chưa lọc ngưỡng */
+  volumeTiers: VolumeTierSource[]
 }
 
 export interface ResolvedPrice {
@@ -182,6 +209,9 @@ export function resolvePriceFromSources(sources: PriceSources): ResolvedPrice {
   const conversionFactor = unitConv?.conversionFactor ?? 1
   const retailPrice = unitConv?.sellingPrice ?? Math.round(rawRetailPrice * conversionFactor)
   const scaled = (raw: number) => Math.round(raw * conversionFactor)
+  // M1: ngưỡng số lượng so theo đơn vị tính, cùng đơn vị với giá của bậc. Mỗi dòng giỏ tính riêng,
+  // không gộp các dòng cùng hàng khác đơn vị.
+  const baseQuantity = pricingBaseQuantity(sources.quantity, unitConv)
 
   const breakdown: TierBreakdown[] = []
   let winner: { price: number; source: PriceSource; sourceDetail: string | null } | null = null
@@ -233,7 +263,7 @@ export function resolvePriceFromSources(sources: PriceSources): ResolvedPrice {
       }
     }
 
-    const rule = sources.customer.categoryDiscount
+    const rule = firstCategoryDiscountFor(sources.customer.categoryDiscounts, baseQuantity)
     // Chiết khấu danh mục là nguồn đặc biệt: tính trên giá bán đơn vị cơ bản rồi nhân hệ số (POS-16)
     const catFinal = rule ? scaled(categoryDiscountFinalPrice(rawRetailPrice, rule)) : null
     const catDetail = rule
@@ -281,7 +311,7 @@ export function resolvePriceFromSources(sources: PriceSources): ResolvedPrice {
     reason: 'Client state',
   })
 
-  const rawVp = sources.volumePrice
+  const rawVp = pickVolumePrice(sources.volumeTiers, baseQuantity)
   const vpPrice = rawVp !== null ? scaled(rawVp.price) : null
   const t4Hit = !winner && vpPrice !== null && vpPrice >= 0
   breakdown.push({

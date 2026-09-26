@@ -3,6 +3,8 @@ import { Hono } from 'hono'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import {
+  categories,
+  categoryDiscounts,
   customerGroups,
   customerPrices,
   priceListItems,
@@ -32,6 +34,7 @@ import { createTestEnv, type TestEnv } from './helpers/test-env.js'
 
 // POS-08: bảng giá, giá riêng khách, giá theo số lượng gắn được theo biến thể.
 // POS-16: giá bán riêng của đơn vị quy đổi không đè giá đặc biệt; nguồn đặc biệt nhân hệ số.
+// M1: ngưỡng giá theo số lượng và chiết khấu danh mục so theo số lượng quy ra đơn vị tính.
 // Mỗi ca so giá máy chủ (/pos/resolve-prices) với bản sao PGlite của máy bán hàng.
 
 beforeAll(() => {
@@ -229,14 +232,12 @@ describe('POS-16: đơn vị quy đổi có giá bán riêng', () => {
       sellingPrice: 2_600_000,
     })
     const customer = await createCustomer(env, { code: 'KH000008' })
-    await env.db
-      .insert(customerPrices)
-      .values({
-        storeId: env.storeId,
-        customerId: customer.id,
-        productId: ensure.id,
-        price: 430_000,
-      })
+    await env.db.insert(customerPrices).values({
+      storeId: env.storeId,
+      customerId: customer.id,
+      productId: ensure.id,
+      price: 430_000,
+    })
 
     const [withPrice, walkIn] = [
       await resolveBoth({
@@ -271,7 +272,7 @@ describe('POS-16: đơn vị quy đổi có giá bán riêng', () => {
     })
     await env.db
       .insert(volumePrices)
-      .values({ storeId: env.storeId, productId: p.id, minQty: 2, price: 9_000 })
+      .values({ storeId: env.storeId, productId: p.id, minQty: 20, price: 9_000 })
     const [list] = await env.db
       .insert(priceLists)
       .values({ storeId: env.storeId, name: 'Bảng giá đại lý', method: 'direct' })
@@ -292,11 +293,132 @@ describe('POS-16: đơn vị quy đổi có giá bán riêng', () => {
     })
     expect(volumeLine).toMatchObject({ price: 90_000, source: 'volume_price' })
 
+    // 1 gói = 10 đơn vị tính chưa tới bậc 20 (M1), bảng giá nhóm áp
     const [groupLine] = await resolveBoth({
       customerId: dealer.id,
       priceListId: null,
       items: [{ productId: p.id, unitConversionId: pack.id, quantity: 1 }],
     })
     expect(groupLine).toMatchObject({ price: 85_000, source: 'price_list' })
+  })
+})
+
+describe('M1: ngưỡng số lượng tính theo đơn vị tính', () => {
+  it('bậc từ 12 lon: 1 Thùng 24 lon vào bậc, 11 lon chưa vào, 12 lon vào', async () => {
+    const beer = await createProduct(env, { name: 'Bia lon', unit: 'Lon', sellingPrice: 10_000 })
+    const crate = await createUnitConversion(env, beer.id, {
+      unit: 'Thùng',
+      conversionFactor: 24,
+      sellingPrice: 230_000,
+    })
+    await env.db
+      .insert(volumePrices)
+      .values({ storeId: env.storeId, productId: beer.id, minQty: 12, price: 9_000 })
+
+    const [crateLine, cans11, cans12] = await resolveBoth({
+      customerId: null,
+      priceListId: null,
+      items: [
+        { productId: beer.id, unitConversionId: crate.id, quantity: 1 },
+        { productId: beer.id, quantity: 11 },
+        { productId: beer.id, quantity: 12 },
+      ],
+    })
+    expect(crateLine).toMatchObject({
+      price: 216_000,
+      source: 'volume_price',
+      sourceDetail: 'SL >= 12',
+    })
+    expect(cans11).toMatchObject({ price: 10_000, source: 'retail_price' })
+    expect(cans12).toMatchObject({ price: 9_000, source: 'volume_price' })
+  })
+
+  it('chiết khấu danh mục từ 6 lon: 1 Lốc 6 lon được giảm, nhân hệ số trên giá lẻ, không trên giá bán riêng của Lốc', async () => {
+    const [cat] = await env.db
+      .insert(categories)
+      .values({ storeId: env.storeId, name: 'Nước ngọt', sortOrder: 1 })
+      .returning()
+    const soda = await createProduct(env, {
+      name: 'Nước ngọt lon',
+      unit: 'Lon',
+      sellingPrice: 10_000,
+      categoryId: cat!.id,
+    })
+    const pack = await createUnitConversion(env, soda.id, {
+      unit: 'Lốc',
+      conversionFactor: 6,
+      sellingPrice: 58_000,
+    })
+    const customer = await createCustomer(env)
+    await env.db.insert(categoryDiscounts).values({
+      storeId: env.storeId,
+      categoryId: cat!.id,
+      customerId: customer.id,
+      discountType: 'percent',
+      discountValue: 10,
+      minQty: 6,
+    })
+
+    const [packLine, cans5] = await resolveBoth({
+      customerId: customer.id,
+      priceListId: null,
+      items: [
+        { productId: soda.id, unitConversionId: pack.id, quantity: 1 },
+        { productId: soda.id, quantity: 5 },
+      ],
+    })
+    expect(packLine).toMatchObject({ price: 54_000, source: 'category_discount' })
+    expect(cans5).toMatchObject({ price: 10_000, source: 'retail_price' })
+  })
+
+  it('biến thể + đơn vị quy đổi + bậc số lượng của biến thể', async () => {
+    const { product, red, blue } = await variantProduct()
+    const box = await createUnitConversion(env, product.id, {
+      unit: 'Hộp',
+      conversionFactor: 3,
+      sellingPrice: 0,
+    })
+    await env.db.insert(volumePrices).values({
+      storeId: env.storeId,
+      productId: product.id,
+      variantId: red.id,
+      minQty: 6,
+      price: 100_000,
+    })
+
+    const [red2Box, red1Box, blue2Box] = await resolveBoth({
+      customerId: null,
+      priceListId: null,
+      items: [
+        { productId: product.id, variantId: red.id, unitConversionId: box.id, quantity: 2 },
+        { productId: product.id, variantId: red.id, unitConversionId: box.id, quantity: 1 },
+        { productId: product.id, variantId: blue.id, unitConversionId: box.id, quantity: 2 },
+      ],
+    })
+    expect(red2Box).toMatchObject({ price: 300_000, source: 'volume_price' })
+    expect(red1Box).toMatchObject({ price: 360_000, source: 'retail_price' })
+    expect(blue2Box).toMatchObject({ price: 330_000, source: 'retail_price' })
+  })
+
+  it('bảng giá thu ngân chọn với đơn vị quy đổi: nhân hệ số, không bị giá bán riêng của đơn vị đè', async () => {
+    const p = await createProduct(env, { sellingPrice: 10_000 })
+    const pack = await createUnitConversion(env, p.id, {
+      conversionFactor: 10,
+      sellingPrice: 95_000,
+    })
+    const [list] = await env.db
+      .insert(priceLists)
+      .values({ storeId: env.storeId, name: 'Bảng giá sỉ', method: 'direct' })
+      .returning()
+    await env.db
+      .insert(priceListItems)
+      .values({ priceListId: list!.id, productId: p.id, price: 8_500 })
+
+    const [line] = await resolveBoth({
+      customerId: null,
+      priceListId: list!.id,
+      items: [{ productId: p.id, unitConversionId: pack.id, quantity: 1 }],
+    })
+    expect(line).toMatchObject({ price: 85_000, source: 'price_list' })
   })
 })

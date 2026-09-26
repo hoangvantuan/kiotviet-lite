@@ -4,9 +4,8 @@ import { resolveEffectiveDebtLimit } from '../utils/debt-limit.js'
 import {
   type CategoryDiscountRule,
   isEffectiveOn,
-  pickCategoryDiscount,
-  pickVolumePrice,
   type PriceSources,
+  rankCategoryDiscounts,
   resolvePriceFromSources,
   selectVariantScoped,
   storeIsoDate,
@@ -458,7 +457,8 @@ export async function resolvePricesOffline(
       unitConversion: null,
       manualPriceList: null,
       customer: null,
-      volumePrice: null,
+      volumeTiers: [],
+      quantity: item.quantity,
     }
 
     if (product) {
@@ -496,7 +496,7 @@ export async function resolvePricesOffline(
           variantId,
         )
       ).map((r) => ({ minQty: r.min_qty, price: num(r.price) }))
-      sources.volumePrice = pickVolumePrice(tiers, item.quantity)
+      sources.volumeTiers = tiers
 
       if (manualList) {
         const price = await listPrice(manualList.id, item.productId, variantId)
@@ -544,11 +544,10 @@ export async function resolvePricesOffline(
               }),
             )
           : []
-        const rule = pickCategoryDiscount(rules, {
+        const ranked = rankCategoryDiscounts(rules, {
           categoryId: product.category_id,
           customerId,
           customerGroupId,
-          quantity: item.quantity,
           today,
         })
         const groupPrice = groupList
@@ -556,7 +555,7 @@ export async function resolvePricesOffline(
           : null
         sources.customer = {
           customerPrice: cp ? num(cp.price) : null,
-          categoryDiscount: rule,
+          categoryDiscounts: ranked,
           groupPriceList:
             groupPrice !== null && groupList
               ? { price: groupPrice, priceListName: groupList.name }

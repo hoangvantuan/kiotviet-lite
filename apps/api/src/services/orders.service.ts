@@ -351,10 +351,22 @@ export async function createOrder({
     snapshotPriceListName = input.priceListName ?? null
   }
 
+  // OFF-11 (ADR-0014): đơn ngoại tuyến ghi theo giờ bán trên máy bán, đã kiểm giới hạn
+  const receivedAt = new Date()
+  let offlineSale: ReturnType<typeof resolveOfflineSoldAt> | null = null
+  if (source === 'offline_sync') {
+    const [store] = await db
+      .select({ createdAt: stores.createdAt })
+      .from(stores)
+      .where(eq(stores.id, actor.storeId))
+      .limit(1)
+    offlineSale = resolveOfflineSoldAt(offlineCreatedAt, receivedAt, store?.createdAt ?? null)
+  }
   // POS-08, R1: giá hệ thống từng dòng tính trước khi duyệt giá, để dòng lấy giá đặc biệt (bảng giá,
   // giá riêng khách, chiết khấu danh mục, giá theo số lượng) dưới giá vốn cũng phải qua duyệt dưới
-  // giá vốn. Kết quả dùng lại khi đối chiếu đơn giá trong giao dịch.
-  const orderDate = new Date()
+  // giá vốn. Kết quả dùng lại khi đối chiếu đơn giá trong giao dịch. Đơn ngoại tuyến định giá theo
+  // giờ bán đã kiểm (ADR-0014), không theo giờ máy chủ nhận.
+  const orderDate = offlineSale?.soldAt ?? receivedAt
   const resolvedPrices = await Promise.all(
     input.items.map((item) =>
       resolveProductPrice({
@@ -385,17 +397,6 @@ export async function createOrder({
   // ADR-0009: đơn ngoại tuyến vi phạm chính sách vẫn nhận (hàng đã giao) nhưng chờ chủ duyệt
   const policyViolations: OrderPolicyViolation[] =
     source === 'offline_sync' ? [...offlineViolations] : []
-  // OFF-11 (ADR-0014): đơn ngoại tuyến ghi theo giờ bán trên máy bán, đã kiểm giới hạn
-  const receivedAt = new Date()
-  let offlineSale: ReturnType<typeof resolveOfflineSoldAt> | null = null
-  if (source === 'offline_sync') {
-    const [store] = await db
-      .select({ createdAt: stores.createdAt })
-      .from(stores)
-      .where(eq(stores.id, actor.storeId))
-      .limit(1)
-    offlineSale = resolveOfflineSoldAt(offlineCreatedAt, receivedAt, store?.createdAt ?? null)
-  }
   if (offlineSale?.violation) policyViolations.push(offlineSale.violation)
   const priceIssue = priceViolation(priceApproval)
   if (priceIssue) policyViolations.push(priceIssue)
@@ -491,6 +492,8 @@ export async function createOrder({
       let negativeStockAlertsEnabled: boolean | undefined
       // POS-13: đọc một lần khi có dòng làm tồn âm
       let allowNegativeStock: boolean | undefined
+      // Dòng đơn ngoại tuyến bán quá tồn khi cửa hàng không cho bán âm (POS-13)
+      const overSoldLines: string[] = []
       const mismatchedLines: Array<{
         productId: string
         productName: string
@@ -873,12 +876,18 @@ export async function createOrder({
               allowNegativeStock = setting.allowNegativeStock
             }
             // POS-13: cửa hàng không cho bán âm kho thì chặn đơn POS (hàng đã khóa nên số tồn là
-            // số thật tại lúc bán). Đơn ngoại tuyến đã giao hàng tại quầy nên vẫn ghi, kèm cảnh báo.
+            // số thật tại lúc bán). Đơn ngoại tuyến đã giao hàng tại quầy nên vẫn ghi, nhưng vào
+            // chờ duyệt với vi phạm negative_stock_policy, không phụ thuộc bật cảnh báo tồn âm.
+            const available = Math.max(0, newStock + deductQty)
+            const label = item.variantName
+              ? `${item.productName} (${item.variantName})`
+              : item.productName
+            if (!allowNegativeStock && source === 'offline_sync') {
+              overSoldLines.push(
+                `${label} còn ${available} ${product.unit}, bán ${deductQty} ${product.unit}`,
+              )
+            }
             if (!allowNegativeStock && source === 'pos') {
-              const available = Math.max(0, newStock + deductQty)
-              const label = item.variantName
-                ? `${item.productName} (${item.variantName})`
-                : item.productName
               throw new ApiError(
                 'BUSINESS_RULE_VIOLATION',
                 `Không đủ tồn kho: ${label} chỉ còn ${available} ${product.unit}`,
@@ -908,6 +917,14 @@ export async function createOrder({
             }
           }
         }
+      }
+
+      if (overSoldLines.length > 0) {
+        policyViolations.push({
+          code: 'negative_stock_policy',
+          message: `Bán vượt tồn kho khi cửa hàng không cho bán âm: ${overSoldLines.join('; ')}`,
+          requiredPermissions: [],
+        })
       }
 
       // BC-10, TIEN-101: chia chiết khấu đơn xuống từng dòng một lần lúc bán. Báo cáo theo sản
