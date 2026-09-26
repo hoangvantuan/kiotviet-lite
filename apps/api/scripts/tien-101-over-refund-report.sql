@@ -22,8 +22,9 @@ SELECT
   "o"."order_number" AS "ma_don",
   "oi"."product_name" AS "ten_hang",
   "oi"."variant_name" AS "bien_the",
-  "oi"."quantity" AS "sl_mua",
-  "x"."sl_da_tra",
+  -- Số lượng numeric(14,3) (ADR-0015): bỏ số 0 thừa để "3.000" không bị đọc thành ba nghìn
+  trim_scale("oi"."quantity") AS "sl_mua",
+  trim_scale("x"."sl_da_tra") AS "sl_da_tra",
   "x"."cac_phieu",
   "x"."da_hoan",
   "x"."dung"::bigint AS "dung",
