@@ -46,7 +46,9 @@ jobs:
         run: pnpm -r typecheck
 
       - name: Test
-        run: pnpm test
+        # verbose in từng test khi xong, nên nếu treo thì biết test kế tiếp trong file nào đang chạy;
+        # hanging-process liệt kê handle giữ tiến trình khi vitest không tự thoát
+        run: pnpm test --reporter=verbose --reporter=hanging-process
         env:
           TEST_PG_URL: postgres://kiotviet:kiotviet_password@localhost:5432/kiotviet_lite_ci
 
