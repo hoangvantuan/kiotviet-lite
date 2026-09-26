@@ -28,7 +28,7 @@ Người bán hàng tại quầy, quyền hạn thấp nhất.
 _Tránh dùng_: staff, nhân viên bán hàng
 
 **Ca bán hàng**:
-Khoảng thời gian một người trực quầy, có số tiền quỹ ghi nhận lúc mở và lúc đóng.
+Khoảng thời gian một người trực quầy, có số tiền quỹ ghi nhận lúc mở và lúc đóng. Cửa hàng tự chọn có dùng ca hay không; mỗi người bán có tối đa một ca đang mở.
 _Tránh dùng_: phiên làm việc, ca trực
 
 ### Hàng hóa
@@ -210,6 +210,14 @@ _Tránh dùng_: phiếu thu tiền, biên nhận
 **Phiếu chi**:
 Chứng từ ghi nhận cửa hàng trả tiền nợ cho nhà cung cấp. Có thể gắn một phiếu nhập hàng để trả cho đúng phiếu đó, khi ấy số chi không vượt số phiếu còn nợ.
 _Tránh dùng_: phiếu chi tiền, thanh toán NCC
+
+**Phương thức tiền**:
+Kênh mà một khoản tiền thực nhận hay thực chi đi qua: tiền mặt, chuyển khoản hoặc QR. Ghi trên phiếu thu, phiếu chi và phần hoàn tiền của phiếu trả; đơn hàng còn có thêm "kết hợp" và "ghi nợ".
+_Tránh dùng_: hình thức thanh toán, kênh thu
+
+**Chênh lệch ca**:
+Tiền mặt đếm được lúc đóng ca trừ tiền mặt phải có (quỹ đầu ca cộng tiền mặt thu, trừ tiền mặt chi và hoàn). Âm là thiếu, dương là thừa.
+_Tránh dùng_: lệch quỹ, sai ca
 
 **Điều chỉnh nợ**:
 Bút toán tăng hoặc giảm công nợ một số tiền chênh lệch, kèm lý do, vì một việc nằm ngoài mua bán và thu chi, ví dụ chiết khấu cuối kỳ hay ghi nhận sai sót. Tăng nợ tạo một khoản nợ mới; giảm nợ giảm trừ các khoản nợ cũ nhất trước. Không gõ thẳng số công nợ mới.
