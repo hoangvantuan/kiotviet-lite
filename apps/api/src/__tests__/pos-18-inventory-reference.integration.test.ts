@@ -39,8 +39,7 @@ const BACKFILL_UPDATES = readFileSync(
       .join('\n')
       .trim(),
   )
-  // Câu cuối (CASE ... WHERE reference_type IS NULL) chỉ chạy được trước khi đặt NOT NULL
-  .filter((stmt) => stmt.startsWith('UPDATE') && !stmt.includes('IS NULL'))
+  .filter((stmt) => stmt.startsWith('UPDATE'))
 
 let env: TestEnv
 let app: Hono
@@ -213,13 +212,53 @@ describe('POS-18: tham chiếu chứng từ trên sổ kho', () => {
     )
   })
 
-  it('migration điền lại tham chiếu dòng cũ từ ghi chú', async () => {
-    await runAllFlows()
-    const expected = await ledger()
-    expect(BACKFILL_UPDATES.length).toBe(8)
-
+  it('migration điền lại tham chiếu dòng cũ từ ghi chú, dòng không khớp theo loại dòng', async () => {
+    const d = await runAllFlows()
+    // Đơn bán đồng bộ offline ghi chú "<mã đơn> (offline sync)"
     await env.db.execute(
-      sql`UPDATE inventory_transactions SET reference_type = 'manual', reference_id = NULL`,
+      sql`UPDATE inventory_transactions SET note = note || ' (offline sync)'
+          WHERE type = 'sale' AND reference_id = ${d.returnedOrder.id}`,
+    )
+    // Dòng cũ có ghi chú không khớp chứng từ nào: rơi vào CASE dự phòng
+    const at = Date.now() + 60_000
+    const orphans = [
+      { type: 'sale', note: 'HD-MAT-GHI-CHU' },
+      { type: 'return', note: 'TH-MAT-GHI-CHU' },
+      { type: 'purchase_cancel', note: 'Hủy PN-MAT' },
+      { type: 'purchase', note: 'Nhập thêm hàng biếu' },
+    ] as const
+    for (const [i, o] of orphans.entries()) {
+      await env.db.insert(inventoryTransactions).values({
+        storeId: env.storeId,
+        productId: d.product.id,
+        type: o.type,
+        quantity: 0,
+        note: o.note,
+        referenceType: 'manual',
+        referenceId: null,
+        createdBy: env.owner.id,
+        createdAt: new Date(at + i * 1000),
+      })
+    }
+    const expected = [
+      ...(await ledger()).slice(0, -orphans.length),
+      { type: 'sale', referenceType: 'order', referenceId: null },
+      { type: 'return', referenceType: 'order_return', referenceId: null },
+      { type: 'purchase_cancel', referenceType: 'purchase_order', referenceId: null },
+      // Nhập tay cũng là loại 'purchase' ghi chú tự do nên dòng không khớp phiếu là manual
+      { type: 'purchase', referenceType: 'manual', referenceId: null },
+    ]
+    expect(BACKFILL_UPDATES.length).toBe(9)
+
+    // Đưa bảng về trạng thái lúc migration chạy: cột mới cho phép NULL, chưa có CHECK
+    await env.db.execute(
+      sql`ALTER TABLE inventory_transactions DROP CONSTRAINT chk_inventory_tx_reference_id`,
+    )
+    await env.db.execute(
+      sql`ALTER TABLE inventory_transactions ALTER COLUMN reference_type DROP NOT NULL`,
+    )
+    await env.db.execute(
+      sql`UPDATE inventory_transactions SET reference_type = NULL, reference_id = NULL`,
     )
     for (const stmt of BACKFILL_UPDATES) await env.db.execute(sql.raw(stmt))
 
