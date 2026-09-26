@@ -1,5 +1,6 @@
 import type { PriceSource } from '../constants/pricing.js'
 import type { TierBreakdown } from '../schema/pricing-resolve.js'
+import { formatQuantity } from './quantity.js'
 
 /**
  * Quy tắc giá 6 tầng của POS, dạng hàm thuần. Máy chủ (`pricing.service.ts`, đọc Postgres) và máy
@@ -321,14 +322,16 @@ export function resolvePriceFromSources(sources: PriceSources): ResolvedPrice {
     matched: t4Hit,
     reason:
       rawVp !== null
-        ? `SL >= ${rawVp.minQty}: ${vpPrice?.toLocaleString('vi-VN')}đ`
+        ? `SL >= ${formatQuantity(rawVp.minQty)}: ${vpPrice?.toLocaleString('vi-VN')}đ`
         : 'Không có giá theo số lượng phù hợp',
   })
   if (t4Hit) {
     winner = {
       price: vpPrice!,
       source: 'volume_price',
-      sourceDetail: isFallback ? `Giá dự phòng: SL >= ${rawVp!.minQty}` : `SL >= ${rawVp!.minQty}`,
+      sourceDetail: isFallback
+        ? `Giá dự phòng: SL >= ${formatQuantity(rawVp!.minQty)}`
+        : `SL >= ${formatQuantity(rawVp!.minQty)}`,
     }
   }
 
