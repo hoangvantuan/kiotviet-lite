@@ -283,7 +283,8 @@ test('OFF-04: đóng tab CHỦ trong lúc tab kia đang ghi đơn: tab kia lên 
   context,
   loginAs,
 }) => {
-  test.setTimeout(120_000)
+  // CI đồng bộ khoảng một đơn mỗi giây (OFF-10 mất 2 phút cho 120 đơn), nên hạn giờ như OFF-10
+  test.setTimeout(240_000)
   const COUNT = 100
   const orderData = await bulkOrderData()
 
@@ -322,7 +323,7 @@ test('OFF-04: đóng tab CHỦ trong lúc tab kia đang ghi đơn: tab kia lên 
   await expectPending(second, COUNT)
 
   await context.setOffline(false)
-  await expect(indicator(second)).toBeHidden({ timeout: 60_000 })
+  await expect(indicator(second)).toBeHidden({ timeout: 150_000 })
   const found = await Promise.all(clientIds.map(orderByClientId))
   expect(found.filter(Boolean)).toHaveLength(COUNT)
 })

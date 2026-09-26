@@ -257,6 +257,8 @@ describe('o1-sync: /sync/push', () => {
 
       const row = await orderByClientId(order.clientId)
       expect(row!.createdAt.toISOString()).toBe(soldAt.toISOString())
+      // BC-06: báo cáo dòng tiền và ca đọc sold_at, phải cùng giờ bán hiệu lực với created_at
+      expect(row!.soldAt.toISOString()).toBe(soldAt.toISOString())
       expect(row!.syncedAt).not.toBeNull()
       expect(row!.reviewStatus).toBe('none')
       // Mã đơn theo ngày bán
@@ -278,6 +280,8 @@ describe('o1-sync: /sync/push', () => {
 
       const row = await orderByClientId(order.clientId)
       expect(row!.createdAt.getTime()).toBeGreaterThanOrEqual(before - 1000)
+      // Giờ bán bị kẹp: cả sold_at lẫn created_at là giờ nhận đơn
+      expect(row!.soldAt.getTime()).toBe(row!.createdAt.getTime())
       expect(row!.createdAt.getTime()).toBeLessThan(future.getTime())
       expect(row!.policyViolations?.map((v) => v.code)).toContain('sold_at_suspect')
     })
@@ -291,6 +295,8 @@ describe('o1-sync: /sync/push', () => {
 
       const row = await orderByClientId(order.clientId)
       expect(row!.createdAt.getTime()).toBeGreaterThanOrEqual(before - 1000)
+      // Giờ bán bị kẹp: cả sold_at lẫn created_at là giờ nhận đơn
+      expect(row!.soldAt.getTime()).toBe(row!.createdAt.getTime())
       expect(row!.policyViolations?.map((v) => v.code)).toContain('sold_at_suspect')
       expect(await auditChanges(row!.id, 'order.created')).toMatchObject({
         claimedSoldAt: old.toISOString(),
@@ -310,6 +316,8 @@ describe('o1-sync: /sync/push', () => {
 
       const row = await orderByClientId(order.clientId)
       expect(row!.createdAt.getTime()).toBeGreaterThanOrEqual(before - 1000)
+      // Giờ bán bị kẹp: cả sold_at lẫn created_at là giờ nhận đơn
+      expect(row!.soldAt.getTime()).toBe(row!.createdAt.getTime())
       expect(row!.policyViolations?.[0]?.message).toContain('trước lúc tạo cửa hàng')
     })
   })

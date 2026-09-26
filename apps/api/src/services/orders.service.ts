@@ -305,7 +305,7 @@ export async function createOrder({
   // ADR-0009: đơn ngoại tuyến vi phạm chính sách vẫn nhận (hàng đã giao) nhưng chờ chủ duyệt
   const policyViolations: OrderPolicyViolation[] =
     source === 'offline_sync' ? [...offlineViolations] : []
-  // OFF-11 (ADR-0012): đơn ngoại tuyến ghi theo giờ bán trên máy bán, đã kiểm giới hạn
+  // OFF-11 (ADR-0014): đơn ngoại tuyến ghi theo giờ bán trên máy bán, đã kiểm giới hạn
   const receivedAt = new Date()
   let offlineSale: ReturnType<typeof resolveOfflineSoldAt> | null = null
   if (source === 'offline_sync') {

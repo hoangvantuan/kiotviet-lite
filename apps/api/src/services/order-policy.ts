@@ -552,7 +552,7 @@ export function debtLimitViolation(params: {
 }
 
 /**
- * OFF-11 (ADR-0012): giờ bán của đơn ngoại tuyến do máy bán gửi, không tin được hoàn toàn. Giờ bán
+ * OFF-11 (ADR-0014): giờ bán của đơn ngoại tuyến do máy bán gửi, không tin được hoàn toàn. Giờ bán
  * nằm ngoài khoảng tin được thì đơn ghi theo giờ nhận và gắn cờ để chủ đối chiếu; giờ gốc trả về ở
  * `claimedAt` để lưu vào nhật ký. Khoảng tin được:
  * - không quá SYNC_SOLD_AT_MAX_FUTURE_MS về tương lai (đồng hồ sai, hoặc sửa để dời doanh thu);

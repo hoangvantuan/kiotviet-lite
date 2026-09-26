@@ -37,9 +37,9 @@ shift_choice_required`, kèm danh sách ca) để giao diện hỏi chọn ca; k
    thì để trống ca. Ca được đọc với khóa FOR SHARE nên không đóng được khi chứng từ đang ghi.
 5. **Đơn ngoại tuyến không bị chặn vì ca.** Khi đồng bộ, đơn gắn vào ca của người bán có giờ bán
    nằm trong khoảng mở, đóng ca; không khớp thì để trống và hiện ở mục "chưa gắn ca" của báo cáo.
-   Giờ bán lưu ở `orders.sold_at` (đơn trực tuyến bằng giờ tạo, đơn ngoại tuyến bằng giờ bán trên
-   máy); báo cáo dòng tiền lọc đơn theo `sold_at`, nên đơn bán 21:00 đồng bộ sáng hôm sau vẫn
-   thuộc ngày bán, cùng ngày với ca đã gắn.
+   Giờ bán lưu ở `orders.sold_at` (đơn trực tuyến bằng giờ tạo, đơn ngoại tuyến bằng giờ bán hiệu
+   lực theo ADR-0014, ghi vào cả `created_at`); báo cáo dòng tiền lọc đơn theo `sold_at`, nên đơn
+   bán 21:00 đồng bộ sáng hôm sau vẫn thuộc ngày bán, cùng ngày với ca đã gắn.
 6. **Chênh lệch ca = tiền đếm - (quỹ đầu ca + tiền mặt thu - tiền mặt chi và hoàn).** Số liệu
    lúc đóng được chụp vào `close_summary`; chứng từ gắn vào ca sau khi đóng (đơn ngoại tuyến đồng
    bộ muộn) làm số tính lại khác số đã chụp, và màn chi tiết ca cho thấy điều đó.
@@ -65,7 +65,8 @@ shift_choice_required`, kèm danh sách ca) để giao diện hỏi chọn ca; k
 - Phiếu chi chưa có mã chứng từ riêng; phiếu thu có mã `PT-yymmdd-nnnn` từ bộ đếm chứng từ.
 - Báo cáo phương thức có thêm một dòng "Chưa rõ" cho tới khi hết kỳ có chứng từ cũ.
 - Báo cáo doanh thu cũ (màn Báo cáo) vẫn lọc đơn theo `created_at`; chỉ báo cáo dòng tiền đi theo
-  `sold_at`. Hai màn có thể lệch nhau ở đơn ngoại tuyến đồng bộ qua ngày.
+  `sold_at`. Hai cột bằng nhau ở mọi đơn bán (đơn ngoại tuyến theo ADR-0014), nên hai màn không
+  lệch nhau.
 - Dấu chênh lệch thống nhất: thực đếm trừ phải có (âm là thiếu, dương là thừa).
 - Tiền đã trả lúc nhập hàng (`purchase_orders.paid_amount`) không có phương thức nên chưa vào
   dòng tiền ra, trong khi khoản NCC hoàn khi hủy phiếu thì vào dòng tiền vào. Đơn hủy và phiếu

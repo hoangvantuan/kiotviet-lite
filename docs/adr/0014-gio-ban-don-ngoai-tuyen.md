@@ -1,11 +1,12 @@
-# ADR-0012: Giờ bán của đơn ngoại tuyến lấy theo máy bán, máy chủ giới hạn
+# ADR-0014: Giờ bán của đơn ngoại tuyến lấy theo máy bán, máy chủ giới hạn
 
 - Trạng thái: Đã chốt
 - Ngày: 2026-09-26
 - Phạm vi: `apps/api/src/routes/sync.routes.ts`, `apps/api/src/services/order-policy.ts`,
   `packages/shared/src/schema/orders.ts`, `packages/shared/src/schema/sync-management.ts`,
   `apps/web/src/lib/offline-orders.ts`, `apps/web/src/lib/order-sync.ts`
-- Bổ sung cho: [ADR-0009](0009-han-muc-no-mac-dinh-khong-cho-no.md)
+- Bổ sung cho: [ADR-0009](0009-han-muc-no-mac-dinh-khong-cho-no.md),
+  [ADR-0013](0013-ca-ban-hang-va-dong-tien-theo-phuong-thuc.md)
 
 ## Bối cảnh
 
@@ -17,9 +18,10 @@ bán chưa có mã máy chủ, khách cầm hóa đơn quay lại thì không tr
 
 ## Quyết định
 
-1. **`created_at` của đơn ngoại tuyến là giờ bán trên máy bán** (`soldAt` gửi kèm từng đơn).
-   Mọi báo cáo theo thời gian đọc `created_at`, nên tự tính theo giờ bán mà không phải sửa báo
-   cáo nào. Đơn trực tuyến giữ nguyên: `created_at` là lúc máy chủ ghi.
+1. **Đơn ngoại tuyến có MỘT giờ bán hiệu lực, ghi vào cả `created_at` lẫn `sold_at`** (giờ bán
+   trên máy, `soldAt` gửi kèm từng đơn, sau khi kẹp theo mục 2). Báo cáo doanh thu lọc
+   `created_at`, báo cáo dòng tiền lọc `sold_at` (ADR-0013), nên hai màn luôn cùng ngày. Ca bán
+   hàng cũng gắn theo giờ này. Đơn trực tuyến giữ nguyên: hai cột là lúc máy chủ ghi.
 2. **Máy chủ giới hạn giờ bán**, vì đồng hồ máy bán có thể sai hoặc bị chỉnh. Giờ bán nằm ngoài
    khoảng tin được thì đơn ghi theo **giờ nhận đơn**:
    - sau giờ nhận quá 5 phút (`SYNC_SOLD_AT_MAX_FUTURE_MS`);
@@ -29,7 +31,7 @@ bán chưa có mã máy chủ, khách cầm hóa đơn quay lại thì không tr
    Mọi trường hợp trên gắn vi phạm `sold_at_suspect`, đơn thành đơn chờ duyệt (ADR-0009). Giờ gốc
    máy gửi vẫn được giữ để tra: `claimedSoldAt` trong nhật ký `order.created`, `offlineCreatedAt`
    trong nhật ký `order.policy_violation_offline`. Ca bán hàng dùng chung quy tắc này
-   (`resolveOfflineSoldAt`).
+   (`resolveOfflineSoldAt`), không có quy tắc giờ bán thứ hai.
 
 3. **Người bán là người lập đơn trên máy, không phải người đồng bộ.** Hàng chờ ngoại tuyến lưu
    `userId` và `storeId` của người bán; `/sync/push` nhận `sellerUserId` từng đơn, kiểm người đó

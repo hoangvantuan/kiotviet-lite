@@ -42,7 +42,7 @@ export const SYNC_PUSH_MAX_BATCH = 100
  * OFF-11: đơn ngoại tuyến mang giờ bán tính trên máy bán. Máy chủ chấp nhận lệch tới
  * SYNC_SOLD_AT_MAX_FUTURE_MS về tương lai (đồng hồ máy lệch nhẹ); xa hơn thì dùng giờ nhận đơn và
  * gắn cờ. Cũ hơn SYNC_SOLD_AT_MAX_AGE_DAYS, hoặc trước lúc tạo cửa hàng, cũng dùng giờ nhận đơn và
- * gắn cờ (ADR-0012).
+ * gắn cờ (ADR-0014).
  */
 export const SYNC_SOLD_AT_MAX_FUTURE_MS = 5 * 60 * 1000
 export const SYNC_SOLD_AT_MAX_AGE_DAYS = 7
