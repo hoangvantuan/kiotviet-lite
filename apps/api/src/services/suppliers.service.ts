@@ -689,14 +689,14 @@ export async function restoreSupplier({
       if (isUniqueViolation(err, 'uniq_suppliers_store_name_alive')) {
         throw new ApiError(
           'CONFLICT',
-          'Tên nhà cung cấp đã được dùng cho NCC khác, vui lòng đổi tên trước khi khôi phục',
+          'Tên nhà cung cấp đã được dùng cho nhà cung cấp khác, vui lòng đổi tên trước khi khôi phục',
           { field: 'name' },
         )
       }
       if (isUniqueViolation(err, 'uniq_suppliers_store_phone_alive')) {
         throw new ApiError(
           'CONFLICT',
-          'Số điện thoại đã được dùng cho NCC khác, vui lòng đổi số điện thoại trước khi khôi phục',
+          'Số điện thoại đã được dùng cho nhà cung cấp khác, vui lòng đổi số điện thoại trước khi khôi phục',
           { field: 'phone' },
         )
       }

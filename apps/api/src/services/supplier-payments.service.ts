@@ -300,7 +300,7 @@ export async function createSupplierPayment({
     if (input.amount > debtBefore) {
       throw new ApiError(
         'BUSINESS_RULE_VIOLATION',
-        `Số tiền chi (${formatVnd(input.amount)}) vượt quá nợ phải trả NCC hiện tại (${formatVnd(
+        `Số tiền chi (${formatVnd(input.amount)}) vượt quá nợ phải trả nhà cung cấp hiện tại (${formatVnd(
           debtBefore,
         )})`,
       )
@@ -466,7 +466,7 @@ export async function cancelSupplierPayment({
       if (po.returnRefundAmount > 0) {
         throw new ApiError(
           'BUSINESS_RULE_VIOLATION',
-          `Phiếu nhập ${po.code} đã trả hàng và phát sinh tiền NCC phải hoàn, nên không hủy được phiếu chi gắn phiếu này`,
+          `Phiếu nhập ${po.code} đã trả hàng và phát sinh tiền nhà cung cấp phải hoàn, nên không hủy được phiếu chi gắn phiếu này`,
           { reason: 'purchase_order_has_supplier_refund', purchaseOrderId: po.id },
         )
       }

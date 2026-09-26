@@ -144,7 +144,7 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
                 <TableHead className="text-right">Thành tiền</TableHead>
                 <TableHead className="text-right">Giá vốn sau</TableHead>
                 <TableHead className="text-right">Tồn sau</TableHead>
-                <TableHead className="text-right">Đã trả NCC</TableHead>
+                <TableHead className="text-right">Đã trả nhà cung cấp</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -245,7 +245,7 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
         </div>
         {order.returnedAmount > 0 && (
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Hàng đã trả NCC</span>
+            <span className="text-muted-foreground">Hàng đã trả nhà cung cấp</span>
             <span>-{formatVndWithSuffix(order.returnedAmount)}</span>
           </div>
         )}

@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 
 import type { CustomerListItem, ListCustomersQuery } from '@kiotviet-lite/shared'
-import { formatPhone, formatVndWithSuffix } from '@kiotviet-lite/shared'
+import { formatDebtLimitLabel, formatPhone, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import { Pagination } from '@/components/shared/pagination'
@@ -317,6 +317,7 @@ export function CustomerList() {
                 <TableHead className="hidden lg:table-cell text-right">Số đơn</TableHead>
                 <TableHead className="hidden lg:table-cell text-right">Tổng mua</TableHead>
                 <TableHead className="text-right">Công nợ</TableHead>
+                <TableHead className="hidden md:table-cell text-right">Hạn mức</TableHead>
                 <TableHead className="w-32 text-right">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
@@ -356,6 +357,9 @@ export function CustomerList() {
                       effectiveDebtLimit={customer.effectiveDebtLimit}
                       warningPercent={warningPercent}
                     />
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell text-right text-sm">
+                    {formatDebtLimitLabel(customer.effectiveDebtLimit)}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
