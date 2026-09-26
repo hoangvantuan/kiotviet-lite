@@ -1,5 +1,8 @@
 import { Trash2 } from 'lucide-react'
 
+import { formatQuantity, subQty } from '@kiotviet-lite/shared'
+
+import { QuantityInput } from '@/components/shared/quantity-input'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -22,6 +25,8 @@ export interface EditableStockCheckItem {
   variantLabel: string | null
   systemQty: number
   actualQty: number
+  /** Mặt hàng bán số lẻ: ô thực tế nhận số lẻ (ADR-0015) */
+  allowDecimalQuantity: boolean
   note: string
 }
 
@@ -53,7 +58,7 @@ export function StockCheckItemsEditor({ items, onUpdateItem, onRemoveItem, disab
           </TableHeader>
           <TableBody>
             {items.map((it, idx) => {
-              const diff = it.actualQty - it.systemQty
+              const diff = subQty(it.actualQty, it.systemQty)
               const fmt = formatDiff(diff)
               return (
                 <TableRow key={it.tempId}>
@@ -67,19 +72,16 @@ export function StockCheckItemsEditor({ items, onUpdateItem, onRemoveItem, disab
                   <TableCell className="hidden lg:table-cell font-mono text-xs">
                     {it.productSku}
                   </TableCell>
-                  <TableCell className="text-right font-mono">{it.systemQty}</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {formatQuantity(it.systemQty)}
+                  </TableCell>
                   <TableCell>
-                    <Input
-                      type="number"
-                      min={0}
-                      step={1}
+                    <QuantityInput
+                      live
                       value={it.actualQty}
+                      allowDecimal={it.allowDecimalQuantity}
                       disabled={disabled}
-                      onChange={(e) =>
-                        onUpdateItem(it.tempId, {
-                          actualQty: Math.max(0, Math.floor(Number(e.target.value) || 0)),
-                        })
-                      }
+                      onCommit={(v) => onUpdateItem(it.tempId, { actualQty: Math.max(0, v) })}
                       aria-label={`Số lượng thực tế của ${it.productName}`}
                     />
                   </TableCell>
@@ -115,7 +117,7 @@ export function StockCheckItemsEditor({ items, onUpdateItem, onRemoveItem, disab
 
       <div className="md:hidden space-y-2">
         {items.map((it) => {
-          const diff = it.actualQty - it.systemQty
+          const diff = subQty(it.actualQty, it.systemQty)
           const fmt = formatDiff(diff)
           return (
             <div key={it.tempId} className="rounded-md border p-3 space-y-2">
@@ -140,21 +142,17 @@ export function StockCheckItemsEditor({ items, onUpdateItem, onRemoveItem, disab
               <div className="grid grid-cols-3 gap-2 items-end">
                 <div>
                   <div className="text-xs text-muted-foreground">Tồn kho hệ thống</div>
-                  <div className="font-mono font-medium">{it.systemQty}</div>
+                  <div className="font-mono font-medium">{formatQuantity(it.systemQty)}</div>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Thực tế</div>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={1}
+                  <QuantityInput
+                    live
                     value={it.actualQty}
+                    allowDecimal={it.allowDecimalQuantity}
                     disabled={disabled}
-                    onChange={(e) =>
-                      onUpdateItem(it.tempId, {
-                        actualQty: Math.max(0, Math.floor(Number(e.target.value) || 0)),
-                      })
-                    }
+                    onCommit={(v) => onUpdateItem(it.tempId, { actualQty: Math.max(0, v) })}
+                    aria-label={`Số lượng thực tế của ${it.productName}`}
                   />
                 </div>
                 <div className="text-right">

@@ -2,6 +2,8 @@ import type { MouseEvent } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { PackageOpen } from 'lucide-react'
 
+import { formatQuantity } from '@kiotviet-lite/shared'
+
 import { StockBadge } from './stock-badge'
 import { useLowStockListQuery } from './use-products'
 
@@ -56,7 +58,7 @@ export function LowStockPanel({ enabled, onItemClick }: LowStockPanelProps) {
               <p className="truncate text-sm font-medium">{p.name}</p>
               <p className="truncate text-xs text-muted-foreground">{p.sku}</p>
               <p className="text-xs text-muted-foreground">
-                Tồn: {p.currentStock} / Định mức: {p.minStock}
+                Tồn: {formatQuantity(p.currentStock)} / Định mức: {formatQuantity(p.minStock)}
               </p>
             </div>
             <StockBadge

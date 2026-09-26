@@ -10,7 +10,7 @@ import type {
   RevenueGroupBy,
   RevenueReportTab,
 } from '@kiotviet-lite/shared'
-import { formatPhone, formatVndWithSuffix } from '@kiotviet-lite/shared'
+import { formatPhone, formatQuantity, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -136,7 +136,9 @@ export function RevenueReport() {
                   <TableRow key={r.productId}>
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.sku}</TableCell>
-                    <TableCell className="text-right font-mono">{r.quantity}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatQuantity(r.quantity)}
+                    </TableCell>
                     <TableCell className="text-right font-mono">
                       {formatVndWithSuffix(r.revenue)}
                     </TableCell>

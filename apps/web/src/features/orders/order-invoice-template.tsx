@@ -1,4 +1,5 @@
 import type { PrintSettingsResponse } from '@kiotviet-lite/shared'
+import { formatQuantity, lineAmount } from '@kiotviet-lite/shared'
 
 import { PAYMENT_METHOD_LABELS } from '@/lib/constants'
 import { formatVnd, formatVndWithSuffix } from '@/lib/currency'
@@ -27,7 +28,10 @@ export interface InvoiceProps {
 }
 
 function calculateTotalCost(items: OrderDetailItem[]): number {
-  return items.reduce((sum, it) => sum + (it.costPrice != null ? it.costPrice * it.quantity : 0), 0)
+  return items.reduce(
+    (sum, it) => sum + (it.costPrice != null ? lineAmount(it.costPrice, it.quantity) : 0),
+    0,
+  )
 }
 
 // ================================================================
@@ -291,7 +295,7 @@ export function OrderInvoiceA4({ order, store, isReprint, printSettings }: Invoi
                 )}
               </td>
               <td className="text-center">{item.unit ?? ''}</td>
-              <td className="text-right">{item.quantity}</td>
+              <td className="text-right">{formatQuantity(item.quantity)}</td>
               <td className="text-right">{formatVnd(item.unitPrice)}</td>
               {showDiscount && (
                 <td className="text-right">
@@ -474,7 +478,7 @@ export function OrderInvoiceA5({ order, store, isReprint, printSettings }: Invoi
                 )}
               </td>
               <td className="text-center">{item.unit ?? ''}</td>
-              <td className="text-right">{item.quantity}</td>
+              <td className="text-right">{formatQuantity(item.quantity)}</td>
               <td className="text-right">{formatVnd(item.unitPrice)}</td>
               <td className="text-right">{formatVnd(item.lineTotal)}</td>
             </tr>

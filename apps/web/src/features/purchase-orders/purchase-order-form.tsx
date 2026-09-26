@@ -9,10 +9,11 @@ import type {
   ProductDetail,
   VariantItem,
 } from '@kiotviet-lite/shared'
-import { formatPhone } from '@kiotviet-lite/shared'
+import { formatPhone, formatQuantity, isQuantityAllowed, mulQty } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
 import { EmptyState } from '@/components/shared/empty-state'
+import { QuantityInput } from '@/components/shared/quantity-input'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -54,6 +55,8 @@ interface ItemRow {
   variantLabel: string | null
   costPrice: number | null
   baseUnit: string
+  /** Cờ bán số lẻ của sản phẩm (ADR-0015) */
+  allowDecimalQuantity: boolean
   unitConversions: UnitOption[]
   // null = nhập theo đơn vị tính; quantity và unitPrice tính theo đơn vị đang chọn
   unitConversionId: string | null
@@ -67,6 +70,7 @@ interface UnitOption {
   id: string
   unit: string
   conversionFactor: number
+  allowDecimalQuantity: boolean
 }
 
 const BASE_UNIT_VALUE = 'base'
@@ -76,6 +80,7 @@ function toUnitOptions(detail: ProductDetail): UnitOption[] {
     id: u.id,
     unit: u.unit,
     conversionFactor: u.conversionFactor,
+    allowDecimalQuantity: u.allowDecimalQuantity,
   }))
 }
 
@@ -87,6 +92,17 @@ function discountValueToDisplay(type: DiscountType, apiValue: number): number {
 function displayToDiscountValue(type: DiscountType, displayValue: number): number {
   if (type === 'percent') return Math.round(Math.max(0, Math.min(100, displayValue)) * 100)
   return Math.max(0, Math.round(displayValue))
+}
+
+/** Số lượng dòng dương và đúng cờ bán số lẻ, cùng quy tắc với máy chủ */
+function isRowQuantityAllowed(it: ItemRow): boolean {
+  if (!(it.quantity > 0)) return false
+  const conv = it.unitConversions.find((u) => u.id === it.unitConversionId) ?? null
+  return isQuantityAllowed({
+    quantity: it.quantity,
+    productAllowsDecimal: it.allowDecimalQuantity,
+    unitConversion: conv,
+  })
 }
 
 let TEMP_ID_COUNTER = 0
@@ -186,6 +202,7 @@ export function PurchaseOrderForm() {
           variantLabel: null,
           costPrice: detail.costPrice,
           baseUnit: detail.unit,
+          allowDecimalQuantity: detail.allowDecimalQuantity,
           unitConversions: toUnitOptions(detail),
           unitConversionId: null,
           quantity: 1,
@@ -228,6 +245,7 @@ export function PurchaseOrderForm() {
             : v.attribute1Value,
           costPrice: cost,
           baseUnit: product.unit,
+          allowDecimalQuantity: product.allowDecimalQuantity,
           unitConversions: toUnitOptions(product),
           unitConversionId: null,
           quantity: 1,
@@ -258,8 +276,15 @@ export function PurchaseOrderForm() {
   // Đổi đơn vị trên dòng: gợi ý đơn giá theo giá vốn hiện tại nhân hệ số quy đổi
   const changeItemUnit = (it: ItemRow, value: string) => {
     const conv = it.unitConversions.find((u) => u.id === value) ?? null
+    const allowed = isQuantityAllowed({
+      quantity: it.quantity,
+      productAllowsDecimal: it.allowDecimalQuantity,
+      unitConversion: conv,
+    })
     updateItem(it.tempId, {
       unitConversionId: conv?.id ?? null,
+      // Số lẻ mà đơn vị mới chỉ nhận số nguyên: về 1
+      quantity: allowed ? it.quantity : 1,
       unitPrice: (it.costPrice ?? 0) * (conv?.conversionFactor ?? 1),
       discountValue: it.discountType === 'amount' ? 0 : it.discountValue,
     })
@@ -272,7 +297,7 @@ export function PurchaseOrderForm() {
   const submitDisabled =
     !supplierId ||
     items.length === 0 ||
-    items.some((it) => it.quantity < 1 || it.unitPrice < 0) ||
+    items.some((it) => !isRowQuantityAllowed(it) || it.unitPrice < 0) ||
     paidAmount > totalAmount ||
     paidAmount < 0 ||
     createMutation.isPending
@@ -453,16 +478,16 @@ export function PurchaseOrderForm() {
                         {it.productSku}
                       </TableCell>
                       <TableCell>
-                        <Input
+                        <QuantityInput
+                          live
                           aria-label="Số lượng"
-                          type="number"
-                          min={1}
+                          allowDecimal={conv ? conv.allowDecimalQuantity : it.allowDecimalQuantity}
                           value={it.quantity}
-                          onChange={(e) =>
-                            updateItem(it.tempId, {
-                              quantity: Math.max(1, Number(e.target.value) || 0),
-                            })
-                          }
+                          onCommit={(qty) => {
+                            if (isRowQuantityAllowed({ ...it, quantity: qty })) {
+                              updateItem(it.tempId, { quantity: qty })
+                            }
+                          }}
                         />
                         {it.unitConversions.length > 0 && (
                           <Select
@@ -484,7 +509,8 @@ export function PurchaseOrderForm() {
                         )}
                         {conv && (
                           <div className="text-xs text-muted-foreground mt-1">
-                            = {it.quantity * conv.conversionFactor} {it.baseUnit}
+                            = {formatQuantity(mulQty(it.quantity, conv.conversionFactor))}{' '}
+                            {it.baseUnit}
                           </div>
                         )}
                       </TableCell>

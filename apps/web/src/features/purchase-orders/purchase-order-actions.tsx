@@ -2,12 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { Ban, Undo2, Wallet } from 'lucide-react'
 
 import {
+  amountByQtyRatio,
+  formatQuantity,
   moneyMethodLabel,
   type PurchaseOrderDetail,
   type RefundMethod,
+  subQty,
 } from '@kiotviet-lite/shared'
 
 import { CancelDocumentDialog } from '@/components/shared/cancel-document-dialog'
+import { QuantityInput } from '@/components/shared/quantity-input'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -17,7 +21,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { RefundMethodFields } from '@/features/shifts/refund-method-fields'
@@ -178,10 +181,10 @@ function PurchaseReturnDialog({ open, onOpenChange, order }: PurchaseReturnDialo
   const lines = useMemo(
     () =>
       order.items.map((it) => {
-        const max = it.quantity - it.returnedQuantity
+        const max = subQty(it.quantity, it.returnedQuantity)
         const qty = Math.min(quantities[it.id] ?? 0, max)
         // Ước tính theo giá thực nhập; máy chủ tính chính xác phần dư làm tròn
-        const estimate = it.quantity > 0 ? Math.round((lineNet(it) * qty) / it.quantity) : 0
+        const estimate = it.quantity > 0 ? amountByQtyRatio(lineNet(it), qty, it.quantity) : 0
         return { item: it, max, qty, estimate }
       }),
     [order.items, quantities],
@@ -238,27 +241,24 @@ function PurchaseReturnDialog({ open, onOpenChange, order }: PurchaseReturnDialo
                   <p className="text-xs text-muted-foreground">{item.variantLabelSnapshot}</p>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Đã nhập {item.quantity}
-                  {item.unitName ? ` ${item.unitName}` : ''}, đã trả {item.returnedQuantity}, còn
-                  trả được {max}
+                  Đã nhập {formatQuantity(item.quantity)}
+                  {item.unitName ? ` ${item.unitName}` : ''}, đã trả{' '}
+                  {formatQuantity(item.returnedQuantity)}, còn trả được {formatQuantity(max)}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <Label htmlFor={`return-qty-${item.id}`} className="sr-only">
                   Số lượng trả {item.productNameSnapshot}
                 </Label>
-                <Input
+                <QuantityInput
+                  live
                   id={`return-qty-${item.id}`}
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={max}
+                  allowDecimal={item.allowDecimalQuantity}
                   disabled={max <= 0 || mutation.isPending}
                   className="w-24 text-right"
-                  value={qty || ''}
-                  onChange={(e) => {
-                    const v = Math.max(0, Math.floor(Number(e.target.value) || 0))
-                    setQuantities((prev) => ({ ...prev, [item.id]: Math.min(v, max) }))
+                  value={qty || null}
+                  onCommit={(v) => {
+                    setQuantities((prev) => ({ ...prev, [item.id]: Math.min(Math.max(0, v), max) }))
                   }}
                 />
                 <span className="w-28 text-right text-sm">{formatVnd(estimate)}</span>
@@ -357,7 +357,8 @@ export function PurchaseReturnsSection({ order }: { order: PurchaseOrderDetail }
             {r.items.map((it) => (
               <li key={it.id}>
                 {it.productNameSnapshot}
-                {it.variantLabelSnapshot ? ` (${it.variantLabelSnapshot})` : ''}: {it.quantity}
+                {it.variantLabelSnapshot ? ` (${it.variantLabelSnapshot})` : ''}:{' '}
+                {formatQuantity(it.quantity)}
                 {it.unitName ? ` ${it.unitName}` : ''}
               </li>
             ))}

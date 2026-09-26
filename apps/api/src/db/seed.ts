@@ -192,6 +192,8 @@ export async function seed(db: Db) {
     stock: number
     hasVariants?: boolean
     barcode?: string
+    /** Hàng cân ký bán số lẻ (ADR-0015) */
+    allowDecimalQuantity?: boolean
   }) {
     const id = uuidv7()
     await db.insert(products).values({
@@ -207,6 +209,7 @@ export async function seed(db: Db) {
       status: 'active',
       hasVariants: p.hasVariants ?? false,
       trackInventory: true,
+      allowDecimalQuantity: p.allowDecimalQuantity ?? false,
       // Giống app: tồn cấp sản phẩm cha bằng tổng tồn biến thể, cập nhật sau khi tạo biến thể
       currentStock: p.hasVariants ? 0 : p.stock,
       minStock: 5,
@@ -300,6 +303,7 @@ export async function seed(db: Db) {
       cost: 32000,
       unit: 'Kg',
       stock: 20,
+      allowDecimalQuantity: true,
     },
   ]
   const simpleProductIds: string[] = []

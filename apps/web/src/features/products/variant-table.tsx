@@ -1,5 +1,7 @@
 import { Lock, RotateCcw, Sparkles, Trash2 } from 'lucide-react'
 
+import { formatQuantity } from '@kiotviet-lite/shared'
+
 import { CurrencyInput } from '@/components/shared/currency-input'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -279,7 +281,7 @@ export function VariantTable({
             </div>
             {!v._isNew && (
               <p className="text-xs text-muted-foreground">
-                Tồn kho hiện tại: {v.stockQuantity} (Cập nhật qua Story 2.4)
+                Tồn kho hiện tại: {formatQuantity(v.stockQuantity)} (Cập nhật qua Story 2.4)
               </p>
             )}
           </div>

@@ -9,6 +9,7 @@ import {
   formatQuantity,
   hasPermission,
   inventoryTransactions,
+  isWholeQuantity,
   type MoneyMethod,
   mulQty,
   orderItems,
@@ -104,9 +105,11 @@ export async function getReturnableItems({
       returnedQuantity: sql<number>`COALESCE(SUM(${orderReturnItems.quantity}), 0)`.mapWith(
         parseQuantity,
       ),
+      productAllowsDecimal: sql<boolean>`COALESCE(BOOL_OR(${products.allowDecimalQuantity}), false)`,
     })
     .from(orderItems)
     .leftJoin(orderReturnItems, eq(orderReturnItems.orderItemId, orderItems.id))
+    .leftJoin(products, eq(products.id, orderItems.productId))
     .where(eq(orderItems.orderId, orderId))
     .groupBy(orderItems.id)
     .orderBy(asc(orderItems.createdAt))
@@ -125,6 +128,9 @@ export async function getReturnableItems({
     lineTotal: Number(it.lineTotal),
     orderDiscountAllocated: Number(it.orderDiscountAllocated),
     conversionFactor: Number(it.conversionFactor),
+    // Cùng quy tắc với lúc tạo phiếu trả (ADR-0015 mục 2): dòng gốc lẻ, hoặc mặt hàng bán số lẻ
+    allowDecimalQuantity:
+      !isWholeQuantity(it.purchasedQuantity) || Boolean(it.productAllowsDecimal),
   }))
 }
 

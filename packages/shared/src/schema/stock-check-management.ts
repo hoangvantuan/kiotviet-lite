@@ -48,6 +48,8 @@ export const stockCheckItemDetailSchema = z.object({
   actualQty: z.number(),
   diff: z.number(),
   note: z.string().nullable(),
+  // ADR-0015: cờ bán số lẻ hiện tại của mặt hàng, để ô số lượng thực tế nhận số lẻ
+  allowDecimalQuantity: z.boolean(),
 })
 
 export const stockCheckListItemSchema = z.object({

@@ -4,7 +4,7 @@
 - Ngày: 2026-09-26
 - Phạm vi: `packages/shared/src/utils/quantity.ts`, `packages/shared/src/schema/quantity-column.ts`,
   `packages/shared/src/utils/pricing.ts`, các schema zod có số lượng, cột số lượng và tồn kho ở
-  `packages/shared/src/schema/*`, migration `*_d4_decimal_quantity`, PGlite `v005`, các dịch vụ bán,
+  `packages/shared/src/schema/*`, migration `*_d4_decimal_quantity`, PGlite `v006`, các dịch vụ bán,
   trả hàng, nhập hàng, trả hàng nhập, kiểm kê, nhập liệu hàng loạt, báo cáo tồn, `apps/api/scripts/invariants.sql`,
   ô nhập số lượng và mẫu in ở `apps/web`
 - Bổ sung cho: [ADR-0006](0006-nhap-lieu-hang-loat-khong-dong-ton-kho.md),
@@ -32,7 +32,7 @@ hàng tính theo kg): `products.current_stock`, `products.min_stock`,
 `inventory_transactions.quantity`, `.stock_after`, `stock_check_items` và `stock_check_logs`
 (`system_qty`, `actual_qty`, `diff`), `stock_checks.total_diff_positive`, `.total_diff_negative`,
 `volume_prices.min_qty`. `category_discounts.min_qty` giữ số nguyên (ngưỡng số dòng hàng). Bản sao danh mục và hàng chờ
-ngoại tuyến trên PGlite đổi theo ở migration `v005`.
+ngoại tuyến trên PGlite đổi theo ở migration `v006`.
 
 Migration đổi kiểu bằng `USING col::numeric(14,3)`, giữ nguyên dữ liệu. Hệ số quy đổi
 (`conversion_factor`) giữ số nguyên dương: "1 thùng = 24 lon". Tiền giữ `bigint` đồng.
@@ -94,6 +94,21 @@ dòng rồi mới cộng, như tiền dòng.
   nhận số nguyên; nút tăng giảm vẫn bước 1.
 - Hiển thị tối đa 3 chữ số lẻ, bỏ số 0 thừa, theo `vi-VN` (`1,5`, `1,255`, `12`) ở giỏ hàng, hóa
   đơn in, chi tiết chứng từ và báo cáo (`formatQuantity`).
+- POS kiểm cờ bằng cùng hàm `isQuantityAllowed` với máy chủ. Đổi đơn vị tính của dòng mà số lượng
+  đang có không hợp lệ với đơn vị mới (ví dụ 1,5 kg đổi sang thùng không bật cờ) thì số lượng về 1.
+- Chi tiết phiếu nhập, danh sách dòng trả được và chi tiết phiếu kiểm trả kèm `allowDecimalQuantity`
+  của từng dòng (cờ hiện tại, hoặc true khi dòng gốc đã lẻ) để ô nhập biết có nhận số lẻ không.
+- Ngưỡng bậc giá theo số lượng luôn nhận số lẻ (bậc 2,5 kg).
+- Ô số lượng ở giỏ POS ghi khi rời ô hoặc nhấn Enter (gõ "0,5" không đi qua 0 làm xóa dòng); ô ở
+  form chứng từ ghi ngay mỗi lần gõ ra số hợp lệ.
+
+### 7. Bản sao danh mục ngoại tuyến
+
+PGlite `v006` đổi `catalog_products.current_stock`, `catalog_variants.stock_quantity`,
+`catalog_volume_prices.min_qty` sang `NUMERIC(14,3)`, thêm cờ ở sản phẩm và đơn vị quy đổi, rồi xóa
+con trỏ đồng bộ để lần kéo sau nạp lại toàn bộ danh mục kèm cờ. Máy chủ bản cũ chưa gửi cờ thì bản
+sao ghi `false`. Tìm hàng và tính giá ngoại tuyến đọc số lượng qua `parseQuantity`, nên ra cùng giá
+với trực tuyến.
 
 ### 6. Nhập dữ liệu hàng loạt
 

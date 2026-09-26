@@ -1,7 +1,7 @@
 import { BarChart3, Package } from 'lucide-react'
 
 import type { CustomerStatsMonthlySale } from '@kiotviet-lite/shared'
-import { formatVndWithSuffix } from '@kiotviet-lite/shared'
+import { formatQuantity, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { EmptyState } from '@/components/shared/empty-state'
 import {
@@ -99,7 +99,7 @@ export function CustomerStatsTab({ customerId }: CustomerStatsTabProps) {
                   <TableRow key={p.productId}>
                     <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
                     <TableCell className="font-medium">{p.productName}</TableCell>
-                    <TableCell className="text-right">{p.quantity}</TableCell>
+                    <TableCell className="text-right">{formatQuantity(p.quantity)}</TableCell>
                     <TableCell className="text-right">{formatVndWithSuffix(p.total)}</TableCell>
                   </TableRow>
                 ))}

@@ -6,10 +6,12 @@ import {
   type DiscountType,
   type DocumentStatus,
   inventoryTransactions,
+  isWholeQuantity,
   lineAmount,
   type ListPurchaseOrdersQuery,
   mulQty,
   type PaymentStatus,
+  products,
   productUnitConversions,
   type PurchaseOrderDetail,
   type PurchaseOrderItemDetail,
@@ -634,6 +636,35 @@ export async function getPurchaseOrder({
     .where(eq(purchaseOrderItems.purchaseOrderId, orderId))
     .orderBy(asc(purchaseOrderItems.createdAt))
 
+  // Cờ bán số lẻ hiện tại để hộp trả hàng nhập cho gõ số lẻ (ADR-0015 mục 2)
+  const productIds = [...new Set(itemRows.map((it) => it.productId))]
+  const unitIds = [
+    ...new Set(itemRows.map((it) => it.unitConversionId).filter((id): id is string => !!id)),
+  ]
+  const productFlags = new Map(
+    productIds.length === 0
+      ? []
+      : (
+          await db
+            .select({ id: products.id, allow: products.allowDecimalQuantity })
+            .from(products)
+            .where(inArray(products.id, productIds))
+        ).map((r) => [r.id, r.allow] as const),
+  )
+  const unitFlags = new Map(
+    unitIds.length === 0
+      ? []
+      : (
+          await db
+            .select({
+              id: productUnitConversions.id,
+              allow: productUnitConversions.allowDecimalQuantity,
+            })
+            .from(productUnitConversions)
+            .where(inArray(productUnitConversions.id, unitIds))
+        ).map((r) => [r.id, r.allow] as const),
+  )
+
   const items: PurchaseOrderItemDetail[] = itemRows.map((it) => ({
     id: it.id,
     productId: it.productId,
@@ -657,6 +688,11 @@ export async function getPurchaseOrder({
     costAfter: it.costAfter === null ? null : Number(it.costAfter),
     stockAfter: it.stockAfter,
     returnedQuantity: it.returnedQuantity,
+    allowDecimalQuantity:
+      !isWholeQuantity(it.quantity) ||
+      ((it.unitConversionId ? unitFlags.get(it.unitConversionId) : undefined) ??
+        productFlags.get(it.productId) ??
+        false),
   }))
 
   const returns = await listPurchaseReturns({ db, purchaseOrderId: orderId, items: itemRows })

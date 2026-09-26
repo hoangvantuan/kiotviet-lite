@@ -1,3 +1,5 @@
+import { lineAmount } from '@kiotviet-lite/shared'
+
 import { PAYMENT_METHOD_LABELS } from './constants'
 import { formatVnd } from './currency'
 import { formatDateTimeForReceipt } from './date'
@@ -276,7 +278,7 @@ export function buildOrderReceipt(
   // Cost price
   if (options.showCostPrice) {
     const totalCost = order.items.reduce(
-      (sum, it) => sum + (it.costPrice != null ? it.costPrice * it.quantity : 0),
+      (sum, it) => sum + (it.costPrice != null ? lineAmount(it.costPrice, it.quantity) : 0),
       0,
     )
     if (totalCost > 0) {

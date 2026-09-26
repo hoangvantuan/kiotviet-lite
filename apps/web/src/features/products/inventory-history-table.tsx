@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import type { InventoryTransactionItem } from '@kiotviet-lite/shared'
+import { formatQuantity } from '@kiotviet-lite/shared'
 
 import { Pagination } from '@/components/shared/pagination'
 import { Badge } from '@/components/ui/badge'
@@ -91,7 +92,7 @@ export function InventoryHistoryTable({ productId }: InventoryHistoryTableProps)
                       className={`text-right font-mono ${tx.quantity < 0 ? 'text-red-600' : 'text-emerald-600'}`}
                     >
                       {tx.quantity > 0 ? '+' : ''}
-                      {tx.quantity}
+                      {formatQuantity(tx.quantity)}
                     </TableCell>
                     <TableCell className="text-right font-mono text-xs">
                       {tx.unitCost === null ? '-' : formatVnd(tx.unitCost)}
@@ -125,7 +126,7 @@ export function InventoryHistoryTable({ productId }: InventoryHistoryTableProps)
                     Số lượng:{' '}
                     <span className={tx.quantity < 0 ? 'text-red-600' : 'text-emerald-600'}>
                       {tx.quantity > 0 ? '+' : ''}
-                      {tx.quantity}
+                      {formatQuantity(tx.quantity)}
                     </span>
                   </span>
                   <span>Tồn sau: {tx.stockAfter ?? '-'}</span>

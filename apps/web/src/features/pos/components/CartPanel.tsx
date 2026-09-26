@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { ShoppingCart, Trash2 } from 'lucide-react'
 
+import { formatQuantity, sumQty } from '@kiotviet-lite/shared'
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +37,7 @@ export function CartPanel({ onPayment }: CartPanelProps) {
     (s.tabs[s.activeTab]?.items ?? []).reduce((sum, i) => sum + i.lineTotal, 0),
   )
   const totalQty = useCartStore((s) =>
-    (s.tabs[s.activeTab]?.items ?? []).reduce((sum, i) => sum + i.quantity, 0),
+    sumQty((s.tabs[s.activeTab]?.items ?? []).map((i) => i.quantity)),
   )
   // POS-20: "Tổng tiền hàng (N sản phẩm)" đếm số dòng hàng, không cộng số lượng
   const lineCount = useCartStore((s) => (s.tabs[s.activeTab]?.items ?? []).length)
@@ -65,7 +67,7 @@ export function CartPanel({ onPayment }: CartPanelProps) {
           <h2 className="text-sm font-semibold text-foreground">Giỏ hàng</h2>
           {totalQty > 0 && (
             <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
-              {totalQty}
+              {formatQuantity(totalQty)}
             </span>
           )}
         </div>

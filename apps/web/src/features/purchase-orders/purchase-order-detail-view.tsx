@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { ChevronLeft } from 'lucide-react'
 
 import type { PaymentStatus } from '@kiotviet-lite/shared'
-import { formatPhone } from '@kiotviet-lite/shared'
+import { formatPhone, formatQuantity } from '@kiotviet-lite/shared'
 
 import { CancelledBadge } from '@/components/shared/cancel-document-dialog'
 import { Badge } from '@/components/ui/badge'
@@ -158,10 +158,10 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
                   </TableCell>
                   <TableCell className="font-mono text-xs">{it.productSkuSnapshot}</TableCell>
                   <TableCell className="text-right">
-                    {it.quantity}
+                    {formatQuantity(it.quantity)}
                     {it.unitName && (
                       <div className="text-xs text-muted-foreground">
-                        {it.unitName} = {it.baseQuantity}
+                        {it.unitName} = {formatQuantity(it.baseQuantity)}
                       </div>
                     )}
                   </TableCell>
@@ -196,7 +196,7 @@ export function PurchaseOrderDetailView({ orderId }: PurchaseOrderDetailViewProp
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Số lượng × Đơn giá</span>
                 <span>
-                  {it.quantity}
+                  {formatQuantity(it.quantity)}
                   {it.unitName ? ` ${it.unitName}` : ''} × {formatVnd(it.unitPrice)}
                 </span>
               </div>

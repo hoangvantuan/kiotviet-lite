@@ -16,6 +16,7 @@ import {
   type CategoryItem,
   type CreateProductInput,
   createProductSchema,
+  formatQuantity,
   productBarcodeSchema,
   type ProductDetail,
   productSkuSchema,
@@ -24,6 +25,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
+import { QuantityInput } from '@/components/shared/quantity-input'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -111,6 +113,7 @@ interface BasicFormShape {
   imageUrl: string
   status: 'active' | 'inactive'
   trackInventory: boolean
+  allowDecimalQuantity: boolean
   minStock: number
   initialStock?: number
 }
@@ -131,6 +134,7 @@ const createDefaults: CreateFormShape = {
   imageUrl: '',
   status: 'active',
   trackInventory: false,
+  allowDecimalQuantity: false,
   minStock: 0,
   initialStock: 0,
 }
@@ -190,6 +194,7 @@ function CreateDialog({ open, onOpenChange, categories, brands }: ProductFormDia
       unit: values.unit || 'Cái',
       status: values.status,
       trackInventory: values.trackInventory,
+      allowDecimalQuantity: values.allowDecimalQuantity,
       minStock: values.trackInventory ? values.minStock : 0,
       initialStock: hasVariants ? 0 : values.trackInventory ? values.initialStock : 0,
     }
@@ -366,6 +371,7 @@ function EditDialog({
       imageUrl: product.imageUrl ?? '',
       status: product.status,
       trackInventory: product.trackInventory,
+      allowDecimalQuantity: product.allowDecimalQuantity,
       minStock: product.minStock,
     }),
     [product],
@@ -445,6 +451,9 @@ function EditDialog({
     if (values.status !== product.status) payload.status = values.status
     if (values.trackInventory !== product.trackInventory) {
       payload.trackInventory = values.trackInventory
+    }
+    if (values.allowDecimalQuantity !== product.allowDecimalQuantity) {
+      payload.allowDecimalQuantity = values.allowDecimalQuantity
     }
     if (values.minStock !== product.minStock) payload.minStock = values.minStock
 
@@ -571,8 +580,8 @@ function EditDialog({
             )}
             {hasVariants && !product.hasVariants && product.currentStock > 0 && (
               <p className="text-xs text-amber-700">
-                Tồn kho hiện tại {product.currentStock} &gt; 0. Vui lòng kiểm kê về 0 trước khi bật
-                biến thể.
+                Tồn kho hiện tại {formatQuantity(product.currentStock)} &gt; 0. Vui lòng kiểm kê về
+                0 trước khi bật biến thể.
               </p>
             )}
           </section>
@@ -649,6 +658,7 @@ interface ProductFormFields extends FieldValues {
   imageUrl: string
   status: 'active' | 'inactive'
   trackInventory: boolean
+  allowDecimalQuantity: boolean
   minStock: number
   initialStock?: number
 }
@@ -962,9 +972,31 @@ function InventorySection<T extends FieldValues & ProductFormFields>({
     value: unknown,
     opts?: unknown,
   ) => void
-  const register = form.register as unknown as UseFormRegister<ProductFormFields>
+  const allowDecimal = (form.watch as unknown as (name: 'allowDecimalQuantity') => boolean)(
+    'allowDecimalQuantity',
+  )
+  const watchQty = form.watch as unknown as (name: 'initialStock' | 'minStock') => number
+  function setQty(name: 'initialStock' | 'minStock', value: number | null) {
+    if (value === null) return
+    setValue(name, value, { shouldValidate: true, shouldDirty: true })
+  }
   return (
     <section className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Bán số lẻ</h3>
+          <p className="text-xs text-muted-foreground">
+            Cho nhập số lượng lẻ như 1,5 kg (hàng cân ký), tối đa 3 chữ số sau dấu phẩy.
+          </p>
+        </div>
+        <Switch
+          aria-label="Bán số lẻ"
+          checked={allowDecimal}
+          onCheckedChange={(v) =>
+            setValue('allowDecimalQuantity', v, { shouldValidate: true, shouldDirty: true })
+          }
+        />
+      </div>
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Theo dõi tồn kho</h3>
         <Switch
@@ -992,14 +1024,11 @@ function InventorySection<T extends FieldValues & ProductFormFields>({
           {mode === 'create' && !hideInitialStock && (
             <div className="space-y-1">
               <Label htmlFor="p-initial">Tồn kho ban đầu</Label>
-              <Input
+              <QuantityInput
                 id="p-initial"
-                type="number"
-                min={0}
-                inputMode="numeric"
-                {...register('initialStock' as Path<ProductFormFields>, {
-                  valueAsNumber: true,
-                })}
+                allowDecimal={allowDecimal}
+                value={watchQty('initialStock')}
+                onChange={(v) => setQty('initialStock', v)}
               />
               {getError(form.formState.errors, 'initialStock') && (
                 <p className="text-sm text-destructive">
@@ -1010,12 +1039,11 @@ function InventorySection<T extends FieldValues & ProductFormFields>({
           )}
           <div className="space-y-1">
             <Label htmlFor="p-min">Tồn tối thiểu (báo sắp hết khi tồn kho ≤ tồn tối thiểu)</Label>
-            <Input
+            <QuantityInput
               id="p-min"
-              type="number"
-              min={0}
-              inputMode="numeric"
-              {...register('minStock' as Path<ProductFormFields>, { valueAsNumber: true })}
+              allowDecimal={allowDecimal}
+              value={watchQty('minStock')}
+              onChange={(v) => setQty('minStock', v)}
             />
             <p className="text-xs text-muted-foreground">Để 0 nếu không cần cảnh báo.</p>
             {getError(form.formState.errors, 'minStock') && (
@@ -1027,7 +1055,7 @@ function InventorySection<T extends FieldValues & ProductFormFields>({
           {mode === 'edit' && !hideInitialStock && (
             <div className="space-y-1">
               <Label>Tồn kho hiện tại</Label>
-              <Input value={currentStock ?? 0} readOnly disabled />
+              <Input value={formatQuantity(currentStock ?? 0)} readOnly disabled />
               <p className="text-xs text-muted-foreground">
                 Cập nhật qua phiếu nhập hàng hoặc kiểm kê.
               </p>

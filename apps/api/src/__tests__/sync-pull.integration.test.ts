@@ -766,3 +766,92 @@ describe('Cách ly cửa hàng', () => {
     expect(pageB.data.rows).toHaveLength(1)
   })
 })
+
+describe('GL-07: số lượng lẻ trên bản sao danh mục (PGlite v006)', () => {
+  it('tồn lẻ, cờ bán số lẻ, bậc giá lẻ về bản sao; tìm hàng và giá khớp online', async () => {
+    const meat = await createProduct(env, {
+      name: 'Thịt heo ba chỉ',
+      sku: 'KG-01',
+      unit: 'kg',
+      sellingPrice: 45_000,
+      currentStock: 12.345,
+      allowDecimalQuantity: true,
+    })
+    await createUnitConversion(env, meat.id, {
+      unit: 'thùng',
+      conversionFactor: 10,
+      allowDecimalQuantity: true,
+    })
+    await env.db
+      .insert(volumePrices)
+      .values([{ storeId: env.storeId, productId: meat.id, minQty: 2.5, price: 40_000 }])
+    await sync(env.owner.authHeader, true)
+
+    const offline = await searchCatalogProducts(client, {
+      storeId: env.storeId,
+      search: 'thit heo',
+      includeCost: false,
+    })
+    const found = offline.find((p) => p.id === meat.id)
+    expect(found).toMatchObject({ stockQuantity: 12.345, allowDecimalQuantity: true })
+    expect(found?.unitConversions[0]).toMatchObject({ unit: 'thùng', allowDecimalQuantity: true })
+    const online = await app.request('/api/v1/pos/products/search?q=thit%20heo', {
+      headers: env.owner.authHeader,
+    })
+    const onlineBody = (await online.json()) as { data: Array<Record<string, unknown>> }
+    expect(offline).toEqual(
+      onlineBody.data.map((p) => {
+        const copy = { ...p }
+        delete copy.costPrice
+        return copy
+      }),
+    )
+
+    // Bậc giá 2,5 kg: 2,499 còn giá lẻ, 2,5 và 1,255 × 2 lấy đúng như máy chủ
+    const input = {
+      customerId: null,
+      priceListId: null,
+      items: [
+        { productId: meat.id, quantity: 1.255 },
+        { productId: meat.id, quantity: 2.499 },
+        { productId: meat.id, quantity: 2.5 },
+      ],
+    }
+    const res = await app.request('/api/v1/pos/resolve-prices', {
+      method: 'POST',
+      headers: { ...env.staff.authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+    expect(res.status).toBe(200)
+    const onlinePrices = ((await res.json()) as { data: ResolvedPriceItem[] }).data
+    const offlinePrices = await resolvePricesOffline(client, { storeId: env.storeId, input })
+    expect(offlinePrices).toEqual(onlinePrices)
+    expect(offlinePrices.map((p) => p.price)).toEqual([45_000, 45_000, 40_000])
+  })
+
+  it('v006 đổi cột bản sao cũ sang số lẻ, giữ dữ liệu, xóa con trỏ để tải lại cờ', async () => {
+    const old = new PGlite()
+    for (const m of pgliteMigrations.filter((x) => x.version < 6)) await old.exec(m.sql)
+    const productId = randomUUID()
+    await old.query(
+      `INSERT INTO catalog_products (store_id, id, name, sku, selling_price, unit, current_stock)
+       VALUES ($1, $2, 'Gạo', 'G-01', 20000, 'kg', 7)`,
+      [env.storeId, productId],
+    )
+    await old.query(
+      `INSERT INTO catalog_sync_state (store_id, entity, cursor_t, cursor_id)
+       VALUES ($1, 'products', '2026-01-01T00:00:00.000Z', $2)`,
+      [env.storeId, productId],
+    )
+    await old.exec(pgliteMigrations.find((x) => x.version === 6)!.sql)
+    await old.query(`UPDATE catalog_products SET current_stock = 7.125 WHERE id = $1`, [productId])
+    const { rows } = await old.query<{ current_stock: string; allow_decimal_quantity: boolean }>(
+      'SELECT current_stock, allow_decimal_quantity FROM catalog_products WHERE id = $1',
+      [productId],
+    )
+    expect(rows[0]).toEqual({ current_stock: '7.125', allow_decimal_quantity: false })
+    const state = await old.query('SELECT * FROM catalog_sync_state')
+    expect(state.rows).toHaveLength(0)
+    await old.close()
+  })
+})

@@ -25,7 +25,7 @@ export function addToCartAction({
   quantity = 1,
   notes = null,
 }: AddToCartOptions): boolean {
-  if (!Number.isInteger(quantity) || quantity <= 0) return false
+  if (!Number.isFinite(quantity) || quantity <= 0) return false
   const unitConversion =
     explicitUnitConversion ??
     (unitConversionId
@@ -70,6 +70,7 @@ export function addToCartAction({
       unitName: unitConversion?.unit ?? product.unit ?? null,
       unitConversionId: effectiveUnitConversionId,
       trackInventory: product.trackInventory,
+      allowDecimalQuantity: product.allowDecimalQuantity ?? false,
       stockQuantity,
       baseUnit: product.unit ?? null,
       baseUnitPrice: rawPrice,

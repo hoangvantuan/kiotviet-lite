@@ -2161,6 +2161,7 @@ export async function searchProductsForPos({
       imageUrl: products.imageUrl,
       trackInventory: products.trackInventory,
       currentStock: products.currentStock,
+      allowDecimalQuantity: products.allowDecimalQuantity,
       hasVariants: products.hasVariants,
       categoryId: products.categoryId,
     })
@@ -2212,6 +2213,7 @@ export async function searchProductsForPos({
         imageUrl: products.imageUrl,
         trackInventory: products.trackInventory,
         currentStock: products.currentStock,
+        allowDecimalQuantity: products.allowDecimalQuantity,
         hasVariants: products.hasVariants,
         categoryId: products.categoryId,
       })
@@ -2283,6 +2285,7 @@ export async function searchProductsForPos({
         conversionFactor: uc.conversionFactor,
         sellingPrice:
           uc.sellingPrice && Number(uc.sellingPrice) > 0 ? Number(uc.sellingPrice) : null,
+        allowDecimalQuantity: uc.allowDecimalQuantity,
       }
       const list = unitConversionsMap.get(uc.productId) ?? []
       list.push(item)
@@ -2301,6 +2304,7 @@ export async function searchProductsForPos({
     imageUrl: row.imageUrl,
     trackInventory: row.trackInventory,
     stockQuantity: row.hasVariants ? (variantStockMap.get(row.id) ?? 0) : row.currentStock,
+    allowDecimalQuantity: row.allowDecimalQuantity,
     hasVariants: row.hasVariants,
     categoryId: row.categoryId,
     variants: variantsMap.get(row.id) ?? [],

@@ -1,6 +1,11 @@
 import { and, eq } from 'drizzle-orm'
 
-import { isWholeQuantity, mulQty, products, productUnitConversions } from '@kiotviet-lite/shared'
+import {
+  isQuantityAllowed,
+  isWholeQuantity,
+  products,
+  productUnitConversions,
+} from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
 import { ApiError } from './errors.js'
@@ -22,14 +27,7 @@ export function assertQuantityAllowed(args: {
 }): void {
   const { quantity, productName, productAllowsDecimal, unitConversion } = args
   if (args.originalQuantity !== undefined && !isWholeQuantity(args.originalQuantity)) return
-  const unitAllowsDecimal = unitConversion
-    ? unitConversion.allowDecimalQuantity
-    : productAllowsDecimal
-  const baseQuantity = unitConversion ? mulQty(quantity, unitConversion.conversionFactor) : quantity
-  if (
-    (!unitAllowsDecimal && !isWholeQuantity(quantity)) ||
-    (!productAllowsDecimal && !isWholeQuantity(baseQuantity))
-  ) {
+  if (!isQuantityAllowed({ quantity, productAllowsDecimal, unitConversion })) {
     throw new ApiError(
       'VALIDATION_ERROR',
       `${productName} chỉ nhận số lượng nguyên (mặt hàng chưa bật bán số lẻ)`,

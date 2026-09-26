@@ -15,8 +15,11 @@ export type CatalogEntity = Exclude<SyncPullEntity, 'tombstones'>
 
 interface TableSpec {
   table: string
-  /** [khóa JSON từ /sync/pull, cột cục bộ, kiểu SQL] */
-  columns: Array<[string, string, string]>
+  /**
+   * [khóa JSON từ /sync/pull, cột cục bộ, kiểu SQL, giá trị khi thiếu]. Giá trị khi thiếu cho cột
+   * mới NOT NULL mà máy chủ bản cũ chưa gửi.
+   */
+  columns: Array<[string, string, string] | [string, string, string, string]>
   /** Khóa duy nhất trên máy chủ ngoài id (khóa JSON); `lower:` so không phân biệt hoa thường */
   naturalKey?: string[]
 }
@@ -36,7 +39,8 @@ export const CATALOG_TABLES: Record<CatalogEntity, TableSpec> = {
       ['imageUrl', 'image_url', 'text'],
       ['hasVariants', 'has_variants', 'boolean'],
       ['trackInventory', 'track_inventory', 'boolean'],
-      ['currentStock', 'current_stock', 'integer'],
+      ['currentStock', 'current_stock', 'numeric'],
+      ['allowDecimalQuantity', 'allow_decimal_quantity', 'boolean', 'false'],
       ['status', 'status', 'text'],
     ],
   },
@@ -53,7 +57,7 @@ export const CATALOG_TABLES: Record<CatalogEntity, TableSpec> = {
       ['attribute2Value', 'attribute2_value', 'text'],
       ['sellingPrice', 'selling_price', 'bigint'],
       ['costPrice', 'cost_price', 'bigint'],
-      ['stockQuantity', 'stock_quantity', 'integer'],
+      ['stockQuantity', 'stock_quantity', 'numeric'],
       ['status', 'status', 'text'],
       ['createdAt', 'created_at', 'timestamptz'],
     ],
@@ -67,6 +71,7 @@ export const CATALOG_TABLES: Record<CatalogEntity, TableSpec> = {
       ['unit', 'unit', 'text'],
       ['conversionFactor', 'conversion_factor', 'integer'],
       ['sellingPrice', 'selling_price', 'bigint'],
+      ['allowDecimalQuantity', 'allow_decimal_quantity', 'boolean', 'false'],
       ['sortOrder', 'sort_order', 'integer'],
       ['createdAt', 'created_at', 'timestamptz'],
     ],
@@ -132,7 +137,7 @@ export const CATALOG_TABLES: Record<CatalogEntity, TableSpec> = {
       ['id', 'id', 'uuid'],
       ['productId', 'product_id', 'uuid'],
       ['variantId', 'variant_id', 'uuid'],
-      ['minQty', 'min_qty', 'integer'],
+      ['minQty', 'min_qty', 'numeric'],
       ['price', 'price', 'bigint'],
     ],
   },
@@ -212,7 +217,11 @@ function upsertSql(entity: CatalogEntity): string {
   const spec = CATALOG_TABLES[entity]
   const recordType = spec.columns.map(([key, , type]) => `"${key}" ${type}`).join(', ')
   const targetCols = spec.columns.map(([, col]) => col).join(', ')
-  const selectCols = spec.columns.map(([key]) => `r."${key}"`).join(', ')
+  const selectCols = spec.columns
+    .map(([key, , , fallback]) =>
+      fallback === undefined ? `r."${key}"` : `COALESCE(r."${key}", ${fallback})`,
+    )
+    .join(', ')
   const updates = spec.columns
     .filter(([, col]) => col !== 'id')
     .map(([, col]) => `${col} = EXCLUDED.${col}`)

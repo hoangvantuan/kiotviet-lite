@@ -219,3 +219,52 @@ describe('useCartStore - PIN duyệt gắn với đúng giỏ lúc duyệt', () 
     expect(tab().priceApproverId).toBe('manager-1')
   })
 })
+
+describe('useCartStore - bán số lẻ hàng cân ký (GL-07, POS-09)', () => {
+  beforeEach(() => {
+    useCartStore.getState().clearCart()
+  })
+
+  const meat = {
+    productId: 'prod-meat',
+    variantId: null,
+    productName: 'Thịt heo',
+    variantName: null,
+    sku: 'KG-01',
+    unitPrice: 45_000,
+    imageUrl: null,
+    notes: null,
+    unitName: 'kg',
+    unitConversionId: null,
+    trackInventory: true,
+    stockQuantity: 10,
+    allowDecimalQuantity: true,
+    unitConversions: [{ id: 'uc-thung', unit: 'Thùng', conversionFactor: 10, sellingPrice: 0 }],
+  }
+  const items = () => useCartStore.getState().tabs[1]?.items ?? []
+
+  it('1,255 kg × 45.000 đ ra 56.475 đ; cộng dồn không lệch số thực', () => {
+    useCartStore.getState().addItem(meat, 1.255)
+    expect(items()[0]).toMatchObject({ quantity: 1.255, lineTotal: 56_475 })
+    useCartStore.getState().addItem(meat, 0.1)
+    useCartStore.getState().addItem(meat, 0.2)
+    expect(items()[0]!.quantity).toBe(1.555)
+    useCartStore.getState().updateQuantity('prod-meat', 0.333)
+    expect(items()[0]).toMatchObject({ quantity: 0.333, lineTotal: 14_985 })
+  })
+
+  it('hàng không bật cờ bỏ qua số lẻ, giữ số cũ', () => {
+    const can = { ...meat, productId: 'prod-can', allowDecimalQuantity: false }
+    useCartStore.getState().addItem(can, 1.5)
+    expect(items()).toHaveLength(0)
+    useCartStore.getState().addItem(can, 2)
+    useCartStore.getState().updateQuantity('prod-can', 1.5)
+    expect(items()[0]!.quantity).toBe(2)
+  })
+
+  it('đổi sang đơn vị chỉ nhận số nguyên thì số lẻ về 1', () => {
+    useCartStore.getState().addItem(meat, 1.5)
+    useCartStore.getState().changeItemUnit('prod-meat', 'uc-thung')
+    expect(items()[0]).toMatchObject({ quantity: 1, unitConversionId: 'uc-thung' })
+  })
+})

@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { AlertTriangle, CheckCircle, ChevronRight } from 'lucide-react'
 
 import type { LowStockAlert, OverdueDebt } from '@kiotviet-lite/shared'
-import { formatVndWithSuffix } from '@kiotviet-lite/shared'
+import { formatQuantity, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -139,7 +139,7 @@ export function LowStockAlertCard({ data, isLoading, isError }: LowStockAlertCar
               </Badge>
             ) : (
               <span className="text-sm text-yellow-600 font-mono">
-                {alert.currentStock}/{alert.minStock}
+                {formatQuantity(alert.currentStock)}/{formatQuantity(alert.minStock)}
               </span>
             )}
           </div>

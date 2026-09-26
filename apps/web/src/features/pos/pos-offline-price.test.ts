@@ -30,6 +30,7 @@ describe('POS Ngoại tuyến: Giữ giá trên từng dòng và cảnh báo gi�
     costPrice: 30_000,
     imageUrl: null,
     trackInventory: true,
+    allowDecimalQuantity: false,
     stockQuantity: 20,
     hasVariants: false,
     categoryId: null,

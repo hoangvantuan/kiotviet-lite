@@ -6,6 +6,7 @@ import {
   amountByQtyRatio,
   formatQuantity,
   hasValidQuantityScale,
+  isQuantityAllowed,
   lineAmount,
   mulQty,
   parseQuantity,
@@ -91,5 +92,28 @@ describe('số lượng thập phân (ADR-0015)', () => {
     expect(parseQuantityInput('abc', { allowDecimal: true })).toBeNull()
     expect(parseQuantityInput('1,5,2', { allowDecimal: true })).toBeNull()
     expect(parseQuantityInput('', { allowDecimal: true })).toBeNull()
+  })
+
+  it('cờ bán số lẻ: đơn vị theo cờ của nó, số quy ra đơn vị gốc nguyên khi sản phẩm không bật', () => {
+    const can = { conversionFactor: 24, allowDecimalQuantity: true }
+    expect(isQuantityAllowed({ quantity: 1.5, productAllowsDecimal: true })).toBe(true)
+    expect(isQuantityAllowed({ quantity: 1.5, productAllowsDecimal: false })).toBe(false)
+    expect(isQuantityAllowed({ quantity: 2, productAllowsDecimal: false })).toBe(true)
+    expect(isQuantityAllowed({ quantity: 1.2345, productAllowsDecimal: true })).toBe(false)
+    // 0,5 thùng 24 lon = 12 lon được, 0,3 thùng = 7,2 lon thì không
+    expect(
+      isQuantityAllowed({ quantity: 0.5, productAllowsDecimal: false, unitConversion: can }),
+    ).toBe(true)
+    expect(
+      isQuantityAllowed({ quantity: 0.3, productAllowsDecimal: false, unitConversion: can }),
+    ).toBe(false)
+    // Đơn vị không bật cờ: chỉ số nguyên dù sản phẩm bật
+    expect(
+      isQuantityAllowed({
+        quantity: 0.5,
+        productAllowsDecimal: true,
+        unitConversion: { conversionFactor: 10 },
+      }),
+    ).toBe(false)
   })
 })

@@ -1,6 +1,8 @@
 import { type KeyboardEvent, useRef } from 'react'
 import { CheckCircle } from 'lucide-react'
 
+import { formatQuantity } from '@kiotviet-lite/shared'
+
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -155,7 +157,9 @@ export function OrderCompletionDialog({
                     <span className="text-muted-foreground"> ({item.variantName})</span>
                   )}
                 </span>
-                <span className="ml-2 shrink-0 text-muted-foreground">x{item.quantity}</span>
+                <span className="ml-2 shrink-0 text-muted-foreground">
+                  x{formatQuantity(item.quantity)}
+                </span>
                 <span className="ml-2 shrink-0 font-mono text-foreground">
                   {formatVndWithSuffix(item.lineTotal)}
                 </span>

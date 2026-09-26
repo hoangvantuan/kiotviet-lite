@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 
 import type { ExportFormat, ProfitRow } from '@kiotviet-lite/shared'
-import { formatVndWithSuffix } from '@kiotviet-lite/shared'
+import { formatQuantity, formatVndWithSuffix } from '@kiotviet-lite/shared'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -153,7 +153,9 @@ export function ProfitReport() {
                   <TableRow key={r.productId} className={r.isLoss ? 'bg-red-50 text-red-700' : ''}>
                     <TableCell>{r.productName}</TableCell>
                     <TableCell className="text-muted-foreground">{r.sku}</TableCell>
-                    <TableCell className="text-right font-mono">{r.quantity}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatQuantity(r.quantity)}
+                    </TableCell>
                     <TableCell className="text-right font-mono">
                       {formatVndWithSuffix(r.revenue)}
                     </TableCell>

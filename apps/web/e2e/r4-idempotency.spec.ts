@@ -433,7 +433,7 @@ test('Phiếu nhập: mất phản hồi rồi bấm lưu lại, một phiếu, 
     .dispatchEvent('click')
   const row = page.locator('table tbody tr').first()
   await expect(row).toContainText('Dưa leo')
-  await row.locator('input[type="number"]').first().fill('3')
+  await row.locator('input[aria-label="Số lượng"]').first().fill('3')
 
   await loseNextResponse(page, '/api/v1/purchase-orders$')
   const submit = page.getByRole('button', { name: /Lưu phiếu nhập/i }).first()
@@ -459,7 +459,10 @@ test('Phiếu trả: mất phản hồi rồi bấm xác nhận lại, một phi
   await page.goto(`/orders/${order.id}`)
   await page.getByRole('button', { name: /Trả hàng/i }).click()
   const dialog = page.getByRole('dialog')
-  await dialog.locator('input[type="number"]').first().fill('1')
+  await dialog
+    .getByRole('textbox', { name: /Số lượng trả/ })
+    .first()
+    .fill('1')
 
   await loseNextResponse(page, `/api/v1/orders/${order.id}/returns$`)
   const confirm = dialog.getByRole('button', { name: /Xác nhận trả hàng/i })

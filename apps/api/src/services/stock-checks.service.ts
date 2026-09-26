@@ -933,12 +933,16 @@ export async function getStockCheckById({
   }
 
   const itemRows = await db
-    .select()
+    .select({
+      item: stockCheckItems,
+      allowDecimalQuantity: products.allowDecimalQuantity,
+    })
     .from(stockCheckItems)
+    .leftJoin(products, eq(products.id, stockCheckItems.productId))
     .where(eq(stockCheckItems.stockCheckId, stockCheckId))
     .orderBy(asc(stockCheckItems.productNameSnapshot))
 
-  const items: StockCheckItemDetail[] = itemRows.map((it) => ({
+  const items: StockCheckItemDetail[] = itemRows.map(({ item: it, allowDecimalQuantity }) => ({
     id: it.id,
     productId: it.productId,
     variantId: it.variantId,
@@ -949,6 +953,7 @@ export async function getStockCheckById({
     actualQty: it.actualQty,
     diff: it.diff,
     note: it.note,
+    allowDecimalQuantity: allowDecimalQuantity ?? false,
   }))
 
   return {

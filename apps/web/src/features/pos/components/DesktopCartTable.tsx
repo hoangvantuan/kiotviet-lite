@@ -11,7 +11,10 @@ import {
   Trash2,
 } from 'lucide-react'
 
+import { addQty, formatQuantity, lineAmount, subQty } from '@kiotviet-lite/shared'
+
 import { CurrencyInput } from '@/components/shared/currency-input'
+import { QuantityInput } from '@/components/shared/quantity-input'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -22,7 +25,9 @@ import { formatVndWithSuffix } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 import {
   type CartItem as CartItemType,
+  cartItemAllowsDecimal,
   type DiscountType,
+  isCartQuantityAllowed,
   useCartStore,
 } from '@/stores/use-cart-store'
 
@@ -55,15 +60,10 @@ function DesktopCartRow({ item, index }: DesktopCartRowProps) {
   const [discountPopoverOpen, setDiscountPopoverOpen] = useState(false)
   const [notesPopoverOpen, setNotesPopoverOpen] = useState(false)
 
-  const [draftQty, setDraftQty] = useState<string>(String(item.quantity))
   const [draftDiscountType, setDraftDiscountType] = useState<DiscountType>(
     item.discountType ?? DISCOUNT_TYPE.AMOUNT,
   )
   const [draftNotes, setDraftNotes] = useState<string>(item.notes ?? '')
-
-  useEffect(() => {
-    setDraftQty(String(item.quantity))
-  }, [item.quantity])
 
   useEffect(() => {
     setDraftNotes(item.notes ?? '')
@@ -73,22 +73,16 @@ function DesktopCartRow({ item, index }: DesktopCartRowProps) {
     if (item.discountType) setDraftDiscountType(item.discountType)
   }, [item.discountType])
 
-  const gross = item.unitPrice * item.quantity
+  const gross = lineAmount(item.unitPrice, item.quantity)
+  const allowDecimal = cartItemAllowsDecimal(item)
   const hasLineDiscount = item.discountAmount > 0
   const overStock = item.trackInventory && item.quantity > item.stockQuantity
 
-  function commitQty() {
-    const parsed = Number(draftQty)
-    if (!Number.isFinite(parsed) || parsed <= 0 || !Number.isInteger(parsed)) {
-      setDraftQty(String(item.quantity))
-      return
-    }
-    if (parsed === item.quantity) return
-    if (!updateCartQuantity(item.id, parsed)) {
-      setDraftQty(String(item.quantity))
-      return
-    }
-    repriceOnQuantity(item.id, parsed)
+  function commitQty(qty: number) {
+    // Hàng không bật bán số lẻ chỉ nhận số nguyên, vượt tồn bị chặn: ô tự trả về số cũ
+    if (qty <= 0 || !isCartQuantityAllowed(item, qty)) return
+    if (!updateCartQuantity(item.id, qty)) return
+    repriceOnQuantity(item.id, qty)
   }
 
   function handleTypeChange(nextType: DiscountType) {
@@ -163,7 +157,7 @@ function DesktopCartRow({ item, index }: DesktopCartRowProps) {
                 <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
                 {item.stockQuantity <= 0
                   ? 'Hết hàng'
-                  : `Tồn: ${item.stockQuantity}${item.unitName ? ` ${item.unitName}` : ''}`}
+                  : `Tồn: ${formatQuantity(item.stockQuantity)}${item.unitName ? ` ${item.unitName}` : ''}`}
               </span>
             )}
 
@@ -219,33 +213,29 @@ function DesktopCartRow({ item, index }: DesktopCartRowProps) {
           <button
             type="button"
             onClick={() => {
-              updateCartQuantity(item.id, item.quantity - 1)
-              if (item.quantity - 1 > 0) repriceOnQuantity(item.id, item.quantity - 1)
+              const next = subQty(item.quantity, 1)
+              updateCartQuantity(item.id, next)
+              if (next > 0) repriceOnQuantity(item.id, next)
             }}
             className="flex h-8 w-8 items-center justify-center rounded border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             aria-label="Giảm số lượng"
           >
             <Minus className="h-3.5 w-3.5" />
           </button>
-          <Input
+          <QuantityInput
             id={`desktop-qty-${item.id}`}
-            type="number"
-            inputMode="numeric"
-            min={1}
-            value={draftQty}
-            onChange={(e) => setDraftQty(e.target.value)}
-            onBlur={commitQty}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-            }}
+            value={item.quantity}
+            allowDecimal={allowDecimal}
+            onCommit={commitQty}
             className="h-8 w-14 text-center font-mono text-xs px-1"
             aria-label="Số lượng"
           />
           <button
             type="button"
             onClick={() => {
-              if (updateCartQuantity(item.id, item.quantity + 1)) {
-                repriceOnQuantity(item.id, item.quantity + 1)
+              const next = addQty(item.quantity, 1)
+              if (updateCartQuantity(item.id, next)) {
+                repriceOnQuantity(item.id, next)
               }
             }}
             className="flex h-8 w-8 items-center justify-center rounded border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"

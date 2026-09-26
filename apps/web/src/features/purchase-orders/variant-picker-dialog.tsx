@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import type { ProductDetail, VariantItem } from '@kiotviet-lite/shared'
+import { formatQuantity } from '@kiotviet-lite/shared'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -103,7 +104,7 @@ export function VariantPickerDialog({
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium truncate">{buildLabel(v)}</span>
                       <span className="text-xs text-muted-foreground tabular-nums">
-                        Tồn: {v.stockQuantity}
+                        Tồn: {formatQuantity(v.stockQuantity)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2 mt-0.5">

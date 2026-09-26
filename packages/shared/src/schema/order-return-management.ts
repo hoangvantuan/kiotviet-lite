@@ -75,6 +75,8 @@ export interface ReturnableItem {
   orderDiscountAllocated: number
   /** Số đơn vị gốc trong một đơn vị bán; trả 1 đơn vị bán hoàn chừng này vào kho */
   conversionFactor: number
+  /** Được trả số lượng lẻ (dòng gốc lẻ hoặc mặt hàng bán số lẻ, ADR-0015) */
+  allowDecimalQuantity: boolean
 }
 
 export interface OrderReturnItemDetail {

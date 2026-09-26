@@ -18,6 +18,7 @@ function item(overrides: Partial<ReturnableItem>): ReturnableItem {
     lineTotal: 135_000,
     orderDiscountAllocated: 27_000,
     conversionFactor: 1,
+    allowDecimalQuantity: false,
     ...overrides,
   }
 }

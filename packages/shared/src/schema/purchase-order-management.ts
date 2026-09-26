@@ -82,6 +82,8 @@ export const purchaseOrderItemDetailSchema = z.object({
   stockAfter: z.number().nullable(),
   // KHO-11: lũy kế đã trả NCC, theo đơn vị ghi trên chứng từ
   returnedQuantity: z.number(),
+  // ADR-0015: được trả số lượng lẻ ở đơn vị của dòng (dòng gốc lẻ, hoặc đơn vị đang bán số lẻ)
+  allowDecimalQuantity: z.boolean(),
 })
 
 export const purchaseOrderListItemSchema = z.object({

@@ -85,6 +85,26 @@ export function isWholeQuantity(value: number): boolean {
 }
 
 /**
+ * Quy tắc cờ bán số lẻ (ADR-0015 mục 2), dùng chung máy chủ và POS: số lượng theo đơn vị đã chọn
+ * theo cờ của đơn vị đó (đơn vị gốc theo cờ sản phẩm), và số quy ra đơn vị gốc phải nguyên khi sản
+ * phẩm không bật cờ. Không kiểm dấu và giới hạn trên.
+ */
+export function isQuantityAllowed(args: {
+  quantity: number
+  productAllowsDecimal: boolean
+  unitConversion?: { conversionFactor: number; allowDecimalQuantity?: boolean } | null
+}): boolean {
+  const { quantity, productAllowsDecimal, unitConversion } = args
+  if (!hasValidQuantityScale(quantity)) return false
+  const unitAllowsDecimal = unitConversion
+    ? (unitConversion.allowDecimalQuantity ?? false)
+    : productAllowsDecimal
+  if (!unitAllowsDecimal && !isWholeQuantity(quantity)) return false
+  const baseQuantity = unitConversion ? mulQty(quantity, unitConversion.conversionFactor) : quantity
+  return productAllowsDecimal || isWholeQuantity(baseQuantity)
+}
+
+/**
  * Chia làm tròn nửa lên (nửa xa số 0) hai số nguyên BigInt. Kết quả là đồng.
  */
 export function divRoundHalfUp(numerator: bigint, denominator: bigint): number {

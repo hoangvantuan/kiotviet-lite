@@ -52,7 +52,7 @@ test.describe('Kiểm thử E2E: Nhập hàng và Cập nhật Tồn kho (Purcha
     // 6. Nhập số lượng nhập là 20
     const tableRow = page.locator('table tbody tr').first()
     await expect(tableRow).toBeVisible({ timeout: 10000 })
-    const qtyInput = tableRow.locator('input[type="number"]').first()
+    const qtyInput = tableRow.locator('input[aria-label="Số lượng"]').first()
     await expect(qtyInput).toBeVisible({ timeout: 5000 })
     await qtyInput.fill('20')
 
