@@ -388,19 +388,21 @@ describe('Returns API', () => {
   })
 
   // ------- Test: staff gọi API → 403 -------
-  it('staff không có quyền tạo return → 403', async () => {
+  // TIEN-111: nhân viên được lập phiếu trả, nhưng không thấy giá vốn (quyết định 3)
+  it('staff tạo return hoàn đúng kênh → 201', async () => {
+    const itemsRes = await getReturnableItems(env.paidOrderId, env.base.staff.authHeader)
+    expect(itemsRes.status).toBe(200)
+    const { data: items } = (await itemsRes.json()) as { data: Array<Record<string, unknown>> }
+    for (const item of items) {
+      expect(Object.keys(item).some((k) => /cost/i.test(k))).toBe(false)
+    }
+
     const res = await createReturn(
       env.paidOrderId,
-      { items: [{ orderItemId: 'dummy-id', quantity: 1, reason: 'defective' }] },
+      { items: [{ orderItemId: items[0]!.orderItemId, quantity: 1, reason: 'defective' }] },
       env.base.staff.authHeader,
     )
-    expect(res.status).toBe(403)
-  })
-
-  // ------- Test: staff xem returnable-items → 403 -------
-  it('staff không có quyền xem returnable-items → 403', async () => {
-    const res = await getReturnableItems(env.paidOrderId, env.base.staff.authHeader)
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(201)
   })
 
   // ------- Test: multi-tenant isolation -------

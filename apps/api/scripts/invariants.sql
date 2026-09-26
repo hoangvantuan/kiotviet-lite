@@ -144,6 +144,28 @@ JOIN (
 ) x ON x.customer_id = c.id
 WHERE x.applied <> x.used;
 
+-- I10. Dòng sổ kho có tham chiếu phải trỏ tới chứng từ có thật cùng cửa hàng, đúng loại (POS-18).
+-- Dòng chứng từ cũ không khớp được ghi chú lúc điền (reference_id NULL) không kiểm ở đây.
+INSERT INTO invariant_violations
+SELECT 'I10_inventory_reference', t.store_id, 'inventory_transaction ' || t.id,
+       format('type=%s, reference=%s/%s', t.type, t.reference_type, t.reference_id)
+FROM inventory_transactions t
+WHERE t.reference_id IS NOT NULL
+  AND NOT CASE t.reference_type
+    WHEN 'order' THEN t.type IN ('sale', 'order_cancel') AND EXISTS (
+      SELECT 1 FROM orders o WHERE o.id = t.reference_id AND o.store_id = t.store_id)
+    WHEN 'order_return' THEN t.type = 'return' AND EXISTS (
+      SELECT 1 FROM order_returns r WHERE r.id = t.reference_id AND r.store_id = t.store_id)
+    WHEN 'purchase_order' THEN t.type IN ('purchase', 'purchase_cancel') AND EXISTS (
+      SELECT 1 FROM purchase_orders po WHERE po.id = t.reference_id AND po.store_id = t.store_id)
+    WHEN 'purchase_return' THEN t.type = 'purchase_return' AND EXISTS (
+      SELECT 1 FROM purchase_returns pr WHERE pr.id = t.reference_id AND pr.store_id = t.store_id)
+    WHEN 'stock_check' THEN t.type = 'stock_check' AND EXISTS (
+      SELECT 1 FROM stock_checks sc WHERE sc.id = t.reference_id AND sc.store_id = t.store_id)
+    WHEN 'product' THEN t.type = 'initial_stock' AND t.reference_id = t.product_id
+    ELSE false
+  END;
+
 \pset footer on
 SELECT check_name, count(*) AS violations
 FROM invariant_violations GROUP BY check_name ORDER BY check_name;

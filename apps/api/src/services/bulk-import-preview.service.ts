@@ -12,6 +12,7 @@ import {
   createSupplierSchema,
   customerGroups,
   customers,
+  formatVndWithSuffix,
   products,
   suppliers,
   updateCustomerSchema,
@@ -116,6 +117,8 @@ const fields = {
 } as const
 const keyField = { products: 'sku', customers: 'code', suppliers: 'code' } as const
 const numericFields = new Set(['sellingPrice', 'costPrice', 'weight', 'minStock', 'debtLimit'])
+// GL-24: cột tiền hiện trong dữ liệu mẫu có phân cách hàng nghìn
+const moneyFields = new Set(['sellingPrice', 'costPrice', 'debtLimit'])
 const boolField = 'trackInventory'
 const categoryColumn = 'Danh mục'
 const brandColumn = 'Thương hiệu'
@@ -578,6 +581,8 @@ export async function previewBulkImport({
         for (const issue of validated.error.issues) {
           const field = String(issue.path[0] ?? '')
           const column = expected[fields[kind].indexOf(field as never)] ?? keyName
+          // GL-23: ô đã báo lỗi kiểu lúc đọc thì bị bỏ khỏi input; không báo thêm "Thiếu giá trị"
+          if (rowErrors.some((error) => error.column === column)) continue
           const message =
             issue.code === 'invalid_type'
               ? issue.received === 'undefined'
@@ -712,7 +717,9 @@ export async function previewBulkImport({
           ? '__XOA__ (xóa)'
           : field === 'groupId' && typeof value === 'string'
             ? (groupRows.find((group) => group.id === value)?.name ?? value)
-            : value
+            : moneyFields.has(field) && typeof value === 'number'
+              ? formatVndWithSuffix(value)
+              : value
     }
     if (kind === 'products') {
       if (item.categoryPath !== undefined)

@@ -62,6 +62,72 @@ export function defaultRefundMethod(order: {
   }
 }
 
+/** Số tiền theo từng kênh hoàn tiền (QR tính vào chuyển khoản) */
+export type RefundChannelAmounts = Record<RefundMethod, number>
+
+/** Kênh hoàn tiền tương ứng một kênh thu: QR hoàn qua chuyển khoản */
+export function refundChannelOf(method: MoneyMethod): RefundMethod {
+  return method === 'cash' ? 'cash' : 'transfer'
+}
+
+/**
+ * TIEN-111: số khách đã trả cho đơn lúc bán theo từng kênh, cùng cách tính dòng tiền
+ * (apps/api/src/lib/cash-flow.ts): đơn tiền mặt, chuyển khoản, QR là cả tổng đơn; đơn kết hợp lấy
+ * tiền mặt trừ tiền thối; đơn ghi nợ lấy phần trả ngay.
+ */
+export function orderPaidByChannel(order: {
+  paymentMethod: string
+  total: number
+  cashAmount: number | null
+  transferAmount: number | null
+  change: number
+}): RefundChannelAmounts {
+  switch (order.paymentMethod) {
+    case 'cash':
+      return { cash: order.total, transfer: 0 }
+    case 'transfer':
+    case 'qr':
+      return { cash: 0, transfer: order.total }
+    case 'combined':
+      return {
+        cash: Math.max(0, (order.cashAmount ?? 0) - order.change),
+        transfer: order.transferAmount ?? 0,
+      }
+    case 'debt':
+      return { cash: order.cashAmount ?? 0, transfer: order.transferAmount ?? 0 }
+    default:
+      return { cash: 0, transfer: 0 }
+  }
+}
+
+/**
+ * TIEN-111: số còn hoàn được qua từng kênh mà không vượt quyền: khách đã trả qua kênh đó (lúc bán
+ * cộng phiếu thu nợ của đơn) trừ phần các phiếu trả trước đã hoàn qua kênh đó.
+ */
+export function refundableByChannel(
+  paid: RefundChannelAmounts,
+  refunded: RefundChannelAmounts,
+): RefundChannelAmounts {
+  return {
+    cash: Math.max(0, paid.cash - refunded.cash),
+    transfer: Math.max(0, paid.transfer - refunded.transfer),
+  }
+}
+
+/**
+ * TIEN-111: hoàn qua một kênh nhiều hơn số còn hoàn được qua kênh đó là vượt quyền (ví dụ đơn
+ * 10.000 tiền mặt cộng 990.000 chuyển khoản mà chi 1.000.000 tiền mặt từ két). Người không có
+ * `orders.returnOverride` cần người duyệt nhập PIN (R1). Máy chủ và hộp trả hàng dùng chung hàm này.
+ */
+export function refundExceedsChannel(
+  refundable: RefundChannelAmounts,
+  method: MoneyMethod | null,
+  amount: number,
+): boolean {
+  if (method === null || amount <= 0) return false
+  return amount > refundable[refundChannelOf(method)]
+}
+
 // ---------------------------------------------------------------------------
 // Ca bán hàng (POS-06)
 // ---------------------------------------------------------------------------

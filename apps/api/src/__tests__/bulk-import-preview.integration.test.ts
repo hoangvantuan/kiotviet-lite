@@ -192,6 +192,38 @@ describe('bulk import preview over HTTP (PGlite)', () => {
     expect((await env.db.select({ count: count() }).from(customers))[0]?.count).toBe(0)
   })
 
+  // GL-23: ô giá sai kiểu chỉ báo một lỗi, không báo thêm "Thiếu giá trị"
+  // GL-24: dữ liệu mẫu hiện tiền có phân cách hàng nghìn
+  it('reports one error per bad price cell and formats money in the sample', async () => {
+    const bad = await payload(
+      await upload(
+        app,
+        'products',
+        workbook('products', [['SP-LE', 'Ống nhựa', '', '', '', 12.5]]),
+        'create-only',
+        env.owner.authHeader.Authorization,
+      ),
+    )
+    const priceErrors = bad.data.errors.filter(
+      (error: { column: string }) => error.column === 'Giá bán',
+    )
+    expect(priceErrors.map((error: { message: string }) => error.message)).toEqual([
+      'Phải là số nguyên XLSX, không có dấu phân cách hoặc công thức',
+    ])
+
+    const good = await payload(
+      await upload(
+        app,
+        'products',
+        workbook('products', [['SP-TIEN', 'Ống đồng', '', '', '', 450000]]),
+        'create-only',
+        env.owner.authHeader.Authorization,
+      ),
+    )
+    expect(good.data.errors).toEqual([])
+    expect(good.data.sample[0]?.['Giá bán']).toBe('450.000\u00A0đ')
+  })
+
   it('distinguishes create-only conflicts, upsert no-ops, blank retention and explicit nullable clears', async () => {
     await env.db.insert(suppliers).values({
       storeId: env.storeId,

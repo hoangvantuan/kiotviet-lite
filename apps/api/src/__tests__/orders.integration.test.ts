@@ -231,7 +231,8 @@ describe('Orders API Integration Tests', () => {
   })
 
   describe('GET /:id/returnable-items & POST /:id/returns (Phân quyền)', () => {
-    it('Staff bị chặn 403 khi gọi GET /:id/returnable-items', async () => {
+    // TIEN-111: nhân viên được lập phiếu trả nên xem được hàng có thể trả, không kèm giá vốn
+    it('Staff gọi được GET /:id/returnable-items, không thấy giá vốn', async () => {
       const prod = await createProduct(env, { sellingPrice: 50_000 })
       const { order } = await createCompletedOrder(env, prod.id)
 
@@ -239,7 +240,8 @@ describe('Orders API Integration Tests', () => {
         method: 'GET',
         headers: env.staff.authHeader,
       })
-      expect(res.status).toBe(403)
+      expect(res.status).toBe(200)
+      expect(JSON.stringify(await res.json())).not.toMatch(/cost/i)
     })
 
     it('Manager và Owner được phép gọi GET /:id/returnable-items', async () => {

@@ -40,7 +40,11 @@ export function useReturnableItemsQuery(orderId: string | undefined) {
     queryKey: [...ORDERS_KEY, 'returnable-items', orderId],
     queryFn: async () => {
       const response = await getReturnableItemsApi(orderId as string)
-      return { items: response.data, prepaymentApplied: response.meta?.prepaymentApplied ?? 0 }
+      return {
+        items: response.data,
+        prepaymentApplied: response.meta?.prepaymentApplied ?? 0,
+        refundableByChannel: response.meta?.refundableByChannel ?? null,
+      }
     },
     enabled: Boolean(orderId),
   })

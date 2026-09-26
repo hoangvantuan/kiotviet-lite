@@ -83,11 +83,12 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
     const sidebar = page.locator('aside')
     await expect(sidebar).toBeVisible()
 
-    // Staff chỉ được thấy các menu: Tổng quan, Bán hàng, Đơn hàng, Cài đặt
+    // Staff chỉ được thấy các menu: Tổng quan, Bán hàng, Đơn hàng, Phiếu thu (TIEN-111), Cài đặt
     const allowedStaffMenuPatterns = [
       /Tổng quan|Tong quan/i,
       /Bán hàng|Ban hang/i,
       /Đơn hàng|Don hang/i,
+      /Phiếu thu|Phieu thu/i,
       /Cài đặt|Cai dat/i,
     ]
     for (const pattern of allowedStaffMenuPatterns) {
@@ -99,7 +100,6 @@ test.describe('Kiểm thử E2E: Đăng nhập và Phân quyền hiển thị Me
       /Sản phẩm|San pham/i,
       /Danh mục|Danh muc/i,
       /Khách hàng|Khach hang/i,
-      /Phiếu thu|Phieu thu/i,
       /Bảng giá|Bang gia/i,
       /Nhà cung cấp|Nha cung cap/i,
       /Phiếu nhập hàng|Phieu nhap hang/i,

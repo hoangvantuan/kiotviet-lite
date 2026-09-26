@@ -852,6 +852,8 @@ async function insertVariantsBatch({
         quantity: original.stockQuantity,
         createdBy: actor.userId,
         note: 'Khởi tạo tồn kho biến thể',
+        referenceType: 'product',
+        referenceId: productId,
       })
 
       await logAction({
@@ -994,6 +996,8 @@ export async function createProduct({
         quantity: initialStock,
         createdBy: actor.userId,
         note: 'Khởi tạo tồn kho lúc tạo sản phẩm',
+        referenceType: 'product',
+        referenceId: created.id,
       })
 
       await logAction({
@@ -1720,6 +1724,8 @@ async function applyVariantDiff({
           quantity: original.stockQuantity,
           createdBy: actor.userId,
           note: 'Khởi tạo tồn kho biến thể',
+          referenceType: 'product',
+          referenceId: productId,
         })
 
         await logAction({

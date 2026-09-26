@@ -50,6 +50,7 @@ export const approvalPermissionSchema = z.enum([
   'pos.editPriceBelowCost',
   'pos.overrideDebtLimit',
   'documents.cancel',
+  'orders.returnOverride',
 ])
 
 // userId bỏ trống: kiểm PIN của chính người đang đăng nhập.

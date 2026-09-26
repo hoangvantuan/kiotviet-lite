@@ -37,7 +37,10 @@ export const customers = pgTable(
     debtLimit: bigint({ mode: 'number' }),
     debtUnlimited: boolean().notNull().default(false),
     groupId: uuid().references(() => customerGroups.id, { onDelete: 'set null' }),
+    // TIEN-105: "Tổng mua" và "Số đơn" không lưu cột, tính khi đọc từ đơn còn hiệu lực trừ trả hàng.
+    /** @deprecated TIEN-105: không đọc, không ghi. Giữ cột cho API cũ chạy song song lúc triển khai, xóa ở bản sau. */
     totalPurchased: bigint({ mode: 'number' }).notNull().default(0),
+    /** @deprecated TIEN-105: không đọc, không ghi. Giữ cột cho API cũ chạy song song lúc triển khai, xóa ở bản sau. */
     purchaseCount: integer().notNull().default(0),
     currentDebt: bigint({ mode: 'number' }).notNull().default(0),
     deletedAt: timestamp({ withTimezone: true }),

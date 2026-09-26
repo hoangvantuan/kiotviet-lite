@@ -500,6 +500,7 @@ describe('PATCH /products variants CRUD', () => {
       productId: created.id,
       variantId,
       type: 'manual_adjustment',
+      referenceType: 'manual',
       quantity: 5,
       createdBy: env.base.owner.id,
     })
@@ -553,6 +554,7 @@ describe('PATCH /products variants CRUD', () => {
       productId: created.id,
       variantId,
       type: 'manual_adjustment',
+      referenceType: 'manual',
       quantity: 5,
       createdBy: env.base.owner.id,
     })
@@ -669,6 +671,7 @@ describe('Bật/Tắt biến thể', () => {
       productId: created.body.data.id,
       variantId,
       type: 'manual_adjustment',
+      referenceType: 'manual',
       quantity: 5,
       createdBy: env.base.owner.id,
     })

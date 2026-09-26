@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm'
+import { randomUUID } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
@@ -46,7 +47,12 @@ interface OldLineInput {
 }
 
 /** Ghi một phiếu nhập đúng như mã trước khi sửa KHO-04 đã ghi (unit_cost null, sổ ghi đơn giá niêm yết). */
-async function insertOldPurchaseOrder(code: string, lines: OldLineInput[], discountTotal = 0) {
+async function insertOldPurchaseOrder(
+  code: string,
+  lines: OldLineInput[],
+  discountTotal = 0,
+  ledgerNote: string | null = code,
+) {
   const subtotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice - (l.discountAmount ?? 0), 0)
   const at = tick()
   const [po] = await env.db
@@ -90,7 +96,9 @@ async function insertOldPurchaseOrder(code: string, lines: OldLineInput[], disco
       unitCost: l.unitPrice,
       costAfter: l.costAfter,
       stockAfter: l.stockAfter,
-      note: code,
+      note: ledgerNote,
+      referenceType: 'purchase_order',
+      referenceId: po!.id,
       createdBy: env.owner.id,
       createdAt: at,
     })
@@ -105,6 +113,8 @@ async function insertSale(productId: string, quantity: number, stockAfter: numbe
     quantity: -quantity,
     stockAfter,
     note: 'HD-TEST',
+    referenceType: 'order',
+    referenceId: randomUUID(),
     createdBy: env.owner.id,
     createdAt: tick(),
   })
@@ -382,6 +392,24 @@ describe('Script tính lại giá vốn bị thổi (KHO-04, quyết định 7)'
       .where(and(eq(auditLogs.action, 'inventory.cost_recalculated'), eq(auditLogs.targetId, p.id)))
     expect(audit?.userAgent).toBe('script cost:recalc')
     expect((audit?.changes as { performedBy?: string }).performedBy).toBe('script cost:recalc')
+  })
+
+  it('Ghép giao dịch sổ với dòng phiếu theo reference_id, không theo ghi chú (POS-18)', async () => {
+    const p = await createProduct(env, { currentStock: 40, costPrice: 31_600 })
+    // Ghi chú sổ không trùng mã phiếu nhưng reference_id trỏ đúng phiếu: vẫn ghép được chiết khấu
+    await insertOldPurchaseOrder(
+      'PN-OLD-0101',
+      [{ productId: p.id, quantity: 10, unitPrice: 30_000, costAfter: 31_600, stockAfter: 40 }],
+      30_000,
+      'Nhập bổ sung',
+    )
+    const row = (await recalcInflatedPurchaseCosts({ db: env.db, storeId: env.storeId })).rows.find(
+      (r) => r.productId === p.id,
+    )!
+    // Phiếu cũ bị bỏ 30.000 trên 40 đơn vị: δ 750
+    expect(row.status).toBe('fixable')
+    expect(row.diffPerUnit).toBe(750)
+    expect(row.correctedCost).toBe(30_850)
   })
 
   it('Phiếu lập theo quy tắc mới không bị tính lại', async () => {

@@ -170,7 +170,7 @@ const customerDetailRoute = createRoute({
 const receiptsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/receipts',
-  beforeLoad: requirePermissionGuard('customers.manage'),
+  beforeLoad: requirePermissionGuard('receipts.create'),
   component: ReceiptsPage,
 })
 

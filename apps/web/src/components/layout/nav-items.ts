@@ -65,7 +65,7 @@ export const NAV_ITEMS: NavItem[] = [
     path: '/receipts',
     label: 'Phiếu thu',
     icon: HandCoins,
-    requiredPermission: 'customers.manage',
+    requiredPermission: 'receipts.create',
   },
   { path: '/pricing', label: 'Bảng giá', icon: Tags, requiredPermission: 'pricing.manage' },
   {

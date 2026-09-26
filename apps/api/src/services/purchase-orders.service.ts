@@ -474,6 +474,8 @@ export async function createPurchaseOrder({
         costAfter: p.costAfter,
         stockAfter: p.stockAfter,
         note: code,
+        referenceType: 'purchase_order',
+        referenceId: createdId,
         createdBy: actor.userId,
       })
     }

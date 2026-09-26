@@ -653,6 +653,8 @@ export async function confirmStockCheck({
         costAfter: p.productCostPrice,
         stockAfter: p.newStock,
         note: `Kiểm kho ${header.code}`,
+        referenceType: 'stock_check',
+        referenceId: stockCheckId,
         createdBy: actor.userId,
       })
 

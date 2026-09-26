@@ -65,12 +65,14 @@ export type ApprovalPermission =
   | 'pos.editPriceBelowCost'
   | 'pos.overrideDebtLimit'
   | 'documents.cancel'
+  | 'orders.returnOverride'
 
 export const APPROVAL_PERMISSIONS: readonly ApprovalPermission[] = [
   'pos.editPrice',
   'pos.editPriceBelowCost',
   'pos.overrideDebtLimit',
   'documents.cancel',
+  'orders.returnOverride',
 ]
 
 const PERMISSION_LABELS: Record<ApprovalPermission, string> = {
@@ -78,6 +80,7 @@ const PERMISSION_LABELS: Record<ApprovalPermission, string> = {
   'pos.editPriceBelowCost': 'bán dưới giá vốn',
   'pos.overrideDebtLimit': 'duyệt vượt hạn mức nợ',
   'documents.cancel': 'hủy chứng từ',
+  'orders.returnOverride': 'hoàn tiền trả hàng qua kênh khác',
 }
 
 // ---------------------------------------------------------------------------

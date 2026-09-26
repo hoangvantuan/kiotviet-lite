@@ -1044,9 +1044,7 @@ export async function seed(db: Db) {
       name: c.name,
       phone: c.phone,
       groupId: (c as Record<string, unknown>).group as string | undefined,
-      // Seed không có đơn bán nên chưa có tổng mua (tránh số liệu không truy ra chứng từ)
-      totalPurchased: 0,
-      purchaseCount: 0,
+      // TIEN-105: tổng mua, số đơn tính từ đơn bán nên luôn truy ra chứng từ
       email: `${c.phone}@test.vn`,
       address: 'TP.HCM',
     })
@@ -1196,6 +1194,8 @@ export async function seed(db: Db) {
       costAfter: item.cost,
       stockAfter: opening,
       note: 'Tồn đầu kỳ (dữ liệu mẫu)',
+      referenceType: 'product',
+      referenceId: item.productId,
       createdBy: ownerId,
       createdAt: openingAt,
     })
@@ -1255,6 +1255,8 @@ export async function seed(db: Db) {
         costAfter: l.item.cost,
         stockAfter: l.stockAfter,
         note: po.code,
+        referenceType: 'purchase_order',
+        referenceId: poId,
         createdBy: ownerId,
         createdAt: purchaseAt,
       })

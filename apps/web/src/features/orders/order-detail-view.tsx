@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { ChevronLeft, RotateCcw } from 'lucide-react'
 
-import { moneyMethodLabel, RETURN_REASON_LABELS } from '@kiotviet-lite/shared'
+import { hasPermission, moneyMethodLabel, RETURN_REASON_LABELS } from '@kiotviet-lite/shared'
 
 import { QueryErrorState } from '@/components/shared/query-error-state'
 import { Badge } from '@/components/ui/badge'
@@ -53,7 +53,7 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
   const returnsQuery = useOrderReturnsQuery(orderId)
   const [returnOpen, setReturnOpen] = useState(false)
   const user = useAuthStore((s) => s.user)
-  const canReturn = user?.role === 'owner' || user?.role === 'manager'
+  const canReturn = !!user && hasPermission(user.role, 'orders.return')
   const { printOrder } = usePrintOrder()
   const printSettingsQuery = usePrintSettingsQuery()
   const storeInfo = useInvoiceStoreInfo()

@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 
 import {
   type CancelDocumentInput,
@@ -184,8 +184,9 @@ export async function cancelOrder({
       })
     }
 
-    // Hoàn tồn đúng như lúc bán đã trừ: đọc các dòng 'sale' của đơn trong sổ giao dịch kho (ghi chú
-    // là mã đơn), không dựa vào cờ theo dõi tồn hiện tại. Sản phẩm bật hay tắt theo dõi tồn sau khi
+    // Hoàn tồn đúng như lúc bán đã trừ: đọc các dòng 'sale' của đơn trong sổ giao dịch kho (theo
+    // tham chiếu chứng từ POS-18, dòng cũ đã được migration điền từ ghi chú), không dựa vào cờ theo
+    // dõi tồn hiện tại. Sản phẩm bật hay tắt theo dõi tồn sau khi
     // bán thì vẫn hoàn đúng số đã trừ, hàng không trừ kho lúc bán thì không cộng vào.
     const sold = await tx
       .select({
@@ -198,10 +199,8 @@ export async function cancelOrder({
         and(
           eq(inventoryTransactions.storeId, actor.storeId),
           eq(inventoryTransactions.type, 'sale'),
-          inArray(inventoryTransactions.note, [
-            order.orderNumber,
-            `${order.orderNumber} (offline sync)`,
-          ]),
+          eq(inventoryTransactions.referenceType, 'order'),
+          eq(inventoryTransactions.referenceId, order.id),
         ),
       )
       .groupBy(inventoryTransactions.productId, inventoryTransactions.variantId)
@@ -265,6 +264,8 @@ export async function cancelOrder({
         quantity: restoreQty,
         stockAfter: newStock,
         note: `Hủy ${order.orderNumber}`,
+        referenceType: 'order',
+        referenceId: order.id,
         createdBy: actor.userId,
       })
     }

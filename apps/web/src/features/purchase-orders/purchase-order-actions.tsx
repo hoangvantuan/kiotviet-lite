@@ -105,13 +105,13 @@ export function PurchaseOrderActions({ order }: { order: PurchaseOrderDetail }) 
         description={
           <>
             <p>
-              Hàng đã nhập được rút khỏi kho, giá vốn tính lại như chưa nhập, nợ phải trả NCC giảm
-              phần còn nợ của phiếu.
+              Hàng đã nhập được rút khỏi kho, giá vốn tính lại như chưa nhập, nợ phải trả nhà cung
+              cấp giảm phần còn nợ của phiếu.
             </p>
             {order.initialPaidAmount > 0 && (
               <p>
                 Phần đã trả lúc nhập {formatVndWithSuffix(order.initialPaidAmount)} ghi thành tiền
-                NCC phải hoàn.
+                nhà cung cấp phải hoàn.
               </p>
             )}
             <p>Tồn kho hiện tại không đủ để rút lại (hàng đã bán) thì không hủy được.</p>
@@ -138,7 +138,7 @@ export function PurchaseOrderActions({ order }: { order: PurchaseOrderDetail }) 
       >
         {order.initialPaidAmount > 0 && (
           <RefundMethodFields
-            label="NCC hoàn tiền qua"
+            label="Nhà cung cấp hoàn tiền qua"
             value={cancelRefundMethod}
             onChange={setCancelRefundMethod}
             shiftChoice={cancelShiftChoice}
@@ -206,7 +206,7 @@ function PurchaseReturnDialog({ open, onOpenChange, order }: PurchaseReturnDialo
       const parts = [
         r.debtReductionAmount > 0 ? `giảm nợ ${formatVndWithSuffix(r.debtReductionAmount)}` : '',
         r.supplierRefundAmount > 0
-          ? `NCC hoàn ${formatVndWithSuffix(r.supplierRefundAmount)} (${moneyMethodLabel(r.refundMethod)})`
+          ? `Nhà cung cấp hoàn ${formatVndWithSuffix(r.supplierRefundAmount)} (${moneyMethodLabel(r.refundMethod)})`
           : '',
       ].filter(Boolean)
       showSuccess(`Đã tạo phiếu trả ${r.code}${parts.length ? `, ${parts.join(', ')}` : ''}`)
@@ -223,7 +223,7 @@ function PurchaseReturnDialog({ open, onOpenChange, order }: PurchaseReturnDialo
           <DialogTitle>Trả hàng nhập theo phiếu {order.code}</DialogTitle>
           <DialogDescription>
             Trả theo giá thực nhập của dòng (sau chiết khấu). Hàng trả giảm tồn kho, giảm nợ phải
-            trả NCC; phần vượt số còn nợ ghi thành tiền NCC phải hoàn.
+            trả nhà cung cấp; phần vượt số còn nợ ghi thành tiền nhà cung cấp phải hoàn.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -282,7 +282,7 @@ function PurchaseReturnDialog({ open, onOpenChange, order }: PurchaseReturnDialo
           </div>
           {refundEstimate > 0 && (
             <RefundMethodFields
-              label={`NCC hoàn ${formatVndWithSuffix(refundEstimate)} qua`}
+              label={`Nhà cung cấp hoàn ${formatVndWithSuffix(refundEstimate)} qua`}
               value={refundMethod}
               onChange={setRefundMethod}
               shiftChoice={shiftChoice}
@@ -326,7 +326,7 @@ export function PurchaseOrderCancelledNotice({ order }: { order: PurchaseOrderDe
       <p className="mt-1 text-xs">
         Nợ phải trả giảm {formatVndWithSuffix(order.cancelDebtReduction)}
         {order.cancelSupplierRefund > 0
-          ? `, NCC hoàn ${formatVndWithSuffix(order.cancelSupplierRefund)} (${moneyMethodLabel(order.cancelRefundMethod)})`
+          ? `, nhà cung cấp hoàn ${formatVndWithSuffix(order.cancelSupplierRefund)} (${moneyMethodLabel(order.cancelRefundMethod)})`
           : ''}
         .
       </p>
@@ -350,7 +350,7 @@ export function PurchaseReturnsSection({ order }: { order: PurchaseOrderDetail }
             {r.createdByName ? ` bởi ${r.createdByName}` : ''}. Giảm nợ{' '}
             {formatVndWithSuffix(r.debtReductionAmount)}
             {r.supplierRefundAmount > 0
-              ? `, NCC hoàn ${formatVndWithSuffix(r.supplierRefundAmount)} (${moneyMethodLabel(r.refundMethod)})`
+              ? `, nhà cung cấp hoàn ${formatVndWithSuffix(r.supplierRefundAmount)} (${moneyMethodLabel(r.refundMethod)})`
               : ''}
           </p>
           <ul className="mt-1 text-xs">

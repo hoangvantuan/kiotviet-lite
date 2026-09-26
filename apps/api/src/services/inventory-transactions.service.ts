@@ -116,6 +116,9 @@ export async function recordPurchaseTransaction({
         costAfter,
         stockAfter,
         note: input.note ?? null,
+        // Nhập tay ngoài phiếu nhập: không có chứng từ gốc
+        referenceType: 'manual',
+        referenceId: null,
         createdBy: actor.userId,
       })
       .returning()
@@ -245,6 +248,8 @@ export async function recordManualAdjustment({
         costAfter: null,
         stockAfter,
         note: noteText,
+        referenceType: 'manual',
+        referenceId: null,
         createdBy: actor.userId,
       })
       .returning()

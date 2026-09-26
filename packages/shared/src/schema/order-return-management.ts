@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { documentShiftIdSchema, type MoneyMethod, moneyMethodSchema } from './cash-management.js'
+import { pinSchema } from './user-management.js'
 
 export const orderReturnReasonSchema = z.enum([
   'defective',
@@ -34,6 +35,14 @@ export const createOrderReturnSchema = z
     // gốc (defaultRefundMethod). Phần cấn nợ và hoàn vào tiền trả trước không dùng trường này.
     refundMethod: moneyMethodSchema.optional(),
     shiftId: documentShiftIdSchema,
+    // TIEN-111: hoàn qua kênh khác kênh khách đã trả là vượt quyền. Người không có quyền
+    // `orders.returnOverride` kèm người duyệt và PIN của chính người duyệt (R1, ADR-0009).
+    approverId: z.string().uuid('Người duyệt không hợp lệ').optional(),
+    approverPin: pinSchema.optional(),
+  })
+  .refine((d) => !d.approverPin || !!d.approverId, {
+    message: 'Cần chọn người duyệt cho mã PIN',
+    path: ['approverId'],
   })
   // CRIT C3: chặn trùng orderItemId trong cùng phiếu. Nếu cho trùng, mỗi dòng đều
   // thấy "remaining" từ snapshot ban đầu → trả vượt số đã mua, hoàn tiền gấp N lần.

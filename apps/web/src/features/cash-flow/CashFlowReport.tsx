@@ -83,7 +83,7 @@ function MethodsTable({ report }: { report: CashFlowReportData }) {
             <TableHead>Phương thức</TableHead>
             <TableHead className="text-right">Bán hàng</TableHead>
             <TableHead className="text-right">Thu nợ</TableHead>
-            <TableHead className="text-right">NCC hoàn tiền</TableHead>
+            <TableHead className="text-right">Nhà cung cấp hoàn tiền</TableHead>
             <TableHead className="text-right">Hoàn tiền khách</TableHead>
             <TableHead className="text-right">Chi nhà cung cấp</TableHead>
             <TableHead className="text-right">Thực thu ròng</TableHead>

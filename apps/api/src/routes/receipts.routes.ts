@@ -30,7 +30,7 @@ export function createReceiptsRoutes({ db }: ReceiptsRoutesDeps) {
   const app = new Hono()
   app.onError(errorHandler)
   app.use('*', requireAuth(db))
-  app.use('*', requirePermission('customers.manage'))
+  app.use('*', requirePermission('receipts.create'))
 
   app.get('/', async (c) => {
     const auth = c.get('auth')
