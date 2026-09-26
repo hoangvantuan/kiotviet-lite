@@ -9,6 +9,8 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    # Bình thường khoảng 20 phút; test treo thì hỏng sớm thay vì giữ runner 6 giờ
+    timeout-minutes: 45
     # Postgres thật cho các test cần nhiều kết nối đồng thời (PGlite chỉ có một kết nối),
     # ví dụ test deadlock phiếu thu và trả hàng (TIEN-103)
     services:
@@ -44,7 +46,9 @@ jobs:
         run: pnpm -r typecheck
 
       - name: Test
-        run: pnpm test
+        # verbose in từng test khi xong, nên nếu treo thì biết test kế tiếp trong file nào đang chạy;
+        # hanging-process liệt kê handle giữ tiến trình khi vitest không tự thoát
+        run: pnpm test --reporter=verbose --reporter=hanging-process
         env:
           TEST_PG_URL: postgres://kiotviet:kiotviet_password@localhost:5432/kiotviet_lite_ci
 
@@ -55,6 +59,7 @@ jobs:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
     needs: ci
+    timeout-minutes: 30
     services:
       postgres:
         # Cùng bản với production (docker-compose.prod.yml)

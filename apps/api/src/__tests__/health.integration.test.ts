@@ -1,6 +1,3 @@
-import { PGlite } from '@electric-sql/pglite'
-import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm'
-import { drizzle } from 'drizzle-orm/pglite'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Db } from '../db/index.js'
@@ -33,9 +30,13 @@ describe('healthcheck phản ánh DB thật', () => {
   })
 
   it('DB không tới được: readiness 503, liveness vẫn 200', async () => {
-    const env = await createTestEnv()
-    const app = createHealthRoutes({ db: env.db })
-    await env.close()
+    // Không truy vấn PGlite đã close: WASM có lúc kẹt đồng bộ, chặn event loop nên cả
+    // testTimeout cũng không cứu được (CI #54 treo 20 phút). Giả lập lỗi kết nối như postgres-js.
+    const refused = {
+      execute: () =>
+        Promise.reject(Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' })),
+    } as unknown as Db
+    const app = createHealthRoutes({ db: refused })
     const ready = await app.request('/')
     expect(ready.status).toBe(503)
     expect(await body(ready)).toEqual({
@@ -53,18 +54,20 @@ describe('healthcheck phản ánh DB thật', () => {
     expect((await body(ready)).checks.db).toBe('down')
   })
 
-  it('DB tới được nhưng chưa migrate: readiness 503 migrations pending', async () => {
-    const pglite = new PGlite({ extensions: { pg_trgm } })
-    try {
-      const app = createHealthRoutes({
-        db: drizzle(pglite, { casing: 'snake_case' }) as unknown as Db,
-      })
-      const ready = await app.request('/')
-      expect(ready.status).toBe(503)
-      expect((await body(ready)).checks).toEqual({ db: 'ok', migrations: 'pending' })
-    } finally {
-      await pglite.close()
-    }
+  // Không dựng PGlite trần rồi truy vấn schema chưa có: CI treo 20 đến 45 phút đúng ở ca này
+  // (WASM kẹt đồng bộ nên testTimeout không cắt được). Giả lập đúng mã lỗi Postgres trả về:
+  // postgres-js đặt code ở lỗi, drizzle bọc lỗi gốc vào cause.
+  it.each([
+    ['schema drizzle chưa có (3F000)', { code: '3F000' }],
+    ['bảng migration chưa có, lỗi bọc trong cause (42P01)', { cause: { code: '42P01' } }],
+  ])('DB tới được nhưng chưa migrate: readiness 503 migrations pending, %s', async (_, shape) => {
+    const unmigrated = {
+      execute: () => Promise.reject(Object.assign(new Error('relation does not exist'), shape)),
+    } as unknown as Db
+    const app = createHealthRoutes({ db: unmigrated })
+    const ready = await app.request('/')
+    expect(ready.status).toBe(503)
+    expect((await body(ready)).checks).toEqual({ db: 'ok', migrations: 'pending' })
   })
 
   it('thiếu migration mới hơn bản build: readiness 503', async () => {
