@@ -2,8 +2,12 @@ import { useState } from 'react'
 import { Ban } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { defaultRefundMethod, moneyMethodLabel, type RefundMethod } from '@kiotviet-lite/shared'
+
 import { CancelDocumentDialog } from '@/components/shared/cancel-document-dialog'
 import { Button } from '@/components/ui/button'
+import { RefundMethodFields } from '@/features/shifts/refund-method-fields'
+import { useDocumentShiftChoice } from '@/features/shifts/use-document-shift-choice'
 import { handleApiError } from '@/lib/api-error'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { formatDateTime } from '@/lib/date'
@@ -13,12 +17,30 @@ import { useCancelOrderMutation } from './use-orders'
 
 /**
  * TIEN-107: hủy đơn bán. Chỉ đơn hoàn tất, chưa trả hàng; đơn đã có phiếu thu phải hủy phiếu thu
- * trước (máy chủ chặn và báo lý do).
+ * trước (máy chủ chặn và báo lý do). Phần khách đã trả lúc bán là tiền trả lại: người hủy chọn kênh
+ * trả, tiền mặt gắn vào ca đang mở (BC-06); tiền bán vẫn thuộc ngày bán, ca bán.
  */
 export function OrderCancelButton({ order }: { order: OrderDetailResponse }) {
   const [open, setOpen] = useState(false)
   const mutation = useCancelOrderMutation()
+  const initialRefundMethod = defaultRefundMethod({
+    paymentMethod: order.paymentMethod,
+    cashAmount: order.cashAmount,
+    transferAmount: order.transferAmount,
+  })
+  const [refundMethod, setRefundMethod] = useState<RefundMethod>(initialRefundMethod)
+  const shiftChoice = useDocumentShiftChoice()
   if (order.status !== 'completed') return null
+  // Ước tính để hiện ô chọn kênh; máy chủ tính chính xác = tổng đơn trừ khoản nợ ghi lúc bán
+  const refundEstimate = order.total - (order.debtAmountAtSale ?? order.debtAmount)
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next)
+    if (!next) {
+      setRefundMethod(initialRefundMethod)
+      shiftChoice.reset()
+    }
+  }
 
   return (
     <>
@@ -27,7 +49,7 @@ export function OrderCancelButton({ order }: { order: OrderDetailResponse }) {
       </Button>
       <CancelDocumentDialog
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={handleOpenChange}
         title={`Hủy đơn ${order.orderNumber}`}
         description={
           <>
@@ -41,12 +63,22 @@ export function OrderCancelButton({ order }: { order: OrderDetailResponse }) {
           </>
         }
         isPending={mutation.isPending}
+        confirmDisabled={shiftChoice.pending}
         onConfirm={async (input) => {
           try {
-            const res = await mutation.mutateAsync({ orderId: order.id, input })
+            const res = await mutation.mutateAsync({
+              orderId: order.id,
+              input: {
+                ...input,
+                ...(refundEstimate > 0 ? { refundMethod } : {}),
+                ...(shiftChoice.shiftId ? { shiftId: shiftChoice.shiftId } : {}),
+              },
+            })
             const { cashRefundAmount, prepaymentRefundAmount } = res.data
             const parts = [
-              cashRefundAmount > 0 ? `trả lại khách ${formatVndWithSuffix(cashRefundAmount)}` : '',
+              cashRefundAmount > 0
+                ? `trả lại khách ${formatVndWithSuffix(cashRefundAmount)} (${moneyMethodLabel(res.data.refundMethod)})`
+                : '',
               prepaymentRefundAmount > 0
                 ? `hoàn ${formatVndWithSuffix(prepaymentRefundAmount)} vào tiền trả trước`
                 : '',
@@ -55,11 +87,23 @@ export function OrderCancelButton({ order }: { order: OrderDetailResponse }) {
               `Đã hủy đơn ${order.orderNumber}${parts.length ? `, ${parts.join(', ')}` : ''}`,
             )
           } catch (err) {
-            handleApiError(err)
+            // Nhiều ca đang mở: hiện ô chọn ca, giữ hộp thoại để chọn rồi xác nhận lại
+            if (!shiftChoice.capture(err)) handleApiError(err)
             throw err
           }
         }}
-      />
+      >
+        {refundEstimate > 0 && (
+          <RefundMethodFields
+            label={`Trả lại khách ${formatVndWithSuffix(refundEstimate)} qua`}
+            value={refundMethod}
+            onChange={setRefundMethod}
+            shiftChoice={shiftChoice}
+            disabled={mutation.isPending}
+            idPrefix="order-cancel-refund"
+          />
+        )}
+      </CancelDocumentDialog>
     </>
   )
 }

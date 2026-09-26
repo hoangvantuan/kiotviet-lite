@@ -252,6 +252,8 @@ export interface OrderCancelResult {
   orderNumber: string
   status: 'cancelled'
   cashRefundAmount: number
+  /** BC-06: kênh trả lại phần tiền trên; null khi không phải trả tiền */
+  refundMethod: MoneyMethod | null
   debtReductionAmount: number
   prepaymentRefundAmount: number
   cancelledAt: string

@@ -61,11 +61,19 @@ function MethodsTable({ report }: { report: CashFlowReportData }) {
     (acc, row) => ({
       salesIn: acc.salesIn + row.salesIn,
       receiptsIn: acc.receiptsIn + row.receiptsIn,
+      supplierRefundsIn: acc.supplierRefundsIn + row.supplierRefundsIn,
       refundsOut: acc.refundsOut + row.refundsOut,
       supplierPaymentsOut: acc.supplierPaymentsOut + row.supplierPaymentsOut,
       net: acc.net + row.net,
     }),
-    { salesIn: 0, receiptsIn: 0, refundsOut: 0, supplierPaymentsOut: 0, net: 0 },
+    {
+      salesIn: 0,
+      receiptsIn: 0,
+      supplierRefundsIn: 0,
+      refundsOut: 0,
+      supplierPaymentsOut: 0,
+      net: 0,
+    },
   )
   return (
     <div className="overflow-x-auto rounded-md border">
@@ -75,7 +83,8 @@ function MethodsTable({ report }: { report: CashFlowReportData }) {
             <TableHead>Phương thức</TableHead>
             <TableHead className="text-right">Bán hàng</TableHead>
             <TableHead className="text-right">Thu nợ</TableHead>
-            <TableHead className="text-right">Hoàn tiền trả hàng</TableHead>
+            <TableHead className="text-right">NCC hoàn tiền</TableHead>
+            <TableHead className="text-right">Hoàn tiền khách</TableHead>
             <TableHead className="text-right">Chi nhà cung cấp</TableHead>
             <TableHead className="text-right">Thực thu ròng</TableHead>
           </TableRow>
@@ -93,7 +102,16 @@ function MethodsTable({ report }: { report: CashFlowReportData }) {
               <TableCell className="text-right font-mono">
                 {formatVndWithSuffix(row.receiptsIn)}
               </TableCell>
-              <TableCell className="text-right font-mono">
+              <TableCell
+                className="text-right font-mono"
+                data-testid={`cash-flow-supplier-refunds-${row.method ?? 'unknown'}`}
+              >
+                {formatVndWithSuffix(row.supplierRefundsIn)}
+              </TableCell>
+              <TableCell
+                className="text-right font-mono"
+                data-testid={`cash-flow-refunds-${row.method ?? 'unknown'}`}
+              >
                 {formatVndWithSuffix(row.refundsOut)}
               </TableCell>
               <TableCell className="text-right font-mono">
@@ -113,6 +131,9 @@ function MethodsTable({ report }: { report: CashFlowReportData }) {
             </TableCell>
             <TableCell className="text-right font-mono">
               {formatVndWithSuffix(total.receiptsIn)}
+            </TableCell>
+            <TableCell className="text-right font-mono">
+              {formatVndWithSuffix(total.supplierRefundsIn)}
             </TableCell>
             <TableCell className="text-right font-mono">
               {formatVndWithSuffix(total.refundsOut)}

@@ -34,7 +34,15 @@ export function ShiftCashLines({ summary }: { summary: ShiftSummary }) {
       <Row label="Tiền quỹ đầu ca" value={formatVndWithSuffix(summary.openingCash)} />
       <Row label="+ Bán hàng tiền mặt" value={formatVndWithSuffix(summary.cashSales)} />
       <Row label="+ Thu nợ tiền mặt" value={formatVndWithSuffix(summary.cashReceipts)} />
-      <Row label="- Hoàn tiền mặt (trả hàng)" value={formatVndWithSuffix(summary.cashRefunds)} />
+      <Row
+        label="+ Nhà cung cấp hoàn tiền mặt"
+        value={formatVndWithSuffix(summary.cashSupplierRefunds)}
+        testId="shift-cash-supplier-refunds"
+      />
+      <Row
+        label="- Hoàn tiền mặt (trả hàng, hủy đơn)"
+        value={formatVndWithSuffix(summary.cashRefunds)}
+      />
       <Row
         label="- Chi tiền mặt cho nhà cung cấp"
         value={formatVndWithSuffix(summary.cashSupplierPayments)}
