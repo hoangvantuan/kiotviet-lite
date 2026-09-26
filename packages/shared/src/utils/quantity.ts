@@ -178,24 +178,49 @@ export function formatQuantity(value: number | string | null | undefined): strin
   return QUANTITY_FORMATTER.format(n)
 }
 
+/** Phần nguyên có dấu chấm phân cách hàng nghìn kiểu vi-VN: "1.500", "1.250.000" ("0.255" là số lẻ) */
+const THOUSANDS_GROUPED = /^[1-9]\d{0,2}(\.\d{3})+$/
+
 /**
- * Phân tích chuỗi người dùng gõ vào ô số lượng. Dấu phẩy hoặc dấu chấm đều là dấu thập phân (bàn
- * phím số gõ ra dấu chấm); không nhận dấu phân cách hàng nghìn. Trả null nếu không hợp lệ, quá 3
- * chữ số lẻ, hoặc có phần lẻ khi `allowDecimal` là false.
+ * Phân tích chuỗi người dùng gõ vào ô số lượng theo vi-VN. Dấu phẩy là dấu thập phân. Dấu chấm theo
+ * sau đúng 3 chữ số (có thể lặp nhóm 3) là phân cách hàng nghìn: "1.500" là 1500, "1.250.000" là
+ * 1250000, "1.250,5" là 1250,5. Dấu chấm khác là dấu thập phân (bàn phím số gõ ra dấu chấm):
+ * "1.5", "1.25". Trả null nếu không hợp lệ, quá 3 chữ số lẻ, hoặc có phần lẻ khi `allowDecimal`
+ * là false.
  */
 export function parseQuantityInput(
   input: string,
   options: { allowDecimal?: boolean; allowNegative?: boolean } = {},
 ): number | null {
-  const s = input.trim().replace(/\s+/g, '')
+  let s = input.trim().replace(/\s+/g, '')
+  let sign = ''
+  if (options.allowNegative && s.startsWith('-')) {
+    sign = '-'
+    s = s.slice(1)
+  }
   if (s === '') return null
-  const pattern = options.allowNegative ? /^-?\d*([.,]\d*)?$/ : /^\d*([.,]\d*)?$/
-  if (!pattern.test(s)) return null
-  const normalized = s.replace(',', '.')
-  if (normalized === '.' || normalized === '-' || normalized === '-.') return null
-  const [, frac = ''] = normalized.split('.')
+  let intPart: string
+  let frac: string
+  const comma = s.indexOf(',')
+  if (comma >= 0) {
+    intPart = s.slice(0, comma)
+    frac = s.slice(comma + 1)
+    if (intPart.includes('.')) {
+      if (!THOUSANDS_GROUPED.test(intPart)) return null
+      intPart = intPart.replaceAll('.', '')
+    }
+  } else if (THOUSANDS_GROUPED.test(s)) {
+    intPart = s.replaceAll('.', '')
+    frac = ''
+  } else {
+    const dot = s.indexOf('.')
+    intPart = dot >= 0 ? s.slice(0, dot) : s
+    frac = dot >= 0 ? s.slice(dot + 1) : ''
+  }
+  if (!/^\d*$/.test(intPart) || !/^\d*$/.test(frac)) return null
+  if (intPart === '' && frac === '') return null
   if (frac.length > QUANTITY_SCALE) return null
-  const n = Number(normalized)
+  const n = Number(`${sign}${intPart || '0'}.${frac || '0'}`)
   if (!Number.isFinite(n)) return null
   if (!options.allowDecimal && !Number.isInteger(n)) return null
   return roundQty(n)

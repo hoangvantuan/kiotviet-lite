@@ -83,7 +83,6 @@ describe('số lượng thập phân (ADR-0015)', () => {
 
   it('phân tích ô nhập dấu phẩy kiểu Việt Nam', () => {
     expect(parseQuantityInput('1,5', { allowDecimal: true })).toBe(1.5)
-    expect(parseQuantityInput('1.255', { allowDecimal: true })).toBe(1.255)
     expect(parseQuantityInput('0,5', { allowDecimal: true })).toBe(0.5)
     expect(parseQuantityInput(',5', { allowDecimal: true })).toBe(0.5)
     expect(parseQuantityInput('1,2345', { allowDecimal: true })).toBeNull()
@@ -92,6 +91,35 @@ describe('số lượng thập phân (ADR-0015)', () => {
     expect(parseQuantityInput('abc', { allowDecimal: true })).toBeNull()
     expect(parseQuantityInput('1,5,2', { allowDecimal: true })).toBeNull()
     expect(parseQuantityInput('', { allowDecimal: true })).toBeNull()
+  })
+
+  it('phân tích số lượng theo vi-VN: dấu chấm theo sau 3 chữ số là phân cách hàng nghìn', () => {
+    // Dấu chấm phân cách hàng nghìn, kể cả khi hàng không bật cờ số lẻ
+    expect(parseQuantityInput('1.500')).toBe(1500)
+    expect(parseQuantityInput('1.500', { allowDecimal: true })).toBe(1500)
+    expect(parseQuantityInput('1.250.000')).toBe(1_250_000)
+    expect(parseQuantityInput('12.345')).toBe(12_345)
+    expect(parseQuantityInput('1.255', { allowDecimal: true })).toBe(1255)
+    // Kết hợp: dấu chấm hàng nghìn, dấu phẩy thập phân
+    expect(parseQuantityInput('1.250,5', { allowDecimal: true })).toBe(1250.5)
+    expect(parseQuantityInput('1.250,5')).toBeNull()
+    expect(parseQuantityInput('1.25,5', { allowDecimal: true })).toBeNull()
+    // Dấu chấm khác là dấu thập phân
+    expect(parseQuantityInput('1.5', { allowDecimal: true })).toBe(1.5)
+    expect(parseQuantityInput('1.25', { allowDecimal: true })).toBe(1.25)
+    expect(parseQuantityInput('0.255', { allowDecimal: true })).toBe(0.255)
+    expect(parseQuantityInput('1234.5', { allowDecimal: true })).toBe(1234.5)
+    expect(parseQuantityInput('.5', { allowDecimal: true })).toBe(0.5)
+    expect(parseQuantityInput('1.5')).toBeNull()
+    expect(parseQuantityInput('1.2345', { allowDecimal: true })).toBeNull()
+    expect(parseQuantityInput('1.500.5', { allowDecimal: true })).toBeNull()
+    expect(parseQuantityInput('1,5.5', { allowDecimal: true })).toBeNull()
+    // Số âm (điều chỉnh tồn)
+    expect(parseQuantityInput('-1.500', { allowNegative: true })).toBe(-1500)
+    expect(parseQuantityInput('-0,5', { allowDecimal: true, allowNegative: true })).toBe(-0.5)
+    expect(parseQuantityInput('-1,5', { allowDecimal: true })).toBeNull()
+    expect(parseQuantityInput('-', { allowNegative: true })).toBeNull()
+    expect(parseQuantityInput('.', { allowDecimal: true })).toBeNull()
   })
 
   it('cờ bán số lẻ: đơn vị theo cờ của nó, số quy ra đơn vị gốc nguyên khi sản phẩm không bật', () => {
