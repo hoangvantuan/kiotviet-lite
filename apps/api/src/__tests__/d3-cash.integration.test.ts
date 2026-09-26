@@ -9,15 +9,20 @@ import {
   orderItems,
   orderReturns,
   orders,
+  purchaseOrders,
+  purchaseReturns,
   receipts,
   type ShiftDetail,
+  type ShiftSummary,
   stores,
+  supplierPayments,
   suppliers,
 } from '@kiotviet-lite/shared'
 
 import { createCashReportsRoutes } from '../routes/cash-reports.routes.js'
 import { createOrdersRoutes } from '../routes/orders.routes.js'
 import { createPosRoutes } from '../routes/pos.routes.js'
+import { createPurchaseOrdersRoutes } from '../routes/purchase-orders.routes.js'
 import { createReceiptsRoutes } from '../routes/receipts.routes.js'
 import { createShiftsRoutes } from '../routes/shifts.routes.js'
 import { createSupplierPaymentsRoutes } from '../routes/supplier-payments.routes.js'
@@ -45,6 +50,7 @@ let apps: {
   shifts: App
   supplierPayments: App
   cashReports: App
+  purchaseOrders: App
 }
 
 beforeEach(async () => {
@@ -56,6 +62,7 @@ beforeEach(async () => {
     shifts: createShiftsRoutes({ db: env.db }),
     supplierPayments: createSupplierPaymentsRoutes({ db: env.db }),
     cashReports: createCashReportsRoutes({ db: env.db }),
+    purchaseOrders: createPurchaseOrdersRoutes({ db: env.db }),
   }
 })
 
@@ -1022,5 +1029,261 @@ describe('BC-06 (review MAJOR 3): đơn ngoại tuyến tính theo giờ bán', 
     })
     const [saved] = await env.db.select().from(orders).where(eq(orders.id, order.id))
     expect(saved!.soldAt.getTime()).toBe(saved!.createdAt.getTime())
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Review MAJOR 4: chứng từ hủy (d3-void) trong ca và dòng tiền
+// ---------------------------------------------------------------------------
+
+async function cancelDoc(
+  app: App,
+  id: string,
+  extra: Record<string, unknown> = {},
+  user: SeededUser = env.owner,
+) {
+  return call<{
+    data: { refundMethod?: string | null }
+    error: { details: { reason: string; shifts?: Array<{ id: string }> } }
+  }>(app, 'POST', `/${id}/cancel`, user, { reason: 'Lập nhầm', ...extra })
+}
+
+function methodRow(report: CashFlowReport, method: string) {
+  return report.methods.find((m) => m.method === method)!
+}
+
+async function newSupplier(code: string) {
+  const [supplier] = await env.db
+    .insert(suppliers)
+    .values({ storeId: env.storeId, code, name: `NCC ${code}` })
+    .returning()
+  return supplier!
+}
+
+async function purchaseOrder(supplierId: string, productId: string, paidAmount: number) {
+  const res = await call<{ data: { id: string; items: Array<{ id: string }> } }>(
+    apps.purchaseOrders,
+    'POST',
+    '/',
+    env.owner,
+    {
+      supplierId,
+      paidAmount,
+      items: [
+        { productId, quantity: 10, unitPrice: 50_000, discountType: 'amount', discountValue: 0 },
+      ],
+    },
+  )
+  expect(res.status, JSON.stringify(res.body)).toBe(201)
+  return res.body.data
+}
+
+describe('TIEN-107, BC-06 (review MAJOR 4b): phiếu thu, phiếu chi đã hủy không tính', () => {
+  it('hủy phiếu thu 30k và phiếu chi 40k tiền mặt: ca và báo cáo trở về như chưa lập', async () => {
+    const { customer, debtId } = await customerWithDebt(80_000)
+    const shift = await openShift(env.owner, 100_000)
+    const receipt = await postReceipt(env.owner, customer.id, debtId, 30_000, 'cash')
+    expect(receipt.status, JSON.stringify(receipt.body)).toBe(201)
+    const [supplier] = await env.db
+      .insert(suppliers)
+      .values({ storeId: env.storeId, code: 'NCC-M4B', name: 'NCC M4B', currentDebt: 40_000 })
+      .returning()
+    const paid = await call<{ data: { id: string } }>(
+      apps.supplierPayments,
+      'POST',
+      '/',
+      env.owner,
+      { supplierId: supplier!.id, amount: 40_000, paymentMethod: 'cash' },
+    )
+    expect(paid.status, JSON.stringify(paid.body)).toBe(201)
+    expect((await shiftDetail(shift.id)).summary.expectedCash).toBe(90_000)
+
+    expect((await cancelDoc(apps.receipts, receipt.body.data.id)).status).toBe(200)
+    expect((await cancelDoc(apps.supplierPayments, paid.body.data.id)).status).toBe(200)
+    const [savedPayment] = await env.db
+      .select()
+      .from(supplierPayments)
+      .where(eq(supplierPayments.id, paid.body.data.id))
+    expect(savedPayment!.status).toBe('cancelled')
+
+    expect((await shiftDetail(shift.id)).summary).toMatchObject({
+      cashReceipts: 0,
+      cashSupplierPayments: 0,
+      expectedCash: 100_000,
+    })
+    const report = await cashFlow(today())
+    expect(methodRow(report, 'cash')).toMatchObject({ receiptsIn: 0, supplierPaymentsOut: 0 })
+    expect(report.cash).toMatchObject({ cashOut: 0 })
+  })
+})
+
+describe('TIEN-107, BC-06 (review MAJOR 4c): hủy đơn không rút ngược số của ngày cũ, ca đã đóng', () => {
+  it('ca A bán 100k rồi đóng; hủy đơn trong ca B: ca A giữ nguyên, ca B chi 100k tiền mặt', async () => {
+    await enableShifts()
+    const product = await createProduct(env, { sellingPrice: 100_000, currentStock: 10 })
+    const shiftA = await openShift(env.staff, 200_000)
+    const order = await sell(env.staff, {
+      paymentMethod: 'cash',
+      lines: [{ product, price: 100_000, quantity: 1 }],
+    })
+    const closedA = await closeShift(env.staff, shiftA.id, 300_000)
+    expect(closedA.difference).toBe(0)
+    const shiftB = await openShift(env.staff, 500_000)
+
+    // Quản lý hủy thay: cửa hàng chỉ có ca B đang mở nên khoản trả lại gắn vào ca B
+    const cancelled = await cancelDoc(apps.orders, order.id, {}, env.manager)
+    expect(cancelled.status, JSON.stringify(cancelled.body)).toBe(200)
+    expect(cancelled.body.data.refundMethod).toBe('cash')
+    const [saved] = await env.db.select().from(orders).where(eq(orders.id, order.id))
+    expect(saved).toMatchObject({
+      cancelRefundAmount: 100_000,
+      cancelRefundMethod: 'cash',
+      cancelShiftId: shiftB.id,
+    })
+
+    const a = await shiftDetail(shiftA.id)
+    expect(a.summary).toMatchObject({ cashSales: 100_000, cashRefunds: 0, expectedCash: 300_000 })
+    expect(a.closeSummary!.expectedCash).toBe(300_000)
+    expect((await shiftDetail(shiftB.id)).summary).toMatchObject({
+      cashSales: 0,
+      cashRefunds: 100_000,
+      expectedCash: 400_000,
+    })
+
+    // Cùng ngày: tiền bán vẫn ở ngày bán, khoản trả lại là tiền ra; doanh thu loại đơn hủy
+    const report = await cashFlow(today())
+    expect(methodRow(report, 'cash')).toMatchObject({ salesIn: 100_000, refundsOut: 100_000 })
+    expect(report.cash.netCash).toBe(0)
+    expect(report.revenue).toMatchObject({ orderCount: 0, gross: 0 })
+  })
+
+  it('đơn chuyển khoản bán hôm qua, hủy hôm nay: hôm qua giữ tiền vào, hôm nay chi chuyển khoản', async () => {
+    const product = await createProduct(env, { sellingPrice: 70_000, currentStock: 10 })
+    const order = await sell(env.staff, {
+      paymentMethod: 'transfer',
+      lines: [{ product, price: 70_000, quantity: 1 }],
+    })
+    const soldAt = new Date(`${dayKey(-1)}T10:00:00+07:00`)
+    await env.db.update(orders).set({ soldAt, createdAt: soldAt }).where(eq(orders.id, order.id))
+    const before = await cashFlow(dayKey(-1))
+
+    const cancelled = await cancelDoc(apps.orders, order.id)
+    expect(cancelled.status, JSON.stringify(cancelled.body)).toBe(200)
+    expect(cancelled.body.data.refundMethod).toBe('transfer')
+
+    const yesterday = await cashFlow(dayKey(-1))
+    expect(methodRow(yesterday, 'transfer')).toEqual(methodRow(before, 'transfer'))
+    expect(methodRow(yesterday, 'transfer')).toMatchObject({ salesIn: 70_000, refundsOut: 0 })
+    const todayReport = await cashFlow(today())
+    expect(methodRow(todayReport, 'transfer')).toMatchObject({
+      salesIn: 0,
+      refundsOut: 70_000,
+      net: -70_000,
+    })
+    expect(todayReport.cash.cashOut).toBe(0)
+  })
+
+  it('người hủy chọn hoàn tiền mặt khi nhiều ca đang mở: phải chọn ca; đơn chỉ ghi nợ thì không cần ca', async () => {
+    await enableShifts()
+    const product = await createProduct(env, { sellingPrice: 60_000, currentStock: 10 })
+    const staffShift = await openShift(env.staff, 0)
+    const ownerShift = await openShift(env.owner, 0)
+    const order = await sell(env.staff, {
+      paymentMethod: 'transfer',
+      lines: [{ product, price: 60_000, quantity: 1 }],
+    })
+    const ask = await cancelDoc(apps.orders, order.id, { refundMethod: 'cash' }, env.manager)
+    expect(ask.status).toBe(422)
+    expect(ask.body.error.details.reason).toBe('shift_choice_required')
+    expect(ask.body.error.details.shifts!.map((s) => s.id).sort()).toEqual(
+      [staffShift.id, ownerShift.id].sort(),
+    )
+    const [stillActive] = await env.db.select().from(orders).where(eq(orders.id, order.id))
+    expect(stillActive!.status).not.toBe('cancelled')
+
+    const ok = await cancelDoc(
+      apps.orders,
+      order.id,
+      { refundMethod: 'cash', shiftId: staffShift.id },
+      env.manager,
+    )
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200)
+    const [saved] = await env.db.select().from(orders).where(eq(orders.id, order.id))
+    expect(saved).toMatchObject({ cancelRefundMethod: 'cash', cancelShiftId: staffShift.id })
+    expect((await shiftDetail(staffShift.id)).summary.cashRefunds).toBe(60_000)
+
+    // Đơn ghi nợ toàn bộ: không có tiền trả lại nên không hỏi ca
+    const customer = await createCustomer(env, { debtLimit: 10_000_000 })
+    const debtOrder = await sell(env.staff, {
+      paymentMethod: 'debt',
+      customerId: customer.id,
+      debtAmount: 60_000,
+      lines: [{ product, price: 60_000, quantity: 1 }],
+    })
+    const noRefund = await cancelDoc(apps.orders, debtOrder.id, {}, env.manager)
+    expect(noRefund.status, JSON.stringify(noRefund.body)).toBe(200)
+    expect(noRefund.body.data.refundMethod).toBeNull()
+  })
+})
+
+describe('BC-06 (review MAJOR 4d): tiền nhà cung cấp hoàn là tiền vào theo phương thức', () => {
+  it('trả hàng nhập đã trả tiền: NCC hoàn tiền mặt vào ca; hủy phiếu nhập hoàn chuyển khoản', async () => {
+    const product = await createProduct(env, { sellingPrice: 100_000, currentStock: 0 })
+    const supplier = await newSupplier('NCC-M4D')
+    const shift = await openShift(env.staff, 100_000)
+
+    const paidPo = await purchaseOrder(supplier.id, product.id, 500_000)
+    const ret = await call<{ data: { id: string; supplierRefundAmount: number } }>(
+      apps.purchaseOrders,
+      'POST',
+      `/${paidPo.id}/returns`,
+      env.owner,
+      { items: [{ purchaseOrderItemId: paidPo.items[0]!.id, quantity: 2 }] },
+    )
+    expect(ret.status, JSON.stringify(ret.body)).toBe(201)
+    expect(ret.body.data.supplierRefundAmount).toBe(100_000)
+    const [savedReturn] = await env.db
+      .select()
+      .from(purchaseReturns)
+      .where(eq(purchaseReturns.id, ret.body.data.id))
+    expect(savedReturn).toMatchObject({ refundMethod: 'cash', shiftId: shift.id })
+
+    const cancelPo = await purchaseOrder(supplier.id, product.id, 200_000)
+    const cancelled = await cancelDoc(apps.purchaseOrders, cancelPo.id, {
+      refundMethod: 'transfer',
+    })
+    expect(cancelled.status, JSON.stringify(cancelled.body)).toBe(200)
+    const [savedPo] = await env.db
+      .select()
+      .from(purchaseOrders)
+      .where(eq(purchaseOrders.id, cancelPo.id))
+    expect(savedPo).toMatchObject({ cancelSupplierRefund: 200_000, cancelRefundMethod: 'transfer' })
+
+    expect((await shiftDetail(shift.id)).summary).toMatchObject({
+      cashSupplierRefunds: 100_000,
+      expectedCash: 200_000,
+      transferIn: 200_000,
+    })
+    const report = await cashFlow(today())
+    expect(methodRow(report, 'cash')).toMatchObject({ supplierRefundsIn: 100_000, net: 100_000 })
+    expect(methodRow(report, 'transfer')).toMatchObject({
+      supplierRefundsIn: 200_000,
+      net: 200_000,
+    })
+    expect(report.cash).toMatchObject({ cashIn: 100_000, netCash: 100_000 })
+  })
+
+  it('bản chụp đóng ca cũ thiếu trường tiền NCC hoàn vẫn đọc được (mặc định 0)', async () => {
+    const shift = await openShift(env.staff, 50_000)
+    await closeShift(env.staff, shift.id, 50_000)
+    const [row] = await env.db.select().from(cashShifts).where(eq(cashShifts.id, shift.id))
+    const legacy: Partial<ShiftSummary> = { ...row!.closeSummary! }
+    delete legacy.cashSupplierRefunds
+    await env.db
+      .update(cashShifts)
+      .set({ closeSummary: legacy as NonNullable<typeof row>['closeSummary'] })
+      .where(eq(cashShifts.id, shift.id))
+    const detail = await shiftDetail(shift.id)
+    expect(detail.closeSummary).toMatchObject({ cashSupplierRefunds: 0, expectedCash: 50_000 })
   })
 })

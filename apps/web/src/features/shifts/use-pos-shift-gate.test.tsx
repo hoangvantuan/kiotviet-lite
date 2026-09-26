@@ -52,6 +52,7 @@ const OPEN_SHIFT = {
     cashReceipts: 0,
     cashRefunds: 0,
     cashSupplierPayments: 0,
+    cashSupplierRefunds: 0,
     expectedCash: 500_000,
     transferIn: 0,
     qrIn: 0,
