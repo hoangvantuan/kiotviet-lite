@@ -17,6 +17,7 @@ import {
   type CurrentShiftResponse,
   hasPermission,
   type ListShiftsQuery,
+  type OpenShiftChoice,
   type OpenShiftInput,
   orderReturns,
   orders,
@@ -83,6 +84,94 @@ export async function lockOpenShiftId(
     .limit(1)
     .for('share')
   return row?.id ?? null
+}
+
+/** Kết quả chọn ca cho chứng từ: `choices` khác null nghĩa là có nhiều ca mở, chưa biết chọn ca nào. */
+export interface DocumentShiftResolution {
+  shiftId: string | null
+  choices: OpenShiftChoice[] | null
+}
+
+/**
+ * Ca cho chứng từ có dòng tiền lập ngoài luồng bán (phiếu trả, phiếu thu, phiếu chi). Nhân viên
+ * thường không có quyền lập các phiếu này, quản lý lập thay; gắn theo người lập thì tiền rơi khỏi
+ * ca của thu ngân và ca đó báo thiếu, thừa sai. Thứ tự chọn:
+ * 1. `requestedShiftId`: ca người lập chọn, phải thuộc cửa hàng và đang mở.
+ * 2. Ca đang mở của chính người lập.
+ * 3. Cửa hàng có đúng một ca đang mở: gắn vào ca đó.
+ * 4. Nhiều ca đang mở: trả danh sách ca; `assertDocumentShift` quyết định có phải hỏi hay không.
+ * Gọi ở đầu transaction, trước khi khóa đơn và khách (cùng thứ tự với lúc bán). Mọi ca đọc ra
+ * đều khóa FOR SHARE như lockOpenShiftId, để lệnh đóng ca chờ chứng từ commit.
+ */
+export async function resolveDocumentShift(
+  db: Db,
+  opts: { storeId: string; userId: string; requestedShiftId?: string | null },
+): Promise<DocumentShiftResolution> {
+  const { storeId, userId, requestedShiftId } = opts
+  if (requestedShiftId) {
+    const [row] = await db
+      .select({ id: cashShifts.id })
+      .from(cashShifts)
+      .where(
+        and(
+          eq(cashShifts.id, requestedShiftId),
+          eq(cashShifts.storeId, storeId),
+          eq(cashShifts.status, 'open'),
+        ),
+      )
+      .limit(1)
+      .for('share')
+    if (!row) {
+      throw new ApiError(
+        'BUSINESS_RULE_VIOLATION',
+        'Ca bán hàng đã chọn không còn mở. Vui lòng chọn lại ca',
+        { reason: 'shift_not_open' },
+      )
+    }
+    return { shiftId: row.id, choices: null }
+  }
+
+  const own = await lockOpenShiftId(db, storeId, userId)
+  if (own) return { shiftId: own, choices: null }
+
+  const open = await db
+    .select({
+      id: cashShifts.id,
+      userId: cashShifts.userId,
+      userName: users.name,
+      openedAt: cashShifts.openedAt,
+    })
+    .from(cashShifts)
+    .leftJoin(users, eq(users.id, cashShifts.userId))
+    .where(and(eq(cashShifts.storeId, storeId), eq(cashShifts.status, 'open')))
+    .orderBy(cashShifts.openedAt)
+    .for('share', { of: cashShifts })
+  if (open.length <= 1) return { shiftId: open[0]?.id ?? null, choices: null }
+  return {
+    shiftId: null,
+    choices: open.map((s) => ({
+      id: s.id,
+      userId: s.userId,
+      userName: s.userName,
+      openedAt: s.openedAt.toISOString(),
+    })),
+  }
+}
+
+/**
+ * Ca cuối cùng của chứng từ. Nhiều ca đang mở mà chứng từ có khoản tiền mặt (vào hay ra ngăn
+ * kéo) thì bắt người lập chọn ca; khoản không phải tiền mặt không ảnh hưởng ngăn kéo nên để trống.
+ */
+export function assertDocumentShift(
+  resolution: DocumentShiftResolution,
+  hasCash: boolean,
+): string | null {
+  if (!resolution.choices || !hasCash) return resolution.shiftId
+  throw new ApiError(
+    'BUSINESS_RULE_VIOLATION',
+    'Có nhiều ca đang mở. Vui lòng chọn ca nhận khoản tiền mặt này',
+    { reason: 'shift_choice_required', shifts: resolution.choices },
+  )
 }
 
 /**

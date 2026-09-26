@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 import { documentStatusSchema } from './document-cancel.js'
-import { moneyMethodInput, moneyMethodSchema } from './cash-management.js'
+import { documentShiftIdSchema, moneyMethodInput, moneyMethodSchema } from './cash-management.js'
 import { dateFilterSchema, paginationSchema } from './pagination.js'
 
 export const createSupplierPaymentSchema = z
@@ -13,6 +13,7 @@ export const createSupplierPaymentSchema = z
       .min(1, 'Số tiền phải lớn hơn 0')
       .max(99_999_999_999_999, 'Số tiền vượt giới hạn'),
     paymentMethod: moneyMethodInput('Vui lòng chọn phương thức chi tiền'),
+    shiftId: documentShiftIdSchema,
     note: z.string().trim().max(500, 'Ghi chú tối đa 500 ký tự').nullable().optional(),
     // TIEN-104: gắn phiếu chi với một phiếu nhập cụ thể (tùy chọn)
     purchaseOrderId: z.string().uuid('Phiếu nhập không hợp lệ').nullable().optional(),

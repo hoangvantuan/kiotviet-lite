@@ -33,25 +33,30 @@ export function moneyMethodLabel(method: MoneyMethod | null): string {
 }
 
 /**
- * TIEN-02: phương thức hoàn tiền mặc định theo cách khách đã trả đơn gốc. Đơn kết hợp có phần
- * tiền mặt thì hoàn tiền mặt; đơn ghi nợ chỉ thu tiền mặt tại quầy nên phần dư cũng hoàn tiền mặt.
+ * TIEN-02: phương thức hoàn tiền mặc định theo cách khách đã trả đơn gốc. Đơn kết hợp, đơn ghi nợ
+ * có trả trước hoàn theo kênh chiếm phần lớn số tiền đã trả (bằng nhau thì tiền mặt); không trả gì
+ * thì hoàn tiền mặt. QR là cách nhận tiền, không dùng để hoàn: đơn QR hoàn chuyển khoản.
  * Dùng chung cho hộp trả hàng (chọn sẵn) và máy chủ (khi máy khách không gửi).
  */
 export function defaultRefundMethod(order: {
   paymentMethod: string
   cashAmount: number | null
+  transferAmount: number | null
 }): MoneyMethod {
   switch (order.paymentMethod) {
     case 'transfer':
-      return 'transfer'
     case 'qr':
-      return 'qr'
+      return 'transfer'
     case 'combined':
-      return (order.cashAmount ?? 0) > 0 ? 'cash' : 'transfer'
+    case 'debt':
+      return (order.transferAmount ?? 0) > (order.cashAmount ?? 0) ? 'transfer' : 'cash'
     default:
       return 'cash'
   }
 }
+
+/** Kênh được chọn khi hoàn tiền (TIEN-02): không có QR. */
+export const REFUND_METHODS = ['cash', 'transfer'] as const satisfies readonly MoneyMethod[]
 
 // ---------------------------------------------------------------------------
 // Ca bán hàng (POS-06)
@@ -66,6 +71,24 @@ const cashAmountSchema = (label: string) =>
     .int('Số tiền phải là số nguyên')
     .min(0, 'Số tiền không được âm')
     .max(99_999_999_999, 'Số tiền vượt giới hạn')
+
+/**
+ * Ca nhận chứng từ có dòng tiền (phiếu thu, phiếu chi, phiếu trả) khi người lập không trực quầy,
+ * ví dụ quản lý hoàn tiền thay thu ngân. Bỏ trống thì máy chủ tự chọn (resolveDocumentShift).
+ */
+export const documentShiftIdSchema = z
+  .string()
+  .uuid('Ca bán hàng không hợp lệ')
+  .nullable()
+  .optional()
+
+/** Một ca đang mở, trả kèm lỗi `shift_choice_required` để người lập chọn ca. */
+export interface OpenShiftChoice {
+  id: string
+  userId: string
+  userName: string | null
+  openedAt: string
+}
 
 export const openShiftSchema = z
   .object({
@@ -208,9 +231,18 @@ export const cashFlowReportSchema = z.object({
     cashOut: z.number().int(),
     /** Tiền mặt ngăn kéo tăng thêm trong kỳ, cộng với tiền đầu ngày ra số phải có */
     netCash: z.number().int(),
-    /** Tổng tiền quỹ đầu ca của các ca mở trong kỳ (0 nếu không dùng ca) */
+    /**
+     * Tiền đầu ngày gợi ý: quỹ đầu ca của ca mở sớm nhất trong kỳ (0 nếu không dùng ca). Không
+     * cộng quỹ đầu ca các ca sau: ca nối tiếp nhận lại chính tiền trong ngăn kéo của ca trước.
+     */
     openingCash: z.number().int(),
+    /** Tổng chênh lệch (thực đếm - phải có) của các ca đã đóng, mở trong kỳ */
+    shiftDifference: z.number().int(),
+    closedShiftCount: z.number().int(),
+    /** Ca mở trong kỳ còn chưa đóng: chưa có chênh lệch */
+    openShiftCount: z.number().int(),
   }),
+  /** Ca mở trong kỳ, xếp theo giờ mở. Ca vắt qua 0h thuộc ngày mở ca */
   shifts: z.array(shiftSchema),
   /** Chứng từ tiền mặt không gắn ca trong kỳ, cần đối soát tay khi cửa hàng dùng ca */
   unassigned: z.object({

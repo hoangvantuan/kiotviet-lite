@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { type MoneyMethod, moneyMethodSchema } from './cash-management.js'
+import { documentShiftIdSchema, type MoneyMethod, moneyMethodSchema } from './cash-management.js'
 
 export const orderReturnReasonSchema = z.enum([
   'defective',
@@ -33,6 +33,7 @@ export const createOrderReturnSchema = z
     // TIEN-02: kênh hoàn phần tiền trả lại khách. Bỏ trống thì máy chủ lấy theo cách trả của đơn
     // gốc (defaultRefundMethod). Phần cấn nợ và hoàn vào tiền trả trước không dùng trường này.
     refundMethod: moneyMethodSchema.optional(),
+    shiftId: documentShiftIdSchema,
   })
   // CRIT C3: chặn trùng orderItemId trong cùng phiếu. Nếu cho trùng, mỗi dòng đều
   // thấy "remaining" từ snapshot ban đầu → trả vượt số đã mua, hoàn tiền gấp N lần.

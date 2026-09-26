@@ -16,7 +16,6 @@ import {
   type CashFlowMethodRow,
   type CashFlowReport,
   type CashFlowReportQuery,
-  cashShifts,
   MONEY_METHODS,
   type MoneyMethod,
   orderItems,
@@ -67,8 +66,9 @@ export async function getCashFlowReport({
 
   const orderScope = and(
     eq(orders.storeId, storeId),
-    gte(orders.createdAt, start),
-    lte(orders.createdAt, end),
+    // Theo giờ bán: đơn ngoại tuyến đồng bộ hôm sau vẫn thuộc ngày bán, cùng ngày với ca đã gắn
+    gte(orders.soldAt, start),
+    lte(orders.soldAt, end),
     cashFlowOrderFilter(),
   )
   const receiptScope = and(
@@ -194,16 +194,12 @@ export async function getCashFlowReport({
   const cashOnly = <T extends { method: string | null; unassignedCash: string }>(list: T[]) =>
     list.filter((r) => r.method === 'cash').reduce((acc, r) => acc + Number(r.unassignedCash), 0)
 
-  const [openingAgg] = await db
-    .select({ openingCash: sumInt(sql`${cashShifts.openingCash}`) })
-    .from(cashShifts)
-    .where(
-      and(
-        eq(cashShifts.storeId, storeId),
-        gte(cashShifts.openedAt, start),
-        lte(cashShifts.openedAt, end),
-      ),
-    )
+  // Ca thuộc ngày mở ca (ca vắt qua 0h tính cho ngày mở). Đối soát theo từng ca rồi cộng chênh
+  // lệch; tiền đầu ngày là quỹ đầu ca của ca sớm nhất, không cộng dồn quỹ đầu ca các ca nối tiếp
+  const shifts = await listShiftsOpenedBetween(db, storeId, start, end)
+  const closedShifts = shifts.filter((s) => s.status === 'closed')
+  // listShiftsOpenedBetween xếp theo giờ mở: phần tử đầu là ca sớm nhất
+  const earliestShift = shifts[0]
 
   const gross = Number(lineAgg?.gross ?? 0)
   const lineDiscount = Number(lineAgg?.lineDiscount ?? 0)
@@ -232,9 +228,12 @@ export async function getCashFlowReport({
       cashIn,
       cashOut,
       netCash: cashIn - cashOut,
-      openingCash: Number(openingAgg?.openingCash ?? 0),
+      openingCash: earliestShift?.openingCash ?? 0,
+      shiftDifference: closedShifts.reduce((sum, s) => sum + (s.difference ?? 0), 0),
+      closedShiftCount: closedShifts.length,
+      openShiftCount: shifts.length - closedShifts.length,
     },
-    shifts: await listShiftsOpenedBetween(db, storeId, start, end),
+    shifts,
     unassigned: {
       orderCount: orderAgg?.unassignedCount ?? 0,
       cashIn: Number(orderAgg?.unassignedCash ?? 0) + cashOnly(receiptRows),

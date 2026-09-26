@@ -33,7 +33,7 @@ import {
   refreshPurchaseOrderPaymentStatus,
 } from './purchase-orders.service.js'
 import { serviceDb, type ServiceTransaction } from './service-transaction.js'
-import { lockOpenShiftId } from './shifts.service.js'
+import { assertDocumentShift, resolveDocumentShift } from './shifts.service.js'
 
 export interface SupplierPaymentsActor {
   userId: string
@@ -242,8 +242,15 @@ export async function createSupplierPayment({
   return db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
 
-    // POS-06: phiếu chi lập trong ca gắn vào ca đang mở của người lập (không bắt buộc)
-    const shiftId = await lockOpenShiftId(txDb, actor.storeId, actor.userId)
+    // POS-06: phiếu chi vào ca của quầy chi tiền (resolveDocumentShift), khóa ca trước nhà cung cấp
+    const shiftId = assertDocumentShift(
+      await resolveDocumentShift(txDb, {
+        storeId: actor.storeId,
+        userId: actor.userId,
+        requestedShiftId: input.shiftId,
+      }),
+      input.paymentMethod === 'cash',
+    )
 
     // TIEN-104: phiếu chi gắn phiếu nhập. Khóa phiếu nhập trước NCC (thứ tự khóa chứng từ, NCC,
     // sản phẩm như hủy phiếu nhập), phiếu phải còn hiệu lực, cùng NCC, và chi không vượt số còn

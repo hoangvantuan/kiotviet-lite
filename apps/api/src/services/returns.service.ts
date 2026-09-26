@@ -40,7 +40,7 @@ import {
   lockProductsInIdOrder,
 } from './products-lock.helper.js'
 import { serviceDb, type ServiceTransaction } from './service-transaction.js'
-import { lockOpenShiftId } from './shifts.service.js'
+import { assertDocumentShift, resolveDocumentShift } from './shifts.service.js'
 
 export interface ReturnsActor {
   userId: string
@@ -160,9 +160,13 @@ export async function createReturn({
   const result = await db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
 
-    // POS-06: phiếu trả lập trong ca gắn vào ca đang mở của người lập (không bắt buộc). Khóa ca
-    // trước đơn, cùng thứ tự với lúc bán
-    const shiftId = await lockOpenShiftId(txDb, actor.storeId, actor.userId)
+    // POS-06: phiếu trả vào ca của quầy nhận khoản hoàn (resolveDocumentShift). Khóa ca trước
+    // đơn, cùng thứ tự với lúc bán; nhiều ca mở thì chỉ hỏi chọn ca khi có hoàn tiền mặt (bước 5)
+    const shiftResolution = await resolveDocumentShift(txDb, {
+      storeId: actor.storeId,
+      userId: actor.userId,
+      requestedShiftId: input.shiftId,
+    })
 
     // 1. Validate order
     const orderRows = await tx
@@ -174,6 +178,7 @@ export async function createReturn({
         paymentStatus: orders.paymentStatus,
         paymentMethod: orders.paymentMethod,
         cashAmount: orders.cashAmount,
+        transferAmount: orders.transferAmount,
         status: orders.status,
         total: orders.total,
       })
@@ -336,8 +341,10 @@ export async function createReturn({
           defaultRefundMethod({
             paymentMethod: order.paymentMethod,
             cashAmount: order.cashAmount === null ? null : Number(order.cashAmount),
+            transferAmount: order.transferAmount === null ? null : Number(order.transferAmount),
           }))
         : null
+    const shiftId = assertDocumentShift(shiftResolution, refundMethod === 'cash')
 
     // Đơn đã được cấn bằng tiền trả trước: phần đó quay về tiền trả trước (ADR-0011). Gọi trước
     // khi khóa sản phẩm vì hàm khóa các khoản trả trước của khách.

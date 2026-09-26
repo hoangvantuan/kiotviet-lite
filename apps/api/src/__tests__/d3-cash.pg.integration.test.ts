@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import {
   cashShifts,
+  type CreateOrderInput,
   customers,
   orders,
   products,
@@ -24,6 +25,7 @@ import { signAccessToken } from '../lib/jwt.js'
 import { createPosRoutes } from '../routes/pos.routes.js'
 import { createReceiptsRoutes } from '../routes/receipts.routes.js'
 import { createShiftsRoutes } from '../routes/shifts.routes.js'
+import { createOrder } from '../services/orders.service.js'
 import { computeShiftSummary } from '../services/shifts.service.js'
 
 /**
@@ -261,6 +263,58 @@ describe.skipIf(!adminUrl)(
       expect(shift!.closeSummary!.orderCount).toBe(attached.length)
       expect(shift!.expectedCash).toBe(attached.length * 10_000)
       expect(saleRes.filter((r) => r.status === 201)).toHaveLength(attached.length)
+    })
+
+    it('đóng ca chờ giao dịch bán đang ghi commit rồi mới chụp số (chạm đúng vùng khóa chồng lấn)', async () => {
+      const s = await seedStore()
+      await db.update(stores).set({ shiftsEnabled: true }).where(eq(stores.id, s.store.id))
+      const shifts = createShiftsRoutes({ db })
+      const opened = await post(s, shifts, '/open', { openingCash: 0 }, randomUUID())
+      const shiftId = ((await opened.json()) as { data: { id: string } }).data.id
+
+      // Rào: giao dịch bán đã ghi đơn và giữ khóa FOR SHARE trên ca, chưa commit
+      let saleWritten!: () => void
+      let release!: () => void
+      const written = new Promise<void>((r) => (saleWritten = r))
+      const released = new Promise<void>((r) => (release = r))
+      const sale = db.transaction(async (tx) => {
+        await createOrder({
+          db,
+          transaction: tx,
+          actor: { userId: s.owner.id, storeId: s.store.id, role: 'owner' },
+          input: orderPayload(s) as unknown as CreateOrderInput,
+        })
+        saleWritten()
+        await released
+      })
+      await written
+
+      let closeSettled = false
+      const close = post(s, shifts, `/${shiftId}/close`, { countedCash: 0 }, randomUUID()).then(
+        (r) => {
+          closeSettled = true
+          return r
+        },
+      )
+      // Chờ tới khi lệnh đóng ca thật sự đứng đợi khóa của giao dịch bán
+      const deadline = Date.now() + 10_000
+      for (;;) {
+        const [row] = await client<{ n: number }[]>`
+          SELECT count(*)::int AS n FROM pg_stat_activity
+          WHERE datname = ${dbName} AND wait_event_type = 'Lock'`
+        if (row!.n > 0) break
+        if (Date.now() > deadline) throw new Error('Lệnh đóng ca không chờ khóa của giao dịch bán')
+        await new Promise((r) => setTimeout(r, 20))
+      }
+      expect(closeSettled).toBe(false)
+
+      release()
+      await sale
+      const closeRes = await close
+      expect(closeRes.status, await closeRes.clone().text()).toBe(200)
+      const [shift] = await db.select().from(cashShifts).where(eq(cashShifts.id, shiftId))
+      expect(shift!.closeSummary!.orderCount).toBe(1)
+      expect(shift!.expectedCash).toBe(10_000)
     })
   },
 )

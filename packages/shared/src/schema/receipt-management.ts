@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 import { documentStatusSchema } from './document-cancel.js'
-import { moneyMethodInput, moneyMethodSchema } from './cash-management.js'
+import { documentShiftIdSchema, moneyMethodInput, moneyMethodSchema } from './cash-management.js'
 import { dateFilterSchema, paginationSchema } from './pagination.js'
 
 export const allocationInputSchema = z
@@ -24,6 +24,7 @@ export const createReceiptSchema = z
       .max(99_999_999_999_999, 'Số tiền vượt giới hạn'),
     // TIEN-05: phương thức nhận tiền, bắt buộc để đối soát quỹ tiền mặt và tài khoản ngân hàng
     paymentMethod: moneyMethodInput('Vui lòng chọn phương thức nhận tiền'),
+    shiftId: documentShiftIdSchema,
     note: z.string().trim().max(500, 'Ghi chú tối đa 500 ký tự').nullable().optional(),
     allocationMode: z.enum(['fifo', 'manual']),
     allocations: z.array(allocationInputSchema).min(1, 'Cần ít nhất một khoản phân bổ'),

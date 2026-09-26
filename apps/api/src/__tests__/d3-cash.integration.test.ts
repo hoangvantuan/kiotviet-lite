@@ -322,6 +322,23 @@ describe('TIEN-02: phiếu trả lưu phương thức hoàn tiền', () => {
     expect(list.body.data[0]!.refundMethod).toBe('transfer')
   })
 
+  it('mặc định hoàn theo kênh chiếm phần lớn; đơn QR hoàn chuyển khoản (MINOR 1, 8)', async () => {
+    const product = await createProduct(env, { sellingPrice: 50_000, currentStock: 20 })
+    // Kết hợp 30k tiền mặt + 70k chuyển khoản: chuyển khoản chiếm phần lớn
+    const combinedOrder = await sell(env.owner, {
+      paymentMethod: 'combined',
+      cashAmount: 30_000,
+      transferAmount: 70_000,
+      lines: [{ product, price: 50_000, quantity: 2 }],
+    })
+    expect((await returnAll(env.owner, combinedOrder.id)).refundMethod).toBe('transfer')
+    const qrOrder = await sell(env.owner, {
+      paymentMethod: 'qr',
+      lines: [{ product, price: 50_000, quantity: 2 }],
+    })
+    expect((await returnAll(env.owner, qrOrder.id)).refundMethod).toBe('transfer')
+  })
+
   it('người trả hàng chọn phương thức khác thì lưu đúng lựa chọn', async () => {
     const product = await createProduct(env, { sellingPrice: 50_000, currentStock: 10 })
     const order = await sell(env.owner, {
@@ -723,6 +740,9 @@ describe('BC-06: báo cáo dòng tiền theo phương thức', () => {
       cashOut: 75_000,
       netCash: 255_000,
       openingCash: 0,
+      shiftDifference: 0,
+      closedShiftCount: 0,
+      openShiftCount: 0,
     })
   })
 
@@ -754,5 +774,253 @@ describe('BC-06: báo cáo dòng tiền theo phương thức', () => {
       env.staff,
     )
     expect(res.status).toBe(403)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Review PR #58
+// ---------------------------------------------------------------------------
+
+async function shiftDetail(id: string) {
+  const res = await call<{ data: ShiftDetail }>(apps.shifts, 'GET', `/${id}`, env.owner)
+  expect(res.status).toBe(200)
+  return res.body.data
+}
+
+async function closeShift(user: SeededUser, id: string, countedCash: number) {
+  const res = await call<{ data: ShiftDetail }>(apps.shifts, 'POST', `/${id}/close`, user, {
+    countedCash,
+  })
+  expect(res.status, JSON.stringify(res.body)).toBe(200)
+  return res.body.data
+}
+
+async function cashFlow(from: string, to: string = from) {
+  const res = await call<{ data: CashFlowReport }>(
+    apps.cashReports,
+    'GET',
+    `/cash-flow?from=${from}&to=${to}`,
+    env.owner,
+  )
+  expect(res.status, JSON.stringify(res.body)).toBe(200)
+  return res.body.data
+}
+
+function dayKey(offsetDays: number) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(
+    new Date(Date.now() + offsetDays * 86_400_000),
+  )
+}
+
+describe('POS-06 (review MAJOR 1): chứng từ quản lý lập thay gắn vào ca của thu ngân', () => {
+  it('nhân viên mở ca 500k, bán 100k; quản lý hoàn 50k: ca nhân viên phải có 550k', async () => {
+    await enableShifts()
+    const product = await createProduct(env, { sellingPrice: 50_000, currentStock: 10 })
+    const shift = await openShift(env.staff, 500_000)
+    const order = await sell(env.staff, {
+      paymentMethod: 'cash',
+      lines: [{ product, price: 50_000, quantity: 2 }],
+    })
+    // Quản lý không có ca; cửa hàng chỉ có một ca đang mở nên phiếu trả vào ca đó
+    const ret = await returnAll(env.manager, order.id)
+    expect(ret.refundAmount).toBe(50_000)
+    const [saved] = await env.db.select().from(orderReturns).where(eq(orderReturns.id, ret.id))
+    expect(saved!.shiftId).toBe(shift.id)
+    expect((await shiftDetail(shift.id)).summary.expectedCash).toBe(550_000)
+  })
+
+  it('phiếu thu của quản lý và phiếu chi của chủ vào ca duy nhất đang mở', async () => {
+    const { customer, debtId } = await customerWithDebt(80_000)
+    const shift = await openShift(env.staff, 100_000)
+    const receipt = await postReceipt(env.manager, customer.id, debtId, 30_000, 'cash')
+    expect(receipt.status, JSON.stringify(receipt.body)).toBe(201)
+    const [savedReceipt] = await env.db
+      .select()
+      .from(receipts)
+      .where(eq(receipts.id, receipt.body.data.id))
+    expect(savedReceipt!.shiftId).toBe(shift.id)
+
+    const [supplier] = await env.db
+      .insert(suppliers)
+      .values({ storeId: env.storeId, code: 'NCC-R1', name: 'NCC R1', currentDebt: 40_000 })
+      .returning()
+    const paid = await call<{ data: { id: string } }>(
+      apps.supplierPayments,
+      'POST',
+      '/',
+      env.owner,
+      {
+        supplierId: supplier!.id,
+        amount: 40_000,
+        paymentMethod: 'cash',
+      },
+    )
+    expect(paid.status, JSON.stringify(paid.body)).toBe(201)
+    expect((await shiftDetail(shift.id)).summary).toMatchObject({
+      cashReceipts: 30_000,
+      cashSupplierPayments: 40_000,
+      expectedCash: 90_000,
+    })
+  })
+
+  it('nhiều ca đang mở: hoàn tiền mặt phải chọn ca; chọn rồi thì gắn đúng ca đã chọn', async () => {
+    await enableShifts()
+    const product = await createProduct(env, { sellingPrice: 50_000, currentStock: 10 })
+    const staffShift = await openShift(env.staff, 0)
+    await openShift(env.owner, 0)
+    const order = await sell(env.staff, {
+      paymentMethod: 'cash',
+      lines: [{ product, price: 50_000, quantity: 2 }],
+    })
+    const ids = await orderItemIds(order.id)
+    const body = {
+      items: [{ orderItemId: ids[0]!, quantity: 1, reason: 'defective' }],
+      note: null,
+    }
+    const ask = await call<{
+      error: { details: { reason: string; shifts: Array<{ id: string; userName: string | null }> } }
+    }>(apps.orders, 'POST', `/${order.id}/returns`, env.manager, body)
+    expect(ask.status).toBe(422)
+    expect(ask.body.error.details.reason).toBe('shift_choice_required')
+    expect(ask.body.error.details.shifts.map((s) => s.id)).toContain(staffShift.id)
+    expect(await env.db.select().from(orderReturns)).toHaveLength(0)
+
+    const chosen = await call<{ data: { id: string } }>(
+      apps.orders,
+      'POST',
+      `/${order.id}/returns`,
+      env.manager,
+      { ...body, shiftId: staffShift.id },
+    )
+    expect(chosen.status, JSON.stringify(chosen.body)).toBe(201)
+    const [saved] = await env.db
+      .select()
+      .from(orderReturns)
+      .where(eq(orderReturns.id, chosen.body.data.id))
+    expect(saved!.shiftId).toBe(staffShift.id)
+  })
+
+  it('ca đã chọn đã đóng hoặc thuộc cửa hàng khác: 422, không tạo chứng từ', async () => {
+    const { customer, debtId } = await customerWithDebt(50_000)
+    const shift = await openShift(env.staff, 0)
+    await closeShift(env.staff, shift.id, 0)
+    const res = await call<{ error: { details: { reason: string } } }>(
+      apps.receipts,
+      'POST',
+      '/',
+      env.manager,
+      {
+        customerId: customer.id,
+        amount: 10_000,
+        paymentMethod: 'cash',
+        shiftId: shift.id,
+        allocationMode: 'manual',
+        allocations: [{ debtId, amount: 10_000 }],
+      },
+    )
+    expect(res.status).toBe(422)
+    expect(res.body.error.details.reason).toBe('shift_not_open')
+    expect(await env.db.select().from(receipts)).toHaveLength(0)
+  })
+})
+
+describe('BC-06 (review MAJOR 2): đối soát trong ngày với các ca nối tiếp', () => {
+  it('ca sáng 1.000k bán 2.000k, ca chiều mở 3.000k bán 1.000k: phải có 4.000k, không cộng dồn đầu ca', async () => {
+    await enableShifts()
+    const product = await createProduct(env, { sellingPrice: 1_000_000, currentStock: 10 })
+    const morning = await openShift(env.staff, 1_000_000)
+    await sell(env.staff, {
+      paymentMethod: 'cash',
+      lines: [{ product, price: 1_000_000, quantity: 2 }],
+    })
+    await closeShift(env.staff, morning.id, 3_000_000)
+    const afternoon = await openShift(env.manager, 3_000_000)
+    await sell(env.manager, {
+      paymentMethod: 'cash',
+      lines: [{ product, price: 1_000_000, quantity: 1 }],
+    })
+    await closeShift(env.manager, afternoon.id, 3_900_000)
+
+    const report = await cashFlow(today())
+    // Tiền đầu ngày là quỹ đầu ca của ca mở sớm nhất, không cộng quỹ đầu ca các ca sau
+    expect(report.cash.openingCash).toBe(1_000_000)
+    expect(report.cash.openingCash + report.cash.netCash).toBe(4_000_000)
+    // Tổng chênh lệch ngày = tổng chênh lệch các ca đã đóng
+    expect(report.cash.shiftDifference).toBe(-100_000)
+    expect(report.cash.closedShiftCount).toBe(2)
+    expect(report.cash.openShiftCount).toBe(0)
+  })
+
+  it('ca vắt qua 0h thuộc ngày mở ca', async () => {
+    const openedAt = new Date(`${dayKey(-1)}T23:00:00+07:00`)
+    await env.db.insert(cashShifts).values({
+      storeId: env.storeId,
+      userId: env.staff.id,
+      openingCash: 700_000,
+      openedAt,
+      status: 'closed',
+      closedAt: new Date(Math.min(Date.now(), openedAt.getTime() + 3 * 3_600_000)),
+      closedBy: env.staff.id,
+      expectedCash: 700_000,
+      countedCash: 650_000,
+      difference: -50_000,
+    })
+    const yesterday = await cashFlow(dayKey(-1))
+    expect(yesterday.shifts).toHaveLength(1)
+    expect(yesterday.cash).toMatchObject({ openingCash: 700_000, shiftDifference: -50_000 })
+    const todayReport = await cashFlow(today())
+    expect(todayReport.shifts).toHaveLength(0)
+    expect(todayReport.cash).toMatchObject({ openingCash: 0, shiftDifference: 0 })
+  })
+})
+
+describe('BC-06 (review MAJOR 3): đơn ngoại tuyến tính theo giờ bán', () => {
+  it('bán ngoại tuyến 21:00 hôm qua, đồng bộ hôm nay: đơn ở ngày hôm qua và ở ca A', async () => {
+    const product = await createProduct(env, { sellingPrice: 30_000, currentStock: 10 })
+    const soldAt = new Date(`${dayKey(-1)}T21:00:00+07:00`)
+    const [shiftA] = await env.db
+      .insert(cashShifts)
+      .values({
+        storeId: env.storeId,
+        userId: env.staff.id,
+        openingCash: 0,
+        openedAt: new Date(soldAt.getTime() - 3_600_000),
+        status: 'closed',
+        closedAt: new Date(soldAt.getTime() + 3_600_000),
+        closedBy: env.staff.id,
+        expectedCash: 0,
+        countedCash: 0,
+        difference: 0,
+      })
+      .returning()
+    const order = await createOrder({
+      db: env.db,
+      actor: { userId: env.staff.id, storeId: env.storeId, role: env.staff.role },
+      input: {
+        ...orderInput({ paymentMethod: 'cash', lines: [{ product, price: 30_000, quantity: 1 }] }),
+        clientId: randomUUID(),
+      } as CreateOrderInput,
+      source: 'offline_sync',
+      offlineCreatedAt: soldAt.toISOString(),
+    })
+    const [saved] = await env.db.select().from(orders).where(eq(orders.id, order.id))
+    expect(saved!.shiftId).toBe(shiftA!.id)
+    expect(saved!.soldAt.toISOString()).toBe(soldAt.toISOString())
+
+    const yesterday = await cashFlow(dayKey(-1))
+    expect(yesterday.revenue.orderCount).toBe(1)
+    expect(yesterday.methods.find((m) => m.method === 'cash')!.salesIn).toBe(30_000)
+    const todayReport = await cashFlow(today())
+    expect(todayReport.revenue.orderCount).toBe(0)
+  })
+
+  it('đơn trực tuyến có giờ bán bằng giờ tạo', async () => {
+    const product = await createProduct(env, { sellingPrice: 30_000, currentStock: 10 })
+    const order = await sell(env.staff, {
+      paymentMethod: 'cash',
+      lines: [{ product, price: 30_000, quantity: 1 }],
+    })
+    const [saved] = await env.db.select().from(orders).where(eq(orders.id, order.id))
+    expect(saved!.soldAt.getTime()).toBe(saved!.createdAt.getTime())
   })
 })

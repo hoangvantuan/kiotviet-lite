@@ -53,7 +53,7 @@ import {
 } from './document-cancel.helper.js'
 import { nextDocumentCode } from './document-codes.service.js'
 import { serviceDb, type ServiceTransaction } from './service-transaction.js'
-import { lockOpenShiftId } from './shifts.service.js'
+import { assertDocumentShift, resolveDocumentShift } from './shifts.service.js'
 
 export interface ReceiptsActor {
   userId: string
@@ -388,8 +388,16 @@ export async function createReceipt({
   return db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
 
-    // POS-06: gắn ca đang mở của người lập (không bắt buộc). Khóa ca trước khách, cùng thứ tự đơn hàng
-    const shiftId = await lockOpenShiftId(txDb, actor.storeId, actor.userId)
+    // POS-06: gắn vào ca của quầy nhận tiền (resolveDocumentShift). Khóa ca trước khách, cùng thứ
+    // tự đơn hàng
+    const shiftId = assertDocumentShift(
+      await resolveDocumentShift(txDb, {
+        storeId: actor.storeId,
+        userId: actor.userId,
+        requestedShiftId: input.shiftId,
+      }),
+      input.paymentMethod === 'cash',
+    )
 
     // 1. Lock customer FIRST
     const customerRows = await tx

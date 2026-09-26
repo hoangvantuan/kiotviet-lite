@@ -390,10 +390,12 @@ export async function createOrder({
       // POS-06: gắn ca trước mọi khóa khác (thứ tự khóa: ca, customers, debts, products). Đơn POS
       // bị chặn khi cửa hàng dùng ca mà người bán chưa mở ca; đơn ngoại tuyến gắn theo giờ bán,
       // không khớp ca nào thì để trống và hiện ở đối soát.
-      const shiftId =
-        source === 'offline_sync'
-          ? await resolveShiftAt(txDb, actor.storeId, actor.userId, offlineSoldAt(offlineCreatedAt))
-          : await requireShiftForSale(txDb, actor.storeId, actor.userId)
+      // BC-06: đơn ngoại tuyến lưu giờ bán để báo cáo tính đúng ngày; đơn trực tuyến để cột lấy
+      // mặc định now(), bằng created_at
+      const soldAt = source === 'offline_sync' ? offlineSoldAt(offlineCreatedAt) : undefined
+      const shiftId = soldAt
+        ? await resolveShiftAt(txDb, actor.storeId, actor.userId, soldAt)
+        : await requireShiftForSale(txDb, actor.storeId, actor.userId)
 
       // TIEN-103: thứ tự khóa chung customers, debts, products (customer-debt-ledger.service.ts).
       // Đơn ghi nợ khóa khách trước khi đụng tới kho, thay vì chỉ khóa lúc ghi nợ ở cuối.
@@ -412,6 +414,7 @@ export async function createOrder({
         .values({
           storeId: actor.storeId,
           orderNumber,
+          ...(soldAt ? { soldAt } : {}),
           customerId: input.customerId ?? null,
           userId: actor.userId,
           priceListId: effectivePriceListId,
