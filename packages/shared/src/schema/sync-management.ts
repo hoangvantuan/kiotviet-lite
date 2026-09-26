@@ -1,22 +1,76 @@
 import { z } from 'zod'
 
-export const syncInitialQuerySchema = z.object({
-  cursor: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(1000).default(500),
-})
-export type SyncInitialQuery = z.infer<typeof syncInitialQuerySchema>
+/**
+ * GL-03: các loại dữ liệu danh mục máy bán hàng kéo về. `tombstones` là dấu vết dòng bị xóa cứng.
+ * Thứ tự này cũng là thứ tự máy khách kéo trong một lượt.
+ */
+export const SYNC_PULL_ENTITIES = [
+  'tombstones',
+  'price_lists',
+  'customer_groups',
+  'customers',
+  'products',
+  'variants',
+  'unit_conversions',
+  'price_list_items',
+  'customer_prices',
+  'volume_prices',
+  'category_discounts',
+] as const
+export type SyncPullEntity = (typeof SYNC_PULL_ENTITIES)[number]
 
-export const syncIncrementalQuerySchema = z.object({
-  since: z.string().datetime(),
-})
-export type SyncIncrementalQuery = z.infer<typeof syncIncrementalQuerySchema>
+export const SYNC_PULL_DEFAULT_LIMIT = 1000
+
+/** Vị trí đã đọc tới: mốc updated_at (ISO UTC, đủ micro giây) và id của dòng cuối */
+export interface SyncCursor {
+  t: string
+  id: string
+}
+
+export const syncPullQuerySchema = z
+  .object({
+    entity: z.enum(SYNC_PULL_ENTITIES),
+    after: z.string().datetime({ offset: true }).optional(),
+    afterId: z.string().uuid().optional(),
+    // Trang đầu của lượt gia tăng: thời điểm máy chủ lúc bắt đầu lượt trước. Dòng lượt trước có thể
+    // bỏ sót là dòng của transaction đang chạy lúc đó (commit muộn), nên đọc lại từ vài phút trước mốc
+    since: z.string().datetime({ offset: true }).optional(),
+    limit: z.coerce.number().int().min(1).max(2000).default(SYNC_PULL_DEFAULT_LIMIT),
+  })
+  .transform(({ entity, after, afterId, since, limit }) => ({
+    entity,
+    cursor: after ? { t: after, id: afterId ?? '00000000-0000-0000-0000-000000000000' } : null,
+    since: after !== undefined ? (since ?? null) : null,
+    limit,
+  }))
+export type SyncPullQuery = z.output<typeof syncPullQuerySchema>
+
+export interface SyncPullResponse {
+  data: {
+    entity: SyncPullEntity
+    /** Dòng còn dùng được (với `tombstones`: {entity, entityId}) */
+    rows: Record<string, unknown>[]
+    /** id các dòng đã xóa mềm, máy khách phải xóa bản sao */
+    deleted: string[]
+  }
+  meta: {
+    hasMore: boolean
+    /** null khi trang rỗng: máy khách giữ con trỏ cũ */
+    nextCursor: SyncCursor | null
+    serverTime: string
+    /** Chỉ có ở trang đầu của lần đồng bộ từ đầu, để hiện tiến độ */
+    total?: number
+    /** Con trỏ dấu xóa đã quá hạn lưu giữ: xóa dữ liệu cục bộ và đồng bộ lại từ đầu */
+    resetRequired?: boolean
+  }
+}
 
 export const schemaVersionResponseSchema = z.object({
   version: z.number().int(),
 })
 export type SchemaVersionResponse = z.infer<typeof schemaVersionResponseSchema>
 
-export const PGLITE_SCHEMA_VERSION = 3
+export const PGLITE_SCHEMA_VERSION = 4
 
 /**
  * OFF-17: mã tạm in trên hóa đơn của đơn ngoại tuyến là tiền tố này cộng 8 ký tự đầu của

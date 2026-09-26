@@ -6,6 +6,11 @@ settings:
 
 packageExtensionsChecksum: sha256-MiHZ3mgtOUb60KfpkAkui5ad/9eLmcQda0MiZKaTRqA=
 
+patchedDependencies:
+  '@electric-sql/pglite@0.4.4':
+    hash: ff27382e68a9ef77fa5596b9fa858cb12f652afe3fbdce7788f35f1f714a9275
+    path: patches/@electric-sql__pglite@0.4.4.patch
+
 importers:
   .:
     devDependencies:
@@ -65,7 +70,7 @@ importers:
         version: 16.6.1
       drizzle-orm:
         specifier: ^0.45.0
-        version: 0.45.2(@electric-sql/pglite@0.4.4)(postgres@3.4.9)
+        version: 0.45.2(@electric-sql/pglite@0.4.4(patch_hash=ff27382e68a9ef77fa5596b9fa858cb12f652afe3fbdce7788f35f1f714a9275))(postgres@3.4.9)
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0
@@ -99,7 +104,7 @@ importers:
     devDependencies:
       '@electric-sql/pglite':
         specifier: ^0.4.4
-        version: 0.4.4
+        version: 0.4.4(patch_hash=ff27382e68a9ef77fa5596b9fa858cb12f652afe3fbdce7788f35f1f714a9275)
       '@types/bcryptjs':
         specifier: ^3.0.0
         version: 3.0.0
@@ -138,7 +143,7 @@ importers:
         version: 3.2.2(react@19.2.5)
       '@electric-sql/pglite':
         specifier: ^0.4.4
-        version: 0.4.4
+        version: 0.4.4(patch_hash=ff27382e68a9ef77fa5596b9fa858cb12f652afe3fbdce7788f35f1f714a9275)
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.73.1(react@19.2.5))(zod@3.25.76)
@@ -198,7 +203,7 @@ importers:
         version: 4.1.0
       drizzle-orm:
         specifier: ^0.45.0
-        version: 0.45.2(@electric-sql/pglite@0.4.4)(postgres@3.4.9)
+        version: 0.45.2(@electric-sql/pglite@0.4.4(patch_hash=ff27382e68a9ef77fa5596b9fa858cb12f652afe3fbdce7788f35f1f714a9275))(postgres@3.4.9)
       html5-qrcode:
         specifier: ^2.3.8
         version: 2.3.8
@@ -292,7 +297,7 @@ importers:
         version: link:../shared
       drizzle-orm:
         specifier: ^0.45.0
-        version: 0.45.2(@electric-sql/pglite@0.4.4)(postgres@3.4.9)
+        version: 0.45.2(@electric-sql/pglite@0.4.4(patch_hash=ff27382e68a9ef77fa5596b9fa858cb12f652afe3fbdce7788f35f1f714a9275))(postgres@3.4.9)
       grammy:
         specifier: ^1.42.0
         version: 1.42.0
@@ -302,7 +307,7 @@ importers:
     devDependencies:
       '@electric-sql/pglite':
         specifier: ^0.4.4
-        version: 0.4.4
+        version: 0.4.4(patch_hash=ff27382e68a9ef77fa5596b9fa858cb12f652afe3fbdce7788f35f1f714a9275)
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17
@@ -320,7 +325,7 @@ importers:
     dependencies:
       drizzle-orm:
         specifier: ^0.45.0
-        version: 0.45.2(@electric-sql/pglite@0.4.4)(postgres@3.4.9)
+        version: 0.45.2(@electric-sql/pglite@0.4.4(patch_hash=ff27382e68a9ef77fa5596b9fa858cb12f652afe3fbdce7788f35f1f714a9275))(postgres@3.4.9)
       uuidv7:
         specifier: ^1.2.1
         version: 1.2.1
@@ -8766,7 +8771,8 @@ snapshots:
 
   '@drizzle-team/brocli@0.10.2': {}
 
-  '@electric-sql/pglite@0.4.4': {}
+  '@electric-sql/pglite@0.4.4(patch_hash=ff27382e68a9ef77fa5596b9fa858cb12f652afe3fbdce7788f35f1f714a9275)':
+    {}
 
   '@emnapi/core@1.10.0':
     dependencies:
@@ -10578,9 +10584,9 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.21.0
 
-  drizzle-orm@0.45.2(@electric-sql/pglite@0.4.4)(postgres@3.4.9):
+  drizzle-orm@0.45.2(@electric-sql/pglite@0.4.4(patch_hash=ff27382e68a9ef77fa5596b9fa858cb12f652afe3fbdce7788f35f1f714a9275))(postgres@3.4.9):
     optionalDependencies:
-      '@electric-sql/pglite': 0.4.4
+      '@electric-sql/pglite': 0.4.4(patch_hash=ff27382e68a9ef77fa5596b9fa858cb12f652afe3fbdce7788f35f1f714a9275)
       postgres: 3.4.9
 
   dunder-proto@1.0.1:

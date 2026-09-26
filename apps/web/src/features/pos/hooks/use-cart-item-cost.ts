@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 
-import { apiClient } from '@/lib/api-client'
 import type { CartItem } from '@/stores/use-cart-store'
 
-import type { PosProductItem } from '../types'
+import { searchPosProducts } from './use-pos-products'
 
 /**
  * Trạng thái giá vốn của một dòng trong giỏ:
@@ -26,10 +25,8 @@ type Lookup = Pick<CartItem, 'productId' | 'variantId' | 'sku'>
  * productId. Trả undefined khi không còn tìm thấy sản phẩm.
  */
 export async function fetchCartItemCostPrice(item: Lookup): Promise<number | null | undefined> {
-  const res = await apiClient.get<{ data: PosProductItem[] }>(
-    `/api/v1/pos/products/search?q=${encodeURIComponent(item.sku)}`,
-  )
-  const product = res.data.find((p) => p.id === item.productId)
+  const products = await searchPosProducts({ q: item.sku })
+  const product = products.find((p) => p.id === item.productId)
   if (!product) return undefined
   if (!item.variantId) return product.costPrice
   const variant = product.variants.find((v) => v.id === item.variantId)

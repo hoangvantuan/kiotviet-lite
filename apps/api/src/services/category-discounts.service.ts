@@ -2,6 +2,7 @@ import { and, asc, desc, eq, isNull, type SQL, sql } from 'drizzle-orm'
 
 import {
   categories,
+  categoryDiscountFinalPrice,
   type CategoryDiscountListItem,
   categoryDiscounts,
   type CategoryDiscountType,
@@ -16,6 +17,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { toIsoDate } from '../lib/date.js'
 import { ApiError } from '../lib/errors.js'
 import { escapeLikePattern } from '../lib/strings.js'
 import { diffObjects, logAction, type RequestMeta } from './audit.service.js'
@@ -44,10 +46,6 @@ interface CategoryDiscountRow {
   note: string | null
   createdAt: Date
   updatedAt: Date
-}
-
-function toIsoDate(today: Date): string {
-  return today.toISOString().slice(0, 10)
 }
 
 export function computeEffectiveStatus(
@@ -593,13 +591,6 @@ export interface CategoryDiscountResolved {
   finalPrice: number
 }
 
-function applyDiscount(basePrice: number, type: CategoryDiscountType, value: number): number {
-  if (type === 'percent') {
-    return Math.round((basePrice * value) / 100)
-  }
-  return value
-}
-
 export async function findApplicableCategoryDiscount({
   db,
   storeId,
@@ -661,13 +652,14 @@ export async function findApplicableCategoryDiscount({
 
   const baseSellingPrice = basePrice ?? Number(product.sellingPrice)
   const discountType = winner.discountType as CategoryDiscountType
-  const discountAmount = applyDiscount(baseSellingPrice, discountType, Number(winner.discountValue))
+  const discountValue = Number(winner.discountValue)
 
+  // Thứ tự ưu tiên ở ORDER BY trên phải khớp `pickCategoryDiscount` (định giá ngoại tuyến)
   return {
     discountId: winner.id,
     discountType,
-    discountValue: Number(winner.discountValue),
-    finalPrice: Math.max(0, baseSellingPrice - discountAmount),
+    discountValue,
+    finalPrice: categoryDiscountFinalPrice(baseSellingPrice, { discountType, discountValue }),
   }
 }
 

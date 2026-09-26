@@ -14,7 +14,7 @@ import type {
   UpdatePriceListItemInput,
 } from '@kiotviet-lite/shared'
 
-import { apiClient } from '@/lib/api-client'
+import { apiClient, LONG_REQUEST_TIMEOUT_MS } from '@/lib/api-client'
 
 interface Envelope<T> {
   data: T
@@ -84,7 +84,7 @@ export function recalculatePriceListApi(id: string) {
       removedCount: number
       preservedOverrideCount: number
     }>
-  >(`/api/v1/price-lists/${id}/recalculate`)
+  >(`/api/v1/price-lists/${id}/recalculate`, undefined, { timeoutMs: LONG_REQUEST_TIMEOUT_MS })
 }
 
 export function listPriceListItemsApi(
@@ -121,13 +121,16 @@ export function deletePriceListItemApi(priceListId: string, itemId: string) {
 }
 
 export function clonePriceListApi(id: string, input: ClonePriceListInput) {
-  return apiClient.post<Envelope<PriceListDetail>>(`/api/v1/price-lists/${id}/clone`, input)
+  return apiClient.post<Envelope<PriceListDetail>>(`/api/v1/price-lists/${id}/clone`, input, {
+    timeoutMs: LONG_REQUEST_TIMEOUT_MS,
+  })
 }
 
 export function importPriceListApi(id: string, input: ImportPriceListInput) {
   return apiClient.post<Envelope<{ summary: ImportPriceListSummary; priceList: PriceListDetail }>>(
     `/api/v1/price-lists/${id}/import`,
     input,
+    { timeoutMs: LONG_REQUEST_TIMEOUT_MS },
   )
 }
 
@@ -135,5 +138,6 @@ export function comparePriceListsApi(listAId: string, listBId: string) {
   const params = new URLSearchParams({ listAId, listBId })
   return apiClient.get<Envelope<ComparePriceListsResponse>>(
     `/api/v1/price-lists/compare?${params.toString()}`,
+    { timeoutMs: LONG_REQUEST_TIMEOUT_MS },
   )
 }

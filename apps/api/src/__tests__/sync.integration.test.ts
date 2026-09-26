@@ -49,80 +49,65 @@ describe('Sync API Integration Tests', () => {
     })
   })
 
-  describe('GET /initial (Đồng bộ khởi tạo ban đầu)', () => {
-    it('trả về đầy đủ các danh mục, sản phẩm, khách hàng của cửa hàng', async () => {
+  // GL-03: /initial và /incremental được thay bằng /pull phân trang theo con trỏ; kiểm kỹ ở
+  // sync-pull.integration.test.ts
+  describe('GET /pull (Đồng bộ danh mục)', () => {
+    type PullBody = {
+      data: { rows: Array<{ id: string; productId?: string }>; deleted: string[] }
+      meta: { hasMore: boolean; nextCursor: { t: string; id: string } | null }
+    }
+    const pull = async (entity: string, headers: Record<string, string>, extra = '') => {
+      const res = await app.request(`/pull?entity=${entity}${extra}`, { method: 'GET', headers })
+      expect(res.status).toBe(200)
+      return (await res.json()) as PullBody
+    }
+
+    it('trả về sản phẩm, biến thể, khách hàng của cửa hàng', async () => {
       const prod = await createProduct(env, { name: 'Sản phẩm đồng bộ', sellingPrice: 50_000 })
       await createVariant(env, prod.id, { attribute1Name: 'Màu', attribute1Value: 'Đỏ' })
       const cust = await createCustomer(env, { name: 'Khách đồng bộ' })
 
-      const res = await app.request('/initial', {
-        method: 'GET',
-        headers: env.owner.authHeader,
-      })
-
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as {
-        data: {
-          products: Array<{ id: string; name: string }>
-          variants: Array<{ id: string; productId: string }>
-          customers: Array<{ id: string; name: string }>
-        }
-        meta: { syncedAt: string }
-      }
-
-      expect(body.data.products.some((p) => p.id === prod.id)).toBe(true)
-      expect(body.data.variants.some((v) => v.productId === prod.id)).toBe(true)
-      expect(body.data.customers.some((c) => c.id === cust.id)).toBe(true)
-      expect(body.meta.syncedAt).toBeTruthy()
+      expect(
+        (await pull('products', env.owner.authHeader)).data.rows.some((p) => p.id === prod.id),
+      ).toBe(true)
+      expect(
+        (await pull('variants', env.owner.authHeader)).data.rows.some(
+          (v) => v.productId === prod.id,
+        ),
+      ).toBe(true)
+      expect(
+        (await pull('customers', env.owner.authHeader)).data.rows.some((c) => c.id === cust.id),
+      ).toBe(true)
     })
 
     it('cách ly đa cửa hàng: không trả về dữ liệu của cửa hàng khác', async () => {
       const prodA = await createProduct(env, { name: 'Sản phẩm Store A' })
-
-      // Tạo Store B
       const storeB = await createStore(env, { name: 'Store B' })
       const userB = await createUser(env, { storeId: storeB.id, role: 'owner' })
       const prodB = await createProduct(env, { storeId: storeB.id, name: 'Sản phẩm Store B' })
 
-      const resA = await app.request('/initial', {
-        method: 'GET',
-        headers: env.owner.authHeader,
-      })
-      const bodyA = (await resA.json()) as {
-        data: { products: Array<{ id: string }> }
-      }
-      expect(bodyA.data.products.some((p) => p.id === prodA.id)).toBe(true)
-      expect(bodyA.data.products.some((p) => p.id === prodB.id)).toBe(false)
+      const rowsA = (await pull('products', env.owner.authHeader)).data.rows
+      expect(rowsA.some((p) => p.id === prodA.id)).toBe(true)
+      expect(rowsA.some((p) => p.id === prodB.id)).toBe(false)
 
-      const resB = await app.request('/initial', {
-        method: 'GET',
-        headers: userB.authHeader,
-      })
-      const bodyB = (await resB.json()) as {
-        data: { products: Array<{ id: string }> }
-      }
-      expect(bodyB.data.products.some((p) => p.id === prodB.id)).toBe(true)
-      expect(bodyB.data.products.some((p) => p.id === prodA.id)).toBe(false)
+      const rowsB = (await pull('products', userB.authHeader)).data.rows
+      expect(rowsB.some((p) => p.id === prodB.id)).toBe(true)
+      expect(rowsB.some((p) => p.id === prodA.id)).toBe(false)
     })
-  })
 
-  describe('GET /incremental (Đồng bộ tăng dần)', () => {
-    it('chỉ trả về các bản ghi cập nhật sau thời điểm since', async () => {
-      const pastDate = new Date(Date.now() - 60_000).toISOString()
+    it('đọc tiếp từ con trỏ chỉ trả bản ghi mới hơn', async () => {
+      await createProduct(env, { name: 'Sản phẩm cũ' })
+      const first = await pull('products', env.owner.authHeader)
+      const cursor = first.meta.nextCursor!
       const prod = await createProduct(env, { name: 'Sản phẩm mới sửa', sellingPrice: 90_000 })
 
-      const res = await app.request(`/incremental?since=${encodeURIComponent(pastDate)}`, {
-        method: 'GET',
-        headers: env.owner.authHeader,
-      })
-
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as {
-        data: { products: Array<{ id: string; name: string }> }
-        meta: { syncedAt: string }
-      }
-
-      expect(body.data.products.some((p) => p.id === prod.id)).toBe(true)
+      const next = await pull(
+        'products',
+        env.owner.authHeader,
+        `&after=${encodeURIComponent(cursor.t)}&afterId=${cursor.id}`,
+      )
+      expect(next.data.rows.map((p) => p.id)).toContain(prod.id)
+      expect(next.data.rows.some((p) => first.data.rows.some((f) => f.id === p.id))).toBe(false)
     })
   })
 

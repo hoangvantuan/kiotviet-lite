@@ -16,9 +16,22 @@ export async function getCurrentVersion(pglite: PGliteInterface): Promise<number
   }
 }
 
+async function getAppliedVersions(pglite: PGliteInterface): Promise<Set<number>> {
+  try {
+    const result = await pglite.query<{ version: number }>('SELECT version FROM schema_version')
+    return new Set(result.rows.map((r) => Number(r.version)))
+  } catch {
+    return new Set()
+  }
+}
+
 /**
  * Chạy mọi migration còn thiếu theo thứ tự, mỗi bước trong một giao dịch cùng dòng
  * schema_version, để một bước lỗi giữa chừng không để lại bảng nửa vời.
+ *
+ * "Còn thiếu" là chưa có dòng trong schema_version, không phải lớn hơn phiên bản cao nhất: hai
+ * nhánh thêm migration song song có thể lên máy theo thứ tự khác số (v004 trước v003), so với số
+ * lớn nhất thì bước số nhỏ sẽ không bao giờ chạy.
  *
  * Bản cũ bỏ qua toàn bộ migration khi cách biệt phiên bản lớn hơn 3, nên máy mới cài (phiên bản
  * 0) sẽ không có bảng nào ngay khi có migration thứ 4. Cách biệt lớn chỉ còn là tín hiệu
@@ -30,8 +43,9 @@ export async function runPGliteMigrations(
   migrations: PGliteMigration[],
 ): Promise<{ success: boolean; needsResync: boolean }> {
   const currentVersion = await getCurrentVersion(pglite)
+  const applied = await getAppliedVersions(pglite)
   const pending = migrations
-    .filter((m) => m.version > currentVersion)
+    .filter((m) => !applied.has(m.version))
     .sort((a, b) => a.version - b.version)
 
   if (pending.length === 0) return { success: true, needsResync: false }

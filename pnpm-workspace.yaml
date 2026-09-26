@@ -11,3 +11,9 @@ packageExtensions:
     peerDependenciesMeta:
       zod:
         optional: true
+
+# PGliteWorker 0.4.4 (còn nguyên ở 0.5.8): tab đóng khi yêu cầu giành khóa truy vấn còn đang xếp hàng
+# thì worker chủ giành được khóa sau đó và giữ mãi, mọi tab khác treo truy vấn. Bản vá nhả khóa ngay
+# nếu tab đã đóng và không trả lời vào kênh đã đóng.
+patchedDependencies:
+  '@electric-sql/pglite@0.4.4': patches/@electric-sql__pglite@0.4.4.patch

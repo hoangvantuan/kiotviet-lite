@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiClientError } from '@/lib/api-client'
+import { ApiClientError, REQUEST_TIMEOUT_MS } from '@/lib/api-client'
 import { resetIdempotencyKeysForTest } from '@/lib/idempotency'
 import { posTransferNote } from '@/lib/vietqr'
 import { useAuthStore } from '@/stores/use-auth-store'
@@ -12,10 +12,28 @@ import { useCartStore } from '@/stores/use-cart-store'
 
 import {
   type CheckoutVariables,
+  OFFLINE_UNKNOWN_OUTCOME_MESSAGE,
   pendingCheckoutKey,
   PREVIOUS_ORDER_SAVED,
+  UNKNOWN_OUTCOME_RETRY_HINT,
   useCheckoutMutation,
 } from './use-checkout'
+
+// Hàng chờ ngoại tuyến: mặc định không mở được (như máy không có PGlite) để các bài R4 bên dưới
+// giữ nguyên tiền đề "lỗi mạng thì báo lỗi, lưu lại cùng khóa"; bài OFF-06 tự bật lên
+const offline = vi.hoisted(() => ({
+  getOfflineDB: vi.fn<() => Promise<object>>(),
+  saveOfflineOrder: vi.fn(),
+  toastWarning: vi.fn(),
+}))
+vi.mock('@/lib/pglite', () => ({ getOfflineDB: offline.getOfflineDB }))
+vi.mock('@/lib/offline-orders', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/offline-orders')>()),
+  saveOfflineOrder: offline.saveOfflineOrder,
+}))
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), warning: offline.toastWarning, error: vi.fn() },
+}))
 
 const PRODUCT_ID = '01a0da5f-d368-7cda-9dfe-5c0c5757357c'
 
@@ -111,6 +129,10 @@ async function checkout(
 }
 
 beforeEach(() => {
+  offline.getOfflineDB.mockReset().mockRejectedValue(new Error('PGlite không khả dụng'))
+  offline.saveOfflineOrder.mockReset().mockImplementation(async (_db, _store, _o, id) => id)
+  offline.toastWarning.mockReset()
+  vi.spyOn(console, 'error').mockImplementation(() => {})
   sessionStorage.clear()
   resetIdempotencyKeysForTest()
   useAuthStore.setState({ accessToken: 'test-token', user: { id: 'u1', storeId: 's1' } as never })
@@ -119,6 +141,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('R4: khóa lưu đơn POS gắn với giỏ hàng của tab', () => {
@@ -269,5 +292,134 @@ describe('POS-07: nội dung chuyển khoản trong mã VietQR tra ngược ra �
     expect(posTransferNote(expected)).toBe(
       `TT ${expected.replace(/-/g, '').slice(0, 8).toUpperCase()}`,
     )
+  })
+})
+
+describe('OFF-06: tạo đơn gặp lỗi mạng hoặc hết giờ: chưa rõ thì theo R4, rồi lưu ngoại tuyến bằng cùng clientId', () => {
+  beforeEach(() => {
+    offline.getOfflineDB.mockReset().mockResolvedValue({})
+  })
+
+  /** fetch treo tới khi bị hủy, như có Wi-Fi mà máy chủ không phản hồi */
+  const hangingFetch = () =>
+    vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => reject(init.signal!.reason))
+        }),
+    )
+
+  it('hết giờ chờ lần đầu: đi luồng chưa rõ của R4, chưa lưu vào máy, không tự gửi lại', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const fetchMock = hangingFetch()
+      vi.stubGlobal('fetch', fetchMock)
+      const result = setup()
+
+      let outcome: unknown
+      await act(async () => {
+        const pending = result.current.mutateAsync({ tab: 1, order: order() }).catch((e) => e)
+        await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS)
+        outcome = await pending
+      })
+
+      expect(sentOrders(fetchMock)).toHaveLength(1)
+      expect(offline.saveOfflineOrder).not.toHaveBeenCalled()
+      expect(outcome).toMatchObject({ code: 'NETWORK_ERROR', details: { outcomeUnknown: true } })
+      expect((outcome as Error).message).toContain('Chưa rõ đã lưu hay chưa')
+      expect((outcome as Error).message).toContain(UNKNOWN_OUTCOME_RETRY_HINT)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bấm lại mà vẫn hết giờ: lưu vào hàng chờ đúng clientId đã gửi, báo chưa rõ kết quả', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const fetchMock = hangingFetch()
+      vi.stubGlobal('fetch', fetchMock)
+      const result = setup()
+
+      let outcome: unknown
+      await act(async () => {
+        const first = result.current.mutateAsync({ tab: 1, order: order() }).catch((e) => e)
+        await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS)
+        await first
+        const second = result.current.mutateAsync({ tab: 1, order: order() })
+        await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS)
+        outcome = await second
+      })
+
+      const sent = sentOrders(fetchMock)
+      expect(sent).toHaveLength(2)
+      expect(sent[1]!.key).toBe(sent[0]!.key)
+      expect(offline.saveOfflineOrder).toHaveBeenCalledTimes(1)
+      const [, seller, payload, clientId] = offline.saveOfflineOrder.mock.calls[0]!
+      expect(seller).toEqual({ storeId: 's1', userId: 'u1' })
+      expect(clientId).toBe(sent[0]!.key)
+      expect((payload as { clientId: string }).clientId).toBe(sent[0]!.key)
+      expect((outcome as { data: { id: string } }).data.id).toBe(sent[0]!.key)
+      expect(offline.toastWarning).toHaveBeenCalledWith(OFFLINE_UNKNOWN_OUTCOME_MESSAGE)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lỗi mạng và máy đã báo ngoại tuyến: lưu ngay bằng khóa đó', async () => {
+    let online = true
+    vi.spyOn(navigator, 'onLine', 'get').mockImplementation(() => online)
+    const fetchMock = vi.fn(async () => {
+      online = false
+      throw new TypeError('Failed to fetch')
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const result = setup()
+
+    const outcome = await checkout(result, { tab: 1, order: order() })
+
+    const [sent] = sentOrders(fetchMock)
+    expect(offline.saveOfflineOrder.mock.calls[0]![3]).toBe(sent!.key)
+    expect((outcome as { data: { id: string } }).data.id).toBe(sent!.key)
+  })
+
+  it('máy chủ trả lỗi nghiệp vụ: không lưu ngoại tuyến', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ error: { code: 'VALIDATION_ERROR', message: 'Sai dữ liệu' } }),
+            { status: 400, headers: { 'Content-Type': 'application/json' } },
+          ),
+        ),
+    )
+    const result = setup()
+
+    const outcome = await checkout(result, { tab: 1, order: order() })
+
+    expect(outcome).toBeInstanceOf(ApiClientError)
+    expect(offline.saveOfflineOrder).not.toHaveBeenCalled()
+  })
+
+  it('không ghi được vào máy: trả lại lỗi mạng gốc và giữ khóa cho lần lưu lại', async () => {
+    offline.saveOfflineOrder.mockRejectedValueOnce(new Error('đĩa đầy'))
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(created())
+    vi.stubGlobal('fetch', fetchMock)
+    const result = setup()
+
+    await checkout(result, { tab: 1, order: order() })
+    const error = await checkout(result, { tab: 1, order: order() })
+    await checkout(result, { tab: 1, order: order() })
+
+    expect(offline.saveOfflineOrder).toHaveBeenCalledTimes(1)
+    expect(error).toMatchObject({ code: 'NETWORK_ERROR', details: { outcomeUnknown: true } })
+    const [first, second, third] = sentOrders(fetchMock)
+    expect(second!.key).toBe(first!.key)
+    expect(third!.key).toBe(first!.key)
   })
 })

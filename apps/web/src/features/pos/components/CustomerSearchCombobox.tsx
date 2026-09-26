@@ -5,10 +5,10 @@ import { formatPhone } from '@kiotviet-lite/shared'
 
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useCustomersQuery } from '@/features/customers/use-customers'
 import { cn } from '@/lib/utils'
 import { useCartStore } from '@/stores/use-cart-store'
 
+import { usePosCustomerSearch } from '../hooks/use-pos-customers'
 import { QuickCreateCustomerInline } from './QuickCreateCustomerInline'
 
 export function CustomerSearchCombobox() {
@@ -31,12 +31,9 @@ export function CustomerSearchCombobox() {
     }
   }, [search])
 
-  const { data } = useCustomersQuery({
-    search: debouncedSearch || undefined,
-    pageSize: 10,
-  })
+  const { data } = usePosCustomerSearch(debouncedSearch)
 
-  const customers = data?.data ?? []
+  const customers = data ?? []
 
   const handleSelect = useCallback(
     (c: { id: string; name: string; groupId: string | null; groupName: string | null }) => {

@@ -6,6 +6,7 @@ import type { CreateOrderInput, DebtInfo, PriceSource } from '@kiotviet-lite/sha
 import { useDocumentMutation } from '@/hooks/use-document-mutation'
 import { apiClient, ApiClientError } from '@/lib/api-client'
 import { idempotencyKeyFor } from '@/lib/idempotency'
+import { getCustomerDebtOffline, isBrowserOffline, isUnreachableError } from '@/lib/offline-catalog'
 import { offlineOrderNumber, saveOfflineOrder } from '@/lib/offline-orders'
 import { getOfflineDB } from '@/lib/pglite'
 import { useAuthStore } from '@/stores/use-auth-store'
@@ -77,6 +78,21 @@ interface CustomerDebtResponse {
 
 /** Mã lỗi khi lần bán trước (cùng khóa) có vẻ đã được lưu: `details` là {@link PreviousOrderSaved} */
 export const PREVIOUS_ORDER_SAVED = 'PREVIOUS_ORDER_SAVED'
+
+/** R4: lỗi mạng giữa chừng, đơn đã chuyển sang hàng chờ trên máy với cùng mã */
+export const OFFLINE_UNKNOWN_OUTCOME_MESSAGE =
+  'Chưa rõ máy chủ đã nhận đơn hay chưa. Đơn được giữ trên máy với cùng mã, khi có mạng sẽ đối chiếu và không tạo đơn trùng.'
+
+/** Thêm vào thông báo "chưa rõ" của R4 để thu ngân biết lần bấm lại sẽ ra sao */
+export const UNKNOWN_OUTCOME_RETRY_HINT =
+  'Nếu vẫn không tới được máy chủ, đơn sẽ được giữ trên máy với cùng mã.'
+
+/**
+ * OFF-06: khóa của các lần bán đã gặp kết quả không rõ. Lần đầu đi luồng "chưa rõ" của R4 (hộp
+ * thanh toán giữ nguyên để bấm lại cùng khóa); bấm lại mà vẫn không tới được máy chủ thì chuyển
+ * sang hàng chờ trên máy, để máy chủ treo không giữ chân thu ngân.
+ */
+const unknownOutcomeKeys = new Set<string>()
 
 export interface PreviousOrderSaved {
   orderId: string
@@ -165,7 +181,10 @@ export function useCheckoutMutation() {
         useOfflineStore.getState().status === 'offline' ||
         (typeof navigator !== 'undefined' && !navigator.onLine)
 
-      if (isOffline) {
+      // OFF-06: lưu vào hàng chờ trên máy bằng CHÍNH clientId của lần bán. `unknown` là khi request
+      // đã gửi mà không có phản hồi: máy chủ có thể đã lưu, /sync/push nhận ra trùng clientId nên
+      // vẫn chỉ ra một đơn.
+      const saveOffline = async (unknown: boolean) => {
         const pglite = await getOfflineDB()
 
         const seller = useAuthStore.getState().user
@@ -178,7 +197,11 @@ export function useCheckoutMutation() {
           payload as CreateOrderInput,
           clientId,
         )
-        toast.success('Đơn hàng đã lưu (ngoại tuyến, chờ đồng bộ)')
+        if (unknown) {
+          toast.warning(OFFLINE_UNKNOWN_OUTCOME_MESSAGE)
+        } else {
+          toast.success('Đơn hàng đã lưu (ngoại tuyến, chờ đồng bộ)')
+        }
 
         const debtAmount = payload.debtAmount ?? 0
         let change = 0
@@ -240,11 +263,42 @@ export function useCheckoutMutation() {
         return { data: offlineOrder }
       }
 
+      if (isOffline) return saveOffline(false)
+
       try {
-        return await apiClient.post<CheckoutResponse>('/api/v1/pos/orders', payload, {
+        const res = await apiClient.post<CheckoutResponse>('/api/v1/pos/orders', payload, {
           idempotencyKey: clientId,
         })
+        unknownOutcomeKeys.delete(clientId)
+        return res
       } catch (error) {
+        if (isUnreachableError(error)) {
+          const apiError = error as ApiClientError
+          const unknown =
+            (apiError.details as { outcomeUnknown?: boolean } | undefined)?.outcomeUnknown === true
+          // Lần đầu không rõ kết quả mà máy vẫn báo có mạng: luồng "chưa rõ" của R4
+          if (unknown && !unknownOutcomeKeys.has(clientId) && !isBrowserOffline()) {
+            unknownOutcomeKeys.add(clientId)
+            throw new ApiClientError(
+              apiError.status,
+              {
+                code: apiError.code,
+                message: `${apiError.message} ${UNKNOWN_OUTCOME_RETRY_HINT}`,
+                details: apiError.details,
+              },
+              null,
+            )
+          }
+          try {
+            const saved = await saveOffline(unknown)
+            unknownOutcomeKeys.delete(clientId)
+            return saved
+          } catch (saveError) {
+            // Không ghi được vào máy thì trả lại lỗi mạng gốc: thu ngân lưu lại cùng khóa (R4)
+            console.error('Không lưu được đơn vào hàng chờ ngoại tuyến', saveError)
+            throw error
+          }
+        }
         throw isKeyReused(error) ? await previousOrderError(clientId, error) : error
       }
     },
@@ -259,14 +313,30 @@ export function useCheckoutMutation() {
   })
 }
 
+/** Nợ của khách; `syncedAt` có giá trị khi số liệu lấy từ bản sao trên máy (ngoại tuyến) */
+export type CustomerDebtView = DebtInfo & { syncedAt?: string; pendingDebt?: number }
+
+async function fetchCustomerDebt(customerId: string): Promise<CustomerDebtView | null> {
+  // OFF-15: không tới được máy chủ thì dùng nợ và hạn mức theo lần đồng bộ gần nhất
+  if (isBrowserOffline()) return getCustomerDebtOffline(customerId)
+  try {
+    const res = await apiClient.get<CustomerDebtResponse>(`/api/v1/pos/customer-debt/${customerId}`)
+    return res.data
+  } catch (error) {
+    if (isUnreachableError(error)) return getCustomerDebtOffline(customerId)
+    throw error
+  }
+}
+
 // Story 5.1: customer debt info query
 export function useCustomerDebtQuery(customerId: string | null) {
   return useQuery({
     queryKey: ['customer-debt', customerId],
-    queryFn: () => apiClient.get<CustomerDebtResponse>(`/api/v1/pos/customer-debt/${customerId}`),
+    queryFn: () => fetchCustomerDebt(customerId!),
     enabled: customerId !== null,
     staleTime: 0,
-    select: (res) => res.data,
+    // Ngoại tuyến vẫn chạy để đọc bản sao cục bộ
+    networkMode: 'always',
   })
 }
 

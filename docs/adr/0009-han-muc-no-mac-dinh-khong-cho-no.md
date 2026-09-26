@@ -94,8 +94,9 @@ ngoại tuyến vì chính tổ hợp đó là cách ghi khống một khoản n
 
 ### Giá vốn
 
-Người không có `products.viewCost` (nhân viên) không nhận số giá vốn ở tìm hàng POS, `/sync/initial`,
-`/sync/incremental`, phản hồi tạo đơn và chi tiết đơn. Phản hồi tạo đơn có cờ `belowCost` từng dòng
+Người không có `products.viewCost` (nhân viên) không nhận số giá vốn ở tìm hàng POS, `/sync/pull`
+(đồng bộ danh mục về máy bán hàng, thay cho `/sync/initial` và `/sync/incremental`), phản hồi tạo đơn
+và chi tiết đơn. Bản sao danh mục trên máy ghi lại quyền lúc tải; quyền đổi thì xóa và tải lại. Phản hồi tạo đơn có cờ `belowCost` từng dòng
 thay cho con số. Không có điểm "thử giá" riêng vì gọi nhiều lần sẽ dò ra giá vốn.
 
 ### Đơn ngoại tuyến: nhận đơn nhưng chờ chủ duyệt

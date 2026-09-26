@@ -603,25 +603,32 @@ describe('BC-13: nhân viên không nhận giá vốn trên mọi đường li�
     expect(owner.body.data[0].costPrice).toBe(ENSURE_COST)
   })
 
-  it('/sync/initial và /sync/incremental: nhân viên không có costPrice', async () => {
-    const initial = await call(app, 'GET', '/api/v1/sync/initial', env.staff.authHeader)
-    expect(initial.status).toBe(200)
-    expect(initial.body.data.products.length).toBeGreaterThan(0)
-    for (const p of initial.body.data.products) expect(p).not.toHaveProperty('costPrice')
-
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    const incremental = await call(
+  it('/sync/pull: nhân viên không có costPrice ở sản phẩm và biến thể', async () => {
+    for (const entity of ['products', 'variants']) {
+      const staff = await call(
+        app,
+        'GET',
+        `/api/v1/sync/pull?entity=${entity}`,
+        env.staff.authHeader,
+      )
+      expect(staff.status).toBe(200)
+      for (const row of staff.body.data.rows) expect(row).not.toHaveProperty('costPrice')
+    }
+    const staffProducts = await call(
       app,
       'GET',
-      `/api/v1/sync/incremental?since=${encodeURIComponent(since)}`,
+      '/api/v1/sync/pull?entity=products',
       env.staff.authHeader,
     )
-    expect(incremental.status).toBe(200)
-    expect(incremental.body.data.products.length).toBeGreaterThan(0)
-    for (const p of incremental.body.data.products) expect(p).not.toHaveProperty('costPrice')
+    expect(staffProducts.body.data.rows.length).toBeGreaterThan(0)
 
-    const ownerInitial = await call(app, 'GET', '/api/v1/sync/initial', env.owner.authHeader)
-    expect(ownerInitial.body.data.products[0]).toHaveProperty('costPrice')
+    const ownerProducts = await call(
+      app,
+      'GET',
+      '/api/v1/sync/pull?entity=products',
+      env.owner.authHeader,
+    )
+    expect(ownerProducts.body.data.rows[0]).toHaveProperty('costPrice')
   })
 
   it('phản hồi tạo đơn và chi tiết đơn: nhân viên chỉ thấy cờ belowCost, không thấy giá vốn', async () => {

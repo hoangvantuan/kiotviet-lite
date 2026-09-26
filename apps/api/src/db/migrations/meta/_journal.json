@@ -407,6 +407,20 @@
       "when": 1790394420195,
       "tag": "0057_offline_sold_at_seller",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1790397666816,
+      "tag": "0058_sync_tombstones",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1790397673531,
+      "tag": "0059_sync_tombstones_triggers",
+      "breakpoints": true
     }
   ]
 }

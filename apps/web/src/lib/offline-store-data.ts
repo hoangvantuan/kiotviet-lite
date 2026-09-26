@@ -1,5 +1,7 @@
 import type { PGliteInterface } from '@electric-sql/pglite'
 
+import { CATALOG_STORE_TABLES } from '@kiotviet-lite/shared/offline'
+
 import { notifyOutboxChanged } from './offline-orders'
 import { getPGliteClient } from './pglite'
 
@@ -20,6 +22,10 @@ export function registerOfflineStoreTable(table: string): void {
   if (!TABLE_NAME.test(table)) throw new Error(`Tên bảng không hợp lệ: ${table}`)
   if (!OFFLINE_STORE_TABLES.includes(table)) OFFLINE_STORE_TABLES.push(table)
 }
+
+// GL-03, OFF-09: bản sao danh mục (hàng, khách, giá vốn, công nợ) và con trỏ đồng bộ. Đăng ký ngay
+// khi nạp module để đăng xuất luôn dọn, kể cả khi phiên này chưa từng mở POS.
+for (const table of CATALOG_STORE_TABLES) registerOfflineStoreTable(table)
 
 /** Mốc đồng bộ danh mục (sync-engine lưu ở schema_version phiên bản -1) */
 const SYNC_WATERMARK_VERSION = -1
