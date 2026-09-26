@@ -1,4 +1,9 @@
-import { debtSourceLabel, formatVndWithSuffix, type ReceiptDetail } from '@kiotviet-lite/shared'
+import {
+  debtSourceLabel,
+  formatVndWithSuffix,
+  moneyMethodLabel,
+  type ReceiptDetail,
+} from '@kiotviet-lite/shared'
 
 import { formatVnd } from '@/lib/currency'
 import { formatDateTime } from '@/lib/date'
@@ -15,7 +20,6 @@ interface ReceiptPrintTemplateProps {
 }
 
 export function ReceiptPrintTemplate({ receipt, store }: ReceiptPrintTemplateProps) {
-  const code = receipt.id.slice(-8).toUpperCase()
   return (
     <div className="hidden print:block print:p-4 print:font-sans print:text-black">
       <header className="text-center">
@@ -25,8 +29,9 @@ export function ReceiptPrintTemplate({ receipt, store }: ReceiptPrintTemplatePro
       </header>
       <h2 className="my-4 text-center text-xl font-bold">PHIẾU THU</h2>
       <div className="text-sm space-y-1">
-        <p>Mã phiếu: {code}</p>
+        <p>Mã phiếu: {receipt.code}</p>
         <p>Ngày: {formatDateTime(receipt.createdAt)}</p>
+        <p>Phương thức: {moneyMethodLabel(receipt.paymentMethod)}</p>
         <p>Khách hàng: {receipt.customerName ?? '—'}</p>
         {receipt.customerCode && <p>Mã KH: {receipt.customerCode}</p>}
         <p>SĐT: {receipt.customerPhone ?? '—'}</p>
@@ -55,7 +60,9 @@ export function ReceiptPrintTemplate({ receipt, store }: ReceiptPrintTemplatePro
           })}
         </tbody>
       </table>
-      <p className="text-right text-base font-bold">Tổng thu: {formatVndWithSuffix(receipt.amount)}</p>
+      <p className="text-right text-base font-bold">
+        Tổng thu: {formatVndWithSuffix(receipt.amount)}
+      </p>
       {receipt.debtAfter !== null && (
         <p className="text-right text-sm">Nợ còn lại: {formatVndWithSuffix(receipt.debtAfter)}</p>
       )}

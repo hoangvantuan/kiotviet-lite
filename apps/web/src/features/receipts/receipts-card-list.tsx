@@ -1,6 +1,6 @@
 import { Eye } from 'lucide-react'
 
-import type { ReceiptListItem } from '@kiotviet-lite/shared'
+import { moneyMethodLabel, type ReceiptListItem } from '@kiotviet-lite/shared'
 
 import { CancelledBadge } from '@/components/shared/cancel-document-dialog'
 import { Button } from '@/components/ui/button'
@@ -24,7 +24,9 @@ export function ReceiptsCardList({ items, onView }: ReceiptsCardListProps) {
         <div key={p.id} className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-xs text-muted-foreground">{formatDateTime(p.createdAt)}</p>
+              <p className="text-xs text-muted-foreground">
+                <span className="font-mono">{p.code}</span> · {formatDateTime(p.createdAt)}
+              </p>
               <p className="truncate font-medium">{p.customerName ?? '(đã xoá)'}</p>
               <p className="text-xs text-muted-foreground font-mono">{p.customerPhone ?? '—'}</p>
             </div>
@@ -35,7 +37,9 @@ export function ReceiptsCardList({ items, onView }: ReceiptsCardListProps) {
                 {formatVndWithSuffix(p.amount)}
               </p>
               {p.status === 'cancelled' && <CancelledBadge />}
-              <p className="text-xs text-muted-foreground">{p.allocationCount} khoản</p>
+              <p className="text-xs text-muted-foreground">
+                {moneyMethodLabel(p.paymentMethod)} · {p.allocationCount} khoản
+              </p>
             </div>
           </div>
           {p.note && <p className="text-xs text-muted-foreground mt-2">{truncate(p.note)}</p>}

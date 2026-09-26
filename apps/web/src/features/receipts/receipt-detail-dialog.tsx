@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Ban, Printer } from 'lucide-react'
 
-import { debtSourceLabel } from '@kiotviet-lite/shared'
+import { debtSourceLabel, moneyMethodLabel } from '@kiotviet-lite/shared'
 
 import { CancelDocumentDialog, CancelledBadge } from '@/components/shared/cancel-document-dialog'
 import { Badge } from '@/components/ui/badge'
@@ -72,7 +72,10 @@ export function ReceiptDetailDialog({ open, onOpenChange, receiptId }: ReceiptDe
               )}
               <div className="grid grid-cols-2 gap-y-2">
                 <span className="text-muted-foreground">Mã phiếu:</span>
-                <span className="font-mono">{receipt.id.slice(-8).toUpperCase()}</span>
+                <span className="font-mono">{receipt.code}</span>
+
+                <span className="text-muted-foreground">Phương thức:</span>
+                <span>{moneyMethodLabel(receipt.paymentMethod)}</span>
 
                 <span className="text-muted-foreground">Ngày tạo:</span>
                 <span>{formatDateTime(receipt.createdAt)}</span>

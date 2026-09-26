@@ -149,6 +149,7 @@ async function setup(): Promise<Env> {
   // Receipts for cashflow
   await base.db.insert(receipts).values({
     storeId: base.storeId,
+    code: 'PT-TEST-0001',
     customerId: customer1!.id,
     amount: 150_000,
     createdBy: base.owner.id,

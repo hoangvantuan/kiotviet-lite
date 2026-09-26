@@ -259,6 +259,7 @@ describe('TIEN-107: hủy phiếu thu', () => {
     const receipt = await call('POST', '/receipts', env.owner.authHeader, {
       customerId: customer.id,
       amount: 100_000,
+      paymentMethod: 'cash',
       allocationMode: 'manual',
       allocations: [{ debtId: debt.id, amount: 100_000 }],
     })
@@ -321,6 +322,7 @@ describe('TIEN-107: hủy phiếu thu', () => {
     const receipt = await call('POST', '/receipts', env.owner.authHeader, {
       customerId: customer.id,
       amount: 200_000,
+      paymentMethod: 'cash',
       allocationMode: 'manual',
       allocations: [{ debtId: debt.id, amount: 200_000 }],
     })
@@ -354,6 +356,7 @@ describe('TIEN-107: hủy phiếu thu', () => {
     const receipt = await call('POST', '/receipts', env.owner.authHeader, {
       customerId: customer.id,
       amount: 100_000,
+      paymentMethod: 'cash',
       allocationMode: 'manual',
       allocations: [{ debtId: debt.id, amount: 100_000 }],
     })
@@ -523,6 +526,7 @@ describe('TIEN-107: hủy đơn bán', () => {
     await call('POST', '/receipts', env.owner.authHeader, {
       customerId: customer.id,
       amount: 50_000,
+      paymentMethod: 'cash',
       allocationMode: 'manual',
       allocations: [{ debtId: debt.id, amount: 50_000 }],
     })
@@ -731,6 +735,7 @@ describe('TIEN-104: phiếu chi gắn phiếu nhập, hủy phiếu chi', () => 
     const tooMuch = await call('POST', '/supplier-payments', env.owner.authHeader, {
       supplierId: supplier.id,
       amount: 600_000,
+      paymentMethod: 'cash',
       purchaseOrderId: po.id,
     })
     expect(tooMuch.status).toBe(422)
@@ -738,6 +743,7 @@ describe('TIEN-104: phiếu chi gắn phiếu nhập, hủy phiếu chi', () => 
     const pay = await call('POST', '/supplier-payments', env.owner.authHeader, {
       supplierId: supplier.id,
       amount: 200_000,
+      paymentMethod: 'cash',
       purchaseOrderId: po.id,
     })
     expect(pay.status).toBe(201)
@@ -836,6 +842,7 @@ describe('Review #57: các ca biên của hủy chứng từ', () => {
     const pay = await call('POST', '/supplier-payments', env.owner.authHeader, {
       supplierId: supplier.id,
       amount: 1_000_000,
+      paymentMethod: 'cash',
       purchaseOrderId: po.id,
     })
     expect(pay.status).toBe(201)
@@ -867,6 +874,7 @@ describe('Review #57: các ca biên của hủy chứng từ', () => {
     const pay = await call('POST', '/supplier-payments', env.owner.authHeader, {
       supplierId: supplier.id,
       amount: 1_000_000,
+      paymentMethod: 'cash',
     })
     expect(pay.status).toBe(201)
     const ret = await call('POST', `/purchase-orders/${po.id}/returns`, env.owner.authHeader, {

@@ -31,6 +31,10 @@ interface CancelDocumentDialogProps {
    * false cho chứng từ mà máy chủ tự chặn theo vai trò (ví dụ phiếu chi chỉ chủ cửa hàng).
    */
   allowApproval?: boolean
+  /** Ô nhập thêm dưới lý do (BC-06: phương thức hoàn tiền, ô chọn ca khi có nhiều ca mở) */
+  children?: ReactNode
+  /** Chặn nút xác nhận khi ô nhập thêm chưa đủ (ví dụ đang chờ chọn ca) */
+  confirmDisabled?: boolean
 }
 
 /**
@@ -45,6 +49,8 @@ export function CancelDocumentDialog({
   isPending,
   onConfirm,
   allowApproval = true,
+  children,
+  confirmDisabled = false,
 }: CancelDocumentDialogProps) {
   const role = useAuthStore((s) => s.user?.role)
   const [reason, setReason] = useState('')
@@ -101,13 +107,14 @@ export function CancelDocumentDialog({
               </p>
             )}
           </div>
+          {children}
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
               Đóng
             </Button>
             <Button
               variant="destructive"
-              disabled={trimmed.length === 0 || isPending}
+              disabled={trimmed.length === 0 || isPending || confirmDisabled}
               onClick={() => (needsApproval ? setPinOpen(true) : void submit())}
             >
               {isPending ? 'Đang hủy...' : 'Xác nhận hủy'}

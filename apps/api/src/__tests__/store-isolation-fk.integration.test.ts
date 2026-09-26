@@ -1111,6 +1111,7 @@ describe('POST /receipts: khóa ngoại: customerId, allocations[].debtId', () =
     const res = await call(fx.app, 'POST', '/api/v1/receipts', fx.ownerB.authHeader, {
       customerId: fx.customerReceiptB.id,
       amount: fx.debtReceiptB.remaining,
+      paymentMethod: 'cash',
       allocationMode: 'manual',
       allocations: [{ debtId: fx.debtReceiptB.id, amount: fx.debtReceiptB.remaining }],
     })
@@ -1121,6 +1122,7 @@ describe('POST /receipts: khóa ngoại: customerId, allocations[].debtId', () =
     const res = await call(fx.app, 'POST', '/api/v1/receipts', fx.ownerB.authHeader, {
       customerId: fx.customerA.id,
       amount: 1_000,
+      paymentMethod: 'cash',
       allocationMode: 'manual',
       allocations: [{ debtId: fx.debtA.id, amount: 1_000 }],
     })
@@ -1133,6 +1135,7 @@ describe('POST /receipts: khóa ngoại: customerId, allocations[].debtId', () =
     const res = await call(fx.app, 'POST', '/api/v1/receipts', fx.ownerB.authHeader, {
       customerId: fx.customerB.id,
       amount: 1_000,
+      paymentMethod: 'cash',
       allocationMode: 'manual',
       allocations: [{ debtId: fx.debtA.id, amount: 1_000 }],
     })
@@ -1234,6 +1237,7 @@ describe('POST /supplier-payments: khóa ngoại: supplierId', () => {
     const res = await call(fx.app, 'POST', '/api/v1/supplier-payments', fx.ownerB.authHeader, {
       supplierId: fx.supplierPayB.id,
       amount: 100_000,
+      paymentMethod: 'cash',
     })
     expectSuccess(res.status)
   })
@@ -1242,6 +1246,7 @@ describe('POST /supplier-payments: khóa ngoại: supplierId', () => {
     const res = await call(fx.app, 'POST', '/api/v1/supplier-payments', fx.ownerB.authHeader, {
       supplierId: fx.supplierA.id,
       amount: 100_000,
+      paymentMethod: 'cash',
     })
     expectRejected(res.status, [404])
   })

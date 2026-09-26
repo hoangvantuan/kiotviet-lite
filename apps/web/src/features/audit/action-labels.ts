@@ -95,6 +95,8 @@ export const ACTION_LABELS: Record<AuditAction, string> = {
   'order.cancelled': 'Hủy đơn bán',
   'purchase_order.cancelled': 'Hủy phiếu nhập hàng',
   'purchase_return.created': 'Trả hàng nhập',
+  'shift.opened': 'Mở ca bán hàng',
+  'shift.closed': 'Đóng ca bán hàng',
 }
 
 export interface ActionGroup {

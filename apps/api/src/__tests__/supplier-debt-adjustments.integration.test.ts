@@ -232,7 +232,7 @@ describe('supplier debt adjustments and opening debt', () => {
     const paid = await payments.request('/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...env.owner.authHeader },
-      body: JSON.stringify({ supplierId, amount: 5_431_600 }),
+      body: JSON.stringify({ supplierId, amount: 5_431_600, paymentMethod: 'cash' }),
     })
     expect(paid.status).toBe(201)
     const paidBody = (await paid.json()) as { data: { debtAfter: number } }

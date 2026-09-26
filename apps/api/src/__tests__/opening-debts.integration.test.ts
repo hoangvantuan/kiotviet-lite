@@ -220,6 +220,7 @@ describe('nợ đầu kỳ khách hàng', () => {
       body: JSON.stringify({
         customerId,
         amount: 100_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [{ debtId: opened.body.data!.id, amount: 100_000 }],
       }),

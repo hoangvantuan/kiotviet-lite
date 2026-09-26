@@ -122,6 +122,7 @@ test('hủy phiếu thu: công nợ khách cộng lại đúng số đã thu', a
   await api.post('/api/v1/receipts', {
     customerId: c.id,
     amount: order.amount,
+    paymentMethod: 'cash',
     allocationMode: 'manual',
     allocations: [{ debtId: debt.id, amount: order.amount }],
     note: 'E2E hủy phiếu thu',

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { documentShiftIdSchema, refundMethodSchema } from './cash-management.js'
 import { pinSchema } from './user-management.js'
 
 /**
@@ -22,6 +23,10 @@ export const cancelDocumentSchema = z
       .max(500, 'Lý do hủy tối đa 500 ký tự'),
     approverId: z.string().uuid('Người duyệt không hợp lệ').optional(),
     approverPin: pinSchema.optional(),
+    // BC-06: chứng từ hủy có tiền trả lại (hủy đơn: trả khách; hủy phiếu nhập: NCC hoàn) ghi kênh
+    // tiền và ca nhận hay chi tiền. Không gửi thì máy chủ chọn mặc định; chứng từ khác bỏ qua
+    refundMethod: refundMethodSchema.optional(),
+    shiftId: documentShiftIdSchema,
   })
   .strict()
   .refine((d) => !d.approverPin || !!d.approverId, {

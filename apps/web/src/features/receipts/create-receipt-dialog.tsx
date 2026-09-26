@@ -5,11 +5,13 @@ import {
   type CreateReceiptInput,
   debtSourceLabel,
   formatPhone,
+  type MoneyMethod,
   type OpenDebtItem,
   type ReceiptDetail,
 } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
+import { MoneyMethodPicker } from '@/components/shared/money-method-picker'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -25,6 +27,8 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { useCustomersQuery } from '@/features/customers/use-customers'
+import { DocumentShiftSelect } from '@/features/shifts/document-shift-select'
+import { useDocumentShiftChoice } from '@/features/shifts/use-document-shift-choice'
 import { useDebounced } from '@/hooks/use-debounced'
 import { useGuardedOpenChange } from '@/hooks/use-document-mutation'
 import { handleApiError } from '@/lib/api-error'
@@ -82,6 +86,11 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
   const [manualAllocations, setManualAllocations] = useState<Record<string, number>>({})
   const [manualSelected, setManualSelected] = useState<Record<string, boolean>>({})
 
+  // TIEN-05: khách trả nợ bằng kênh nào, để đối soát ngăn kéo và sao kê
+  const [paymentMethod, setPaymentMethod] = useState<MoneyMethod>('cash')
+  const shiftChoice = useDocumentShiftChoice()
+  const resetShiftChoice = shiftChoice.reset
+
   // Section 4: Note
   const [note, setNote] = useState<string>('')
 
@@ -95,9 +104,11 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
       setMode('fifo')
       setManualAllocations({})
       setManualSelected({})
+      setPaymentMethod('cash')
       setNote('')
+      resetShiftChoice()
     }
-  }, [open])
+  }, [open, resetShiftChoice])
 
   // Reset allocations when customer changes
   useEffect(() => {
@@ -146,7 +157,13 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
   const customerSelected = Boolean(selectedCustomer)
   const amountValid = amount > 0 && amount <= totalRemaining
   const balanced = sumAllocations === amount && allocations.length > 0
-  const canSubmit = customerSelected && amount > 0 && amountValid && balanced && !mutation.isPending
+  const canSubmit =
+    customerSelected &&
+    amount > 0 &&
+    amountValid &&
+    balanced &&
+    !mutation.isPending &&
+    !shiftChoice.pending
 
   const submit = async () => {
     if (!selectedCustomer) return
@@ -154,15 +171,18 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
     const payload: CreateReceiptInput = {
       customerId: selectedCustomer.id,
       amount,
+      paymentMethod,
       note: note.trim() ? note.trim() : null,
       allocationMode: mode,
       allocations,
+      ...(shiftChoice.shiftId ? { shiftId: shiftChoice.shiftId } : {}),
     }
     try {
       const result = await mutation.mutateAsync(payload)
       onOpenChange(false)
       onCreated?.(result.data)
     } catch (err) {
+      if (shiftChoice.capture(err)) return
       handleApiError(err)
     }
   }
@@ -289,6 +309,30 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
               </p>
               {amount > totalRemaining && (
                 <p className="text-xs text-destructive">Số tiền thu vượt quá nợ còn lại</p>
+              )}
+            </section>
+          )}
+
+          {selectedCustomer && (
+            <section className="space-y-2">
+              <Label>
+                Phương thức nhận tiền <span className="text-destructive">*</span>
+              </Label>
+              <MoneyMethodPicker
+                value={paymentMethod}
+                onChange={setPaymentMethod}
+                disabled={mutation.isPending}
+                ariaLabel="Phương thức nhận tiền"
+                idPrefix="receipt-method"
+              />
+              {shiftChoice.choices && (
+                <DocumentShiftSelect
+                  choices={shiftChoice.choices}
+                  value={shiftChoice.shiftId}
+                  onChange={shiftChoice.setShiftId}
+                  disabled={mutation.isPending}
+                  idPrefix="receipt"
+                />
               )}
             </section>
           )}
@@ -426,7 +470,7 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
                 id="receipt-note"
                 rows={3}
                 maxLength={500}
-                placeholder="VD: Thu tiền nợ tháng 4, tiền mặt"
+                placeholder="VD: Thu tiền nợ tháng 4"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
               />

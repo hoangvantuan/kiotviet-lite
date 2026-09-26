@@ -1,4 +1,4 @@
-import type { SupplierPaymentListItem } from '@kiotviet-lite/shared'
+import { moneyMethodLabel, type SupplierPaymentListItem } from '@kiotviet-lite/shared'
 
 import { CancelledBadge } from '@/components/shared/cancel-document-dialog'
 import { formatVndWithSuffix } from '@/lib/currency'
@@ -37,6 +37,7 @@ export function SupplierPaymentsCardList({
                 {formatVndWithSuffix(p.amount)}
               </p>
               {p.status === 'cancelled' && <CancelledBadge />}
+              <p className="text-xs text-muted-foreground">{moneyMethodLabel(p.paymentMethod)}</p>
               {p.note && (
                 <p className="text-xs text-muted-foreground max-w-[10rem] truncate">
                   {truncate(p.note)}

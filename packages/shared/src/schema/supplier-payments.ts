@@ -1,6 +1,7 @@
 import { bigint, index, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
+import { cashShifts } from './cash-shifts.js'
 import { purchaseOrders } from './purchase-orders.js'
 import { stores } from './stores.js'
 import { suppliers } from './suppliers.js'
@@ -19,6 +20,9 @@ export const supplierPayments = pgTable(
       .notNull()
       .references(() => suppliers.id, { onDelete: 'restrict' }),
     amount: bigint({ mode: 'number' }).notNull(),
+    // Phương thức chi tiền để đối soát tiền mặt (POS-06, BC-06); NULL với phiếu cũ
+    paymentMethod: varchar({ length: 16 }),
+    shiftId: uuid().references(() => cashShifts.id, { onDelete: 'restrict' }),
     note: varchar({ length: 500 }),
     // TIEN-104: phiếu chi có thể gắn với một phiếu nhập cụ thể (tùy chọn)
     purchaseOrderId: uuid().references(() => purchaseOrders.id, { onDelete: 'restrict' }),
@@ -41,5 +45,6 @@ export const supplierPayments = pgTable(
     ),
     index('idx_supplier_payments_store_creator').on(table.storeId, table.createdBy),
     index('idx_supplier_payments_purchase_order').on(table.purchaseOrderId),
+    index('idx_supplier_payments_shift').on(table.shiftId),
   ],
 )

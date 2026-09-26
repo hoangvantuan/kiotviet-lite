@@ -24,6 +24,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { toMoneyMethod } from '../lib/cash-flow.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { escapeLikePattern } from '../lib/strings.js'
@@ -587,6 +588,7 @@ export async function getPurchaseOrder({
       cancelReason: purchaseOrders.cancelReason,
       cancelDebtReduction: purchaseOrders.cancelDebtReduction,
       cancelSupplierRefund: purchaseOrders.cancelSupplierRefund,
+      cancelRefundMethod: purchaseOrders.cancelRefundMethod,
       note: purchaseOrders.note,
       purchaseDate: purchaseOrders.purchaseDate,
       createdBy: purchaseOrders.createdBy,
@@ -673,6 +675,7 @@ export async function getPurchaseOrder({
     cancelReason: row.cancelReason,
     cancelDebtReduction: Number(row.cancelDebtReduction),
     cancelSupplierRefund: Number(row.cancelSupplierRefund),
+    cancelRefundMethod: toMoneyMethod(row.cancelRefundMethod),
     returns,
     note: row.note,
     purchaseDate: row.purchaseDate.toISOString(),
@@ -711,6 +714,7 @@ export async function listPurchaseReturns({
       totalAmount: purchaseReturns.totalAmount,
       debtReductionAmount: purchaseReturns.debtReductionAmount,
       supplierRefundAmount: purchaseReturns.supplierRefundAmount,
+      refundMethod: purchaseReturns.refundMethod,
       note: purchaseReturns.note,
       createdBy: purchaseReturns.createdBy,
       createdByName: returnCreators.name,
@@ -740,6 +744,7 @@ export async function listPurchaseReturns({
     totalAmount: Number(h.totalAmount),
     debtReductionAmount: Number(h.debtReductionAmount),
     supplierRefundAmount: Number(h.supplierRefundAmount),
+    refundMethod: toMoneyMethod(h.refundMethod),
     note: h.note,
     createdBy: h.createdBy,
     createdByName: h.createdByName,

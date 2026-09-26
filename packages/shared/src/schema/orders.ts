@@ -13,6 +13,7 @@ import {
 } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
+import { cashShifts } from './cash-shifts.js'
 import { customers } from './customers.js'
 import type { OrderPolicyViolation } from './order-management.js'
 import { priceLists } from './price-lists.js'
@@ -66,9 +67,20 @@ export const orders = pgTable(
     cancelledAt: timestamp({ withTimezone: true }),
     cancelledBy: uuid().references(() => users.id),
     cancelReason: varchar({ length: 500 }),
+    // BC-06: tiền trả lại khách khi hủy (phần khách đã trả lúc bán), kênh trả và ca chi tiền. Tiền
+    // bán vẫn thuộc ngày bán và ca bán; khoản hoàn là tiền ra của ngày hủy, ca hủy
+    cancelRefundAmount: bigint({ mode: 'number' }).notNull().default(0),
+    cancelRefundMethod: varchar({ length: 16 }),
+    cancelShiftId: uuid().references(() => cashShifts.id, { onDelete: 'restrict' }),
+    // POS-06: ca bán hàng. Đơn ngoại tuyến gắn theo giờ bán và người bán khi đồng bộ; NULL khi
+    // không có ca phù hợp (hiện trong đối soát)
+    shiftId: uuid().references(() => cashShifts.id, { onDelete: 'restrict' }),
     priceListId: uuid().references(() => priceLists.id, { onDelete: 'set null' }),
     priceListName: varchar({ length: 100 }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    // BC-06: giờ bán. Đơn trực tuyến bằng giờ tạo; đơn ngoại tuyến là giờ bán trên máy (đã kiểm,
+    // không ở tương lai) còn created_at là giờ đồng bộ. Báo cáo dòng tiền và gắn ca theo cột này.
+    soldAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })
       .notNull()
       .defaultNow()
@@ -90,10 +102,14 @@ export const orders = pgTable(
     uniqueIndex('uniq_orders_store_number').on(table.storeId, table.orderNumber),
     uniqueIndex('uniq_orders_store_client').on(table.storeId, table.clientId),
     index('idx_orders_store_date').on(table.storeId, table.createdAt),
+    index('idx_orders_store_sold_at').on(table.storeId, table.soldAt),
     index('idx_orders_store_price_list').on(table.storeId, table.priceListId),
     index('idx_orders_store_status').on(table.storeId, table.status),
     index('idx_orders_store_customer').on(table.storeId, table.customerId),
     index('idx_orders_store_payment_status').on(table.storeId, table.paymentStatus),
+    index('idx_orders_shift').on(table.shiftId),
+    index('idx_orders_cancel_shift').on(table.cancelShiftId),
+    index('idx_orders_store_cancelled_at').on(table.storeId, table.cancelledAt),
     index('idx_orders_store_review_status').on(table.storeId, table.reviewStatus),
     index('idx_orders_store_status_created').on(table.storeId, table.status, table.createdAt),
     index('idx_orders_store_cust_status_date').on(

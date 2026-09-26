@@ -12,6 +12,7 @@ describe('createSupplierPaymentSchema', () => {
     const r = createSupplierPaymentSchema.safeParse({
       supplierId: VALID_UUID,
       amount: 500000,
+      paymentMethod: 'cash',
       note: 'Chi trả nợ tháng 4',
     })
     expect(r.success).toBe(true)
@@ -21,6 +22,7 @@ describe('createSupplierPaymentSchema', () => {
     const r = createSupplierPaymentSchema.safeParse({
       supplierId: VALID_UUID,
       amount: 100000,
+      paymentMethod: 'cash',
       note: null,
     })
     expect(r.success).toBe(true)
@@ -30,6 +32,7 @@ describe('createSupplierPaymentSchema', () => {
     const r = createSupplierPaymentSchema.safeParse({
       supplierId: VALID_UUID,
       amount: 100000,
+      paymentMethod: 'cash',
     })
     expect(r.success).toBe(true)
   })
@@ -38,6 +41,7 @@ describe('createSupplierPaymentSchema', () => {
     const r = createSupplierPaymentSchema.safeParse({
       supplierId: 'not-a-uuid',
       amount: 100000,
+      paymentMethod: 'cash',
     })
     expect(r.success).toBe(false)
   })
@@ -46,6 +50,7 @@ describe('createSupplierPaymentSchema', () => {
     const r = createSupplierPaymentSchema.safeParse({
       supplierId: VALID_UUID,
       amount: 0,
+      paymentMethod: 'cash',
     })
     expect(r.success).toBe(false)
     if (!r.success) {
@@ -57,6 +62,7 @@ describe('createSupplierPaymentSchema', () => {
     const r = createSupplierPaymentSchema.safeParse({
       supplierId: VALID_UUID,
       amount: -1000,
+      paymentMethod: 'cash',
     })
     expect(r.success).toBe(false)
   })
@@ -65,6 +71,7 @@ describe('createSupplierPaymentSchema', () => {
     const r = createSupplierPaymentSchema.safeParse({
       supplierId: VALID_UUID,
       amount: 100.5,
+      paymentMethod: 'cash',
     })
     expect(r.success).toBe(false)
   })
@@ -73,6 +80,7 @@ describe('createSupplierPaymentSchema', () => {
     const r = createSupplierPaymentSchema.safeParse({
       supplierId: VALID_UUID,
       amount: 100_000_000_000_000,
+      paymentMethod: 'cash',
     })
     expect(r.success).toBe(false)
   })
@@ -81,6 +89,7 @@ describe('createSupplierPaymentSchema', () => {
     const r = createSupplierPaymentSchema.safeParse({
       supplierId: VALID_UUID,
       amount: 100000,
+      paymentMethod: 'cash',
       note: 'a'.repeat(501),
     })
     expect(r.success).toBe(false)
@@ -90,6 +99,7 @@ describe('createSupplierPaymentSchema', () => {
     const r = createSupplierPaymentSchema.safeParse({
       supplierId: VALID_UUID,
       amount: 100000,
+      paymentMethod: 'cash',
       note: 'a'.repeat(500),
     })
     expect(r.success).toBe(true)
@@ -99,6 +109,7 @@ describe('createSupplierPaymentSchema', () => {
     const r = createSupplierPaymentSchema.safeParse({
       supplierId: VALID_UUID,
       amount: 100000,
+      paymentMethod: 'cash',
       extraField: 'should fail',
     })
     expect(r.success).toBe(false)
@@ -112,6 +123,29 @@ describe('createSupplierPaymentSchema', () => {
   it('từ chối thiếu amount', () => {
     const r = createSupplierPaymentSchema.safeParse({ supplierId: VALID_UUID })
     expect(r.success).toBe(false)
+  })
+})
+
+describe('createSupplierPaymentSchema: phương thức tiền (TIEN-05)', () => {
+  it('từ chối khi thiếu phương thức', () => {
+    const r = createSupplierPaymentSchema.safeParse({
+      supplierId: VALID_UUID,
+      amount: 100000,
+    })
+    expect(r.success).toBe(false)
+  })
+
+  it('nhận chuyển khoản và QR, từ chối "kết hợp" hay "ghi nợ"', () => {
+    const parse = (paymentMethod: string) =>
+      createSupplierPaymentSchema.safeParse({
+        supplierId: VALID_UUID,
+        amount: 100000,
+        paymentMethod,
+      }).success
+    expect(parse('transfer')).toBe(true)
+    expect(parse('qr')).toBe(true)
+    expect(parse('combined')).toBe(false)
+    expect(parse('debt')).toBe(false)
   })
 })
 

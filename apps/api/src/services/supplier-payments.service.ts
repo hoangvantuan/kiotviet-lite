@@ -17,6 +17,7 @@ import {
 } from '@kiotviet-lite/shared'
 
 import type { Db } from '../db/index.js'
+import { toMoneyMethod } from '../lib/cash-flow.js'
 import { ApiError } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
 import { escapeLikePattern } from '../lib/strings.js'
@@ -32,6 +33,7 @@ import {
   refreshPurchaseOrderPaymentStatus,
 } from './purchase-orders.service.js'
 import { serviceDb, type ServiceTransaction } from './service-transaction.js'
+import { assertDocumentShift, resolveDocumentShift } from './shifts.service.js'
 
 export interface SupplierPaymentsActor {
   userId: string
@@ -45,6 +47,7 @@ interface SupplierPaymentRow {
   supplierName: string | null
   supplierPhone: string | null
   amount: number
+  paymentMethod: string | null
   note: string | null
   purchaseOrderId: string | null
   purchaseOrderCode: string | null
@@ -65,6 +68,7 @@ export function toSupplierPaymentListItem(row: SupplierPaymentRow): SupplierPaym
     supplierName: row.supplierName,
     supplierPhone: row.supplierPhone,
     amount: Number(row.amount),
+    paymentMethod: toMoneyMethod(row.paymentMethod),
     note: row.note,
     purchaseOrderId: row.purchaseOrderId,
     purchaseOrderCode: row.purchaseOrderCode,
@@ -110,6 +114,7 @@ const supplierPaymentSelectColumns = {
   createdBy: supplierPayments.createdBy,
   createdByName: users.name,
   createdAt: supplierPayments.createdAt,
+  paymentMethod: supplierPayments.paymentMethod,
 }
 
 export interface SupplierPaymentListResult {
@@ -237,6 +242,16 @@ export async function createSupplierPayment({
   return db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
 
+    // POS-06: phiếu chi vào ca của quầy chi tiền (resolveDocumentShift), khóa ca trước nhà cung cấp
+    const shiftId = assertDocumentShift(
+      await resolveDocumentShift(txDb, {
+        storeId: actor.storeId,
+        userId: actor.userId,
+        requestedShiftId: input.shiftId,
+      }),
+      input.paymentMethod === 'cash',
+    )
+
     // TIEN-104: phiếu chi gắn phiếu nhập. Khóa phiếu nhập trước NCC (thứ tự khóa chứng từ, NCC,
     // sản phẩm như hủy phiếu nhập), phiếu phải còn hiệu lực, cùng NCC, và chi không vượt số còn
     // phải trả của phiếu.
@@ -308,6 +323,8 @@ export async function createSupplierPayment({
         storeId: actor.storeId,
         supplierId: input.supplierId,
         amount: input.amount,
+        paymentMethod: input.paymentMethod,
+        shiftId,
         note: noteNormalized,
         purchaseOrderId,
         createdBy: actor.userId,
@@ -347,6 +364,7 @@ export async function createSupplierPayment({
         supplierId: input.supplierId,
         supplierName: supplier.name,
         amount: input.amount,
+        paymentMethod: input.paymentMethod,
         note: noteNormalized,
         purchaseOrderId,
         purchaseOrderCode,
@@ -377,6 +395,7 @@ export async function createSupplierPayment({
         supplierName: supplier.name,
         supplierPhone: supplier.phone,
         amount: input.amount,
+        paymentMethod: input.paymentMethod,
         note: noteNormalized,
         purchaseOrderId,
         purchaseOrderCode,

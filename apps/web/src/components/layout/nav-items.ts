@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   Activity,
+  Banknote,
   BarChart3,
   ClipboardCheck,
   ClipboardList,
@@ -107,6 +108,12 @@ export const NAV_ITEMS: NavItem[] = [
     path: '/reports/profit',
     label: 'Lợi nhuận',
     icon: DollarSign,
+    requiredPermission: 'reports.view',
+  },
+  {
+    path: '/reports/cash-flow',
+    label: 'Dòng tiền',
+    icon: Banknote,
     requiredPermission: 'reports.view',
   },
   {

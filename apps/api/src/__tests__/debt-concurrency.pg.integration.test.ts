@@ -184,6 +184,7 @@ describe.skipIf(!adminUrl)('TIEN-103: thứ tự khóa công nợ trên Postgres
         input: {
           customerId: s.customer.id,
           amount: 1_000,
+          paymentMethod: 'cash',
           allocationMode: 'fifo',
           allocations: [{ debtId: s.debt.id, amount: 1_000 }],
         },

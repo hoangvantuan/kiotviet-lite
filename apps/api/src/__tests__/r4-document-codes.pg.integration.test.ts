@@ -291,7 +291,7 @@ describe.skipIf(!adminUrl)('R4 OFF-08, POS-02: chứng từ tạo song song trê
     const s = await seedStore()
     const app = createSupplierPaymentsRoutes({ db })
     const key = randomUUID()
-    const body = { supplierId: s.supplier.id, amount: 100_000 }
+    const body = { supplierId: s.supplier.id, amount: 100_000, paymentMethod: 'cash' }
 
     const responses = await Promise.all([
       post(s, app, '/', body, key),

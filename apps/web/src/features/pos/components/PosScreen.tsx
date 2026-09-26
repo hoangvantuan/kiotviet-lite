@@ -11,25 +11,33 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { PinDialog } from '@/features/auth/pin-dialog'
+import { OpenShiftDialog } from '@/features/shifts/open-shift-dialog'
+import { ShiftControl } from '@/features/shifts/shift-control'
+import { usePosShiftGate } from '@/features/shifts/use-pos-shift-gate'
+import { isShiftRequiredError } from '@/features/shifts/use-shifts'
 import { useGuardedOpenChange } from '@/hooks/use-document-mutation'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { ApiClientError } from '@/lib/api-client'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { initializeOfflineDB } from '@/lib/pglite'
 import { showError, showErrorWithAction, showSuccess } from '@/lib/toast'
+import { posTransferNote } from '@/lib/vietqr'
 import { useAuthStore } from '@/stores/use-auth-store'
-import { useCartStore } from '@/stores/use-cart-store'
+import { type TabState, useCartStore } from '@/stores/use-cart-store'
 import { useOfflineStore } from '@/stores/use-offline-store'
 
 import { MAX_CART_TABS } from '../constants'
 import { useAddToCart } from '../hooks/use-add-to-cart'
 import {
+  type CheckoutVariables,
+  pendingCheckoutKey,
   PREVIOUS_ORDER_SAVED,
   type PreviousOrderSaved,
   useCheckoutMutation,
 } from '../hooks/use-checkout'
 import { usePosKeyboard } from '../hooks/use-pos-keyboard'
 import { usePosProducts } from '../hooks/use-pos-products'
+import { usePosStoreConfig } from '../hooks/use-pos-store-config'
 import { priceApprovalFromError, requiredPriceApproval } from '../price-approval'
 import type { OrderDetail, PosProductItem } from '../types'
 import { BarcodeScanner } from './BarcodeScanner'
@@ -53,6 +61,62 @@ interface PaymentPayload {
   debtLimitOverridden?: boolean
   debtLimitOverridePin?: string
   debtLimitApproverId?: string
+}
+
+/** Dựng đơn gửi đi từ tab giỏ hàng và phần trả tiền của hộp thanh toán. */
+function checkoutOrderFromTab(tab: TabState, payload: PaymentPayload): CheckoutVariables['order'] {
+  const subtotal = tab.items.reduce((sum, i) => sum + i.lineTotal, 0)
+  const total = subtotal - tab.orderDiscountAmount
+  const debtAmount = payload.debtAmount ?? 0
+
+  // Story 5.1: paymentStatus dựa trên debtAmount
+  let paymentStatus: 'paid' | 'partial' | 'unpaid' = 'paid'
+  if (debtAmount > 0) {
+    paymentStatus = debtAmount === total ? 'unpaid' : 'partial'
+  }
+
+  return {
+    customerId: tab.customerId ?? null,
+    priceListId: tab.priceListId ?? null,
+    priceListName: tab.priceListName ?? null,
+    subtotal,
+    discountType: tab.orderDiscountType,
+    discountValue: tab.orderDiscountValue,
+    discountAmount: tab.orderDiscountAmount,
+    total,
+    paymentMethod: payload.paymentMethod,
+    paymentStatus,
+    cashAmount: payload.cashAmount,
+    transferAmount: payload.transferAmount,
+    debtAmount: debtAmount > 0 ? debtAmount : undefined,
+    debtLimitOverridden: payload.debtLimitOverridden ?? false,
+    debtLimitOverridePin: payload.debtLimitOverridePin,
+    debtLimitApproverId: payload.debtLimitApproverId,
+    priceOverridePin: tab.priceOverridePin ?? undefined,
+    priceApproverId: tab.priceApproverId ?? undefined,
+    note: null,
+    items: tab.items.map((item) => ({
+      productId: item.productId,
+      variantId: item.variantId,
+      productName: item.productName,
+      variantName: item.variantName,
+      unit: item.unitName,
+      unitPrice: item.unitPrice,
+      quantity: item.quantity,
+      discountType: item.discountType,
+      discountValue: item.discountValue,
+      discountAmount: item.discountAmount,
+      lineTotal: item.lineTotal,
+      note: item.notes,
+      unitConversionId: item.unitConversionId,
+      originalPrice: item.originalPrice,
+      priceOverride: item.priceOverride,
+      priceOverrideReason: item.priceOverrideReason,
+      priceOverridePinUsed: item.priceOverridePinUsed,
+      priceSource: item.priceSource,
+      priceSourceDetail: item.priceSourceDetail,
+    })),
+  }
 }
 
 export function PosScreen() {
@@ -111,6 +175,29 @@ export function PosScreen() {
   // R4: không cho đóng hộp thoại thanh toán khi đơn đang gửi đi
   const handlePaymentOpenChange = useGuardedOpenChange(setPaymentDialogOpen, checkoutMutation)
   const addToCart = useAddToCart()
+  const posConfig = usePosStoreConfig()
+
+  const shiftGate = usePosShiftGate(isOffline)
+  const { ensureShift } = shiftGate
+  // POS-07: nội dung chuyển khoản của đơn sắp lưu, in vào mã VietQR
+  const [transferNote, setTransferNote] = useState('')
+
+  /**
+   * Mã tạm của đơn đang thanh toán: lấy đúng khóa chống trùng mà useCheckoutMutation sẽ gửi (cùng
+   * ý định, cùng tab, cùng dấu vân tay; dấu vân tay không gồm cách trả tiền). Khóa này cũng là
+   * clientId của đơn, nên nội dung chuyển khoản trên sao kê tra ngược ra được đơn, kể cả đơn ngoại
+   * tuyến chưa có mã HD.
+   */
+  function prepareTransferNote() {
+    const cart = useCartStore.getState()
+    const tab = cart.tabs[cart.activeTab]
+    if (!tab) return
+    const key = pendingCheckoutKey({
+      tab: cart.activeTab,
+      order: checkoutOrderFromTab(tab, { paymentMethod: 'cash' }),
+    })
+    setTransferNote(posTransferNote(key))
+  }
 
   function handleSelectProduct(product: PosProductItem) {
     if (product.hasVariants || mode === 'normal') {
@@ -127,9 +214,11 @@ export function PosScreen() {
   // Payment flow
   const handleOpenPayment = useCallback(() => {
     if (cartCount === 0 || cartGrandTotal <= 0) return
+    if (!ensureShift()) return
+    prepareTransferNote()
     setPaymentDefaultMethod('cash')
     setPaymentDialogOpen(true)
-  }, [cartCount, cartGrandTotal])
+  }, [cartCount, cartGrandTotal, ensureShift])
 
   // Story 5.1: F4 mở PaymentDialog với tab Ghi nợ
   const handleOpenDebtPayment = useCallback(() => {
@@ -138,9 +227,11 @@ export function PosScreen() {
       showError('Vui lòng chọn khách hàng để ghi nợ')
       return
     }
+    if (!ensureShift()) return
+    prepareTransferNote()
     setPaymentDefaultMethod('debt')
     setPaymentDialogOpen(true)
-  }, [cartCount, cartGrandTotal, cartCustomerId])
+  }, [cartCount, cartGrandTotal, cartCustomerId, ensureShift])
 
   function handlePaymentComplete(payload: PaymentPayload) {
     // Đọc trạng thái mới nhất: lần gọi lại sau khi duyệt PIN phải thấy PIN vừa lưu
@@ -154,61 +245,10 @@ export function PosScreen() {
       return
     }
 
-    const subtotal = tab.items.reduce((sum, i) => sum + i.lineTotal, 0)
-    const total = subtotal - tab.orderDiscountAmount
-    const debtAmount = payload.debtAmount ?? 0
-
-    // Story 5.1: paymentStatus dựa trên debtAmount
-    let paymentStatus: 'paid' | 'partial' | 'unpaid' = 'paid'
-    if (debtAmount > 0) {
-      paymentStatus = debtAmount === total ? 'unpaid' : 'partial'
-    }
-
     checkoutMutation.mutate(
       {
         tab: cart.activeTab,
-        order: {
-          customerId: tab.customerId ?? null,
-          priceListId: tab.priceListId ?? null,
-          priceListName: tab.priceListName ?? null,
-          subtotal,
-          discountType: tab.orderDiscountType,
-          discountValue: tab.orderDiscountValue,
-          discountAmount: tab.orderDiscountAmount,
-          total,
-          paymentMethod: payload.paymentMethod,
-          paymentStatus,
-          cashAmount: payload.cashAmount,
-          transferAmount: payload.transferAmount,
-          debtAmount: debtAmount > 0 ? debtAmount : undefined,
-          debtLimitOverridden: payload.debtLimitOverridden ?? false,
-          debtLimitOverridePin: payload.debtLimitOverridePin,
-          debtLimitApproverId: payload.debtLimitApproverId,
-          priceOverridePin: tab.priceOverridePin ?? undefined,
-          priceApproverId: tab.priceApproverId ?? undefined,
-          note: null,
-          items: tab.items.map((item) => ({
-            productId: item.productId,
-            variantId: item.variantId,
-            productName: item.productName,
-            variantName: item.variantName,
-            unit: item.unitName,
-            unitPrice: item.unitPrice,
-            quantity: item.quantity,
-            discountType: item.discountType,
-            discountValue: item.discountValue,
-            discountAmount: item.discountAmount,
-            lineTotal: item.lineTotal,
-            note: item.notes,
-            unitConversionId: item.unitConversionId,
-            originalPrice: item.originalPrice,
-            priceOverride: item.priceOverride,
-            priceOverrideReason: item.priceOverrideReason,
-            priceOverridePinUsed: item.priceOverridePinUsed,
-            priceSource: item.priceSource,
-            priceSourceDetail: item.priceSourceDetail,
-          })),
-        },
+        order: checkoutOrderFromTab(tab, payload),
       },
       {
         onSuccess: (response) => {
@@ -225,6 +265,13 @@ export function PosScreen() {
               label: 'Mở đơn',
               onClick: () => window.open(`/orders/${orderId}`, '_blank', 'noopener'),
             })
+            return
+          }
+          if (isShiftRequiredError(err)) {
+            // Ca vừa bị đóng (ở máy khác) hoặc cửa hàng vừa bật ca: mở ca rồi bán tiếp, giỏ giữ nguyên
+            setPaymentDialogOpen(false)
+            shiftGate.handleShiftRequired()
+            showError(err.message)
             return
           }
           if (err instanceof ApiClientError) {
@@ -284,7 +331,16 @@ export function PosScreen() {
       <PosHeader
         showProductGrid={showProductGrid}
         onToggleProductGrid={isDesktop ? () => setShowProductGrid((v) => !v) : undefined}
+        shiftControl={
+          <ShiftControl
+            current={shiftGate.currentShift.data}
+            onOpenShift={() => shiftGate.setOpenShiftOpen(true)}
+            onRefresh={() => shiftGate.currentShift.refetch()}
+          />
+        }
       />
+
+      <OpenShiftDialog open={shiftGate.openShiftOpen} onOpenChange={shiftGate.setOpenShiftOpen} />
 
       {isOffline && (
         <div
@@ -446,6 +502,8 @@ export function PosScreen() {
         defaultMethod={paymentDefaultMethod}
         onComplete={handlePaymentComplete}
         isLoading={checkoutMutation.isPending}
+        bank={posConfig}
+        transferNote={transferNote}
       />
 
       <PinDialog

@@ -22,11 +22,13 @@ import {
 import { PinDialog } from '@/features/auth/pin-dialog'
 import { formatVndWithSuffix } from '@/lib/currency'
 import { cn } from '@/lib/utils'
+import type { BankConfig } from '@/lib/vietqr'
 import { useOfflineStore } from '@/stores/use-offline-store'
 
 import { useCustomerDebtQuery } from '../hooks/use-checkout'
 import { getDenominations } from '../utils'
 import { DebtSummaryCard } from './DebtSummaryCard'
+import { VietQrPanel } from './VietQrPanel'
 
 export type PaymentMethod = 'cash' | 'transfer' | 'qr' | 'combined' | 'debt'
 
@@ -47,6 +49,10 @@ interface PaymentDialogProps {
     debtLimitApproverId?: string
   }) => void
   isLoading?: boolean
+  /** POS-07: tài khoản nhận tiền của cửa hàng để sinh mã VietQR; null là chưa cấu hình */
+  bank?: BankConfig | null
+  /** POS-07: nội dung chuyển khoản (mã tạm của đơn) in trong mã VietQR */
+  transferNote?: string
 }
 
 interface MethodEntry {
@@ -73,6 +79,8 @@ export function PaymentDialog({
   defaultMethod = 'cash',
   onComplete,
   isLoading = false,
+  bank = null,
+  transferNote = '',
 }: PaymentDialogProps) {
   const [method, setMethod] = useState<PaymentMethod>(defaultMethod)
   const [cashAmount, setCashAmount] = useState<number | null>(null)
@@ -330,26 +338,18 @@ export function PaymentDialog({
               </>
             )}
 
-            {method === 'transfer' && (
-              <div className="rounded-lg bg-muted/50 p-4 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Đã nhận chuyển khoản{' '}
-                  <span className="font-semibold text-foreground">
-                    {formatVndWithSuffix(grandTotal)}
-                  </span>
-                </p>
-              </div>
-            )}
-
-            {method === 'qr' && (
-              <div className="rounded-lg bg-muted/50 p-4 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Đã nhận thanh toán QR{' '}
-                  <span className="font-semibold text-foreground">
-                    {formatVndWithSuffix(grandTotal)}
-                  </span>
-                </p>
-              </div>
+            {(method === 'transfer' || method === 'qr') && (
+              <>
+                <VietQrPanel bank={bank} amount={grandTotal} note={transferNote} />
+                <div className="rounded-lg bg-muted/50 p-4 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    {method === 'qr' ? 'Đã nhận thanh toán QR' : 'Đã nhận chuyển khoản'}{' '}
+                    <span className="font-semibold text-foreground">
+                      {formatVndWithSuffix(grandTotal)}
+                    </span>
+                  </p>
+                </div>
+              </>
             )}
 
             {method === 'combined' && (
@@ -376,6 +376,9 @@ export function PaymentDialog({
                     className="h-11"
                   />
                 </div>
+                {comboTransferVal > 0 && (
+                  <VietQrPanel bank={bank} amount={comboTransferVal} note={transferNote} />
+                )}
 
                 {comboTotal > 0 && (
                   <div className="text-right">

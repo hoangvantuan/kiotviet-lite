@@ -29,6 +29,7 @@ const MATRIX: Record<Permission, Record<UserRole, boolean>> = {
   'products.viewCost': { owner: true, manager: true, staff: false },
   'orders.return': { owner: true, manager: true, staff: false },
   'documents.cancel': { owner: true, manager: true, staff: false },
+  'shifts.manage': { owner: true, manager: true, staff: false },
 }
 
 describe('PERMISSIONS map', () => {
@@ -57,6 +58,7 @@ describe('PERMISSIONS map', () => {
         'products.manage',
         'products.viewCost',
         'reports.view',
+        'shifts.manage',
         'store.manage',
         'users.manage',
       ].sort(),

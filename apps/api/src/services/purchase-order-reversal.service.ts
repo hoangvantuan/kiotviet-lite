@@ -5,6 +5,7 @@ import {
   computeReturnLineRefund,
   type CreatePurchaseReturnInput,
   inventoryTransactions,
+  type MoneyMethod,
   productVariants,
   type PurchaseOrderDetail,
   purchaseOrderItems,
@@ -36,6 +37,21 @@ import {
   refreshPurchaseOrderPaymentStatus,
 } from './purchase-orders.service.js'
 import { serviceDb, type ServiceTransaction } from './service-transaction.js'
+import { assertDocumentShift, resolveDocumentShift } from './shifts.service.js'
+
+/**
+ * BC-06: tiền NCC hoàn (hủy phiếu nhập, trả hàng nhập) là tiền vào quỹ: ghi kênh (mặc định tiền mặt)
+ * và ca nhận tiền theo quy tắc chọn ca của chứng từ. Không có tiền hoàn thì để trống cả hai.
+ */
+function supplierRefundTarget(
+  resolution: Awaited<ReturnType<typeof resolveDocumentShift>>,
+  amount: number,
+  requested: MoneyMethod | undefined,
+): { method: MoneyMethod | null; shiftId: string | null } {
+  if (amount <= 0) return { method: null, shiftId: null }
+  const method = requested ?? 'cash'
+  return { method, shiftId: assertDocumentShift(resolution, method === 'cash') }
+}
 
 /**
  * KHO-11: đường sửa sai cho phiếu nhập. Hủy phiếu rút lại toàn bộ hàng và công nợ NCC của phiếu;
@@ -185,6 +201,12 @@ export async function cancelPurchaseOrder({
   const approver = await resolveCancelApprover({ db, actor, input, meta, preauthorized })
   await db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
+    // Ca khóa trước chứng từ, như các chứng từ tiền khác
+    const shiftResolution = await resolveDocumentShift(txDb, {
+      storeId: actor.storeId,
+      userId: actor.userId,
+      requestedShiftId: input.shiftId,
+    })
     const po = await loadPurchaseOrderPayables(txDb, {
       storeId: actor.storeId,
       purchaseOrderId,
@@ -280,6 +302,7 @@ export async function cancelPurchaseOrder({
       Math.min(po.totalAmount - po.initialPaidAmount, supplier.currentDebt),
     )
     const cancelSupplierRefund = po.totalAmount - cancelDebtReduction
+    const refund = supplierRefundTarget(shiftResolution, cancelSupplierRefund, input.refundMethod)
     const debtAfter = supplier.currentDebt - cancelDebtReduction
     await tx
       .update(suppliers)
@@ -300,6 +323,8 @@ export async function cancelPurchaseOrder({
         cancelReason: reason,
         cancelDebtReduction,
         cancelSupplierRefund,
+        cancelRefundMethod: refund.method,
+        cancelShiftId: refund.shiftId,
       })
       .where(eq(purchaseOrders.id, po.id))
 
@@ -317,6 +342,7 @@ export async function cancelPurchaseOrder({
         reason,
         cancelDebtReduction,
         cancelSupplierRefund,
+        cancelRefundMethod: refund.method,
         itemCount: items.length,
         approvedBy: approver?.userId ?? null,
         approvedByName: approver?.name ?? null,
@@ -383,6 +409,11 @@ export async function createPurchaseReturn({
   const db = serviceDb(rootDb, transaction)
   const returnId = await db.transaction(async (tx) => {
     const txDb = tx as unknown as Db
+    const shiftResolution = await resolveDocumentShift(txDb, {
+      storeId: actor.storeId,
+      userId: actor.userId,
+      requestedShiftId: input.shiftId,
+    })
     const po = await loadPurchaseOrderPayables(txDb, {
       storeId: actor.storeId,
       purchaseOrderId,
@@ -456,6 +487,7 @@ export async function createPurchaseReturn({
       Math.min(totalAmount, po.outstanding, supplier.currentDebt),
     )
     const supplierRefundAmount = totalAmount - debtReductionAmount
+    const refund = supplierRefundTarget(shiftResolution, supplierRefundAmount, input.refundMethod)
 
     const code = await nextDocumentCode({
       db: txDb,
@@ -472,6 +504,8 @@ export async function createPurchaseReturn({
         totalAmount,
         debtReductionAmount,
         supplierRefundAmount,
+        refundMethod: refund.method,
+        shiftId: refund.shiftId,
         note: input.note?.trim() || null,
         createdBy: actor.userId,
       })

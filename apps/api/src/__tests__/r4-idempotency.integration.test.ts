@@ -145,6 +145,7 @@ describe('R4 POS-02, TIEN-04, KHO-08: gửi lại cùng Idempotency-Key ra đún
     const r = await sendTwice(app, '/', {
       customerId: customer.id,
       amount: 200_000,
+      paymentMethod: 'cash',
       allocationMode: 'manual',
       allocations: [{ debtId: debt!.id, amount: 200_000 }],
     })
@@ -160,7 +161,11 @@ describe('R4 POS-02, TIEN-04, KHO-08: gửi lại cùng Idempotency-Key ra đún
     const supplier = await seedSupplier(1_000_000)
     const app = createSupplierPaymentsRoutes({ db: env.db })
 
-    const r = await sendTwice(app, '/', { supplierId: supplier.id, amount: 300_000 })
+    const r = await sendTwice(app, '/', {
+      supplierId: supplier.id,
+      amount: 300_000,
+      paymentMethod: 'cash',
+    })
 
     expectReplay(r)
     const rows = await env.db
@@ -293,8 +298,18 @@ describe('R4: quy tắc của Idempotency-Key', () => {
     const app = createSupplierPaymentsRoutes({ db: env.db })
     const key = randomUUID()
 
-    const first = await post(app, '/', { supplierId: supplier.id, amount: 100_000 }, key)
-    const second = await post(app, '/', { supplierId: supplier.id, amount: 200_000 }, key)
+    const first = await post(
+      app,
+      '/',
+      { supplierId: supplier.id, amount: 100_000, paymentMethod: 'cash' },
+      key,
+    )
+    const second = await post(
+      app,
+      '/',
+      { supplierId: supplier.id, amount: 200_000, paymentMethod: 'cash' },
+      key,
+    )
 
     expect(first.status).toBe(201)
     expect(second.status).toBe(422)
@@ -309,8 +324,18 @@ describe('R4: quy tắc của Idempotency-Key', () => {
     const app = createSupplierPaymentsRoutes({ db: env.db })
     const key = randomUUID()
 
-    const first = await post(app, '/', { supplierId: supplier.id, amount: 100_000 }, key)
-    const second = await post(app, '/', { amount: 100_000, supplierId: supplier.id }, key)
+    const first = await post(
+      app,
+      '/',
+      { supplierId: supplier.id, amount: 100_000, paymentMethod: 'cash' },
+      key,
+    )
+    const second = await post(
+      app,
+      '/',
+      { amount: 100_000, paymentMethod: 'cash', supplierId: supplier.id },
+      key,
+    )
 
     expect(first.status).toBe(201)
     expect(second.status).toBe(201)
@@ -322,12 +347,22 @@ describe('R4: quy tắc của Idempotency-Key', () => {
     const app = createSupplierPaymentsRoutes({ db: env.db })
     const key = randomUUID()
 
-    const failed = await post(app, '/', { supplierId: supplier.id, amount: 500_000 }, key)
+    const failed = await post(
+      app,
+      '/',
+      { supplierId: supplier.id, amount: 500_000, paymentMethod: 'cash' },
+      key,
+    )
     expect(failed.status).toBe(422)
     const stored = await env.db.select().from(idempotencyKeys)
     expect(stored).toHaveLength(0)
 
-    const ok = await post(app, '/', { supplierId: supplier.id, amount: 50_000 }, key)
+    const ok = await post(
+      app,
+      '/',
+      { supplierId: supplier.id, amount: 50_000, paymentMethod: 'cash' },
+      key,
+    )
     expect(ok.status).toBe(201)
     expect(ok.headers.get('Idempotent-Replayed')).toBeNull()
   })
@@ -336,7 +371,12 @@ describe('R4: quy tắc của Idempotency-Key', () => {
     const supplier = await seedSupplier(1_000_000)
     const app = createSupplierPaymentsRoutes({ db: env.db })
 
-    const res = await post(app, '/', { supplierId: supplier.id, amount: 100_000 }, 'short')
+    const res = await post(
+      app,
+      '/',
+      { supplierId: supplier.id, amount: 100_000, paymentMethod: 'cash' },
+      'short',
+    )
 
     expect(res.status).toBe(400)
     const rows = await env.db.select().from(supplierPayments)
@@ -347,8 +387,8 @@ describe('R4: quy tắc của Idempotency-Key', () => {
     const supplier = await seedSupplier(1_000_000)
     const app = createSupplierPaymentsRoutes({ db: env.db })
 
-    await post(app, '/', { supplierId: supplier.id, amount: 100_000 })
-    await post(app, '/', { supplierId: supplier.id, amount: 100_000 })
+    await post(app, '/', { supplierId: supplier.id, amount: 100_000, paymentMethod: 'cash' })
+    await post(app, '/', { supplierId: supplier.id, amount: 100_000, paymentMethod: 'cash' })
 
     const rows = await env.db.select().from(supplierPayments)
     expect(rows).toHaveLength(2)

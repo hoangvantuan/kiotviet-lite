@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { moneyMethodSchema } from './cash-management.js'
 import { documentStatusSchema } from './document-cancel.js'
 import { dateFilterSchema, paginationSchema } from './pagination.js'
 import { purchaseReturnSchema } from './purchase-return-management.js'
@@ -128,6 +129,8 @@ export const purchaseOrderDetailSchema = purchaseOrderListItemSchema.extend({
   cancelReason: z.string().nullable(),
   cancelDebtReduction: z.number(),
   cancelSupplierRefund: z.number(),
+  /** BC-06: kênh NCC hoàn phần đã trả khi hủy phiếu; null khi không có tiền hoàn */
+  cancelRefundMethod: moneyMethodSchema.nullable(),
   returns: z.array(purchaseReturnSchema),
   updatedAt: z.string(),
 })

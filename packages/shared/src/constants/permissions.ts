@@ -31,6 +31,8 @@ export const PERMISSIONS = {
   'orders.return': ['owner', 'manager'],
   // TIEN-107: hủy đơn bán, phiếu thu, phiếu nhập. Nhân viên cần PIN của người giữ quyền này.
   'documents.cancel': ['owner', 'manager'],
+  // Xem mọi ca bán hàng và đóng ca thay người bán (POS-06); ai bán hàng cũng mở, đóng ca của mình
+  'shifts.manage': ['owner', 'manager'],
 } as const satisfies Record<string, ReadonlyArray<UserRole>>
 
 export type Permission = keyof typeof PERMISSIONS

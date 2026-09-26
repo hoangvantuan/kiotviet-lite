@@ -1,6 +1,6 @@
 import { Printer } from 'lucide-react'
 
-import type { ReceiptDetail } from '@kiotviet-lite/shared'
+import { moneyMethodLabel, type ReceiptDetail } from '@kiotviet-lite/shared'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -48,6 +48,14 @@ export function ReceiptSuccessDialog({ open, onOpenChange, receipt }: ReceiptSuc
                 {receipt.customerName ?? '—'}{' '}
                 {receipt.customerPhone ? `(${receipt.customerPhone})` : ''}
               </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Mã phiếu:</span>
+              <span className="font-mono">{receipt.code}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Phương thức:</span>
+              <span>{moneyMethodLabel(receipt.paymentMethod)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Số tiền:</span>

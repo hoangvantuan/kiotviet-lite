@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Ban, Undo2, Wallet } from 'lucide-react'
 
-import type { PurchaseOrderDetail } from '@kiotviet-lite/shared'
+import {
+  moneyMethodLabel,
+  type PurchaseOrderDetail,
+  type RefundMethod,
+} from '@kiotviet-lite/shared'
 
 import { CancelDocumentDialog } from '@/components/shared/cancel-document-dialog'
 import { Button } from '@/components/ui/button'
@@ -16,6 +20,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { RefundMethodFields } from '@/features/shifts/refund-method-fields'
+import { useDocumentShiftChoice } from '@/features/shifts/use-document-shift-choice'
 import { CreateSupplierPaymentDialog } from '@/features/supplier-payments/create-supplier-payment-dialog'
 import { useGuardedOpenChange } from '@/hooks/use-document-mutation'
 import { handleApiError } from '@/lib/api-error'
@@ -41,6 +47,9 @@ export function PurchaseOrderActions({ order }: { order: PurchaseOrderDetail }) 
   const [returnOpen, setReturnOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
   const cancelMutation = useCancelPurchaseOrderMutation()
+  // BC-06: phần đã trả lúc nhập là tiền NCC hoàn khi hủy phiếu: ghi kênh nhận và ca nhận tiền mặt
+  const [cancelRefundMethod, setCancelRefundMethod] = useState<RefundMethod>('cash')
+  const cancelShiftChoice = useDocumentShiftChoice()
 
   if (order.status !== 'active') return null
   const outstanding = purchaseOrderOutstanding(order)
@@ -85,7 +94,13 @@ export function PurchaseOrderActions({ order }: { order: PurchaseOrderDetail }) 
       <PurchaseReturnDialog open={returnOpen} onOpenChange={setReturnOpen} order={order} />
       <CancelDocumentDialog
         open={cancelOpen}
-        onOpenChange={setCancelOpen}
+        onOpenChange={(next) => {
+          setCancelOpen(next)
+          if (!next) {
+            setCancelRefundMethod('cash')
+            cancelShiftChoice.reset()
+          }
+        }}
         title={`Hủy phiếu nhập ${order.code}`}
         description={
           <>
@@ -103,16 +118,35 @@ export function PurchaseOrderActions({ order }: { order: PurchaseOrderDetail }) 
           </>
         }
         isPending={cancelMutation.isPending}
+        confirmDisabled={cancelShiftChoice.pending}
         onConfirm={async (input) => {
           try {
-            await cancelMutation.mutateAsync({ id: order.id, input })
+            await cancelMutation.mutateAsync({
+              id: order.id,
+              input: {
+                ...input,
+                ...(order.initialPaidAmount > 0 ? { refundMethod: cancelRefundMethod } : {}),
+                ...(cancelShiftChoice.shiftId ? { shiftId: cancelShiftChoice.shiftId } : {}),
+              },
+            })
             showSuccess(`Đã hủy phiếu nhập ${order.code}`)
           } catch (err) {
-            handleApiError(err)
+            if (!cancelShiftChoice.capture(err)) handleApiError(err)
             throw err
           }
         }}
-      />
+      >
+        {order.initialPaidAmount > 0 && (
+          <RefundMethodFields
+            label="NCC hoàn tiền qua"
+            value={cancelRefundMethod}
+            onChange={setCancelRefundMethod}
+            shiftChoice={cancelShiftChoice}
+            disabled={cancelMutation.isPending}
+            idPrefix="purchase-cancel-refund"
+          />
+        )}
+      </CancelDocumentDialog>
     </div>
   )
 }
@@ -128,13 +162,18 @@ function PurchaseReturnDialog({ open, onOpenChange, order }: PurchaseReturnDialo
   const handleOpenChange = useGuardedOpenChange(onOpenChange, mutation)
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [note, setNote] = useState('')
+  const [refundMethod, setRefundMethod] = useState<RefundMethod>('cash')
+  const shiftChoice = useDocumentShiftChoice()
+  const resetShiftChoice = shiftChoice.reset
 
   useEffect(() => {
     if (open) {
       setQuantities({})
       setNote('')
+      setRefundMethod('cash')
+      resetShiftChoice()
     }
-  }, [open])
+  }, [open, resetShiftChoice])
 
   const lines = useMemo(
     () =>
@@ -149,6 +188,8 @@ function PurchaseReturnDialog({ open, onOpenChange, order }: PurchaseReturnDialo
   )
   const total = lines.reduce((sum, l) => sum + l.estimate, 0)
   const selected = lines.filter((l) => l.qty > 0)
+  // Phần vượt số còn nợ của phiếu là tiền NCC hoàn (ước tính, máy chủ tính chính xác)
+  const refundEstimate = Math.max(0, total - purchaseOrderOutstanding(order))
 
   const submit = async () => {
     try {
@@ -157,19 +198,21 @@ function PurchaseReturnDialog({ open, onOpenChange, order }: PurchaseReturnDialo
         input: {
           items: selected.map((l) => ({ purchaseOrderItemId: l.item.id, quantity: l.qty })),
           ...(note.trim() ? { note: note.trim() } : {}),
+          ...(refundEstimate > 0 ? { refundMethod } : {}),
+          ...(shiftChoice.shiftId ? { shiftId: shiftChoice.shiftId } : {}),
         },
       })
       const r = res.data
       const parts = [
         r.debtReductionAmount > 0 ? `giảm nợ ${formatVndWithSuffix(r.debtReductionAmount)}` : '',
         r.supplierRefundAmount > 0
-          ? `NCC phải hoàn ${formatVndWithSuffix(r.supplierRefundAmount)}`
+          ? `NCC hoàn ${formatVndWithSuffix(r.supplierRefundAmount)} (${moneyMethodLabel(r.refundMethod)})`
           : '',
       ].filter(Boolean)
       showSuccess(`Đã tạo phiếu trả ${r.code}${parts.length ? `, ${parts.join(', ')}` : ''}`)
       onOpenChange(false)
     } catch (err) {
-      handleApiError(err)
+      if (!shiftChoice.capture(err)) handleApiError(err)
     }
   }
 
@@ -237,6 +280,16 @@ function PurchaseReturnDialog({ open, onOpenChange, order }: PurchaseReturnDialo
             <span>Giá trị trả (ước tính)</span>
             <span>{formatVndWithSuffix(total)}</span>
           </div>
+          {refundEstimate > 0 && (
+            <RefundMethodFields
+              label={`NCC hoàn ${formatVndWithSuffix(refundEstimate)} qua`}
+              value={refundMethod}
+              onChange={setRefundMethod}
+              shiftChoice={shiftChoice}
+              disabled={mutation.isPending}
+              idPrefix="purchase-return-refund"
+            />
+          )}
         </div>
         <DialogFooter>
           <Button
@@ -248,7 +301,7 @@ function PurchaseReturnDialog({ open, onOpenChange, order }: PurchaseReturnDialo
           </Button>
           <Button
             onClick={() => void submit()}
-            disabled={selected.length === 0 || mutation.isPending}
+            disabled={selected.length === 0 || mutation.isPending || shiftChoice.pending}
           >
             {mutation.isPending ? 'Đang lưu...' : 'Lưu phiếu trả'}
           </Button>
@@ -273,7 +326,7 @@ export function PurchaseOrderCancelledNotice({ order }: { order: PurchaseOrderDe
       <p className="mt-1 text-xs">
         Nợ phải trả giảm {formatVndWithSuffix(order.cancelDebtReduction)}
         {order.cancelSupplierRefund > 0
-          ? `, NCC phải hoàn ${formatVndWithSuffix(order.cancelSupplierRefund)}`
+          ? `, NCC hoàn ${formatVndWithSuffix(order.cancelSupplierRefund)} (${moneyMethodLabel(order.cancelRefundMethod)})`
           : ''}
         .
       </p>
@@ -297,7 +350,7 @@ export function PurchaseReturnsSection({ order }: { order: PurchaseOrderDetail }
             {r.createdByName ? ` bởi ${r.createdByName}` : ''}. Giảm nợ{' '}
             {formatVndWithSuffix(r.debtReductionAmount)}
             {r.supplierRefundAmount > 0
-              ? `, NCC phải hoàn ${formatVndWithSuffix(r.supplierRefundAmount)}`
+              ? `, NCC hoàn ${formatVndWithSuffix(r.supplierRefundAmount)} (${moneyMethodLabel(r.refundMethod)})`
               : ''}
           </p>
           <ul className="mt-1 text-xs">

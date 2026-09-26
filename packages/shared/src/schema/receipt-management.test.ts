@@ -11,6 +11,7 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: VALID_UUID_1,
       amount: 250000,
+      paymentMethod: 'cash',
       note: 'Thu tiền nợ tháng 4',
       allocationMode: 'fifo',
       allocations: [
@@ -25,6 +26,7 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: VALID_UUID_1,
       amount: 100000,
+      paymentMethod: 'cash',
       allocationMode: 'manual',
       allocations: [{ debtId: VALID_UUID_2, amount: 100000 }],
     })
@@ -35,6 +37,7 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: 'not-a-uuid',
       amount: 100000,
+      paymentMethod: 'cash',
       allocationMode: 'fifo',
       allocations: [{ debtId: VALID_UUID_2, amount: 100000 }],
     })
@@ -45,6 +48,7 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: VALID_UUID_1,
       amount: 0,
+      paymentMethod: 'cash',
       allocationMode: 'fifo',
       allocations: [{ debtId: VALID_UUID_2, amount: 0 }],
     })
@@ -58,6 +62,7 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: VALID_UUID_1,
       amount: -1000,
+      paymentMethod: 'cash',
       allocationMode: 'fifo',
       allocations: [{ debtId: VALID_UUID_2, amount: -1000 }],
     })
@@ -68,6 +73,7 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: VALID_UUID_1,
       amount: 100.5,
+      paymentMethod: 'cash',
       allocationMode: 'fifo',
       allocations: [{ debtId: VALID_UUID_2, amount: 100.5 }],
     })
@@ -78,6 +84,7 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: VALID_UUID_1,
       amount: 100000,
+      paymentMethod: 'cash',
       note: 'a'.repeat(501),
       allocationMode: 'fifo',
       allocations: [{ debtId: VALID_UUID_2, amount: 100000 }],
@@ -89,6 +96,7 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: VALID_UUID_1,
       amount: 100000,
+      paymentMethod: 'cash',
       allocationMode: 'fifo',
       allocations: [],
     })
@@ -99,6 +107,7 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: VALID_UUID_1,
       amount: 100000,
+      paymentMethod: 'cash',
       allocationMode: 'manual',
       allocations: [
         { debtId: VALID_UUID_2, amount: 50000 },
@@ -115,6 +124,7 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: VALID_UUID_1,
       amount: 200000,
+      paymentMethod: 'cash',
       allocationMode: 'fifo',
       allocations: [
         { debtId: VALID_UUID_2, amount: 100000 },
@@ -131,6 +141,7 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: VALID_UUID_1,
       amount: 100000,
+      paymentMethod: 'cash',
       allocationMode: 'fifo',
       allocations: [{ debtId: VALID_UUID_2, amount: 0 }],
     })
@@ -141,6 +152,7 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: VALID_UUID_1,
       amount: 100000,
+      paymentMethod: 'cash',
       allocationMode: 'random',
       allocations: [{ debtId: VALID_UUID_2, amount: 100000 }],
     })
@@ -151,6 +163,7 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: VALID_UUID_1,
       amount: 100000,
+      paymentMethod: 'cash',
       allocationMode: 'fifo',
       allocations: [{ debtId: VALID_UUID_2, amount: 100000 }],
       extraField: 'should fail',
@@ -162,6 +175,7 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: VALID_UUID_1,
       amount: 100000,
+      paymentMethod: 'cash',
       allocationMode: 'fifo',
       allocations: [{ debtId: VALID_UUID_2, amount: 100000, extra: 'x' }],
     })
@@ -172,6 +186,7 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: VALID_UUID_1,
       amount: 100000,
+      paymentMethod: 'cash',
       note: null,
       allocationMode: 'fifo',
       allocations: [{ debtId: VALID_UUID_2, amount: 100000 }],
@@ -183,10 +198,38 @@ describe('createReceiptSchema', () => {
     const r = createReceiptSchema.safeParse({
       customerId: VALID_UUID_1,
       amount: 100000,
+      paymentMethod: 'cash',
       allocationMode: 'fifo',
       allocations: [{ debtId: VALID_UUID_2, amount: 100000 }],
     })
     expect(r.success).toBe(true)
+  })
+})
+
+describe('createReceiptSchema: phương thức tiền (TIEN-05)', () => {
+  it('từ chối khi thiếu phương thức', () => {
+    const r = createReceiptSchema.safeParse({
+      customerId: VALID_UUID_1,
+      amount: 100000,
+      allocationMode: 'fifo',
+      allocations: [{ debtId: VALID_UUID_2, amount: 100000 }],
+    })
+    expect(r.success).toBe(false)
+  })
+
+  it('nhận chuyển khoản và QR, từ chối "kết hợp" hay "ghi nợ"', () => {
+    const parse = (paymentMethod: string) =>
+      createReceiptSchema.safeParse({
+        customerId: VALID_UUID_1,
+        amount: 100000,
+        allocationMode: 'fifo',
+        allocations: [{ debtId: VALID_UUID_2, amount: 100000 }],
+        paymentMethod,
+      }).success
+    expect(parse('transfer')).toBe(true)
+    expect(parse('qr')).toBe(true)
+    expect(parse('combined')).toBe(false)
+    expect(parse('debt')).toBe(false)
   })
 })
 

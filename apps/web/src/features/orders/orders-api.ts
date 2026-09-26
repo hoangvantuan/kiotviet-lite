@@ -1,5 +1,6 @@
 import type {
   CancelDocumentInput,
+  MoneyMethod,
   OrderPolicyViolation,
   OrderReviewStatus,
   PriceSource,
@@ -206,6 +207,8 @@ export interface OrderReturnListItem {
   refundAmount: number
   debtReductionAmount: number
   prepaymentRefundAmount: number
+  /** TIEN-02: kênh chi phần tiền hoàn; null khi không hoàn tiền hoặc phiếu cũ */
+  refundMethod: MoneyMethod | null
   createdByName: string | null
   createdAt: string
   items: OrderReturnItemDetail[]
@@ -213,6 +216,7 @@ export interface OrderReturnListItem {
 
 export interface CreateOrderReturnInput {
   items: Array<{ orderItemId: string; quantity: number; reason: string }>
+  refundMethod?: MoneyMethod
   note?: string | null
 }
 
@@ -248,6 +252,8 @@ export interface OrderCancelResult {
   orderNumber: string
   status: 'cancelled'
   cashRefundAmount: number
+  /** BC-06: kênh trả lại phần tiền trên; null khi không phải trả tiền */
+  refundMethod: MoneyMethod | null
   debtReductionAmount: number
   prepaymentRefundAmount: number
   cancelledAt: string

@@ -124,6 +124,7 @@ describe('POST /supplier-payments (createSupplierPayment)', () => {
       {
         supplierId: env.supplierWithDebtId,
         amount: 300_000,
+        paymentMethod: 'cash',
         note: 'Trả nợ tháng 4',
       },
       env.base.owner.authHeader,
@@ -146,7 +147,7 @@ describe('POST /supplier-payments (createSupplierPayment)', () => {
       env,
       'POST',
       '/',
-      { supplierId: env.supplierWithDebtId, amount: 1_000_000 },
+      { supplierId: env.supplierWithDebtId, amount: 1_000_000, paymentMethod: 'cash' },
       env.base.owner.authHeader,
     )
     expect(r.status).toBe(201)
@@ -158,7 +159,7 @@ describe('POST /supplier-payments (createSupplierPayment)', () => {
       env,
       'POST',
       '/',
-      { supplierId: env.supplierWithDebtId, amount: 100_000 },
+      { supplierId: env.supplierWithDebtId, amount: 100_000, paymentMethod: 'cash' },
       env.base.manager.authHeader,
     )
     expect(r.status).toBe(403)
@@ -170,7 +171,7 @@ describe('POST /supplier-payments (createSupplierPayment)', () => {
       env,
       'POST',
       '/',
-      { supplierId: env.supplierWithDebtId, amount: 100_000 },
+      { supplierId: env.supplierWithDebtId, amount: 100_000, paymentMethod: 'cash' },
       env.base.staff.authHeader,
     )
     expect(r.status).toBe(403)
@@ -181,7 +182,7 @@ describe('POST /supplier-payments (createSupplierPayment)', () => {
       env,
       'POST',
       '/',
-      { supplierId: env.supplierWithDebtId, amount: 2_000_000 },
+      { supplierId: env.supplierWithDebtId, amount: 2_000_000, paymentMethod: 'cash' },
       env.base.owner.authHeader,
     )
     expect(r.status).toBe(422)
@@ -194,7 +195,7 @@ describe('POST /supplier-payments (createSupplierPayment)', () => {
       env,
       'POST',
       '/',
-      { supplierId: env.supplierNoDebtId, amount: 100_000 },
+      { supplierId: env.supplierNoDebtId, amount: 100_000, paymentMethod: 'cash' },
       env.base.owner.authHeader,
     )
     expect(r.status).toBe(422)
@@ -217,7 +218,7 @@ describe('POST /supplier-payments (createSupplierPayment)', () => {
       env,
       'POST',
       '/',
-      { supplierId: env.supplierWithDebtId, amount: 0 },
+      { supplierId: env.supplierWithDebtId, amount: 0, paymentMethod: 'cash' },
       env.base.owner.authHeader,
     )
     expect(r.status).toBe(400)
@@ -240,7 +241,7 @@ describe('POST /supplier-payments (createSupplierPayment)', () => {
       env,
       'POST',
       '/',
-      { supplierId: otherSupplier!.id, amount: 100_000 },
+      { supplierId: otherSupplier!.id, amount: 100_000, paymentMethod: 'cash' },
       env.base.owner.authHeader,
     )
     expect(r.status).toBe(404)
@@ -252,7 +253,7 @@ describe('POST /supplier-payments (createSupplierPayment)', () => {
       env,
       'POST',
       '/',
-      { supplierId: env.supplierWithDebtId, amount: 200_000, note: 'test' },
+      { supplierId: env.supplierWithDebtId, amount: 200_000, paymentMethod: 'cash', note: 'test' },
       env.base.owner.authHeader,
     )
     const logs = await env.base.db
@@ -277,7 +278,7 @@ describe('POST /supplier-payments (createSupplierPayment)', () => {
       env,
       'POST',
       '/',
-      { supplierId: env.supplierWithDebtId, amount: 100_000 },
+      { supplierId: env.supplierWithDebtId, amount: 100_000, paymentMethod: 'cash' },
       env.base.owner.authHeader,
     )
     expect(r.status).toBe(404)
@@ -293,21 +294,36 @@ describe('GET /supplier-payments (listSupplierPayments)', () => {
       env,
       'POST',
       '/',
-      { supplierId: env.supplierWithDebtId, amount: 100_000, note: 'phiếu 1' },
+      {
+        supplierId: env.supplierWithDebtId,
+        amount: 100_000,
+        paymentMethod: 'cash',
+        note: 'phiếu 1',
+      },
       env.base.owner.authHeader,
     )
     await jsonReq(
       env,
       'POST',
       '/',
-      { supplierId: env.supplierBigDebtId, amount: 500_000, note: 'phiếu 2' },
+      {
+        supplierId: env.supplierBigDebtId,
+        amount: 500_000,
+        paymentMethod: 'cash',
+        note: 'phiếu 2',
+      },
       env.base.owner.authHeader,
     )
     await jsonReq(
       env,
       'POST',
       '/',
-      { supplierId: env.supplierBigDebtId, amount: 200_000, note: 'phiếu 3 kèm 50%' },
+      {
+        supplierId: env.supplierBigDebtId,
+        amount: 200_000,
+        paymentMethod: 'cash',
+        note: 'phiếu 3 kèm 50%',
+      },
       env.base.owner.authHeader,
     )
   })
@@ -413,7 +429,7 @@ describe('GET /supplier-payments/:id (getSupplierPayment)', () => {
       env,
       'POST',
       '/',
-      { supplierId: env.supplierWithDebtId, amount: 100_000 },
+      { supplierId: env.supplierWithDebtId, amount: 100_000, paymentMethod: 'cash' },
       env.base.owner.authHeader,
     )
     createdId = r.body.data.id
@@ -469,7 +485,7 @@ describe('Method not allowed (immutable)', () => {
       env,
       'POST',
       '/',
-      { supplierId: env.supplierWithDebtId, amount: 100_000 },
+      { supplierId: env.supplierWithDebtId, amount: 100_000, paymentMethod: 'cash' },
       env.base.owner.authHeader,
     )
     createdId = r.body.data.id
@@ -510,7 +526,7 @@ describe('Debt consistency across sequential payments', () => {
       env,
       'POST',
       '/',
-      { supplierId: env.supplierWithDebtId, amount: 800_000 },
+      { supplierId: env.supplierWithDebtId, amount: 800_000, paymentMethod: 'cash' },
       env.base.owner.authHeader,
     )
     expect(r1.status).toBe(201)
@@ -520,7 +536,7 @@ describe('Debt consistency across sequential payments', () => {
       env,
       'POST',
       '/',
-      { supplierId: env.supplierWithDebtId, amount: 500_000 },
+      { supplierId: env.supplierWithDebtId, amount: 500_000, paymentMethod: 'cash' },
       env.base.owner.authHeader,
     )
     expect(r2.status).toBe(422)

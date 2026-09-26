@@ -10,6 +10,7 @@ import {
 } from 'drizzle-orm/pg-core'
 import { uuidv7 } from 'uuidv7'
 
+import { cashShifts } from './cash-shifts.js'
 import { stores } from './stores.js'
 import { suppliers } from './suppliers.js'
 import { users } from './users.js'
@@ -43,6 +44,9 @@ export const purchaseOrders = pgTable(
     // Lúc hủy: phần giảm vào công nợ NCC và phần NCC phải hoàn tiền mặt (tổng = totalAmount)
     cancelDebtReduction: bigint({ mode: 'number' }).notNull().default(0),
     cancelSupplierRefund: bigint({ mode: 'number' }).notNull().default(0),
+    // BC-06: kênh NCC hoàn phần tiền trên và ca nhận tiền (tiền vào của ngày hủy)
+    cancelRefundMethod: varchar({ length: 16 }),
+    cancelShiftId: uuid().references(() => cashShifts.id, { onDelete: 'restrict' }),
     // Lũy kế trả hàng nhập: giá trị hàng trả và phần NCC hoàn tiền mặt
     returnedAmount: bigint({ mode: 'number' }).notNull().default(0),
     returnRefundAmount: bigint({ mode: 'number' }).notNull().default(0),
@@ -62,5 +66,7 @@ export const purchaseOrders = pgTable(
     index('idx_purchase_orders_store_supplier').on(table.storeId, table.supplierId),
     index('idx_purchase_orders_store_payment_status').on(table.storeId, table.paymentStatus),
     index('idx_purchase_orders_store_created').on(table.storeId, table.createdAt.desc()),
+    index('idx_purchase_orders_cancel_shift').on(table.cancelShiftId),
+    index('idx_purchase_orders_store_cancelled_at').on(table.storeId, table.cancelledAt),
   ],
 )

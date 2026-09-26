@@ -84,7 +84,7 @@ async function receiptFifo(customerId: string, amount: number) {
   return createReceipt({
     db: env.db,
     actor: ownerActor(),
-    input: { customerId, amount, allocationMode: 'fifo', allocations },
+    input: { customerId, amount, paymentMethod: 'cash', allocationMode: 'fifo', allocations },
   })
 }
 
@@ -334,6 +334,7 @@ describe('TIEN-103: mọi luồng tiền khóa customers trước debts', () => 
       input: {
         customerId: customer.id,
         amount: 1_000,
+        paymentMethod: 'cash',
         allocationMode: 'fifo',
         allocations: [{ debtId: open.items[0]!.id, amount: 1_000 }],
       },
@@ -476,6 +477,7 @@ describe('bất biến công nợ kiểm trong transaction', () => {
         input: {
           customerId: customer.id,
           amount: 1_000,
+          paymentMethod: 'cash',
           allocationMode: 'fifo',
           allocations: [{ debtId: debt.id, amount: 1_000 }],
         },

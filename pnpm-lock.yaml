@@ -229,6 +229,9 @@ importers:
       tailwind-merge:
         specifier: ^3.3.0
         version: 3.5.0
+      uqr:
+        specifier: ^0.1.3
+        version: 0.1.3
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -6085,13 +6088,6 @@ packages:
         integrity: sha512-CdzqowRJCeLU72bHvWqwRBBlLcMEtIvGrlvef74kMnV2AolS9Y8xUv1I0U/MNAWMhBlKIoyuEgoJ0t/bbwHbLQ==,
       }
 
-  lru-cache@11.3.6:
-    resolution:
-      {
-        integrity: sha512-Gf/KoL3C/MlI7Bt0PGI9I+TeTC/I6r/csU58N4BSNc4lppLBeKsOdFYkK+dX0ABDUMJNfCHTyPpzwwO21Awd3A==,
-      }
-    engines: { node: 20 || >=22 }
-
   lru-cache@11.5.3:
     resolution:
       {
@@ -7513,6 +7509,12 @@ packages:
     hasBin: true
     peerDependencies:
       browserslist: '>= 4.21.0'
+
+  uqr@0.1.3:
+    resolution:
+      {
+        integrity: sha512-0rjE8iEJe4YmT9TOhwsZtqCMRLc5DXZUI2UEYUUg63ikBkqqE5EYWaI0etFe/5KUcmcYwLih2RND1kq+hrUJXA==,
+      }
 
   uri-js@4.4.1:
     resolution:
@@ -11516,8 +11518,6 @@ snapshots:
 
   loupe@3.2.1: {}
 
-  lru-cache@11.3.6: {}
-
   lru-cache@11.5.3: {}
 
   lru-cache@5.1.1:
@@ -11647,7 +11647,7 @@ snapshots:
 
   path-scurry@2.0.2:
     dependencies:
-      lru-cache: 11.3.6
+      lru-cache: 11.5.3
       minipass: 7.1.3
 
   pathe@2.0.3: {}
@@ -12396,6 +12396,8 @@ snapshots:
       browserslist: 4.28.2
       escalade: 3.2.0
       picocolors: 1.1.1
+
+  uqr@0.1.3: {}
 
   uri-js@4.4.1:
     dependencies:

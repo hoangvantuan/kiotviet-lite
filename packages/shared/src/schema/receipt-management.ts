@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { documentShiftIdSchema, moneyMethodInput, moneyMethodSchema } from './cash-management.js'
 import { documentStatusSchema } from './document-cancel.js'
 import { dateFilterSchema, paginationSchema } from './pagination.js'
 
@@ -21,6 +22,9 @@ export const createReceiptSchema = z
       .int('Số tiền phải là số nguyên')
       .min(1, 'Số tiền phải lớn hơn 0')
       .max(99_999_999_999_999, 'Số tiền vượt giới hạn'),
+    // TIEN-05: phương thức nhận tiền, bắt buộc để đối soát quỹ tiền mặt và tài khoản ngân hàng
+    paymentMethod: moneyMethodInput('Vui lòng chọn phương thức nhận tiền'),
+    shiftId: documentShiftIdSchema,
     note: z.string().trim().max(500, 'Ghi chú tối đa 500 ký tự').nullable().optional(),
     allocationMode: z.enum(['fifo', 'manual']),
     allocations: z.array(allocationInputSchema).min(1, 'Cần ít nhất một khoản phân bổ'),
@@ -106,6 +110,8 @@ export const receiptAllocationItemSchema = z.object({
 
 export const receiptListItemSchema = z.object({
   id: z.string().uuid(),
+  code: z.string(),
+  paymentMethod: moneyMethodSchema.nullable(),
   customerId: z.string().uuid(),
   customerName: z.string().nullable(),
   customerCode: z.string().nullable(),
