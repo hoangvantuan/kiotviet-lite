@@ -5,11 +5,13 @@ import {
   type CreateReceiptInput,
   debtSourceLabel,
   formatPhone,
+  type MoneyMethod,
   type OpenDebtItem,
   type ReceiptDetail,
 } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
+import { MoneyMethodPicker } from '@/components/shared/money-method-picker'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -82,6 +84,9 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
   const [manualAllocations, setManualAllocations] = useState<Record<string, number>>({})
   const [manualSelected, setManualSelected] = useState<Record<string, boolean>>({})
 
+  // TIEN-05: khách trả nợ bằng kênh nào, để đối soát ngăn kéo và sao kê
+  const [paymentMethod, setPaymentMethod] = useState<MoneyMethod>('cash')
+
   // Section 4: Note
   const [note, setNote] = useState<string>('')
 
@@ -95,6 +100,7 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
       setMode('fifo')
       setManualAllocations({})
       setManualSelected({})
+      setPaymentMethod('cash')
       setNote('')
     }
   }, [open])
@@ -154,6 +160,7 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
     const payload: CreateReceiptInput = {
       customerId: selectedCustomer.id,
       amount,
+      paymentMethod,
       note: note.trim() ? note.trim() : null,
       allocationMode: mode,
       allocations,
@@ -293,6 +300,21 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
             </section>
           )}
 
+          {selectedCustomer && (
+            <section className="space-y-2">
+              <Label>
+                Phương thức nhận tiền <span className="text-destructive">*</span>
+              </Label>
+              <MoneyMethodPicker
+                value={paymentMethod}
+                onChange={setPaymentMethod}
+                disabled={mutation.isPending}
+                ariaLabel="Phương thức nhận tiền"
+                idPrefix="receipt-method"
+              />
+            </section>
+          )}
+
           {/* Section 3: Allocation */}
           {selectedCustomer && amount > 0 && amount <= totalRemaining && (
             <section className="space-y-3">
@@ -426,7 +448,7 @@ export function CreateReceiptDialog({ open, onOpenChange, onCreated }: CreateRec
                 id="receipt-note"
                 rows={3}
                 maxLength={500}
-                placeholder="VD: Thu tiền nợ tháng 4, tiền mặt"
+                placeholder="VD: Thu tiền nợ tháng 4"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
               />

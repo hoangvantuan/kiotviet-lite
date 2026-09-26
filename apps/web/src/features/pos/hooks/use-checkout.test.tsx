@@ -6,10 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiClientError } from '@/lib/api-client'
 import { resetIdempotencyKeysForTest } from '@/lib/idempotency'
+import { posTransferNote } from '@/lib/vietqr'
 import { useAuthStore } from '@/stores/use-auth-store'
 import { useCartStore } from '@/stores/use-cart-store'
 
-import { type CheckoutVariables, PREVIOUS_ORDER_SAVED, useCheckoutMutation } from './use-checkout'
+import {
+  type CheckoutVariables,
+  pendingCheckoutKey,
+  PREVIOUS_ORDER_SAVED,
+  useCheckoutMutation,
+} from './use-checkout'
 
 const PRODUCT_ID = '01a0da5f-d368-7cda-9dfe-5c0c5757357c'
 
@@ -242,5 +248,26 @@ describe('R4: khóa lưu đơn POS gắn với giỏ hàng của tab', () => {
     const lookup = fetchMock.mock.calls.find(([url]) => String(url).includes('clientId='))
     expect(String(lookup![0])).toContain(`clientId=${first!.key}`)
     expect(second!.key).toBe(first!.key)
+  })
+})
+
+describe('POS-07: nội dung chuyển khoản trong mã VietQR tra ngược ra đơn', () => {
+  it('khóa tính trước khi mở hộp thanh toán là clientId của đơn được gửi đi', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(created())
+    vi.stubGlobal('fetch', fetchMock)
+    const result = setup()
+
+    // Lúc mở hộp chưa biết cách trả tiền: tính với tiền mặt, khách chọn QR vẫn cùng khóa
+    const expected = pendingCheckoutKey({ tab: 1, order: order() })
+    await checkout(result, {
+      tab: 1,
+      order: order({ paymentMethod: 'qr', cashAmount: undefined }),
+    })
+
+    const [sent] = sentOrders(fetchMock)
+    expect(sent!.clientId).toBe(expected)
+    expect(posTransferNote(expected)).toBe(
+      `TT ${expected.replace(/-/g, '').slice(0, 8).toUpperCase()}`,
+    )
   })
 })

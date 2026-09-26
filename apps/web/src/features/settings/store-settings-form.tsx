@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch'
 import { handleApiError } from '@/lib/api-error'
 import { showError, showSuccess } from '@/lib/toast'
 
+import { CashSettingsSection } from './cash-settings-section'
 import { useStoreQuery, useUpdateStoreMutation } from './use-store-settings'
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024
@@ -216,6 +217,7 @@ export function StoreSettingsForm() {
           kho âm. Hãy bật lại sau khi kiểm kê xong.
         </p>
       </section>
+      {storeQuery.data && <CashSettingsSection store={storeQuery.data} />}
     </div>
   )
 }

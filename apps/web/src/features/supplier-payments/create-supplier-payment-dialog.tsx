@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { type CreateSupplierPaymentInput, createSupplierPaymentSchema } from '@kiotviet-lite/shared'
 
 import { CurrencyInput } from '@/components/shared/currency-input'
+import { MoneyMethodPicker } from '@/components/shared/money-method-picker'
 import { SupplierCombobox } from '@/components/shared/supplier-combobox'
 import { Button } from '@/components/ui/button'
 import {
@@ -25,7 +26,7 @@ import { showSuccess } from '@/lib/toast'
 
 import { useCreateSupplierPaymentMutation } from './use-supplier-payments'
 
-const KNOWN_FIELDS = ['supplierId', 'amount', 'note', 'purchaseOrderId']
+const KNOWN_FIELDS = ['supplierId', 'amount', 'paymentMethod', 'note', 'purchaseOrderId']
 
 /** TIEN-104: mở từ phiếu nhập hoặc bảng nợ NCC thì điền sẵn NCC, có thể gắn một phiếu nhập */
 export interface SupplierPaymentPreset {
@@ -47,6 +48,7 @@ function emptyValues(preset?: SupplierPaymentPreset): CreateSupplierPaymentInput
   return {
     supplierId: preset?.supplierId ?? '',
     amount: 0,
+    paymentMethod: 'cash',
     note: null,
     purchaseOrderId: preset?.purchaseOrderId ?? null,
   }
@@ -89,6 +91,7 @@ export function CreateSupplierPaymentDialog({
       : supplierDebt
 
   const noteValue = useWatch({ control: form.control, name: 'note' }) ?? ''
+  const paymentMethod = useWatch({ control: form.control, name: 'paymentMethod' })
 
   const submit = form.handleSubmit(async (values) => {
     if (selectedSupplier && values.amount > currentDebt) {
@@ -102,6 +105,7 @@ export function CreateSupplierPaymentDialog({
     const payload: CreateSupplierPaymentInput = {
       supplierId: values.supplierId,
       amount: values.amount,
+      paymentMethod: values.paymentMethod,
       note: values.note?.toString().trim() ? values.note.toString().trim() : null,
       ...(linkedPo ? { purchaseOrderId: linkedPo.purchaseOrderId } : {}),
     }
@@ -200,12 +204,25 @@ export function CreateSupplierPaymentDialog({
           </div>
 
           <div className="grid gap-2">
+            <Label>
+              Phương thức chi <span className="text-destructive">*</span>
+            </Label>
+            <MoneyMethodPicker
+              value={paymentMethod}
+              onChange={(v) => form.setValue('paymentMethod', v, { shouldValidate: true })}
+              disabled={isPending}
+              ariaLabel="Phương thức chi"
+              idPrefix="supplier-payment-method"
+            />
+          </div>
+
+          <div className="grid gap-2">
             <Label htmlFor="payment-note">Ghi chú</Label>
             <Textarea
               id="payment-note"
               rows={3}
               maxLength={500}
-              placeholder="VD: Chi trả nợ tháng 4 cho nhà cung cấp ABC, tiền mặt"
+              placeholder="VD: Chi trả nợ tháng 4 cho nhà cung cấp ABC"
               {...form.register('note')}
             />
             <p className="text-xs text-muted-foreground text-right">{noteValue.length}/500</p>

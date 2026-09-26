@@ -12,9 +12,11 @@ import { KeyboardShortcutsTooltip } from './KeyboardShortcutsTooltip'
 interface PosHeaderProps {
   showProductGrid?: boolean
   onToggleProductGrid?: () => void
+  /** POS-06: nút mở hoặc đóng ca */
+  shiftControl?: React.ReactNode
 }
 
-export function PosHeader({ showProductGrid, onToggleProductGrid }: PosHeaderProps) {
+export function PosHeader({ showProductGrid, onToggleProductGrid, shiftControl }: PosHeaderProps) {
   const mode = useCartStore((s) => s.mode)
   const setMode = useCartStore((s) => s.setMode)
 
@@ -32,6 +34,8 @@ export function PosHeader({ showProductGrid, onToggleProductGrid }: PosHeaderPro
 
       <div className="ml-auto flex items-center gap-3">
         <OfflineIndicator />
+
+        {shiftControl}
 
         {onToggleProductGrid && (
           <Button

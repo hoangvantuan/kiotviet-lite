@@ -5,6 +5,7 @@ import type { CreateOrderInput, DebtInfo, PriceSource } from '@kiotviet-lite/sha
 
 import { useDocumentMutation } from '@/hooks/use-document-mutation'
 import { apiClient, ApiClientError } from '@/lib/api-client'
+import { idempotencyKeyFor } from '@/lib/idempotency'
 import { saveOfflineOrder } from '@/lib/offline-orders'
 import { getPGliteRaw, initializeOfflineDB } from '@/lib/pglite'
 import { useAuthStore } from '@/stores/use-auth-store'
@@ -109,6 +110,15 @@ export function checkoutFingerprint({ tab, order }: CheckoutVariables) {
       lineTotal: item.lineTotal,
     })),
   }
+}
+
+/**
+ * POS-07: khóa mà lần thanh toán tới của tab sẽ gửi (cùng ý định, tab, dấu vân tay với
+ * useCheckoutMutation), để in mã tạm vào nội dung chuyển khoản trước khi bấm hoàn tất. Khóa này
+ * là clientId của đơn, nên sao kê ngân hàng tra ngược ra được đơn.
+ */
+export function pendingCheckoutKey(variables: CheckoutVariables): string {
+  return idempotencyKeyFor(`${POS_ORDER_INTENT}:${variables.tab}`, checkoutFingerprint(variables))
 }
 
 function isKeyReused(error: unknown): boolean {

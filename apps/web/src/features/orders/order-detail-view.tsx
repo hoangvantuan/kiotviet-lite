@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { ChevronLeft, RotateCcw } from 'lucide-react'
 
-import { RETURN_REASON_LABELS } from '@kiotviet-lite/shared'
+import { moneyMethodLabel, RETURN_REASON_LABELS } from '@kiotviet-lite/shared'
 
 import { QueryErrorState } from '@/components/shared/query-error-state'
 import { Badge } from '@/components/ui/badge'
@@ -379,7 +379,8 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
                 </div>
                 {ret.refundAmount > 0 && (
                   <p className="text-xs text-blue-600">
-                    Hoàn tiền: {formatVndWithSuffix(ret.refundAmount)}
+                    Hoàn tiền: {formatVndWithSuffix(ret.refundAmount)} (
+                    {moneyMethodLabel(ret.refundMethod)})
                   </p>
                 )}
                 {ret.debtReductionAmount > 0 && (
@@ -405,6 +406,8 @@ export function OrderDetailView({ orderId }: OrderDetailViewProps) {
         orderId={orderId}
         orderNumber={order.orderNumber}
         outstandingDebt={order.debtAmount}
+        orderPaymentMethod={order.paymentMethod}
+        orderCashAmount={order.cashAmount}
       />
 
       {/* Print templates (hidden, only visible during window.print) */}

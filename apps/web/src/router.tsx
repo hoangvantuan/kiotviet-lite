@@ -14,6 +14,7 @@ import { ErrorBoundary } from '@/components/layout/error-boundary'
 import { Toaster } from '@/components/ui/sonner'
 import { useMediaQuery as useMediaQueryRoot } from '@/hooks/use-media-query'
 import { useNetworkStatus } from '@/hooks/use-network-status'
+import { CashFlowReportPage } from '@/pages/cash-flow-report-page'
 import { CategoryDiscountsPage } from '@/pages/category-discounts-page'
 import { CustomerDetailPage } from '@/pages/customer-detail-page'
 import { CustomerPricesPage } from '@/pages/customer-prices-page'
@@ -308,6 +309,14 @@ const reportsProfitRoute = createRoute({
   component: ProfitReportPage,
 })
 
+// BC-06: dòng tiền theo phương thức, đối soát tiền mặt
+const reportsCashFlowRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/reports/cash-flow',
+  beforeLoad: requirePermissionGuard('reports.view'),
+  component: CashFlowReportPage,
+})
+
 const reportsInventoryRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/reports/inventory',
@@ -472,6 +481,7 @@ const routeTree = rootRoute.addChildren([
       dashboardAliasRoute,
       reportsRevenueRoute,
       reportsProfitRoute,
+      reportsCashFlowRoute,
       reportsInventoryRoute,
       reportsPricingRoute,
       reportsRoute,

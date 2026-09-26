@@ -1,6 +1,6 @@
 import { Eye } from 'lucide-react'
 
-import type { ReceiptListItem } from '@kiotviet-lite/shared'
+import { moneyMethodLabel, type ReceiptListItem } from '@kiotviet-lite/shared'
 
 import { CancelledBadge } from '@/components/shared/cancel-document-dialog'
 import { Badge } from '@/components/ui/badge'
@@ -34,9 +34,11 @@ export function ReceiptsTable({ items, onView }: ReceiptsTableProps) {
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead>Mã phiếu</TableHead>
             <TableHead>Ngày tạo</TableHead>
             <TableHead>Khách hàng</TableHead>
             <TableHead className="text-right">Số tiền</TableHead>
+            <TableHead>Phương thức</TableHead>
             <TableHead className="text-center">Số khoản</TableHead>
             <TableHead>Ghi chú</TableHead>
             <TableHead>Người tạo</TableHead>
@@ -48,6 +50,7 @@ export function ReceiptsTable({ items, onView }: ReceiptsTableProps) {
             const note = truncateNote(p.note)
             return (
               <TableRow key={p.id}>
+                <TableCell className="font-mono text-xs">{p.code}</TableCell>
                 <TableCell className="text-sm">{formatDateTime(p.createdAt)}</TableCell>
                 <TableCell>
                   <div className="font-medium">{p.customerName ?? '(đã xoá)'}</div>
@@ -63,6 +66,7 @@ export function ReceiptsTable({ items, onView }: ReceiptsTableProps) {
                   </span>
                   {p.status === 'cancelled' && <CancelledBadge className="ml-2" />}
                 </TableCell>
+                <TableCell className="text-sm">{moneyMethodLabel(p.paymentMethod)}</TableCell>
                 <TableCell className="text-center">
                   <Badge variant="secondary">{p.allocationCount}</Badge>
                 </TableCell>

@@ -1,4 +1,4 @@
-import type { SupplierPaymentListItem } from '@kiotviet-lite/shared'
+import { moneyMethodLabel, type SupplierPaymentListItem } from '@kiotviet-lite/shared'
 
 import { CancelledBadge } from '@/components/shared/cancel-document-dialog'
 import {
@@ -36,6 +36,7 @@ export function SupplierPaymentsTable({ items, canCancel = false }: SupplierPaym
             <TableHead>Nhà cung cấp</TableHead>
             <TableHead className="text-right">Số tiền</TableHead>
             <TableHead>Phiếu nhập</TableHead>
+            <TableHead>Phương thức</TableHead>
             <TableHead>Ghi chú</TableHead>
             <TableHead>Người tạo</TableHead>
             {canCancel && <TableHead className="text-right">Thao tác</TableHead>}
@@ -62,6 +63,7 @@ export function SupplierPaymentsTable({ items, canCancel = false }: SupplierPaym
                   {p.status === 'cancelled' && <CancelledBadge className="ml-2" />}
                 </TableCell>
                 <TableCell className="font-mono text-xs">{p.purchaseOrderCode ?? '—'}</TableCell>
+                <TableCell className="text-sm">{moneyMethodLabel(p.paymentMethod)}</TableCell>
                 <TableCell className="max-w-xs">
                   {note.full ? (
                     <TooltipProvider>

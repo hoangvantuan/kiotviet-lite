@@ -9,6 +9,8 @@ import { ReceiptPrintTemplate } from './receipt-print-template'
 
 const receipt: ReceiptDetail = {
   id: '00000000-0000-4000-8000-00000000abcd',
+  code: 'PT-260925-0007',
+  paymentMethod: 'transfer',
   customerId: '00000000-0000-4000-8000-000000000001',
   customerName: 'Khách nợ',
   customerCode: 'KH000001',
@@ -82,5 +84,28 @@ describe('Nhãn khoản nợ trên phiếu thu', () => {
     const { container } = render(<ReceiptPrintTemplate receipt={receipt} />)
     const table = container.querySelector('table') as HTMLElement
     expect(allocationLabels(table)).toEqual(['Nợ đầu kỳ', 'Điều chỉnh tăng nợ', 'HD-260925-0001'])
+  })
+})
+
+describe('TIEN-109, TIEN-05: mã và phương thức trên phiếu thu', () => {
+  it('chi tiết phiếu thu hiện mã PT từ máy chủ và phương thức nhận tiền', () => {
+    render(<ReceiptDetailDialog open onOpenChange={() => {}} receiptId={receipt.id} />)
+    const dialog = within(screen.getByRole('dialog'))
+    expect(dialog.getByText('PT-260925-0007')).toBeTruthy()
+    expect(dialog.getByText('Chuyển khoản')).toBeTruthy()
+    expect(dialog.queryByText('0000ABCD')).toBeNull()
+  })
+
+  it('bản in phiếu thu ghi mã PT và phương thức', () => {
+    const { container } = render(<ReceiptPrintTemplate receipt={receipt} />)
+    expect(container.textContent).toContain('Mã phiếu: PT-260925-0007')
+    expect(container.textContent).toContain('Phương thức: Chuyển khoản')
+  })
+
+  it('phiếu cũ chưa có phương thức ghi "Chưa rõ (chứng từ cũ)"', () => {
+    const { container } = render(
+      <ReceiptPrintTemplate receipt={{ ...receipt, paymentMethod: null }} />,
+    )
+    expect(container.textContent).toContain('Phương thức: Chưa rõ (chứng từ cũ)')
   })
 })

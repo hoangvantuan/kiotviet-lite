@@ -1,7 +1,13 @@
 import { useState } from 'react'
 
-import { RETURN_REASON_LABELS } from '@kiotviet-lite/shared'
+import {
+  defaultRefundMethod,
+  type MoneyMethod,
+  moneyMethodLabel,
+  RETURN_REASON_LABELS,
+} from '@kiotviet-lite/shared'
 
+import { MoneyMethodPicker } from '@/components/shared/money-method-picker'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -38,6 +44,9 @@ interface ReturnDialogProps {
   orderNumber: string
   /** Nợ còn lại của đơn; tiền hoàn cấn vào đây trước (ADR-0010) */
   outstandingDebt: number
+  /** TIEN-02: cách khách đã trả đơn gốc, để chọn sẵn kênh hoàn tiền */
+  orderPaymentMethod: string
+  orderCashAmount: number | null
 }
 
 const REASON_OPTIONS = Object.entries(RETURN_REASON_LABELS).map(([value, label]) => ({
@@ -57,16 +66,24 @@ export function ReturnDialog({
   orderId,
   orderNumber,
   outstandingDebt,
+  orderPaymentMethod,
+  orderCashAmount,
 }: ReturnDialogProps) {
   const itemsQuery = useReturnableItemsQuery(open ? orderId : undefined)
   const mutation = useCreateReturnMutation()
   const [lines, setLines] = useState<Map<string, ReturnLine>>(new Map())
   const [note, setNote] = useState('')
+  const initialRefundMethod = defaultRefundMethod({
+    paymentMethod: orderPaymentMethod,
+    cashAmount: orderCashAmount,
+  })
+  const [refundMethod, setRefundMethod] = useState<MoneyMethod>(initialRefundMethod)
   const [showResult, setShowResult] = useState<{
     refundAmount: number
     debtReductionAmount: number
     prepaymentRefundAmount: number
     returnNumber: string
+    refundMethod: MoneyMethod | null
   } | null>(null)
 
   const items: ReturnableItem[] = itemsQuery.data?.items ?? []
@@ -105,7 +122,7 @@ export function ReturnDialog({
     try {
       const result = await mutation.mutateAsync({
         orderId,
-        input: { items: returnItems, note: note.trim() || null },
+        input: { items: returnItems, refundMethod, note: note.trim() || null },
       })
       const data = result.data
       setShowResult({
@@ -113,6 +130,7 @@ export function ReturnDialog({
         debtReductionAmount: data.debtReductionAmount,
         prepaymentRefundAmount: data.prepaymentRefundAmount ?? 0,
         returnNumber: data.returnNumber,
+        refundMethod: data.refundMethod,
       })
       showSuccess(`Trả hàng thành công: ${data.returnNumber}`)
     } catch (err) {
@@ -127,6 +145,7 @@ export function ReturnDialog({
   function handleClose() {
     setLines(new Map())
     setNote('')
+    setRefundMethod(initialRefundMethod)
     setShowResult(null)
     onOpenChange(false)
   }
@@ -146,7 +165,8 @@ export function ReturnDialog({
             {showResult.refundAmount > 0 && (
               <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
                 <p className="text-sm font-medium text-blue-800">
-                  Cần hoàn {formatVndWithSuffix(showResult.refundAmount)} cho khách
+                  Cần hoàn {formatVndWithSuffix(showResult.refundAmount)} cho khách (
+                  {moneyMethodLabel(showResult.refundMethod)})
                 </p>
               </div>
             )}
@@ -302,6 +322,18 @@ export function ReturnDialog({
             <span>Hoàn tiền</span>
             <span>{formatVndWithSuffix(preview.refundAmount)}</span>
           </div>
+          {preview.refundAmount > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">Hoàn tiền qua</p>
+              <MoneyMethodPicker
+                value={refundMethod}
+                onChange={setRefundMethod}
+                disabled={mutation.isPending}
+                ariaLabel="Phương thức hoàn tiền"
+                idPrefix="refund-method"
+              />
+            </div>
+          )}
           <Textarea
             placeholder="Ghi chú (tùy chọn)"
             className="text-sm"
