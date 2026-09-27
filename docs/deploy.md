@@ -84,6 +84,25 @@ không đáng kể.
 Bảng `idempotency_keys` (chống tạo chứng từ đôi khi bấm lưu lại) tự dọn: api xóa khóa cũ hơn
 7 ngày lúc khởi động và mỗi 6 giờ.
 
+### Nâng cấp lên bản có số lượng thập phân (migration 0062)
+
+Migration `0062_d4_decimal_quantity` ([ADR-0015](adr/0015-so-luong-thap-phan-hang-can-ky.md))
+đổi các cột số lượng và tồn kho của 13 bảng sang `numeric(14,3)`. Lệnh đổi kiểu viết lại cả bảng
+và giữ khóa `ACCESS EXCLUSIVE` tới hết lệnh: mọi đọc và ghi vào bảng đó đều phải chờ. Bảng lớn nhất
+là `inventory_transactions` và `order_items`. Cửa hàng nhỏ chỉ mất vài giây, nhưng `up -d --build`
+chạy `migrate` trong lúc api cũ còn nhận request, nên request bán hàng sẽ đứng chờ khóa và máy POS
+có thể báo quá thời gian. Lần nâng cấp này chạy **ngoài giờ bán**, sao lưu ngay trước, và dừng api cũ:
+
+```bash
+docker compose -f docker-compose.prod.yml exec backup backup.sh
+docker compose -f docker-compose.prod.yml stop web api
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml logs migrate   # phải kết thúc không lỗi
+```
+
+Sau khi lên bản mới, bản sao danh mục trên máy POS (PGlite `v006-decimal-quantity`) tự kéo lại
+toàn bộ danh mục một lần ở lần đồng bộ đầu tiên.
+
 ### Kiểm tra sau migration 0047 (sổ công nợ R3)
 
 Migration `0047_debt_ledger_backfill` đưa dữ liệu công nợ cũ về sổ công nợ duy nhất
