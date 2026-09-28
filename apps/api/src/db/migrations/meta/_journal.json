@@ -442,6 +442,13 @@
       "when": 1790418651067,
       "tag": "0062_d4_decimal_quantity",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1790561023906,
+      "tag": "0063_tien105_drop_customer_purchase_cols",
+      "breakpoints": true
     }
   ]
 }
