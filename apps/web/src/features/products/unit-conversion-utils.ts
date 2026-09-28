@@ -1,7 +1,3 @@
-export function convertToBaseUnit(quantity: number, factor: number): number {
-  return quantity * factor
-}
-
 export function formatUnitDisplay(unit: string, factor: number, baseUnit: string): string {
   return `1 ${unit} = ${factor} ${baseUnit}`
 }

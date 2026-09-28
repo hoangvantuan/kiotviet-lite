@@ -1,20 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  convertToBaseUnit,
-  formatUnitDisplay,
-  validateUnitNotConflict,
-} from './unit-conversion-utils'
-
-describe('convertToBaseUnit', () => {
-  it('1 thùng × 24 = 24 cái', () => {
-    expect(convertToBaseUnit(1, 24)).toBe(24)
-  })
-
-  it('3 lốc × 6 = 18', () => {
-    expect(convertToBaseUnit(3, 6)).toBe(18)
-  })
-})
+import { formatUnitDisplay, validateUnitNotConflict } from './unit-conversion-utils'
 
 describe('formatUnitDisplay', () => {
   it('formats string đúng dạng "1 X = N Y"', () => {
